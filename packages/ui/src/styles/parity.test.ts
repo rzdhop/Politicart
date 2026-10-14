@@ -134,8 +134,24 @@ const RENAMES: Record<string, string> = {
 };
 
 const root = repoRoot();
-const gameHtml = readFileSync(join(root, 'index.html'), 'utf8');
-const inlineStyle = /<style>([\s\S]*?)<\/style>/.exec(gameHtml);
+
+/**
+ * Find the game's HTML wherever it currently lives.
+ *
+ * It began at the repository root and moved to apps/game/ when the game became
+ * a Vite app (stage 8). Both are checked so this gate survives that move, and
+ * so it still self-retires cleanly at stage 12 when the inline <style> block
+ * goes away for good.
+ */
+function gameMarkup(): string | null {
+  for (const candidate of [join(root, 'apps', 'game', 'index.html'), join(root, 'index.html')]) {
+    if (existsSync(candidate)) return readFileSync(candidate, 'utf8');
+  }
+  return null;
+}
+
+const gameHtml = gameMarkup();
+const inlineStyle = gameHtml === null ? null : /<style>([\s\S]*?)<\/style>/.exec(gameHtml);
 
 function libraryRules(): Rule[] {
   const dir = resolve(import.meta.dirname);

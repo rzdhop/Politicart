@@ -1,0 +1,19 @@
+{
+  "name": "@kart-republique/game",
+  "version": "0.1.0",
+  "description": "Kart Republique: Grand Prix de l'Hemicycle",
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "0.128.0"
+  },
+  "devDependencies": {
+    "vite": "8.3.4"
+  }
+}

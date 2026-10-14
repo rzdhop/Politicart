@@ -63,9 +63,13 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'node e2e/serve.mjs',
+    // The suite runs against a production build, not the dev server. The port
+    // changes how the game is packaged, so a bug that only appears once Vite
+    // has bundled and minified it is exactly the kind this net should catch.
+    command: 'npm run build -w @kart-republique/game && npm run preview -w @kart-republique/game',
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
     stdout: 'ignore',
     stderr: 'pipe',
   },

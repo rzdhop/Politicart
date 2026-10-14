@@ -6,20 +6,19 @@ Current state only. History lives in git.
 
 - **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
   CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** Stage 7 DONE and committed. **PART B IS COMPLETE**: the
-  regression net exists and is green (27 specs, 2.8 min). index.html is still
-  byte-identical to f271930 on this branch.
-- **Next action:** Stage 8, the riskiest stage of the whole task. Move the
-  `<script>` block out of index.html into one bundled module under
-  `apps/game/`, importing `three@0.128.0` (DEC-007) instead of the CDN global,
-  with index.html becoming the Vite entry. **Packaging only**: same DOM, same
-  markup, same listeners, same init order, no behaviour change -- so a failure
-  is a build problem rather than a gameplay problem. Preserve the init order
-  the exploration map flagged (`textures()` before any builder;
-  `buildTrack` setting `G.samples`/`G.N` before `buildFeatures`/`crowdZone`/
-  `grandstand`; the strict physics step order in `frame()`). `$('c')` resolves
-  at module-eval time today and must become an explicit init call. Then
-  `npm run test:e2e` must still be 27/27.
+- **Current stage:** Stage 8 DONE and committed -- **the riskiest stage is
+  behind us**. The game is now a Vite app at `apps/game/`, bundling
+  `three@0.128.0` instead of the CDN global. Packaging only: the markup, the
+  stylesheet and all 1207 script lines were carried across mechanically and
+  verified byte-identical. 27/27 E2E green against the production build.
+- **Next action:** Stage 9 -- split `apps/game/src/game.js` into engine
+  modules, still driving the original DOM, in the low-risk order the
+  exploration map recommended: audio first (already self-contained behind
+  `sfx`/`initAudio`/`updateEngine`/`toggleMute`), then the data literals, then
+  the scene and mesh builders. Do NOT touch physics, items or AI in this stage
+  -- those call `toast()` and `sfx()` from inside the physics step and need the
+  event queue that stage 10 introduces. Preserve init order exactly. 27/27
+  E2E after each move.
 - **Plan amendment:** an unplanned **stage 5b** was inserted before stage 6 to
   self-host the two web fonts. Reason: stage 6's stories are what design-sync
   screenshots in stage 15, and the package shipped no fonts, so every preview
@@ -41,8 +40,15 @@ Current state only. History lives in git.
   keeps serving the playable single-file game on Pages until the port merges.
 - **Tree at checkpoint:** clean
 - **Unrelated changes left unstaged:** none
-- **Last known-good game state:** `f271930` -- index.html is byte-identical to
-  it on this branch and stays so until stage 8.
+- **KNOWN STALE:** `README.md` still describes the game as a single file with
+  "No build step, no install", and still points at `index.html` at the
+  repository root, which stage 8 removed. This is the accepted loss recorded in
+  DEC-003; stage 14 rewrites the README. Anyone reading the branch before then
+  should know the instructions are out of date, not that the game is broken.
+- **Last known-good single-file game:** `f271930`. From stage 8 the game lives
+  at `apps/game/` and needs a build; `183fbc2` is the last commit on this
+  branch where the original single file was still intact and playable by
+  double-clicking.
 
 ## Tier-1 baseline
 
