@@ -101,3 +101,23 @@ QWERTY players alike.
 Two consequences: the E2E suite drives `ArrowUp` and `w` (not `z`), and the
 React port must keep reading `e.code` rather than `e.key`, or French players
 lose their steering.
+
+## Cleanup candidates found while splitting the engine (stage 9)
+
+Both carried over unchanged rather than fixed, because stage 9 is a
+repackaging: a behaviour change hidden inside a 1200-line move is exactly what
+the staging exists to avoid. Worth doing as their own task.
+
+- **`CAST` is a dead flag.** `apps/game/src/engine/primitives.js` keeps a
+  `CAST` boolean that `tag()` reads as `CAST && SHADOWS()`, but nothing ever
+  sets it to `false` -- the three call sites outside the module
+  (`startRace`, `useItem`'s rebuild, `setPreview`) all set it `true`. So the
+  expression is just `SHADOWS()`, and both the flag and its three assignments
+  could go.
+- **No `<meta name="viewport">`.** The game declares a custom
+  `claude:viewport-fit-sides` meta but not the standard viewport one, so a
+  phone renders it at a 980px layout width and the `600px`/`760px` media
+  queries never match. The game tells players to use a computer, so this has
+  never mattered in practice -- but the HUD's phone layout and the select
+  screen's stacked layout are therefore unreachable on a real phone, which is
+  worth knowing before anyone tests them there.

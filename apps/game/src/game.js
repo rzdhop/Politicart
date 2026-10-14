@@ -22,7 +22,23 @@ import * as THREE from 'three';
 import { initAudio, isMuted, sfx, toggleMute, updateEngine } from './engine/audio.js';
 import { getCustom, loadCustom, resetCustom, saveCustom, applyCustom } from './engine/custom.js';
 import { BASE, CHARACTERS, ITEMS, ITEM_ODDS, TRACKS, rollItem } from './engine/data.js';
+import {
+  box,
+  canvasTexture,
+  cone,
+  cyl,
+  imgPlane,
+  mat,
+  plane,
+  setCast,
+  sph,
+  tag,
+  textPlane,
+  torus,
+} from './engine/primitives.js';
+import { camera, renderer, resize } from './engine/render.js';
 import { CFG, G, SHADOWS, getPoly, isClear, seg, togglePoly } from './engine/state.js';
+import { TEX, textures } from './engine/textures.js';
 import { $, clamp, fmtTime, hex, lerp, ordinal, pick, rand, wrapAngle } from './engine/util.js';
 
 'use strict';
@@ -34,71 +50,7 @@ import { $, clamp, fmtTime, hex, lerp, ordinal, pick, rand, wrapAngle } from './
    ===================================================================================== */
 
 
-const texCache = {};
-function imgTex(url) { if (!texCache[url]) { const t = new THREE.TextureLoader().load(url); t.encoding = THREE.sRGBEncoding; texCache[url] = t; } return texCache[url]; }
-function imgPlane(w, h, url) { return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: imgTex(url), side: THREE.DoubleSide })); }
 
-
-
-// ---------- Renderer / camera ----------
-const canvas = $('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-const camera = new THREE.PerspectiveCamera(65, 1, 0.5, 2000);
-function resize() { renderer.setSize(window.innerWidth, window.innerHeight, false); camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); }
-window.addEventListener('resize', resize); resize();
-
-// ---------- Materials & primitives ----------
-const matCache = {};
-let CAST = true; // whether meshes created now cast shadows
-function mat(color, rough) { const k = color + ':' + (rough || 0.85); return matCache[k] || (matCache[k] = new THREE.MeshStandardMaterial({ color, roughness: rough || 0.85, metalness: 0.05 })); }
-function tag(m) { m.castShadow = CAST && SHADOWS(); m.receiveShadow = true; return m; }
-function box(w, h, d, color, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color)); m.position.set(x, y, z); return tag(m); }
-function sph(r, color, x, y, z, s) { const m = new THREE.Mesh(new THREE.SphereGeometry(r, s || seg(), s || seg()), mat(color)); m.position.set(x, y, z); return tag(m); }
-function cyl(rt, rb, h, color, x, y, z, s) { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, s || seg()), mat(color)); m.position.set(x, y, z); return tag(m); }
-function cone(r, h, color, x, y, z, s) { const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, s || seg()), mat(color)); m.position.set(x, y, z); return tag(m); }
-function torus(r, t, color, x, y, z) { const m = new THREE.Mesh(new THREE.TorusGeometry(r, t, Math.max(6, seg() / 2), seg() * 2), mat(color)); m.position.set(x, y, z); return tag(m); }
-function plane(w, h, color, x, z, rotY) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat(color, 0.95)); m.rotation.x = -Math.PI / 2; m.rotation.z = rotY || 0; m.position.set(x, 0.02, z); m.receiveShadow = true; return m; }
-function canvasTexture(w, h, draw) { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; draw(cv.getContext('2d'), w, h); const t = new THREE.CanvasTexture(cv); return t; }
-function textPlane(w, h, text, bg, fg, px) {
-  const t = canvasTexture(512, Math.round(512 * h / w), (c, cw, ch) => { c.fillStyle = bg; c.fillRect(0, 0, cw, ch); c.fillStyle = fg; c.font = 'bold ' + (px || 72) + 'px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, cw / 2, ch / 2); });
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide })); return m;
-}
-
-// ---------- Procedural textures ----------
-const TEX = {};
-function textures() {
-  if (TEX.ready) return;
-  TEX.facade = canvasTexture(256, 256, (c, w, h) => { // Haussmann: cream stone, tall windows, iron balconies, 3 floors per tile
-    c.fillStyle = '#e4d6bb'; c.fillRect(0, 0, w, h);
-    for (let i = 0; i < 400; i++) { c.fillStyle = Math.random() < 0.5 ? '#d8c9ab' : '#ece0c8'; c.fillRect(Math.random() * w, Math.random() * h, 6, 3); }
-    for (let f = 0; f < 3; f++) { const y = 18 + f * 84; c.fillStyle = '#6a5a4a'; c.fillRect(0, y + 60, w, 3);
-      for (let x = 14; x < w; x += 52) { c.fillStyle = '#2d3b55'; c.fillRect(x, y, 26, 52); c.fillStyle = '#9fb4cf'; c.fillRect(x + 3, y + 3, 9, 20); c.fillRect(x + 14, y + 3, 9, 20); c.fillStyle = '#3a3a3a'; for (let b = 0; b < 5; b++) c.fillRect(x - 4 + b * 8, y + 36, 2, 18); c.fillRect(x - 5, y + 34, 36, 2); } }
-  });
-  TEX.facade.wrapS = TEX.facade.wrapT = THREE.RepeatWrapping;
-  TEX.palace = canvasTexture(256, 256, (c, w, h) => { // classical: pale stone, arched windows, pilasters
-    c.fillStyle = '#efe6d2'; c.fillRect(0, 0, w, h);
-    for (let i = 0; i < 300; i++) { c.fillStyle = '#e6dcc4'; c.fillRect(Math.random() * w, Math.random() * h, 8, 2); }
-    for (let f = 0; f < 2; f++) { const y = 30 + f * 120; for (let x = 10; x < w; x += 64) { c.fillStyle = '#d9cfb8'; c.fillRect(x - 8, 0, 6, h); c.fillStyle = '#334a66'; c.fillRect(x + 8, y, 30, 64); c.beginPath(); c.arc(x + 23, y, 15, Math.PI, 0); c.fill(); c.fillStyle = '#b9c9dd'; c.fillRect(x + 12, y + 6, 9, 24); c.fillRect(x + 25, y + 6, 9, 24); c.fillStyle = '#c9bc9c'; c.fillRect(x + 4, y + 66, 38, 5); } }
-  });
-  TEX.palace.wrapS = TEX.palace.wrapT = THREE.RepeatWrapping;
-  TEX.cobble = canvasTexture(256, 256, (c, w, h) => { c.fillStyle = '#8c8a84'; c.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 16) for (let x = 0; x < w; x += 16) { const o = (y / 16) % 2 ? 8 : 0; c.fillStyle = ['#9b9992', '#85837c', '#a3a19a', '#7d7b74'][Math.floor(Math.random() * 4)]; c.fillRect(x + o + 1, y + 1, 14, 14); } });
-  TEX.cobble.wrapS = TEX.cobble.wrapT = THREE.RepeatWrapping;
-  TEX.gravel = canvasTexture(256, 256, (c, w, h) => { c.fillStyle = '#cdbc8e'; c.fillRect(0, 0, w, h); for (let i = 0; i < 4000; i++) { c.fillStyle = ['#d9c99c', '#bfae80', '#e2d3a8', '#b3a376'][i % 4]; c.fillRect(Math.random() * w, Math.random() * h, 2, 2); } });
-  TEX.gravel.wrapS = TEX.gravel.wrapT = THREE.RepeatWrapping;
-  TEX.grass = canvasTexture(256, 256, (c, w, h) => { c.fillStyle = '#6f9a55'; c.fillRect(0, 0, w, h); for (let i = 0; i < 6000; i++) { c.fillStyle = ['#79a55e', '#64904c', '#82ad66', '#5d8746'][i % 4]; c.fillRect(Math.random() * w, Math.random() * h, 2, 3); } });
-  TEX.grass.wrapS = TEX.grass.wrapT = THREE.RepeatWrapping;
-  TEX.water = canvasTexture(256, 256, (c, w, h) => { c.fillStyle = '#4a7fa8'; c.fillRect(0, 0, w, h); for (let i = 0; i < 300; i++) { c.fillStyle = 'rgba(255,255,255,' + (0.08 + Math.random() * 0.2) + ')'; c.fillRect(Math.random() * w, Math.random() * h, 20 + Math.random() * 40, 2); } });
-  TEX.water.wrapS = TEX.water.wrapT = THREE.RepeatWrapping;
-  TEX.asphalt = canvasTexture(256, 512, (c, w, h) => {
-    c.fillStyle = '#3c3d42'; c.fillRect(0, 0, w, h);
-    for (let i = 0; i < 2600; i++) { c.fillStyle = Math.random() < 0.5 ? '#46474d' : '#323338'; c.fillRect(Math.random() * w, Math.random() * h, 3, 3); }
-    c.fillStyle = '#e9e4d6'; c.fillRect(w / 2 - 4, 0, 8, h * 0.45); c.fillRect(6, 0, 5, h); c.fillRect(w - 11, 0, 5, h);
-  });
-  TEX.asphalt.wrapS = TEX.asphalt.wrapT = THREE.RepeatWrapping;
-  TEX.ready = true;
-}
 
 // ---------- Driver (procedural politician, more detail in 'high') ----------
 function buildDriver(def) {
@@ -543,7 +495,7 @@ function startRace() {
   const sun = new THREE.DirectionalLight(0xfff4d6, 1.15); sun.position.set(120, 200, 80); scene.add(sun); scene.add(sun.target);
   sun.castShadow = SHADOWS(); sun.shadow.mapSize.set(2048, 2048); const sc = sun.shadow.camera; sc.left = -110; sc.right = 110; sc.top = 110; sc.bottom = -110; sc.near = 10; sc.far = 500; sun.shadow.bias = -0.0006;
   G.sun = sun; G.scene = scene; G.animated = []; G.hazards = []; G.projectiles = []; G.crowd = [];
-  CAST = true; buildTrack(scene, track);
+  setCast(true); buildTrack(scene, track);
 
   const others = CHARACTERS.filter((c, i) => i !== G.charIdx).sort(() => Math.random() - 0.5).slice(0, CFG.numAI);
   const player = makeKart(CHARACTERS[G.charIdx], false);
@@ -733,7 +685,7 @@ function useItem(k) {
 }
 function spawnHazard(type, x, z, extra) {
   const g = new THREE.Group(); let r = 2.2, life = 45, stun = 1.3;
-  CAST = true;
+  setCast(true);
   if (type === 'barricade') {
     g.add(box(2.6, 0.5, 0.25, 0xc8102e, 0, 1.0, 0)); [-0.9, 0, 0.9].forEach(o => g.add(box(0.5, 0.5, 0.27, 0xffffff, o, 1.0, 0)));
     [-1.0, 1.0].forEach(o => { g.add(box(0.15, 1.3, 0.15, 0x333333, o, 0.65, 0.25)); g.add(box(0.15, 1.3, 0.15, 0x333333, o, 0.65, -0.25)); });
@@ -939,7 +891,7 @@ function ensurePreviewScene() {
 function setPreview(i) {
   ensurePreviewScene();
   while (G.previewHolder.children.length) { const c = G.previewHolder.children[0]; G.previewHolder.remove(c); disposeScene(c); }
-  CAST = true; G.previewKart = buildKart(CHARACTERS[i]); G.previewHolder.add(G.previewKart);
+  setCast(true); G.previewKart = buildKart(CHARACTERS[i]); G.previewHolder.add(G.previewKart);
 }
 function renderPreview(dt) {
   if (!G.previewKart) setPreview(G.charIdx);
