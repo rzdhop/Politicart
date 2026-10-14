@@ -3,8 +3,13 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
 // Library build: one ES bundle plus one CJS bundle, with all component CSS
-// collected into a single dist/index.css. React stays external so the consuming
-// app (and the design-sync bundle) supplies exactly one copy of it.
+// collected into a single dist/styles.css. React stays external so the
+// consuming app (and the design-sync bundle) supplies exactly one copy of it.
+//
+// Note on fonts: library mode always inlines assets referenced from CSS, since
+// a library's stylesheet cannot know the consumer's base path. assetsInlineLimit
+// has no effect here, so the four woff2 subsets are embedded in styles.css.
+// That is the outcome this system wants anyway -- see src/styles/fonts.css.
 export default defineConfig({
   plugins: [react()],
   build: {

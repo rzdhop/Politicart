@@ -4,16 +4,27 @@ Marked UNCONFIRMED / confirmed / invalidated.
 
 ## Unconfirmed
 
+- **A-005 -- Nunito's woff2 subsets are a variable font.** UNCONFIRMED.
+  `packages/ui/src/styles/fonts.css` declares Nunito once per subset with
+  `font-weight: 400 900`, on the evidence that Google serves the identical file
+  for weights 500, 700 and 900 -- which a static font could not do without
+  synthetic emboldening. Collapsing it this way cut `dist/styles.css` from
+  328 kB to 127 kB. To be confirmed by eye once Storybook previews exist
+  (stage 6): body text at 500 and a bold label at 700/900 must show real
+  weight contrast. If they do not, revert to one face per weight and accept
+  the larger stylesheet.
 - **A-002 -- The library class vocabulary stays the game vocabulary.**
   UNCONFIRMED. The extracted components keep the original class names (`.btn`,
   `.panel`, `.tile`, `.powerbox`, `.hud-tl`...) rather than being renamed or
   moved to CSS modules, so the CSS moves verbatim and the design agent is taught
   the real idiom. Assumed preferable to a cosmetic rename; cheap to revisit
   before the first component lands.
-- **A-003 -- French copy stays in stories, not in component props defaults.**
+- **A-003 -- French copy stays in stories, not in component defaults.**
   UNCONFIRMED. Components take text as props with no built-in i18n; the French
-  strings live in the game and in the stories. Assumed right for a single-locale
-  satirical game.
+  strings live in the game and in the stories. Held through stages 3-5:
+  `LapCounter`, `RaceTimer` and `CenterAnnounce` take free text rather than
+  lap/time numbers, and `ResultsTable` renders no header row unless given one,
+  precisely so no French wording is baked into the library.
 ## Confirmed
 
 - **A-001 -- Node v26.10.0 is acceptable to the toolchain.** CONFIRMED

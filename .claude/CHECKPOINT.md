@@ -6,8 +6,9 @@ Current state only. History lives in git.
 
 - **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
   CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** Stage 5 DONE and committed. **All 46 components exist.**
-  Stage 6 next -- Storybook, one story per component.
+- **Current stage:** Stage 5b DONE and committed (fonts self-hosted; an
+  unplanned stage, see the note below). **All 46 components exist.** Stage 6
+  next -- Storybook, one story per component.
 - **Next action:** add Storybook 10.6.2 with `@storybook/react-vite` to
   `packages/ui`, a `.storybook/preview.ts` that imports `../src/styles.css` so
   stories render with the real look, and one `*.stories.tsx` per component.
@@ -17,6 +18,12 @@ Current state only. History lives in git.
   a HudCorner, workshop inputs inside an AdminGrid, KeyCap inside a
   ControlsGrid) or the preview will look broken even though the component is
   fine.
+- **Plan amendment:** an unplanned **stage 5b** was inserted before stage 6 to
+  self-host the two web fonts. Reason: stage 6's stories are what design-sync
+  screenshots in stage 15, and the package shipped no fonts, so every preview
+  would have silently fallen back to Arial Black and Segoe UI. Doing it before
+  the stories exist keeps those previews honest. Kept as its own commit so it
+  reverts alone.
 - **Component count:** 46, not the ~30 the plan estimated. The estimate
   collapsed the HUD's twelve readouts and the workshop's nine form parts into
   single inventory lines. Same scope ("the whole surface"), more accurate count.
@@ -47,7 +54,7 @@ regression contract below began UNVERIFIED.
     npm install            # clean, 95 packages, 0 vulnerabilities
     npm run build          # vite lib build + tsc declarations -> dist/
     npm run typecheck      # tsc --noEmit, clean
-    npm run test           # vitest, 11 files / 244 tests passing
+    npm run test           # vitest, 11 files / 247 tests passing
     npm audit              # 0 vulnerabilities (with and without dev deps)
 
 All four run from the repo root across workspaces. The game's regression

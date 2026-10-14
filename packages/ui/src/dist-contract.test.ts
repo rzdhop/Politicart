@@ -175,6 +175,23 @@ describe.skipIf(!built)('published package contract', () => {
     }
   });
 
+  it('embeds the two self-hosted families as real woff2 data', () => {
+    // Library mode inlines CSS assets, so the fonts travel inside styles.css.
+    // Decode them: a truncated or wrongly-encoded payload would still look
+    // like a plausible data URI but render nothing.
+    const css = readFileSync(join(dist, 'styles.css'), 'utf8');
+    const payloads = [...css.matchAll(/url\(data:font\/woff2;base64,([A-Za-z0-9+/=]+)\)/g)].map(
+      (m) => m[1] as string,
+    );
+    expect(payloads).toHaveLength(4);
+    for (const payload of payloads) {
+      const bytes = Buffer.from(payload, 'base64');
+      expect(bytes.subarray(0, 4).toString('latin1')).toBe('wOF2');
+    }
+    // One face per family-subset pair: no font embedded more than once.
+    expect(new Set(payloads).size).toBe(4);
+  });
+
   it('carries the game stylesheet, tokens included', () => {
     const css = readFileSync(join(dist, 'styles.css'), 'utf8');
     expect(css).toContain('--gold:#f2c14e');

@@ -167,10 +167,42 @@ describe.skipIf(inlineStyle === null)('library CSS is the game CSS, verbatim', (
     expect(libraryRule?.decls).toEqual(sourceRule.decls);
   });
 
-  it('ships nothing the game does not define', () => {
+  it('ships nothing the game does not define, beyond the font faces', () => {
     const sourceKeys = new Set(source.map(key));
-    const extra = library.map(key).filter((k) => !sourceKeys.has(k));
+    const extra = library
+      .map(key)
+      .filter((k) => !sourceKeys.has(k))
+      .filter((k) => k !== '@font-face');
     expect(extra).toEqual([]);
+  });
+
+  it('self-hosts the two families the game loads from Google Fonts', () => {
+    // The game gets these from a <link>; anything rendered from the published
+    // bundle has no such link and would fall back to Arial Black / Segoe UI.
+    const faces = library.filter((r) => r.selector === '@font-face');
+    const families = faces
+      .map((r) => r.decls.find((d) => d.startsWith('font-family')))
+      .map((d) => d?.split(':')[1]?.trim());
+
+    expect(new Set(families)).toEqual(new Set(["'Lilita One'", "'Nunito'"]));
+
+    // Every face must be subsetted and swap, as Google's own output is.
+    // Declarations are compared without whitespace: the extracted rules use the
+    // game's compact style, fonts.css is hand-written with spaces, and that
+    // difference is cosmetic.
+    for (const face of faces) {
+      const decls = face.decls.map((d) => d.replace(/\s+/g, ''));
+      expect(decls.some((d) => d.startsWith('unicode-range'))).toBe(true);
+      expect(decls).toContain('font-display:swap');
+    }
+  });
+
+  it('names the self-hosted families in the tokens that reference them', () => {
+    const tokens = library.find((r) => r.selector === ':root');
+    const display = tokens?.decls.find((d) => d.startsWith('--font-display'));
+    const body = tokens?.decls.find((d) => d.startsWith('--font-body'));
+    expect(display).toContain("'Lilita One'");
+    expect(body).toContain("'Nunito'");
   });
 
   it('renames the minimap inside the mobile media query too', () => {

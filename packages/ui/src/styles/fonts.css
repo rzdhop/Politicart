@@ -1,0 +1,73 @@
+/* Self-hosted web fonts.
+ *
+ * The game loads Lilita One and Nunito from Google Fonts with a `<link>` in
+ * index.html. A design system cannot rely on that: anything rendered from the
+ * published bundle -- a design in Claude Design, a Storybook preview, an
+ * offline page -- would silently fall back to Arial Black and Segoe UI, and the
+ * look would be wrong in a way that is easy to miss and hard to attribute.
+ *
+ * These rules are Google's own stylesheet output, with the files served from
+ * the package instead: the same families, the same `unicode-range` subsets and
+ * the same `font-display: swap`, so rendering matches what a browser gets from
+ * Google today. The one structural change is Nunito's weight declaration,
+ * explained below.
+ *
+ * Only the `latin` and `latin-ext` subsets are shipped. Google also serves
+ * cyrillic, cyrillic-ext and vietnamese for Nunito; this is a French game, and
+ * carrying them would triple the font payload for glyphs it never sets.
+ *
+ * Nunito is declared ONCE per subset with a 400-900 weight range rather than
+ * once per weight. It is a variable font -- Google serves the identical file
+ * for 500, 700 and 900, which a static font could not do without synthetic
+ * emboldening -- so a range picks the same instances its per-weight faces
+ * would, and the game's 500/700/900 all render as before.
+ *
+ * That collapse matters here: Vite's library mode always inlines assets
+ * referenced from CSS, because a library's stylesheet cannot know the
+ * consumer's base path. Declaring Nunito per weight embedded the same two
+ * files three times each, for 328 kB of CSS; one face per subset brings it to
+ * four embedded files. Inlining itself is left alone -- it is the robust
+ * outcome for this system, since a rendered design receives only styles.css
+ * and so has no font directory that could go missing.
+ *
+ * Known gap, inherited rather than introduced: the `latin` subset covers
+ * U+2191 and U+2193 (the up and down arrows the controls legend uses) but not
+ * U+2190 or U+2192, so the left and right arrows fall back to a system font.
+ * The game has the same gap today.
+ */
+
+@font-face {
+  font-family: 'Lilita One';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/lilita-one-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Lilita One';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/lilita-one-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('../fonts/nunito-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('../fonts/nunito-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}

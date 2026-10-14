@@ -11,22 +11,41 @@ were discovered; kept in the repo on purpose.
   block was the only definition of the look before this work. See
   `.claude/DECISIONS.md` DEC-001..008 for why the extraction exists at all.
 
-## Fonts -- OPEN, needs handling before the sync
+## Fonts -- RESOLVED, self-hosted in the package
 
-The look depends on two Google Fonts, loaded by the game with a `<link>` in
-`index.html`:
+The look depends on two families the game loads from Google Fonts with a
+`<link>`: Lilita One (`--font-display`) and Nunito 500/700/900
+(`--font-body`). Anything rendered from the published bundle has no such link,
+so previews and designs would have fallen back to Arial Black and Segoe UI.
 
-    Lilita One   -> var(--font-display)
-    Nunito 500/700/900 -> var(--font-body)
+Both are now self-hosted. `packages/ui/src/fonts/` holds four woff2 subsets
+(92 kB total: each family's `latin` and `latin-ext`), declared by
+`src/styles/fonts.css`, which `styles.css` imports first.
 
-The package ships **no font files** and no `@import` for them: the tokens name
-the families and fall back to `Arial Black`/`Impact` and `Segoe UI`/`system-ui`.
-That is fine inside the game (the `<link>` is there) but a design rendered from
-the uploaded bundle would fall back to the system stack and look wrong.
+**The fonts end up embedded in `dist/styles.css` as base64, not as separate
+files, and that is deliberate.** Vite's library mode always inlines assets
+referenced from CSS, since a library stylesheet cannot know the consumer's base
+path -- `assetsInlineLimit` has no effect there. It also happens to be the
+right outcome for the sync: a rendered design receives only `styles.css` and
+its `@import` closure, so there is no `fonts/` directory that could go missing.
+Cost: `dist/styles.css` is ~127 kB. **So the converter needs no font
+configuration** -- do not go looking for a `fonts/` directory to wire up.
 
-Before stage 15, either self-host both families under the package and have
-`styles.css` reach them, or confirm the design runtime can load Google Fonts.
-Do not let the sync ship a bundle whose type silently degrades.
+Two things to know if these are ever touched:
+
+- Nunito is declared once per subset with `font-weight: 400 900` rather than
+  once per weight. It is a variable font: Google serves the identical file for
+  500, 700 and 900, which a static font could not do without synthetic
+  emboldening. Declaring it per weight embedded the same two files three times
+  each and produced 328 kB of CSS. If a preview ever shows no weight contrast
+  between body text and a bold label, this assumption is where to look first.
+- Only `latin` and `latin-ext` ship. Google also serves cyrillic, cyrillic-ext
+  and vietnamese for Nunito; this is a French game.
+- **Inherited glyph gap:** the `latin` subset covers U+2191 and U+2193 (the up
+  and down arrows in the controls legend) but not U+2190 or U+2192, so the left
+  and right arrows fall back to a system font. The game has this gap today too,
+  via the same subsets -- not introduced by the port, and not worth a custom
+  subset.
 
 ## CSS extraction
 
