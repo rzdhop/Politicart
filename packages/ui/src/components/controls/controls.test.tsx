@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { Tricolore } from '../brand/Tricolore';
 import { Button } from './Button';
 import { ControlsGrid } from './ControlsGrid';
 import { KeyCap } from './KeyCap';
@@ -71,19 +70,5 @@ describe('ControlsGrid and KeyCap', () => {
       </ControlsGrid>,
     );
     expect(container.querySelector('.controls b')?.textContent).toBe('↑');
-  });
-});
-
-describe('Tricolore', () => {
-  it('renders exactly three stripes', () => {
-    const { container } = render(<Tricolore />);
-    const bar = container.firstElementChild;
-    expect(bar?.className).toBe('tricolore');
-    expect(bar?.querySelectorAll('i')).toHaveLength(3);
-  });
-
-  it('is hidden from assistive technology, being purely decorative', () => {
-    const { container } = render(<Tricolore />);
-    expect(container.firstElementChild?.getAttribute('aria-hidden')).toBe('true');
   });
 });

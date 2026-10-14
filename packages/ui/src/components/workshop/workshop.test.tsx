@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { NoteBanner } from '../misc/NoteBanner';
 import { AdPreview } from './AdPreview';
 import { AdminCard } from './AdminCard';
 import { AdminGrid } from './AdminGrid';
@@ -120,13 +119,5 @@ describe('AdPreview', () => {
   it('works outside the admin grid, unlike the rest of the workshop', () => {
     const { container } = render(<AdPreview />);
     expect(container.firstElementChild?.className).toBe('ad-preview');
-  });
-});
-
-describe('NoteBanner', () => {
-  it('renders the note class', () => {
-    const { container } = render(<NoteBanner>Jeu au clavier.</NoteBanner>);
-    expect(container.firstElementChild?.className).toBe('note');
-    expect(container.firstElementChild?.textContent).toBe('Jeu au clavier.');
   });
 });

@@ -6,18 +6,17 @@ Current state only. History lives in git.
 
 - **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
   CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** Stage 5b DONE and committed (fonts self-hosted; an
-  unplanned stage, see the note below). **All 46 components exist.** Stage 6
-  next -- Storybook, one story per component.
-- **Next action:** add Storybook 10.6.2 with `@storybook/react-vite` to
-  `packages/ui`, a `.storybook/preview.ts` that imports `../src/styles.css` so
-  stories render with the real look, and one `*.stories.tsx` per component.
-  Then `npm run build-storybook` must succeed. A11y note: stories are what
-  design-sync screenshots for its preview verification in stage 15, so each
-  story should show the component in a realistic context (HUD readouts inside
-  a HudCorner, workshop inputs inside an AdminGrid, KeyCap inside a
-  ControlsGrid) or the preview will look broken even though the component is
-  fine.
+- **Current stage:** Stage 6 DONE and committed. **PART A IS COMPLETE**: the
+  library exists, is tested, and has a Storybook with one story per component.
+  Stage 7 next -- the Playwright E2E suite against the CURRENT single-file
+  game. index.html is still byte-identical to f271930 on this branch.
+- **Next action:** add Playwright at the repo root with a static server for
+  `index.html`, and specs covering R-01..R-09 against the game AS IT IS NOW.
+  This is the regression net for Part C, so it must be written and green
+  BEFORE stage 8 touches the game -- then any later failure is unambiguously
+  caused by the port. Ask the human before running the suite the first time
+  (Tier 2 rule) and note that Playwright needs `npx playwright install` to
+  fetch browsers, which is a sizeable download.
 - **Plan amendment:** an unplanned **stage 5b** was inserted before stage 6 to
   self-host the two web fonts. Reason: stage 6's stories are what design-sync
   screenshots in stage 15, and the package shipped no fonts, so every preview
@@ -54,7 +53,8 @@ regression contract below began UNVERIFIED.
     npm install            # clean, 95 packages, 0 vulnerabilities
     npm run build          # vite lib build + tsc declarations -> dist/
     npm run typecheck      # tsc --noEmit, clean
-    npm run test           # vitest, 11 files / 247 tests passing
+    npm run test           # vitest, 14 files / 341 tests passing
+    npm run build-storybook -w @kart-republique/ui   # 115 stories, 46 components
     npm audit              # 0 vulnerabilities (with and without dev deps)
 
 All four run from the repo root across workspaces. The game's regression
