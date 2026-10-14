@@ -6,33 +6,46 @@ Current state only. History lives in git.
 
 - **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
   CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** Stage 1 -- npm workspace skeleton + `packages/ui` scaffold
-- **Next action:** create root `package.json` (npm workspaces), `.gitignore`,
-  and `packages/ui/{package.json,tsconfig.json,vite.config.ts,src/index.ts}`;
-  then `npm install`, confirm the lib build emits `dist/` and `tsc --noEmit`
-  passes. Stage 1 touches no file outside `packages/` and the repo root config.
+- **Current stage:** Stage 1 DONE and committed. Stage 2 next -- move the
+  tokens and stylesheet verbatim out of index.html L1-130.
+- **Next action:** create `packages/ui/src/tokens.css` (the `:root` block, 15
+  custom properties) and `packages/ui/src/styles.css` (the remaining rules),
+  imported from `src/index.ts` so the lib build emits `dist/index.css`. Verify
+  declaration-by-declaration against index.html; the game keeps its own inline
+  copy until stage 12, so nothing may be deleted from index.html in this stage.
 - **Open questions:** none open. A-004 resolved as DEC-008 (Pages via GitHub
   Actions). Reminder carried forward: the repository's Pages source must be
   switched to "GitHub Actions" by hand before stage 14's deploy will work.
 
 ## Checkpoint commit
 
-- **Hash:** `f271930842fa711bc56a8ba7ef5b363877a0a19f`
-- **Subject:** Add Kart Republique: single-file Three.js kart racer
-- **Tree at checkpoint:** clean except untracked `.claude/` (this task's own
-  artifacts, created at LOAD)
+- **Hash:** `b21357e501d59443a85c5283a8b2b067023c90ce`
+- **Subject:** Add session artifacts and the plan for the design-system extraction
+- **Branch:** `feat/design-system` (branched from `main` at `f271930`). `main`
+  keeps serving the playable single-file game on Pages until the port merges.
+- **Tree at checkpoint:** clean
 - **Unrelated changes left unstaged:** none
+- **Last known-good game state:** `f271930` -- index.html is byte-identical to
+  it on this branch and stays so until stage 8.
 
 ## Tier-1 baseline
 
-**There is no automated check of any kind in this repo at the checkpoint.** No
-`package.json`, no test runner, no type check, no linter. The Tier-1 baseline is
-therefore empty by definition, not green-by-passing.
+At the task's start there was no automated check of any kind in this repo: no
+`package.json`, no test runner, no type check, no linter. The Tier-1 baseline
+was therefore empty by definition, not green-by-passing, and every item in the
+regression contract below began UNVERIFIED.
 
-Consequence: every item in the regression contract below is UNVERIFIED at the
-start of this task, and the game can only be checked by hand until the port
-lands a test setup. Establishing Tier 1 (type check + unit tests for the
-library) is itself part of the planned work.
+**Tier 1 as of stage 1 (green):**
+
+    npm install            # clean, 95 packages, 0 vulnerabilities
+    npm run build          # vite lib build + tsc declarations -> dist/
+    npm run typecheck      # tsc --noEmit, clean
+    npm run test           # vitest, 1 file / 2 tests passing
+    npm audit              # 0 vulnerabilities (with and without dev deps)
+
+All four run from the repo root across workspaces. The game's regression
+contract stays UNVERIFIED until stage 7 lands the Playwright suite -- that is
+the stage that gives Part C its net.
 
 ## Regression contract
 
