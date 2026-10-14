@@ -40,8 +40,8 @@ Current state only. History lives in git.
 
 ## Checkpoint commit
 
-- **Hash:** `b4d484c0ded80777bb150e9b9c8109baa4420d64`
-- **Subject:** Rebuild the six screens in React on @kart-republique/ui
+- **Hash:** `487454b698f8e3935a4e005031ea88a1989843b1`
+- **Subject:** Move the HUD onto the library's handles and give the minimap to the engine
 - **Branch:** `feat/design-system` (branched from `main` at `f271930`). `main`
   keeps serving the playable single-file game on Pages until the port merges.
 - **Tree at checkpoint:** clean
