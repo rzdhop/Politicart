@@ -71,6 +71,31 @@ describe.skipIf(!built)('published package contract', () => {
       'components/select/PowerBox.d.ts',
       'components/tracks/CardGrid.d.ts',
       'components/tracks/TrackCard.d.ts',
+      'components/hud/HudLayer.d.ts',
+      'components/hud/HudCorner.d.ts',
+      'components/hud/PositionReadout.d.ts',
+      'components/hud/LapCounter.d.ts',
+      'components/hud/RaceTimer.d.ts',
+      'components/hud/MinimapFrame.d.ts',
+      'components/hud/ItemSlot.d.ts',
+      'components/hud/PowerGauge.d.ts',
+      'components/hud/HudHint.d.ts',
+      'components/hud/SpeedReadout.d.ts',
+      'components/hud/DriftGauge.d.ts',
+      'components/hud/CenterAnnounce.d.ts',
+      'components/hud/Toast.d.ts',
+      'components/hud/WrongWay.d.ts',
+      'components/results/ResultsTable.d.ts',
+      'components/workshop/AdminGrid.d.ts',
+      'components/workshop/AdminCard.d.ts',
+      'components/workshop/Field.d.ts',
+      'components/workshop/TextInput.d.ts',
+      'components/workshop/ColorSwatch.d.ts',
+      'components/workshop/FileInput.d.ts',
+      'components/workshop/ColorsRow.d.ts',
+      'components/workshop/LiveryThumb.d.ts',
+      'components/workshop/AdPreview.d.ts',
+      'components/misc/NoteBanner.d.ts',
     ]) {
       expect(existsSync(join(dist, path)), `dist/${path} is missing`).toBe(true);
     }
@@ -102,6 +127,49 @@ describe.skipIf(!built)('published package contract', () => {
       'PowerBoxProps',
       'CardGridProps',
       'TrackCardProps',
+      'HudLayerProps',
+      'HudCornerProps',
+      'PositionReadoutProps',
+      'LapCounterProps',
+      'RaceTimerProps',
+      'MinimapFrameProps',
+      'ItemSlotProps',
+      'PowerGaugeProps',
+      'HudHintProps',
+      'SpeedReadoutProps',
+      'DriftGaugeProps',
+      'CenterAnnounceProps',
+      'ToastProps',
+      'WrongWayProps',
+      'ResultsTableProps',
+      'AdminGridProps',
+      'AdminCardProps',
+      'FieldProps',
+      'TextInputProps',
+      'ColorSwatchProps',
+      'FileInputProps',
+      'ColorsRowProps',
+      'LiveryThumbProps',
+      'AdPreviewProps',
+      'NoteBannerProps',
+    ]) {
+      expect(types, `${name} is not exported`).toContain(name);
+    }
+  });
+
+  it('exports an imperative handle for every live HUD readout', () => {
+    // Stage 13 drives these from the frame loop; without the handles the HUD
+    // would have to go through React state at 60fps.
+    const types = readFileSync(join(dist, 'index.d.ts'), 'utf8');
+    for (const name of [
+      'TextReadoutHandle',
+      'PositionReadoutHandle',
+      'SpeedReadoutHandle',
+      'DriftGaugeHandle',
+      'PowerGaugeHandle',
+      'ItemSlotHandle',
+      'ToastHandle',
+      'WrongWayHandle',
     ]) {
       expect(types, `${name} is not exported`).toContain(name);
     }

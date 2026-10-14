@@ -6,18 +6,20 @@ Current state only. History lives in git.
 
 - **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
   CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** Stage 4 DONE and committed (22 components total). Stage 5
-  next -- hud, results, workshop and misc (the remaining groups).
-- **Next action:** write `packages/ui/src/components/{hud,results,workshop,
-  misc}/` -- HudLayer, HudCorner, PositionReadout, LapCounter, RaceTimer,
-  MinimapFrame, ItemSlot, PowerGauge, HudHint, SpeedReadout, DriftGauge,
-  CenterAnnounce, Toast, WrongWay, ResultsTable, AdminGrid, Field, TextInput,
-  ColorSwatch, LiveryThumb, NoteBanner. Same pattern as stages 3-4. **The HUD
-  group is the one with a design constraint**: per the exploration map, rank,
-  lap, clock, speed, drift and the power bar are written every frame during a
-  race, so these components must expose an imperative handle (a ref to the text
-  node or an `updateX()` method) rather than expecting React state. Stage 13
-  depends on that shape.
+- **Current stage:** Stage 5 DONE and committed. **All 46 components exist.**
+  Stage 6 next -- Storybook, one story per component.
+- **Next action:** add Storybook 10.6.2 with `@storybook/react-vite` to
+  `packages/ui`, a `.storybook/preview.ts` that imports `../src/styles.css` so
+  stories render with the real look, and one `*.stories.tsx` per component.
+  Then `npm run build-storybook` must succeed. A11y note: stories are what
+  design-sync screenshots for its preview verification in stage 15, so each
+  story should show the component in a realistic context (HUD readouts inside
+  a HudCorner, workshop inputs inside an AdminGrid, KeyCap inside a
+  ControlsGrid) or the preview will look broken even though the component is
+  fine.
+- **Component count:** 46, not the ~30 the plan estimated. The estimate
+  collapsed the HUD's twelve readouts and the workshop's nine form parts into
+  single inventory lines. Same scope ("the whole surface"), more accurate count.
 - **Open questions:** none open. A-004 resolved as DEC-008 (Pages via GitHub
   Actions). Reminder carried forward: the repository's Pages source must be
   switched to "GitHub Actions" by hand before stage 14's deploy will work.
@@ -45,7 +47,7 @@ regression contract below began UNVERIFIED.
     npm install            # clean, 95 packages, 0 vulnerabilities
     npm run build          # vite lib build + tsc declarations -> dist/
     npm run typecheck      # tsc --noEmit, clean
-    npm run test           # vitest, 8 files / 179 tests passing
+    npm run test           # vitest, 11 files / 244 tests passing
     npm audit              # 0 vulnerabilities (with and without dev deps)
 
 All four run from the repo root across workspaces. The game's regression

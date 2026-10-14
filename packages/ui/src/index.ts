@@ -57,5 +57,87 @@ export { StatGrid, type StatGridProps } from './components/select/StatGrid';
 export { CardGrid, type CardGridProps } from './components/tracks/CardGrid';
 export { TrackCard, type TrackCardProps } from './components/tracks/TrackCard';
 
+// HUD. The live readouts also expose imperative handles -- see handles.ts for
+// why, and read that before driving the HUD from a game loop.
+export {
+  type TextReadoutHandle,
+} from './components/hud/handles';
+export {
+  CenterAnnounce,
+  type CenterAnnounceProps,
+} from './components/hud/CenterAnnounce';
+export {
+  DriftGauge,
+  type DriftGaugeHandle,
+  type DriftGaugeProps,
+} from './components/hud/DriftGauge';
+export {
+  HudCorner,
+  type HudCornerPosition,
+  type HudCornerProps,
+} from './components/hud/HudCorner';
+export { HudHint, type HudHintProps } from './components/hud/HudHint';
+export { HudLayer, type HudLayerProps } from './components/hud/HudLayer';
+export {
+  ItemSlot,
+  type ItemSlotHandle,
+  type ItemSlotProps,
+} from './components/hud/ItemSlot';
+export { LapCounter, type LapCounterProps } from './components/hud/LapCounter';
+export {
+  MinimapFrame,
+  type MinimapFrameProps,
+} from './components/hud/MinimapFrame';
+export {
+  PositionReadout,
+  type PositionReadoutHandle,
+  type PositionReadoutProps,
+} from './components/hud/PositionReadout';
+export {
+  PowerGauge,
+  type PowerGaugeHandle,
+  type PowerGaugeProps,
+} from './components/hud/PowerGauge';
+export { RaceTimer, type RaceTimerProps } from './components/hud/RaceTimer';
+export {
+  SpeedReadout,
+  type SpeedReadoutHandle,
+  type SpeedReadoutProps,
+} from './components/hud/SpeedReadout';
+export { Toast, type ToastHandle, type ToastProps } from './components/hud/Toast';
+export {
+  WrongWay,
+  type WrongWayHandle,
+  type WrongWayProps,
+} from './components/hud/WrongWay';
+
+// Results.
+export {
+  ResultsTable,
+  type ResultsRow,
+  type ResultsTableProps,
+} from './components/results/ResultsTable';
+
+// Workshop (admin). Every one of these except AdPreview must be rendered
+// inside an AdminGrid -- the stylesheet scopes them to `.admin`.
+export { AdPreview, type AdPreviewProps } from './components/workshop/AdPreview';
+export { AdminCard, type AdminCardProps } from './components/workshop/AdminCard';
+export { AdminGrid, type AdminGridProps } from './components/workshop/AdminGrid';
+export {
+  ColorSwatch,
+  type ColorSwatchProps,
+} from './components/workshop/ColorSwatch';
+export { ColorsRow, type ColorsRowProps } from './components/workshop/ColorsRow';
+export { Field, type FieldProps } from './components/workshop/Field';
+export { FileInput, type FileInputProps } from './components/workshop/FileInput';
+export {
+  LiveryThumb,
+  type LiveryThumbProps,
+} from './components/workshop/LiveryThumb';
+export { TextInput, type TextInputProps } from './components/workshop/TextInput';
+
+// Misc.
+export { NoteBanner, type NoteBannerProps } from './components/misc/NoteBanner';
+
 /** Package version, exported so a consumer can confirm which build it loaded. */
 export const version = '0.1.0';
