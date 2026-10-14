@@ -42,8 +42,8 @@ Current state only. History lives in git.
 
 ## Checkpoint commit
 
-- **Hash:** `c1170857c1b2dad31614ccbbc3be9bd286509e7e`
-- **Subject:** Extract the kart and track builders into engine modules
+- **Hash:** `daaf44f684b67f56d47302e0e97bca7e4b0e1e90`
+- **Subject:** Extract physics, AI, items and powers behind an event queue
 - **Branch:** `feat/design-system` (branched from `main` at `f271930`). `main`
   keeps serving the playable single-file game on Pages until the port merges.
 - **Tree at checkpoint:** clean
