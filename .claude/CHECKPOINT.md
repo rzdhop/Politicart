@@ -21,7 +21,7 @@ Current state only. History lives in git.
 
 ## Checkpoint commit
 
-- **Hash:** `pending -- set to the stage 2 commit below`
+- **Hash:** `01a9dd0f7efef5ab3f3ad184b6b43acff6a12470`
 - **Subject:** Extract the game's tokens and stylesheet into @kart-republique/ui
 - **Branch:** `feat/design-system` (branched from `main` at `f271930`). `main`
   keeps serving the playable single-file game on Pages until the port merges.
