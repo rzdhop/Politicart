@@ -40,8 +40,8 @@ Current state only. History lives in git.
 
 ## Checkpoint commit
 
-- **Hash:** `487454b698f8e3935a4e005031ea88a1989843b1`
-- **Subject:** Move the HUD onto the library's handles and give the minimap to the engine
+- **Hash:** `65998b184998bc785f043ba55274cb37eabf25f7`
+- **Subject:** Publish the game from a GitHub Actions workflow and rewrite the README
 - **Branch:** `feat/design-system` (branched from `main` at `f271930`). `main`
   keeps serving the playable single-file game on Pages until the port merges.
 - **Tree at checkpoint:** clean
