@@ -17,6 +17,12 @@
 // deliberately left as one file here; splitting it into modules is stage 9.
 import * as THREE from 'three';
 
+// Engine modules, pulled out of this file in stage 9. The rest of the game
+// still lives here and is moved out in the stages that follow.
+import { initAudio, isMuted, sfx, toggleMute, updateEngine } from './engine/audio.js';
+import { CFG, G, SHADOWS, getPoly, isClear, seg, togglePoly } from './engine/state.js';
+import { $, clamp, fmtTime, hex, lerp, ordinal, pick, rand, wrapAngle } from './engine/util.js';
+
 'use strict';
 /* =====================================================================================
    KART RÉPUBLIQUE v2 — satirical kart racer with a fictional French political cast.
@@ -24,23 +30,6 @@ import * as THREE from 'three';
    political items + one special power per candidate, AI opponents with rubber-banding,
    procedural textures, shadow mapping, WebAudio sound.
    ===================================================================================== */
-
-// ---------- Utilities ----------
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const lerp = (a, b, t) => a + (b - a) * t;
-const rand = (a, b) => a + Math.random() * (b - a);
-const pick = arr => arr[Math.floor(Math.random() * arr.length)];
-const wrapAngle = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
-const $ = id => document.getElementById(id);
-const fmtTime = t => { const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); };
-const ordinal = r => r + (r === 1 ? 'er' : 'e');
-const hex = c => '#' + c.toString(16).padStart(6, '0');
-
-// ---------- Config ----------
-const CFG = { roadHalfWidth: 9, samples: 600, laps: 3, numAI: 5, powerCooldown: 24 };
-let POLY = 'high';                                   // 'high' = more segments + shadows, 'low' = lighter
-const seg = () => (POLY === 'high' ? 28 : 10);
-const SHADOWS = () => POLY === 'high';
 
 // ---------- Cast (all fictional) ----------
 const CHARACTERS = [
@@ -490,18 +479,6 @@ function cloudsAndSky(scene, top, horizon) {
   const sun = new THREE.Mesh(new THREE.SphereGeometry(28, 16, 16), new THREE.MeshBasicMaterial({ color: 0xfff7d0, fog: false })); sun.position.set(400, 520, 260); scene.add(sun);
   const cm = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92, fog: false });
   for (let i = 0; i < 16; i++) { const g = new THREE.Group(); const n = 3 + Math.floor(Math.random() * 3); for (let j = 0; j < n; j++) { const s = new THREE.Mesh(new THREE.SphereGeometry(rand(7, 14), 10, 8), cm); s.position.set(j * 9 - n * 4, rand(-2, 3), rand(-4, 4)); s.scale.y = 0.55; g.add(s); } g.position.set(rand(-700, 700), rand(120, 190), rand(-700, 700)); scene.add(g); G.animated.push(dt => { g.position.x += dt * 2.5; if (g.position.x > 760) g.position.x = -760; }); }
-}
-
-// ---------- Game state ----------
-const G = {
-  state: 'title', scene: null, track: null, karts: [], player: null, samples: [], N: 0, trackLength: 0,
-  hazards: [], projectiles: [], itemBoxes: [], animated: [], crowd: [], ramps: [], pits: [], pads: [], crossings: [], time: 0, countdown: 0, charIdx: 0, trackIdx: 0,
-  resultsAt: Infinity, wrongTimer: 0, toastTimer: 0, previewKart: null, previewScene: null, sun: null, thumbs: {}, thumbPoly: null,
-};
-function isClear(x, z, margin) {
-  const lim = (CFG.roadHalfWidth + margin) ** 2;
-  for (let i = 0; i < G.N; i += 2) { const s = G.samples[i]; if ((s.x - x) ** 2 + (s.z - z) ** 2 < lim) return false; }
-  return true;
 }
 
 // ---------- Track construction ----------
@@ -1036,7 +1013,7 @@ window.addEventListener('keydown', e => {
   if (G.state === 'race' && ['ControlLeft', 'ControlRight', 'KeyE', 'Enter'].includes(e.code)) useItem(G.player);
   if (G.state === 'race' && ['KeyF', 'ShiftLeft', 'ShiftRight'].includes(e.code)) usePower(G.player);
   if (e.code === 'Escape') { if (G.state === 'race' || G.state === 'countdown') pause(); else if (G.state === 'paused') resume(); }
-  if (e.code === 'KeyM') toggleMute();
+  if (e.code === 'KeyM') { toggleMute(); syncMuteButton(); }
   if (e.code === 'Enter' && G.state === 'title') $('b-play').click();
   if (e.code === 'Enter' && G.state === 'results') $('b-again').click();
   if (G.state === 'select' && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) selectChar((G.charIdx + (e.code === 'ArrowRight' ? 1 : CHARACTERS.length - 1)) % CHARACTERS.length);
@@ -1045,54 +1022,6 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 function inputState() { return { throttle: keys.ArrowUp || keys.KeyW, brake: keys.ArrowDown || keys.KeyS, left: keys.ArrowLeft || keys.KeyA, right: keys.ArrowRight || keys.KeyD, drift: !!keys.Space }; }
-
-// ---------- Audio ----------
-let AC = null, master = null, engineOsc = null, engineGain = null, muted = false, nextNoteTime = 0, noteIx = 0;
-const midiHz = m => 440 * Math.pow(2, (m - 69) / 12);
-const MELODY = [[67, 1], [71, 1], [74, 1], [79, 2], [74, 1], [78, 1], [74, 1], [71, 1], [69, 3], [69, 1], [72, 1], [76, 1], [81, 2], [76, 1], [78, 1], [76, 1], [74, 1], [71, 3], [72, 1], [76, 1], [79, 1], [84, 2], [79, 1], [83, 1], [79, 1], [76, 1], [74, 3], [78, 1], [81, 1], [78, 1], [74, 1], [78, 1], [74, 1], [71, 1], [72, 1], [74, 1], [67, 3]];
-const BASS = [[43, 50], [43, 50], [38, 45], [38, 45], [38, 45], [38, 45], [43, 50], [43, 50], [36, 43], [36, 43], [43, 50], [43, 50], [38, 45], [38, 45], [43, 50], [43, 50]];
-function initAudio() {
-  if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
-  try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
-  master = AC.createGain(); master.gain.value = muted ? 0 : 0.5; master.connect(AC.destination);
-  engineOsc = AC.createOscillator(); engineOsc.type = 'sawtooth'; const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 700;
-  engineGain = AC.createGain(); engineGain.gain.value = 0; engineOsc.connect(f); f.connect(engineGain); engineGain.connect(master); engineOsc.start();
-  nextNoteTime = AC.currentTime + 0.1; noteIx = 0; scheduleMusic();
-}
-function playNote(midi, t, dur, type, vol) { const o = AC.createOscillator(), g = AC.createGain(); o.type = type; o.frequency.value = midiHz(midi); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur); o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02); }
-function scheduleMusic() {
-  const beat = 60 / 168;
-  while (nextNoteTime < AC.currentTime + 0.4) {
-    const beatsSoFar = MELODY.slice(0, noteIx).reduce((a, n) => a + n[1], 0);
-    const n = MELODY[noteIx]; playNote(n[0], nextNoteTime, n[1] * beat * 0.9, 'triangle', 0.12);
-    for (let b = 0; b < n[1]; b++) { const absBeat = beatsSoFar + b; const bar = Math.floor(absBeat / 3) % BASS.length; const inBar = absBeat % 3; playNote(inBar === 0 ? BASS[bar][0] : BASS[bar][1] + (inBar === 2 ? 4 : 0), nextNoteTime + b * beat, beat * 0.5, inBar === 0 ? 'sine' : 'square', inBar === 0 ? 0.16 : 0.05); }
-    nextNoteTime += n[1] * beat; noteIx = (noteIx + 1) % MELODY.length;
-  }
-  setTimeout(scheduleMusic, 120);
-}
-function sfx(name) {
-  if (!AC || muted) return; const t = AC.currentTime; const o = AC.createOscillator(), g = AC.createGain(); o.connect(g); g.connect(master);
-  const env = (v, d) => { g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.001, t + d); o.start(t); o.stop(t + d + 0.02); };
-  switch (name) {
-    case 'boost': o.type = 'square'; o.frequency.setValueAtTime(280, t); o.frequency.exponentialRampToValueAtTime(1100, t + 0.3); env(0.14, 0.35); break;
-    case 'bump': o.type = 'triangle'; o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(50, t + 0.15); env(0.2, 0.18); break;
-    case 'hit': o.type = 'sawtooth'; o.frequency.setValueAtTime(400, t); o.frequency.exponentialRampToValueAtTime(60, t + 0.5); env(0.22, 0.55); break;
-    case 'box': o.type = 'sine'; o.frequency.setValueAtTime(880, t); o.frequency.setValueAtTime(1320, t + 0.08); env(0.12, 0.2); break;
-    case 'pick': o.type = 'square'; o.frequency.setValueAtTime(660, t); o.frequency.setValueAtTime(990, t + 0.07); o.frequency.setValueAtTime(1320, t + 0.14); env(0.1, 0.25); break;
-    case 'drop': o.type = 'triangle'; o.frequency.setValueAtTime(220, t); env(0.12, 0.15); break;
-    case 'throw': o.type = 'sawtooth'; o.frequency.setValueAtTime(600, t); o.frequency.exponentialRampToValueAtTime(1800, t + 0.2); env(0.1, 0.22); break;
-    case 'motion': o.type = 'sawtooth'; o.frequency.setValueAtTime(200, t); o.frequency.exponentialRampToValueAtTime(90, t + 0.6); env(0.18, 0.7); break;
-    case 'jump': o.type = 'sine'; o.frequency.setValueAtTime(300, t); o.frequency.exponentialRampToValueAtTime(900, t + 0.35); env(0.12, 0.4); break;
-    case 'helico': o.type = 'square'; o.frequency.setValueAtTime(80, t); o.frequency.linearRampToValueAtTime(140, t + 1.5); env(0.12, 1.6); break;
-    case 'shield': o.type = 'sine'; o.frequency.setValueAtTime(523, t); o.frequency.setValueAtTime(659, t + 0.1); o.frequency.setValueAtTime(784, t + 0.2); o.frequency.setValueAtTime(1046, t + 0.3); env(0.14, 0.5); break;
-    case 'lap': o.type = 'square'; o.frequency.setValueAtTime(784, t); o.frequency.setValueAtTime(1046, t + 0.12); env(0.1, 0.3); break;
-    case 'count': o.type = 'square'; o.frequency.setValueAtTime(440, t); env(0.12, 0.2); break;
-    case 'go': o.type = 'square'; o.frequency.setValueAtTime(880, t); env(0.16, 0.6); break;
-    case 'finish': [0, 0.15, 0.3, 0.45].forEach((d, i) => { const o2 = AC.createOscillator(), g2 = AC.createGain(); o2.type = 'square'; o2.frequency.value = [523, 659, 784, 1046][i]; g2.gain.setValueAtTime(0.12, t + d); g2.gain.exponentialRampToValueAtTime(0.001, t + d + 0.4); o2.connect(g2); g2.connect(master); o2.start(t + d); o2.stop(t + d + 0.42); }); break;
-  }
-}
-function updateEngine() { if (!engineGain) return; const k = G.player; const racing = G.state === 'race' || G.state === 'countdown'; engineGain.gain.value = racing && !muted ? 0.045 + Math.abs(k.speed) / 900 : 0; engineOsc.frequency.value = 55 + Math.abs(k.speed) * 2.6 + (k.boost > 0 ? 60 : 0) + (k.fly > 0 ? 40 : 0); }
-function toggleMute() { muted = !muted; if (master) master.gain.value = muted ? 0 : 0.5; $('b-mute').textContent = 'Son : ' + (muted ? 'coupé' : 'activé'); }
 
 // ---------- Screens ----------
 const SCREENS = ['s-title', 's-select', 's-tracks', 's-pause', 's-results', 's-admin'];
@@ -1123,7 +1052,8 @@ function renderPreview(dt) {
 }
 function makeThumbs() {
   // Render each character once into a small square and keep the data URL for the roster tiles.
-  if (G.thumbPoly === POLY) return; G.thumbPoly = POLY; G.thumbs = {};
+  const poly = getPoly();
+  if (G.thumbPoly === poly) return; G.thumbPoly = poly; G.thumbs = {};
   ensurePreviewScene(); const keep = G.previewKart; const prevChildren = [...G.previewHolder.children]; prevChildren.forEach(c => G.previewHolder.remove(c));
   renderer.setSize(220, 220, false); camera.aspect = 1; camera.fov = 34; camera.updateProjectionMatrix(); camera.position.set(0.8, 3.2, 7.5); camera.lookAt(0, 1.7, 0);
   CHARACTERS.forEach(c => { const k = buildKart(c); k.rotation.y = -0.5; G.previewHolder.add(k); renderer.render(G.previewScene, camera); G.thumbs[c.id] = renderer.domElement.toDataURL('image/png'); G.previewHolder.remove(k); disposeScene(k); });
@@ -1187,8 +1117,8 @@ loadCustom();
 
 // buttons
 $('b-play').addEventListener('click', () => { initAudio(); buildRoster(); showScreen('s-select'); G.state = 'select'; });
-$('b-poly').addEventListener('click', () => { POLY = POLY === 'low' ? 'high' : 'low'; $('b-poly').textContent = POLY === 'low' ? 'Graphismes : légers (low-poly)' : 'Graphismes : détaillés (ombres)'; if (G.previewHolder) setPreview(G.charIdx); });
-$('b-mute').addEventListener('click', () => { initAudio(); toggleMute(); });
+$('b-poly').addEventListener('click', () => { const poly = togglePoly(); $('b-poly').textContent = poly === 'low' ? 'Graphismes : légers (low-poly)' : 'Graphismes : détaillés (ombres)'; if (G.previewHolder) setPreview(G.charIdx); });
+$('b-mute').addEventListener('click', () => { initAudio(); toggleMute(); syncMuteButton(); });
 $('b-back1').addEventListener('click', () => { showScreen('s-title'); G.state = 'title'; });
 $('b-next1').addEventListener('click', () => { buildTrackCards(); showScreen('s-tracks'); G.state = 'tracks'; });
 $('b-back2').addEventListener('click', () => { showScreen('s-select'); G.state = 'select'; });
@@ -1224,6 +1154,16 @@ function frame(now) {
   if (G.time >= G.resultsAt || (G.player.finished && G.karts.every(k => k.finished))) showResults();
 }
 requestAnimationFrame(frame);
+
+/**
+ * Keep the title screen's sound button in step with the audio module.
+ *
+ * toggleMute() returns the new state rather than touching the DOM, so this is
+ * the one place that knows the wording.
+ */
+function syncMuteButton() {
+  $('b-mute').textContent = 'Son : ' + (isMuted() ? 'coupé' : 'activé');
+}
 
 // --- Test hook -------------------------------------------------------------
 // The end-to-end suite needs to reach the results screen, which is otherwise
