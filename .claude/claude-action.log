@@ -1,0 +1,3 @@
+# Action log (append only)
+# Format: date | stage | problem | solution | files
+2026-10-14 | LOAD/EXPLORE | No prior .claude artifacts; design-sync invoked on a repo with no component package | Created the five artifacts; recorded DEC-001..006 from four scope answers; spawned two read-only agents to map index.html DOM coupling and data shapes | .claude/VISION.md .claude/DECISIONS.md .claude/ASSUMPTIONS.md .claude/CHECKPOINT.md .claude/claude-action.log
