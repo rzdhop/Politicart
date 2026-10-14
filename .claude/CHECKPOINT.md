@@ -37,8 +37,8 @@ Current state only. History lives in git.
 
 ## Checkpoint commit
 
-- **Hash:** `41b3694da4e08793b343d4828cf30ea6b470789c`
-- **Subject:** Extract the renderer, mesh primitives and procedural textures
+- **Hash:** `c1170857c1b2dad31614ccbbc3be9bd286509e7e`
+- **Subject:** Extract the kart and track builders into engine modules
 - **Branch:** `feat/design-system` (branched from `main` at `f271930`). `main`
   keeps serving the playable single-file game on Pages until the port merges.
 - **Tree at checkpoint:** clean
