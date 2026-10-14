@@ -85,3 +85,17 @@ describe('ResultsTable', () => {
     expect(container.querySelectorAll('tbody tr')).toHaveLength(2);
   });
 });
+
+describe('ResultsTable bodyProps', () => {
+  it('spreads bodyProps onto the tbody, so the game can give it its contract id', () => {
+    const { container } = render(<ResultsTable rows={ROWS} bodyProps={{ id: 'r-body' }} />);
+    const body = container.querySelector('tbody#r-body');
+    expect(body).not.toBeNull();
+    expect(body?.querySelectorAll('tr')).toHaveLength(ROWS.length);
+  });
+
+  it('renders a plain tbody when bodyProps is omitted', () => {
+    const { container } = render(<ResultsTable rows={ROWS} />);
+    expect(container.querySelector('tbody')?.attributes).toHaveLength(0);
+  });
+});

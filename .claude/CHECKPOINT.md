@@ -6,27 +6,28 @@ Current state only. History lives in git.
 
 - **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
   CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** Stage 11 DONE and committed. The seam exists:
-  `engine/machine.js` is the one record of where the game is (`G.state` is
-  a read-only getter over it, DEC-011), `engine/race.js` steps the race and
-  returns the frame payload built by `engine/payload.js`, `engine/preview.js`
-  renders the showcase and thumbnails, and `game.js` (232 lines) is now only
-  the UI layer: it listens to the machine for screens, writes the HUD from
-  the payload, drains the event queue, and owns the clock. The engine makes
-  zero DOM writes. The results E2E spec was re-pointed at `window.__kr.endRace`
-  as DEC-009 anticipated. 36 game unit tests; 27/27 E2E green.
-- **Next action:** Stage 12 -- the React UI layer. All six screens (title,
-  select, tracks, pause, results, workshop) composed from `@kart-republique/ui`
-  in `apps/game/src/ui/*`, mounted over the canvas, driven by the machine
-  (`onTransition`) and calling the same engine entry points `game.js` calls
-  today (`startRace`, `transition`, `setPreview`, `makeThumbs`, `buildAdmin`
-  logic, `useItem`/`usePower` on keys). Element ids are the contract
-  (DEC-009): `#s-*`, `#b-*`, `#roster`, `#showcase`, `#trackcards`,
-  `#admin-chars`, `#adm-*-<id>`, `#ad-files`, `#ad-preview`, `#r-sub`,
-  `#r-body`, `#hud`, `#h-*`, `#minimap`, `#note`, `#c`. The HUD stays on the
-  imperative path (stage 13), so stage 12 may keep `updateHUD`/minimap in
-  plain DOM behind refs. Needs react, react-dom and @vitejs/plugin-react in
-  apps/game (same pins as packages/ui). 27/27 E2E after the move.
+- **Current stage:** Stage 12 DONE and committed. The six screens and the
+  note banner are React (`apps/game/src/ui/`), composed from
+  `@kart-republique/ui` and driven by a small external store over the
+  machine (`ui/store.ts`). `index.html` lost its inline stylesheet and the
+  Google Fonts link: the look now comes from the package stylesheet plus
+  two game-only rules in `src/game.css`, and the UI package's parity suite
+  retired itself as designed (Tier 1 is now 238 + 44 tests). `game.js` (148
+  lines) keeps the HUD writer, minimap, keyboard and clock. `ResultsTable`
+  gained `bodyProps` (DEC-012). 27/27 E2E green with no spec selector
+  changed.
+- **Next action:** Stage 13 -- the HUD on the imperative path. Build
+  `ui/Hud.tsx` from the library's HUD components with their handles
+  (`PositionReadout`, `LapCounter`, `RaceTimer`, `MinimapFrame`, `ItemSlot`,
+  `PowerGauge`, `HudHint`, `SpeedReadout`, `DriftGauge`, `CenterAnnounce`,
+  `Toast`, `WrongWay` inside `HudLayer` and four `HudCorner`s), rendered
+  once; `updateHUD` writes through the handles, never through state. Per
+  DEC-012 add part props to `SpeedReadout` (`valueProps`), `DriftGauge`
+  (`fillProps`) and `PowerGauge` (`nameProps`, `fillProps`, `keyHintProps`)
+  so `#h-speed`, `#h-drift`, `#h-pname`, `#h-pbar`, `#h-pkey` land on the
+  same elements. Hand the minimap canvas to the engine (`engine/minimap.js`
+  draws base and karts from the payload). Remove the HUD markup from
+  `index.html`. Manual 60 fps check. 27/27 E2E after the move.
 - **Session note (2026-10-14):** the branch ref file was found zeroed on
   resume and restored from the reflog; see the action log. Nothing was lost.
 - **Plan amendment:** an unplanned **stage 5b** was inserted before stage 6 to

@@ -1,3 +1,4 @@
+import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 // The game, as a Vite app.
@@ -7,6 +8,7 @@ import { defineConfig } from 'vite';
 // the React port (see .claude/DECISIONS.md DEC-003); stage 14 adds the GitHub
 // Actions workflow that publishes the output.
 export default defineConfig({
+  plugins: [react()],
   // Relative asset paths, so the same build works both from the preview server
   // at / and from GitHub Pages under /Politicart/.
   base: './',
@@ -25,8 +27,8 @@ export default defineConfig({
   // somewhere the tests are not looking.
   server: { host: '127.0.0.1', port: 5173, strictPort: true },
   preview: { host: '127.0.0.1', port: 4173, strictPort: true },
-  // Engine unit tests. Node environment on purpose: the modules under test
-  // (the event queue, the input seam) have no DOM, and keeping them that way
-  // is the point.
-  test: { environment: 'node', include: ['src/**/*.test.js'] },
+  // Unit tests. Node environment by default, on purpose: the engine modules
+  // under test have no DOM and keeping them that way is the point. The UI
+  // tests opt into jsdom per file with a `@vitest-environment jsdom` docblock.
+  test: { environment: 'node', include: ['src/**/*.test.{js,ts,tsx}'] },
 });

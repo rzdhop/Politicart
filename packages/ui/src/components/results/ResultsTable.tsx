@@ -25,6 +25,12 @@ export interface ResultsTableProps extends Omit<ComponentPropsWithRef<'table'>, 
   /** The finishing order, top to bottom. */
   rows: ResultsRow[];
   /**
+   * Props for the `<tbody>`, for a consumer that needs to address the body
+   * itself -- the game gives it the id its test suite drives (`#r-body`),
+   * since the ids on the original markup are a contract the port keeps.
+   */
+  bodyProps?: ComponentPropsWithRef<'tbody'>;
+  /**
    * Column headers, as `[rank, name, time]`. The rank column is normally left
    * blank. Omit this and no header row is rendered at all -- the wording is
    * the game's, not the system's, so there is no default.
@@ -53,7 +59,7 @@ export interface ResultsTableProps extends Omit<ComponentPropsWithRef<'table'>, 
  * />
  * ```
  */
-export function ResultsTable({ rows, columns, className, ...rest }: ResultsTableProps) {
+export function ResultsTable({ rows, columns, bodyProps, className, ...rest }: ResultsTableProps) {
   return (
     <table className={cx('results-table', className)} {...rest}>
       {columns === undefined ? null : (
@@ -65,7 +71,7 @@ export function ResultsTable({ rows, columns, className, ...rest }: ResultsTable
           </tr>
         </thead>
       )}
-      <tbody>
+      <tbody {...bodyProps}>
         {rows.map((row, index) => (
           <tr key={row.id ?? index} className={row.highlighted ? 'you' : undefined}>
             <td className="r">{row.rank}</td>

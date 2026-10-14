@@ -203,3 +203,25 @@ say) throws instead of silently restarting as the single file did. That is
 the intended trade. The results-screen E2E spec, which DEC-009 said would
 break here, now calls the engine's `endRace()` through `window.__kr`, the one
 hook the game installs for the suite.
+
+## DEC-012 -- Library components expose inner parts through explicit part props, never through ids they invent
+
+**Context.** DEC-009 makes the game's element ids a contract: the E2E suite
+drives `#r-body`, `#h-speed`, `#h-drift`, `#h-pname` and `#h-pkey`, and
+several of those sit on an *inner* element of what is now one library
+component -- the `<tbody>` of `ResultsTable`, the number `<span>` of
+`SpeedReadout`, the fill `<i>` of `DriftGauge`, the name and key-hint lines
+of `PowerGauge`. A component's own props spread onto its root, so a consumer
+had no way to put an id on the part the contract names.
+
+**Decision.** Where the contract needs an inner part addressed, the component
+takes an explicit, optional props bag for that part (`bodyProps` on
+`ResultsTable` in stage 12; `valueProps`, `fillProps`, `nameProps` and
+`keyHintProps` on the HUD readouts in stage 13), spread onto that element.
+The library never bakes in a game id, and the game never reaches into a
+component's DOM to patch one in.
+
+**Consequence.** The design system stays reusable (no ids, no game knowledge)
+and the E2E suite keeps driving the game through the ids it always has, so
+DEC-009 holds without a single spec selector changing. The cost is a few
+extra optional props on five components, each documented as what it is for.
