@@ -6,9 +6,17 @@ Keyboard only. Three laps, five AI opponents, no cohabitation.
 
 ## Play
 
-Open `index.html` in any modern browser. No build step, no install: the whole game is in that single file. The only external dependency is Three.js r128, loaded from cdnjs.
+The game is published from this repository to GitHub Pages: `https://rzdhop.github.io/Politicart/`.
 
-To host it, enable GitHub Pages on the `main` branch (root) and the game is served at `https://<user>.github.io/Politicart/`.
+To run it locally you need Node 26 and npm:
+
+```sh
+npm ci
+npm run build -w @kart-republique/ui   # the design system the game is built from
+npm run dev -w @kart-republique/game   # http://127.0.0.1:5173
+```
+
+`npm run build` builds everything; `npm run preview -w @kart-republique/game` serves the production build at `http://127.0.0.1:4173`.
 
 ## Controls
 
@@ -23,6 +31,8 @@ To host it, enable GitHub Pages on the `main` branch (root) and the game is serv
 | Esc | Pause |
 | M | Mute |
 
+The game reads physical key codes, so the same keys work on AZERTY and QWERTY keyboards.
+
 ## Content
 
 - **11 fictional candidates**, each with stats (speed, acceleration, handling, weight) and a signature satirical power: Grand débat, Grève générale, Rond-point surprise, Zone à faibles émissions, Amendement de dernière minute, Mégaphone, Éléments de langage, Vol d'audience, Mise en examen, Épandage, Temps de parole.
@@ -33,19 +43,48 @@ To host it, enable GitHub Pages on the `main` branch (root) and the game is serv
 
 All characters, parties and scandals are fictional. Any resemblance to existing figures is purely electoral.
 
-## Code map
+## Repository layout
 
-Everything lives in `index.html`:
+An npm workspace with two packages.
 
-| Section | What it holds |
+| Path | What it is |
 | --- | --- |
-| `<style>` | Theme tokens, menus, HUD, workshop |
-| `CHARACTERS` | The cast: stats, power, look |
-| `ITEMS`, `ITEM_ODDS` | Items and rank-weighted odds |
-| `TRACKS` | Spline control points and `features` (ramps, pits, pads, chicanes, crossings) |
-| `buildDriver`, `buildKart` | Procedural 3D characters and karts |
-| `buildElysee`, `buildBourbon`, `buildVersailles` | Track decor |
-| `updateKart` | Physics: acceleration, drift, jumps, walls, pits |
-| `aiInput` | AI driving with rubber-banding |
-| `useItem`, `usePower` | Items and special powers |
-| Workshop, HUD, audio, main loop | End of the script |
+| `apps/game` | The game: a Vite app. Three.js 0.128 engine, React screens. |
+| `packages/ui` | `@kart-republique/ui`, the design system: the game's look as React components, with Storybook. |
+| `e2e` | The Playwright suite that drives the game through its screens and HUD. |
+| `.github/workflows/pages.yml` | Builds, checks and publishes the game to GitHub Pages on every push to `main`. |
+
+### The game (`apps/game`)
+
+The engine never touches the DOM; the UI never touches the simulation. They meet at four seams.
+
+| Path | What it holds |
+| --- | --- |
+| `src/engine/data.js` | The cast, the items and their rank-weighted odds, the circuits (spline points and `features`). |
+| `src/engine/kart.js`, `track.js`, `primitives.js`, `textures.js` | Procedural karts, drivers, decor and tracks; cached materials; canvas-painted textures. |
+| `src/engine/physics.js`, `ai.js`, `items.js`, `powers.js` | Kart physics (drift, jumps, pits, hazards), AI with rubber-banding, the 14 items, the 11 powers. |
+| `src/engine/race.js` | Sets up a race, steps it one frame at a time and returns the **frame payload** the HUD shows. |
+| `src/engine/machine.js` | The **state machine**: title, select, tracks, admin, countdown, race, paused, results. |
+| `src/engine/events.js` | The **event queue** for the text the engine wants shown (toasts, hints). |
+| `src/engine/input.js` | The **input seam**: the engine reads the controls through it. |
+| `src/engine/minimap.js`, `preview.js`, `render.js`, `audio.js` | The minimap, the character showcase and thumbnails, the one renderer and camera, WebAudio. |
+| `src/ui/` | The React screens and the HUD, composed from `@kart-republique/ui`; `store.ts` is what they read. |
+| `src/game.js` | The per-frame HUD writer, the keyboard and the clock. |
+
+### The design system (`packages/ui`)
+
+Tokens, typography, panels and buttons, the roster and showcase, track cards, every HUD readout, the results table and the workshop form, extracted from the original single-file game and typed. The HUD readouts expose imperative handles so a game loop can write them at 60 fps without a React render.
+
+```sh
+npm run storybook -w @kart-republique/ui   # http://localhost:6006
+```
+
+## Checks
+
+```sh
+npm run typecheck   # TypeScript, both workspaces
+npm run test        # Vitest: the design system and the engine
+npm run test:e2e    # Playwright, Chromium, against the production build (about three minutes)
+```
+
+The E2E suite is the regression net for the game: it drives the real build through the title, roster, circuits, a race with its HUD, pause, the workshop and the results, and asserts on the element ids the game has always had.
