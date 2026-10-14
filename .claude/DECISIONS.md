@@ -120,3 +120,30 @@ Pages. Resolves assumption A-004.
 never go stale from a forgotten local build. Requires the repository's Pages
 source to be set to "GitHub Actions" once, by hand, in repo settings -- noted
 here because the deploy will not work until that click happens.
+
+## DEC-009 -- The game's element ids are a contract the port must keep
+
+**Context.** Stage 7 builds the Playwright suite that is the regression net for
+the whole port (stages 8-13). For that net to mean anything, it has to drive the
+game the way a player does -- through the DOM and the keyboard -- rather than
+through internal functions, which the port will move or delete. That makes it
+depend on the game's element ids: `#s-title`, `#roster`, `#h-speed`,
+`#adm-name-victor`, and the rest.
+
+**Decision.** Treat the existing element ids as a public contract. The React
+components written in stage 12 must render the same ids on the same elements.
+
+**Consequence.** The suite keeps testing *the game* across the port instead of
+testing the port's choice of markup, so a red test means a real regression. The
+cost is that the React layer inherits id names it would not otherwise choose,
+and ids must stay unique -- which is already why the library renamed `#hud` and
+`#minimap` to classes (see `.design-sync/NOTES.md`): the components are reusable
+and carry classes, while the game's instances of them carry the ids.
+
+**One deliberate exception.** The results screen is unreachable without
+white-box access: `G.resultsAt` starts at `Infinity` and the race ends only when
+the player completes three laps, so reaching it by driving would take minutes of
+reliable automated steering per run. That one spec calls the game's own
+`showResults()` and is expected to break at stage 11 or 12, where it should be
+re-pointed rather than treated as a regression. It is labelled as such in
+`e2e/game.spec.ts`.

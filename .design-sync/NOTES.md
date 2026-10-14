@@ -85,3 +85,19 @@ Two things to know if these are ever touched:
 - React 19.3.1, Vite 8.3.4, TypeScript 7.0.2, Vitest 5.0.4 all install and run
   clean on this Node. Storybook 10.6.2 and Playwright 1.64.1 are planned but
   not yet proven here.
+
+## The controls legend says Z, the code says KeyW
+
+`inputState()` reads `keys.ArrowUp || keys.KeyW` -- there is no `KeyZ` anywhere
+in the game, even though the title screen's legend reads "↑ / Z accélérer" and
+the README's table says "↑ / Z / W".
+
+That is correct, not a bug: the game listens on `e.code`, which is
+layout-independent, and the physical key printed **Z** on an AZERTY keyboard
+emits `KeyW`. Likewise the legend's **Q** and **D** for steering are `KeyA` and
+`KeyD`. Reading codes is what makes the same physical keys work for AZERTY and
+QWERTY players alike.
+
+Two consequences: the E2E suite drives `ArrowUp` and `w` (not `z`), and the
+React port must keep reading `e.code` rather than `e.key`, or French players
+lose their steering.

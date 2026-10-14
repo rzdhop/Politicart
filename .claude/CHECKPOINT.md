@@ -6,17 +6,20 @@ Current state only. History lives in git.
 
 - **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
   CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** Stage 6 DONE and committed. **PART A IS COMPLETE**: the
-  library exists, is tested, and has a Storybook with one story per component.
-  Stage 7 next -- the Playwright E2E suite against the CURRENT single-file
-  game. index.html is still byte-identical to f271930 on this branch.
-- **Next action:** add Playwright at the repo root with a static server for
-  `index.html`, and specs covering R-01..R-09 against the game AS IT IS NOW.
-  This is the regression net for Part C, so it must be written and green
-  BEFORE stage 8 touches the game -- then any later failure is unambiguously
-  caused by the port. Ask the human before running the suite the first time
-  (Tier 2 rule) and note that Playwright needs `npx playwright install` to
-  fetch browsers, which is a sizeable download.
+- **Current stage:** Stage 7 DONE and committed. **PART B IS COMPLETE**: the
+  regression net exists and is green (27 specs, 2.8 min). index.html is still
+  byte-identical to f271930 on this branch.
+- **Next action:** Stage 8, the riskiest stage of the whole task. Move the
+  `<script>` block out of index.html into one bundled module under
+  `apps/game/`, importing `three@0.128.0` (DEC-007) instead of the CDN global,
+  with index.html becoming the Vite entry. **Packaging only**: same DOM, same
+  markup, same listeners, same init order, no behaviour change -- so a failure
+  is a build problem rather than a gameplay problem. Preserve the init order
+  the exploration map flagged (`textures()` before any builder;
+  `buildTrack` setting `G.samples`/`G.N` before `buildFeatures`/`crowdZone`/
+  `grandstand`; the strict physics step order in `frame()`). `$('c')` resolves
+  at module-eval time today and must become an explicit init call. Then
+  `npm run test:e2e` must still be 27/27.
 - **Plan amendment:** an unplanned **stage 5b** was inserted before stage 6 to
   self-host the two web fonts. Reason: stage 6's stories are what design-sync
   screenshots in stage 15, and the package shipped no fonts, so every preview
@@ -67,15 +70,15 @@ The game at `index.html` must keep working. No item here may break.
 
 | # | Functionality | Covering test | Status |
 |---|---|---|---|
-| R-01 | Title -> character select -> track select -> race -> results flow | none | UNVERIFIED (manual) |
-| R-02 | Live HUD: position, lap, timer, speed, drift gauge, item slot, power gauge, toasts, wrong-way, countdown | none | UNVERIFIED (manual) |
-| R-03 | Pause / resume / quit to menu | none | UNVERIFIED (manual) |
-| R-04 | Mute toggle (button and `M` key) | none | UNVERIFIED (manual) |
-| R-05 | Graphics toggle: detailed with shadows vs light low-poly | none | UNVERIFIED (manual) |
-| R-06 | Workshop: rename, colours, kart livery, campaign posters; localStorage persistence; reset | none | UNVERIFIED (manual) |
-| R-07 | Keyboard controls as documented in the README controls table | none | UNVERIFIED (manual) |
-| R-08 | Minimap canvas rendering | none | UNVERIFIED (manual) |
-| R-09 | Window resize without layout or renderer breakage | none | UNVERIFIED (manual) |
+| R-01 | Title -> character select -> track select -> race -> results flow | `e2e/game.spec.ts` R-01 (6 specs) + R-01b | COVERED |
+| R-02 | Live HUD: position, lap, timer, speed, drift gauge, item slot, power gauge, toasts, wrong-way, countdown | `e2e/game.spec.ts` R-02 (4 specs) | COVERED |
+| R-03 | Pause / resume / quit to menu | `e2e/game.spec.ts` R-03 (3 specs) | COVERED |
+| R-04 | Mute toggle (button and `M` key) | `e2e/game.spec.ts` R-04 (2 specs) | COVERED |
+| R-05 | Graphics toggle: detailed with shadows vs light low-poly | `e2e/game.spec.ts` R-05 (2 specs) | COVERED |
+| R-06 | Workshop: rename, colours, kart livery, campaign posters; localStorage persistence; reset | `e2e/game.spec.ts` R-06 (3 specs) | COVERED |
+| R-07 | Keyboard controls as documented in the README controls table | `e2e/game.spec.ts` R-07 (3 specs) | COVERED |
+| R-08 | Minimap canvas rendering | `e2e/game.spec.ts` R-08 (1 spec) | COVERED |
+| R-09 | Window resize without layout or renderer breakage | `e2e/game.spec.ts` R-09 (2 specs) | COVERED |
 | R-10 | Three laps, five AI opponents, rubber-banding | none | UNVERIFIED (manual) |
 | R-11 | 11 characters with their stats and signature powers | none | UNVERIFIED (manual) |
 | R-12 | 14 items with rank-weighted odds from golden ballot boxes | none | UNVERIFIED (manual) |
@@ -83,5 +86,23 @@ The game at `index.html` must keep working. No item here may break.
 | R-14 | Synthesized WebAudio sound and music | none | UNVERIFIED (manual) |
 | R-15 | Playable from GitHub Pages at the documented URL | none | UNVERIFIED (manual) |
 
-Items R-01..R-15 that the planned work can cover with real tests will be given
-them (Tier 3); the rest stay manual checks and are named as such at close-out.
+**Stage 7 maps the contract to specs** in `e2e/game.spec.ts`, whose describe
+blocks are named for the items above (R-01 .. R-09, plus R-01b for the results
+screen). Once that suite is green, those rows stop being UNVERIFIED. R-10..R-14
+stay manual: lap counts, item odds, circuit features, procedural models and
+synthesised audio are not things a DOM-level suite can assert, and R-15 is a
+deployment check for stage 14.
+
+**DEC-009 records the consequence**: the game's element ids are now a contract
+the React port must preserve, because the suite drives the game through them.
+
+R-01..R-09 are COVERED as of stage 7: `npm run test:e2e` runs 27 specs against
+the real game in Chromium in about 2.8 minutes, and must be green after every
+stage from 8 to 13.
+
+R-10..R-14 stay UNVERIFIED by choice, not oversight: lap counts over a full
+three-lap race, rank-weighted item odds, circuit features, procedural models
+and synthesised WebAudio are not things a DOM-level suite can assert without
+either minutes of automated driving per run or white-box hooks that the port
+will delete. They are manual checks, to be done by hand before close-out.
+R-15 is a deployment check for stage 14.
