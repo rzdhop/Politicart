@@ -1,0 +1,117 @@
+// Items: pickup, use, hazards and projectiles.
+//
+// pickupItems hands a rolling item to any kart that drives through an active
+// ballot box. useItem resolves the fourteen items -- boosts, shields, flight,
+// hazards dropped behind the kart, projectiles thrown ahead and field-wide
+// stuns. spawnHazard and spawnProjectile build the meshes and register them
+// in G.hazards / G.projectiles, which updateProjectiles then moves, expires
+// and collides every frame. stunKart is the one way a kart gets stunned, so
+// that invincibility and flight are honoured everywhere.
+//
+// Player-facing text goes through engine/events.js (toast, setHint are the
+// queue's emitters); sound is a direct call, see physics.js for why.
+import * as THREE from 'three';
+
+import { sfx } from './audio.js';
+import { rollItem } from './data.js';
+import { setHint, toast } from './events.js';
+import { box, cone, cyl, mat, setCast, sph, textPlane } from './primitives.js';
+import { G } from './state.js';
+import { clamp, lerp, rand, wrapAngle } from './util.js';
+
+// ---------- Items ----------
+export function pickupItems() {
+  for (const b of G.itemBoxes) {
+    b.mesh.rotation.y += 0.03; b.mesh.rotation.x += 0.01;
+    if (!b.active) { b.timer -= 1 / 60; if (b.timer <= 0) { b.active = true; b.mesh.visible = true; } continue; }
+    for (const k of G.karts) { if (k.item || k.itemRolling > 0 || k.finished || k.fly > 0) continue; const d = (k.pos.x - b.x) ** 2 + (k.pos.z - b.z) ** 2; if (d < 7) { b.active = false; b.timer = 3; b.mesh.visible = false; k.pendingItem = rollItem(k.rank); k.itemRolling = 1.1; if (!k.isAI) sfx('box'); break; } }
+  }
+}
+export function useItem(k) {
+  if (!k.item || k.itemRolling > 0) return; const it = k.item; k.item = null;
+  const fx = Math.sin(k.heading), fz = Math.cos(k.heading);
+  if (it === 'turbo') { k.boost = 1.6; k.boostPower = 1.55; sfx('boost'); if (!k.isAI) toast('49.3 ! PASSAGE EN FORCE'); }
+  else if (it === 'greve') { spawnHazard('barricade', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5); k.hazardGrace = 1.0; sfx('drop'); }
+  else if (it === 'sondage') { spawnHazard('fakebox', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5); k.hazardGrace = 1.0; sfx('drop'); }
+  else if (it === 'immunite') { k.invincible = 6; k.stun = 0; sfx('shield'); if (!k.isAI) toast('IMMUNITÉ PARLEMENTAIRE'); }
+  else if (it === 'helico') { k.fly = 4; k.stun = 0; k.drift.active = false; sfx('helico'); if (!k.isAI) toast('HÉLICO PRÉSIDENTIEL'); }
+  else if (it === 'relance') { k.relance = 3; k.relanceTimer = 0; if (!k.isAI) toast('PLAN DE RELANCE : 3 BOOSTS'); }
+  else if (it === 'remaniement') { let n = 0; for (const o of G.karts) if (o !== k && o.rank < k.rank) { if (o.item) o.item = null; if (stunKart(o, 0.7)) n++; } sfx('motion'); toast(k.isAI ? 'REMANIEMENT SURPRISE !' : 'REMANIEMENT : ' + n + ' MINISTRES LIMOGÉS'); }
+  else if (it === 'dossier') { const target = G.karts.find(o => o.rank === k.rank - 1 && !o.finished) || null; spawnProjectile('dossier', k, target); sfx('throw'); if (!k.isAI) toast('FUITE : MEDIAPART EST SUR LE COUP'); }
+  else if (it === 'motion') { let target = G.karts.find(o => o.rank === 0); if (target === k) target = G.karts.find(o => o.rank === 1); spawnProjectile('motion', k, target); sfx('motion'); toast(k.isAI ? 'MOTION DE CENSURE DÉPOSÉE !' : 'MOTION DE CENSURE !'); }
+  else if (it === 'bravm') { const ahead = G.karts.filter(o => o !== k && !o.finished && o.rank < k.rank).sort((a, b) => b.rank - a.rank).slice(0, 2); if (ahead.length) ahead.forEach(t => spawnProjectile('bravm', k, t)); else { spawnProjectile('bravm', k, null); spawnProjectile('bravm', k, null); } sfx('motion'); toast(k.isAI ? 'LA BRAV-M INTERVIENT !' : 'BRAV-M DÉPLOYÉE !'); }
+  else if (it === 'lacrymo') { spawnHazard('lacrymo', k.pos.x - fx * 4, k.pos.z - fz * 4, k); k.hazardGrace = 1.2; sfx('drop'); if (!k.isAI) toast('NUAGE LACRYMOGÈNE LÂCHÉ'); }
+  else if (it === 'casserolade') { let n = 0; for (const o of G.karts) if (o !== k) { const dx = o.pos.x - k.pos.x, dz = o.pos.z - k.pos.z; if (Math.hypot(dx, dz) < 20) { o.speed *= 0.5; if (stunKart(o, 0.8)) n++; } } sfx('motion'); toast(k.isAI ? 'CASSEROLADE !' : 'CASSEROLADE : ' + n + ' SONNÉ' + (n > 1 ? 'S' : '')); }
+  else if (it === 'dissolution') { let n = 0; for (const o of G.karts) if (o !== k && !o.finished) { if (stunKart(o, 0.9)) n++; } sfx('motion'); toast(k.isAI ? 'DISSOLUTION DE L’ASSEMBLÉE !' : 'DISSOLUTION : ' + n + ' KART' + (n > 1 ? 'S' : '') + ' SONNÉ' + (n > 1 ? 'S' : '')); }
+  else if (it === 'niche') { k.invincible = 5; k.phantom = 5; k.boost = Math.max(k.boost, 0.6); k.boostPower = 1.3; k.stun = 0; sfx('shield'); if (!k.isAI) toast('NICHE FISCALE : INTOUCHABLE'); }
+  if (!k.isAI) setHint('Ramassez une urne dorée pour obtenir un objet.');
+}
+export function spawnHazard(type, x, z, extra) {
+  const g = new THREE.Group(); let r = 2.2, life = 45, stun = 1.3;
+  setCast(true);
+  if (type === 'barricade') {
+    g.add(box(2.6, 0.5, 0.25, 0xc8102e, 0, 1.0, 0)); [-0.9, 0, 0.9].forEach(o => g.add(box(0.5, 0.5, 0.27, 0xffffff, o, 1.0, 0)));
+    [-1.0, 1.0].forEach(o => { g.add(box(0.15, 1.3, 0.15, 0x333333, o, 0.65, 0.25)); g.add(box(0.15, 1.3, 0.15, 0x333333, o, 0.65, -0.25)); });
+    g.add(box(0.8, 0.5, 0.05, 0xc8102e, 0.9, 1.8, 0)); g.add(cyl(0.04, 0.04, 2.2, 0x333333, 0.5, 1.1, 0, 5)); g.rotation.y = rand(0, 6.28);
+  } else if (type === 'fakebox') {
+    const m = new THREE.Mesh(new THREE.OctahedronGeometry(1.1, 0), new THREE.MeshStandardMaterial({ color: 0xffd34d, emissive: 0x6a4a00, transparent: true, opacity: 0.9, roughness: 0.3, metalness: 0.4 })); m.position.y = 1.4; g.add(m); G.animated.push(dt => { m.rotation.y -= dt * 1.8; m.rotation.x -= dt * 0.6; }); r = 2.4; life = 40; stun = 1.4;
+  } else if (type === 'lisier') {
+    const pl = new THREE.Mesh(new THREE.CircleGeometry(4.2, 18), new THREE.MeshStandardMaterial({ color: 0x5a3b1e, roughness: 1 })); pl.rotation.x = -Math.PI / 2; pl.position.y = 0.1; pl.scale.set(1.3, 1, 1); g.add(pl);
+    for (let i = 0; i < 7; i++) { const sp = new THREE.Mesh(new THREE.CircleGeometry(rand(0.5, 1.2), 10), mat(0x3f2a14)); sp.rotation.x = -Math.PI / 2; sp.position.set(rand(-4, 4), 0.11, rand(-3, 3)); g.add(sp); }
+    r = 4.4; life = 30; stun = 0;
+  } else if (type === 'lacrymo') {
+    const cloud = new THREE.Mesh(new THREE.SphereGeometry(3.4, 10, 8), new THREE.MeshStandardMaterial({ color: 0xd4dcb2, transparent: true, opacity: 0.55, roughness: 1 })); cloud.position.y = 1.5; cloud.scale.y = 0.65; g.add(cloud);
+    for (let i = 0; i < 4; i++) { const pf = new THREE.Mesh(new THREE.SphereGeometry(rand(1.3, 2.1), 8, 6), new THREE.MeshStandardMaterial({ color: 0xe2e6c8, transparent: true, opacity: 0.4, roughness: 1 })); pf.position.set(rand(-2, 2), 1.3 + rand(-0.3, 0.8), rand(-2, 2)); g.add(pf); }
+    r = 4.2; life = 7; stun = 0;
+  } else if (type === 'rondpoint') {
+    g.add(cyl(4.2, 4.4, 0.7, 0x8a8a84, 0, 0.35, 0, 24)); g.add(cyl(3.2, 3.2, 0.4, 0x5f9a48, 0, 0.9, 0, 24)); g.add(cyl(0.4, 0.4, 5, 0xc0c0c0, 0, 3.2, 0, 8)); [-0.8, 0, 0.8].forEach(o => g.add(box(0.4, 2.4, 0.4, 0xc0c0c0, o, 6.5, 0)));
+    const sign = textPlane(2.4, 1.0, 'CÉDEZ', '#fff', '#c8102e', 80); sign.position.set(0, 2.2, 4.3); g.add(sign); g.add(cyl(0.05, 0.05, 2.2, 0x555555, 0, 1.1, 4.3, 5));
+    r = 5.2; life = 18; stun = 1.0;
+  }
+  g.position.set(x, 0, z); G.scene.add(g); G.hazards.push({ type, x, z, mesh: g, life, r, stun, owner: extra || null });
+}
+export function spawnProjectile(type, owner, target) {
+  const g = new THREE.Group();
+  if (type === 'dossier') { g.add(box(0.9, 0.12, 1.1, 0xb98b4e, 0, 0, 0)); g.add(box(0.7, 0.14, 0.9, 0xfff5dd, 0, 0.02, 0)); g.add(box(0.3, 0.16, 0.12, 0xc8102e, 0.2, 0.02, 0.5)); }
+  else if (type === 'bravm') {
+    g.add(box(0.55, 0.45, 1.8, 0x14141e, 0, 0.75, 0)); g.add(box(0.6, 0.35, 0.6, 0x20202c, 0, 1.0, -0.4));
+    const wg = new THREE.CylinderGeometry(0.5, 0.5, 0.22, 12); wg.rotateZ(Math.PI / 2); [0.85, -0.85].forEach(zz => { const w = new THREE.Mesh(wg, mat(0x111111)); w.position.set(0, 0.5, zz); g.add(w); });
+    g.add(cyl(0.18, 0.2, 0.9, 0x2b2b38, 0, 1.4, -0.35, 8)); g.add(sph(0.28, 0x3a3a46, 0, 1.95, -0.35, 10));           // rider torso + helmet
+    g.add(box(0.5, 0.2, 0.2, 0x111118, 0, 1.3, 0.75)); const bl = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.18), new THREE.MeshBasicMaterial({ color: 0x3a6bff })); bl.position.set(0, 1.6, 0.1); g.add(bl);
+    g.userData.blink = bl;
+  }
+  else { g.add(box(1.0, 0.8, 1.0, 0xc8102e, 0, 0, 0)); g.add(box(1.1, 0.2, 1.1, 0xfff5dd, 0, 0.5, 0)); g.add(cone(0.5, 0.8, 0xf2c14e, 0, 1.0, 0, 6)); }
+  const fx = Math.sin(owner.heading), fz = Math.cos(owner.heading); const sidespawn = type === 'bravm' ? (Math.random() < 0.5 ? 2 : -2) : 0;
+  const p = { type, x: owner.pos.x + fx * 3 + (-fz) * sidespawn, z: owner.pos.z + fz * 3 + fx * sidespawn, y: type === 'motion' ? 1.5 : type === 'bravm' ? 0 : 1.0, dx: fx, dz: fz, owner, target, speed: type === 'motion' ? 85 : type === 'bravm' ? 74 : 62, life: type === 'motion' ? 12 : type === 'bravm' ? 8 : 5, mesh: g, idx: owner.idx };
+  g.position.set(p.x, p.y, p.z); G.scene.add(g); G.projectiles.push(p);
+}
+export function stunKart(k, dur) { if (k.invincible > 0 || k.fly > 0) return false; k.stun = Math.max(k.stun, dur); k.drift.active = false; k.drift.charge = 0; k.boost = 0; if (k === G.player) sfx('hit'); return true; }
+
+// ---------- Projectiles in flight ----------
+export function updateProjectiles(dt) {
+  for (let i = G.projectiles.length - 1; i >= 0; i--) {
+    const p = G.projectiles[i]; p.life -= dt;
+    if (p.target && (p.target.finished || p.target.fly > 0)) p.target = null;
+    if (p.target) { const dx = p.target.pos.x - p.x, dz = p.target.pos.z - p.z; const d = Math.hypot(dx, dz) || 1; const want = Math.atan2(dx, dz), cur = Math.atan2(p.dx, p.dz); const a = cur + clamp(wrapAngle(want - cur), -3.5 * dt, 3.5 * dt); p.dx = Math.sin(a); p.dz = Math.cos(a); if (p.type === 'motion') p.y = d > 20 ? 5 : lerp(5, 1, 1 - d / 20); }
+    else if (p.type === 'dossier') {
+      const N = G.N; let best = p.idx, bd = Infinity; for (let o = 0; o <= 14; o++) { const j = (p.idx + o) % N; const s = G.samples[j]; const d = (s.x - p.x) ** 2 + (s.z - p.z) ** 2; if (d < bd) { bd = d; best = j; } } p.idx = best;
+      const t = G.samples[(best + 8) % N]; const a = Math.atan2(t.x - p.x, t.z - p.z); p.dx = Math.sin(a); p.dz = Math.cos(a);
+    }
+    p.x += p.dx * p.speed * dt; p.z += p.dz * p.speed * dt;
+    p.mesh.position.set(p.x, p.y, p.z); p.mesh.rotation.y += dt * 9;
+    let hit = false;
+    if (p.mesh.userData.blink) p.mesh.userData.blink.material.color.setHex(Math.floor(G.time * 10) % 2 ? 0x3a6bff : 0xff3a4a);
+    for (const k of G.karts) { if (k === p.owner && p.life > (p.type === 'motion' ? 11.5 : p.type === 'bravm' ? 7.4 : 4.6)) continue; if (p.type === 'motion' && k !== p.target) continue; if (k.fly > 0 || k.y > 1.5) continue; const d = (k.pos.x - p.x) ** 2 + (k.pos.z - p.z) ** 2; if (d < 6.5) { stunKart(k, p.type === 'motion' ? 2.6 : p.type === 'bravm' ? 1.7 : 1.5); if (k === G.player) toast(p.type === 'motion' ? 'GOUVERNEMENT RENVERSÉ !' : p.type === 'bravm' ? 'INTERPELLÉ PAR LA BRAV-M !' : 'MEDIAPART ENQUÊTE SUR VOUS !'); hit = true; break; } }
+    if (hit || p.life <= 0) { G.scene.remove(p.mesh); G.projectiles.splice(i, 1); }
+  }
+  for (let i = G.hazards.length - 1; i >= 0; i--) {
+    const h = G.hazards[i]; h.life -= dt; let hit = false;
+    for (const k of G.karts) { if ((k.hazardGrace > 0 && h.type !== 'obstacle' && h.type !== 'lacrymo') || k.fly > 0 || k === h.owner || k.y > 1.2) continue; const d = (k.pos.x - h.x) ** 2 + (k.pos.z - h.z) ** 2; if (d < h.r * h.r) {
+      if (h.type === 'lacrymo') { if (k.slowed <= 0 && k === G.player) toast('GAZ LACRYMOGÈNE !'); k.slowed = Math.max(k.slowed, 1.3); k.confused = Math.max(k.confused, 1.0); }
+      else if (h.type === 'lisier') { if (k.slip <= 0 && k === G.player) toast('LISIER : ÇA GLISSE !'); k.slip = Math.max(k.slip, 0.4); }
+      else if (h.type === 'obstacle') { const dx = k.pos.x - h.x, dz = k.pos.z - h.z, dd = Math.hypot(dx, dz) || 1; k.pos.x = h.x + dx / dd * h.r; k.pos.z = h.z + dz / dd * h.r; if (k.speed > 12) { k.speed *= 0.55; if (k === G.player) sfx('bump'); } }
+      else if (h.type === 'rondpoint') { const dx = k.pos.x - h.x, dz = k.pos.z - h.z, dd = Math.hypot(dx, dz) || 1; k.pos.x = h.x + dx / dd * h.r; k.pos.z = h.z + dz / dd * h.r; if (k.speed > 10) { k.speed *= 0.4; if (stunKart(k, h.stun) && k === G.player) toast('PRIORITÉ AU ROND-POINT !'); k.hazardGrace = 0.8; } }
+      else { if (stunKart(k, h.stun) && k === G.player) toast(h.type === 'fakebox' ? 'SONDAGE TRUQUÉ !' : 'BLOQUÉ PAR LA GRÈVE !'); hit = true; break; } } }
+    if (hit || h.life <= 0) { G.scene.remove(h.mesh); G.hazards.splice(i, 1); }
+  }
+}

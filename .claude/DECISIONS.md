@@ -147,3 +147,30 @@ reliable automated steering per run. That one spec calls the game's own
 `showResults()` and is expected to break at stage 11 or 12, where it should be
 re-pointed rather than treated as a regression. It is labelled as such in
 `e2e/game.spec.ts`.
+
+## DEC-010 -- The engine's event queue carries player-facing text only; sound stays a direct call
+
+**Context.** Stage 10 moves physics, items, powers and AI out of `game.js`.
+The plan said their inline `toast()` and `sfx()` calls would be replaced by
+an event queue the engine emits. Roughly 45 call sites were involved: toasts
+and hints that wrote straight into the HUD from inside the physics step, and
+sound effects that call the WebAudio module.
+
+**Decision.** `engine/events.js` is a FIFO of `{type, text}` events for
+`toast` and `hint` only. The engine modules import `toast` and `setHint` from
+it, so the moved bodies keep their original call shapes unchanged, and
+`frame()` drains the queue once per frame straight after the physics step,
+at the point where the text used to be written. `sfx()` keeps being called
+directly from the engine. Player input reaches the engine through a second
+small seam, `engine/input.js`, where the owner of the controls registers a
+source once and physics reads through it.
+
+**Consequence.** The engine makes zero HUD writes from inside the step, which
+is the property stage 11 needs, and the drain point keeps the on-screen order
+of toasts within a frame identical to before. Sound is not deferred because
+`engine/audio.js` is already engine-side and DOM-free, and a one-frame delay
+between a bump and its sound would be audible for no gain. Item and power use
+triggered from the keyboard now shows its toast on the next frame rather than
+synchronously, at most 16 ms later. The queue is unit-tested in isolation
+(`events.test.js`, `input.test.js`), which gave `apps/game` its first vitest
+setup.

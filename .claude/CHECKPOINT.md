@@ -6,20 +6,25 @@ Current state only. History lives in git.
 
 - **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
   CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** Stage 9 DONE and committed in four sub-stages (9a util,
-  state, audio; 9b data, workshop persistence; 9c renderer, primitives,
-  textures; 9d kart and track builders). `apps/game/src/game.js` is down to
-  605 lines from 1207; the engine lives in `apps/game/src/engine/` as ten
-  modules. Every move was mechanical and verified byte-identical. 27/27 E2E
-  green after each sub-stage.
-- **Next action:** Stage 10 -- engine split 2: physics (updateKart,
-  kartCollisions, updateProgress, updateRanks), items (pickupItems, useItem,
-  spawnHazard, spawnProjectile, updateProjectiles, stunKart), powers
-  (usePower) and AI (aiInput) out of game.js, with the roughly 30 inline
-  `toast()` / `setHint()` / `sfx()` calls inside them replaced by an event
-  queue the engine emits and game.js drains. The plan calls for engine unit
-  tests on the event queue (Tier 3). The physics step order inside frame()
-  is a strict contract and must not change. 27/27 E2E after the move.
+- **Current stage:** Stage 10 DONE and committed. Physics, AI, items and
+  powers now live in `apps/game/src/engine/{physics,ai,items,powers}.js`;
+  player-facing text leaves the engine through `engine/events.js` (a FIFO
+  that `frame()` drains right after the physics step) and player input
+  enters through `engine/input.js`. See DEC-010 for why sound stays a
+  direct call. The moved bodies are byte-identical apart from the export
+  keywords and one `inputState()` -> `readInput()` rename. `game.js` is
+  down to 321 lines. `apps/game` got its first vitest setup (12 tests on
+  the queue and the input seam). 27/27 E2E green.
+- **Next action:** Stage 11 -- the seam. The engine publishes a frame
+  payload (`rank, lap, time, speed, driftCharge, item, powerReady, powerCd,
+  wrongWay, kartPositions[]`) and performs zero DOM writes; `G.state` and
+  `showScreen` collapse into one state machine with unit tests. What still
+  writes the DOM from `game.js` today: `updateHUD`, `drawMinimap*`, the
+  countdown writes to `hud.center` inside `frame()`, `toast`/`setHint`,
+  `showResults`, `showScreen`, the select/track/admin screen builders and
+  `syncMuteButton`. The results-screen E2E spec calls `showResults()`
+  through the test hook and is expected to need re-pointing here (DEC-009).
+  27/27 E2E after the move.
 - **Session note (2026-10-14):** the branch ref file was found zeroed on
   resume and restored from the reflog; see the action log. Nothing was lost.
 - **Plan amendment:** an unplanned **stage 5b** was inserted before stage 6 to

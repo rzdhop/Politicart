@@ -21,13 +21,18 @@ import * as THREE from 'three';
 // still lives here and is moved out in the stages that follow.
 import { initAudio, isMuted, sfx, toggleMute, updateEngine } from './engine/audio.js';
 import { getCustom, loadCustom, resetCustom, saveCustom, applyCustom } from './engine/custom.js';
-import { BASE, CHARACTERS, ITEMS, ITEM_ODDS, TRACKS, rollItem } from './engine/data.js';
+import { BASE, CHARACTERS, ITEMS, ITEM_ODDS, TRACKS } from './engine/data.js';
+import { drain } from './engine/events.js';
+import { setInputSource } from './engine/input.js';
+import { pickupItems, stunKart, updateProjectiles, useItem } from './engine/items.js';
 import { buildKart } from './engine/kart.js';
-import { box, cone, cyl, mat, setCast, sph, textPlane } from './engine/primitives.js';
+import { kartCollisions, updateKart, updateRanks } from './engine/physics.js';
+import { usePower } from './engine/powers.js';
+import { setCast } from './engine/primitives.js';
 import { camera, renderer, resize } from './engine/render.js';
 import { CFG, G, SHADOWS, getPoly, togglePoly } from './engine/state.js';
 import { buildTrack } from './engine/track.js';
-import { $, clamp, fmtTime, hex, lerp, ordinal, rand, wrapAngle } from './engine/util.js';
+import { $, clamp, fmtTime, hex, lerp, ordinal, rand } from './engine/util.js';
 
 'use strict';
 /* =====================================================================================
@@ -79,284 +84,6 @@ function startRace() {
   $('h-pname').textContent = player.def.power.name;
 }
 function disposeScene(scene) { scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
-
-// ---------- Progress & ranking ----------
-function updateProgress(k) {
-  const N = G.N; let best = k.idx, bestD = Infinity;
-  for (let o = -16; o <= 16; o++) { const i = (k.idx + o + N) % N; const s = G.samples[i]; const d = (k.pos.x - s.x) ** 2 + (k.pos.z - s.z) ** 2; if (d < bestD) { bestD = d; best = i; } }
-  const prev = k.idx; k.idx = best;
-  if (prev > N * 0.8 && best < N * 0.2) {
-    k.lap++;
-    if (k.lap > k.maxLap) {
-      k.maxLap = k.lap;
-      const lapTime = G.time - k.lapStart; k.lapStart = G.time; if (lapTime < k.bestLap) k.bestLap = lapTime;
-      if (k.lap >= CFG.laps && !k.finished) { k.finished = true; k.finishTime = G.time; if (k === G.player) onPlayerFinish(); }
-      else if (k === G.player) { toast(k.lap === CFG.laps - 1 ? 'DERNIER TOUR !' : 'TOUR ' + (k.lap + 1) + ' — ' + fmtTime(lapTime)); sfx('lap'); }
-    }
-  } else if (prev < N * 0.2 && best > N * 0.8) k.lap--;
-  k.progress = k.lap + best / N;
-}
-function updateRanks() {
-  const sorted = [...G.karts].sort((a, b) => (a.finished && b.finished) ? a.finishTime - b.finishTime : (a.finished ? -1 : b.finished ? 1 : b.progress - a.progress));
-  sorted.forEach((k, i) => { k.rank = i; });
-  const p = G.player;
-  for (const k of G.karts) if (k.isAI) { const gap = p.progress - k.progress; k.aiSpeedMul = clamp(1 + gap * 0.55, 0.84, 1.14) + k.skill; }
-}
-
-// ---------- AI ----------
-function aiInput(k, dt, lateral) {
-  const N = G.N; const hw = CFG.roadHalfWidth; const look = 8 + Math.floor(Math.abs(k.speed) / 5);
-  const t = G.samples[(k.idx + look) % N];
-  const lane = Math.abs(lateral) > hw - 2.5 ? 0 : k.lane;
-  const tx = t.x + t.sx * lane, tz = t.z + t.sz * lane;
-  const desired = Math.atan2(tx - k.pos.x, tz - k.pos.z);
-  const diff = wrapAngle(desired - k.heading);
-  let steer = clamp(-diff * 3.2, -1, 1); if (k.confused > 0) steer = clamp(steer + Math.sin(G.time * 9 + k.skill * 100) * 1.1, -1, 1);
-  const far = G.samples[(k.idx + look * 3) % N];
-  const curve = Math.abs(wrapAngle(Math.atan2(far.x - k.pos.x, far.z - k.pos.z) - k.heading));
-  let throttle = 1; if (curve > 1.05 && Math.abs(k.speed) > 26 * k.stats.speed) throttle = 0;
-  const drift = curve > 1.15 && Math.abs(k.speed) > 28 && Math.abs(lateral) < hw - 3;
-  k.laneTimer -= dt; if (k.laneTimer <= 0) { k.lane = rand(-3.5, 3.5); k.laneTimer = rand(3, 8); }
-  for (const h of G.hazards) { const dx = h.x - k.pos.x, dz = h.z - k.pos.z; const ahead = dx * Math.sin(k.heading) + dz * Math.cos(k.heading); const side = dx * (-Math.cos(k.heading)) + dz * Math.sin(k.heading); if (ahead > 0 && ahead < 30 && Math.abs(side) < (h.r || 2) + 1.5) k.lane = side > 0 ? -4 : 4; }
-  if (k.item && k.itemRolling <= 0) { k.itemTimer -= dt; if (k.itemTimer <= 0) useItem(k); }
-  if (k.powerCd <= 0 && G.state === 'race' && Math.random() < dt * 0.25 && (k.def.power.id !== 'rattrapage' || k.rank >= 3)) usePower(k);
-  return { throttle, brake: 0, steer, drift };
-}
-
-// ---------- Kart physics ----------
-function updateKart(k, dt) {
-  const S = k.stats; const baseMax = 42 * S.speed; let maxSpeed = baseMax;
-  if (k.boost > 0) maxSpeed *= k.boostPower;
-  if (k.invincible > 0) maxSpeed *= 1.2;
-  if (k.fly > 0) maxSpeed *= 1.5;
-  if (k.slowed > 0) maxSpeed *= 0.55;
-  if (k.isAI || k.finished) maxSpeed *= k.aiSpeedMul;
-  updateProgress(k);
-  const s = G.samples[k.idx]; const hw = CFG.roadHalfWidth;
-  let lateral = (k.pos.x - s.x) * s.sx + (k.pos.z - s.z) * s.sz;
-  k.offroad = Math.abs(lateral) > hw;
-  if (k.offroad && k.invincible <= 0 && k.boost <= 0 && k.fly <= 0 && !k.air) maxSpeed *= 0.65;
-
-  let inp;
-  if (k.stun > 0) inp = { throttle: 0, brake: 0, steer: 0, drift: false };
-  else if (k.isAI || k.finished) inp = aiInput(k, dt, lateral);
-  else { const i = inputState(); inp = { throttle: i.throttle ? 1 : 0, brake: i.brake ? 1 : 0, steer: (i.right ? 1 : 0) - (i.left ? 1 : 0), drift: i.drift }; }
-  if (G.state === 'countdown') { inp.throttle = 0; inp.brake = 0; inp.drift = false; }
-  if (k.fly > 0) inp.throttle = 1;
-  if (k.confused > 0 && !k.isAI) inp.steer = -inp.steer;                           // éléments de langage: inverted controls
-  // ramps: ground height follows the plank; leaving its end launches the kart
-  let groundY = 0, onRamp = null;
-  for (const r of G.ramps) { const rel = (k.idx - r.i0 + G.N) % G.N; if (rel < r.len && Math.abs(lateral) < hw) { onRamp = r; groundY = r.h * clamp((rel + 0.5) / r.len, 0, 1); } }
-  if (k.rampPrev && !onRamp && !k.air) { const r = k.rampPrev; const rel = (k.idx - r.i0 + G.N) % G.N; if (rel >= r.len && rel < r.len + 8 && k.speed > 6) { k.air = true; k.y = r.h; k.vy = k.speed * (r.h / r.L) * 1.35 + 2.5; k.trick = false; if (!k.isAI) sfx('jump'); } }
-  k.rampPrev = onRamp;
-  if (k.air) { if (inp.drift && !k.trick) { k.trick = true; if (!k.isAI) toast('FIGURE !'); } if (k.isAI && !k.trick && Math.random() < dt * 2) k.trick = true; inp.drift = false; }
-
-  const sfA = clamp(Math.abs(k.speed) / baseMax, 0, 1);
-  const accel = 26 * S.accel * (1.45 - 0.6 * sfA);   // punchy launch, tapering near top speed
-  if (inp.throttle > 0) { if (k.speed < maxSpeed) k.speed = Math.min(maxSpeed, k.speed + accel * dt); }
-  else if (inp.brake > 0) { if (k.speed > 0) k.speed = Math.max(0, k.speed - 45 * dt); else k.speed = Math.max(k.speed - 14 * dt, -baseMax * 0.35); }
-  else k.speed *= Math.exp(-dt * 0.9);
-  if (k.speed > maxSpeed) k.speed = lerp(k.speed, maxSpeed, 1 - Math.exp(-dt * 2.5));
-  if (k.stun > 0) k.speed *= Math.exp(-dt * 3);
-
-  const sf = clamp(Math.abs(k.speed) / baseMax, 0, 1);
-  k.steer = lerp(k.steer || 0, inp.steer, 1 - Math.exp(-dt * 11));   // smoothed steering input
-  let turnRate = 2.4 * S.handling * k.steer * (0.3 + 0.7 * Math.min(1, sf * 1.6)) * (k.speed < 0 ? -1 : 1);
-  if (inp.drift && !k.drift.active && inp.steer !== 0 && k.speed > baseMax * 0.45 && k.stun <= 0 && k.fly <= 0) { k.drift.active = true; k.drift.dir = inp.steer; k.drift.charge = 0; }
-  if (k.drift.active) {
-    if (!inp.drift || k.speed < baseMax * 0.25 || k.stun > 0) {
-      const c = k.drift.charge;
-      if (c > 2.0) { k.boost = Math.max(k.boost, 1.1); k.boostPower = 1.45; sfx('boost'); if (!k.isAI) toast('SUPER MINI-TURBO'); }
-      else if (c > 1.0) { k.boost = Math.max(k.boost, 0.55); k.boostPower = 1.3; sfx('boost'); }
-      k.drift.active = false; k.drift.charge = 0;
-    } else { k.drift.charge += dt; turnRate = 2.4 * S.handling * (k.drift.dir * 1.15 + k.steer * 0.55) * (0.5 + 0.5 * sf); k.speed *= Math.exp(-dt * 0.12); }
-  }
-  if (k.stun > 0) turnRate = 11;
-  if (k.air) turnRate *= 0.45;
-  if (k.slip > 0 && k.stun <= 0) { turnRate *= 0.3; k.heading += Math.sin(G.time * 13) * 0.7 * dt; k.speed *= Math.exp(-dt * 0.6); }
-  k.heading -= turnRate * dt;
-
-  let moveDir = k.heading; if (k.drift.active) moveDir += k.drift.dir * 0.35;
-  k.pos.x += Math.sin(moveDir) * k.speed * dt; k.pos.z += Math.cos(moveDir) * k.speed * dt;
-
-  lateral = (k.pos.x - s.x) * s.sx + (k.pos.z - s.z) * s.sz;
-  const limit = hw + 0.1;
-  if (Math.abs(lateral) > limit) {
-    const over = Math.abs(lateral) - limit; const sg = Math.sign(lateral);
-    k.pos.x -= sg * over * s.sx; k.pos.z -= sg * over * s.sz;
-    const th = Math.atan2(s.tx, s.tz);
-    const ang = Math.min(Math.abs(wrapAngle(moveDir - th)), Math.PI / 2);          // approach angle against the wall
-    const loss = clamp(Math.sin(ang) * 0.9, 0.04, 0.9);                             // scraping along keeps speed, head-on costs it
-    if (k.speed > 8 && k.fly <= 0) { k.speed *= 1 - loss * 0.6; if (!k.isAI && loss > 0.3) sfx('bump'); }
-    k.heading += wrapAngle(th - k.heading) * (0.2 + loss * 0.45);
-    if (k.drift.active && loss > 0.4) { k.drift.active = false; k.drift.charge = 0; }
-  }
-
-  // vertical motion
-  if (!k.air) k.y = groundY;
-  else { k.vy -= 32 * dt; k.y += k.vy * dt; if (k.y <= groundY) { k.y = groundY; k.air = false; if (k.trick) { k.boost = Math.max(k.boost, 0.7); k.boostPower = 1.35; sfx('boost'); } else k.speed *= 0.94; k.trick = false; } }
-  // pits, dash pads
-  if (!k.air && k.y <= 0.1 && k.fly <= 0) {
-    if (k.pitGrace <= 0) for (const p of G.pits) { const rel = (k.idx - p.i0 + G.N) % G.N; if (rel < p.len && Math.abs(lateral) < hw) { k.pitGrace = 2;
-      if (p.kind === 'water') { k.speed *= 0.3; if (stunKart(k, 0.8) && !k.isAI) toast('PLOUF !'); }
-      else if (p.kind === 'works') { k.slowed = Math.max(k.slowed, 2.2); k.speed *= 0.6; if (!k.isAI) { toast('ZONE DE TRAVAUX !'); sfx('bump'); } }
-      else if (p.kind === 'manif') { if (stunKart(k, 1.0) && !k.isAI) toast('PRIS DANS LA MANIF !'); } break; } }
-    if (k.padGrace <= 0) for (const p of G.pads) { const rel = (k.idx - p.i0 + G.N) % G.N; if (rel < p.len && Math.abs(lateral) < hw) { k.padGrace = 2; k.boost = Math.max(k.boost, 0.9); k.boostPower = 1.5; if (!k.isAI) sfx('boost'); break; } }
-  }
-  // timers
-  k.slip = Math.max(0, k.slip - dt); k.confused = Math.max(0, k.confused - dt); k.pitGrace = Math.max(0, k.pitGrace - dt); k.padGrace = Math.max(0, k.padGrace - dt); k.phantom = Math.max(0, k.phantom - dt);
-  k.boost = Math.max(0, k.boost - dt); k.stun = Math.max(0, k.stun - dt); k.invincible = Math.max(0, k.invincible - dt); k.hazardGrace = Math.max(0, k.hazardGrace - dt);
-  k.slowed = Math.max(0, k.slowed - dt); k.fly = Math.max(0, k.fly - dt); k.powerCd = Math.max(0, k.powerCd - dt);
-  if (k.relance > 0) { k.relanceTimer -= dt; if (k.relanceTimer <= 0) { k.relance--; k.relanceTimer = 1.1; k.boost = 0.7; k.boostPower = 1.45; sfx('boost'); } }
-  if (k.itemRolling > 0) { k.itemRolling -= dt; if (k.itemRolling <= 0) { k.item = k.pendingItem; k.pendingItem = null; if (!k.isAI) { sfx('pick'); setHint(ITEMS[k.item].hint); } else k.itemTimer = rand(0.8, 4); } }
-
-  // visuals
-  const m = k.mesh; const flyY = k.fly > 0 ? Math.min(5, k.fly > 3.5 ? (4 - k.fly) * 10 : k.fly < 0.5 ? k.fly * 10 : 5) : 0;
-  m.position.set(k.pos.x, k.y + flyY, k.pos.z); m.rotation.y = k.heading; m.rotation.z = k.steer * 0.06 * sf + (k.air && k.trick ? Math.sin(G.time * 12) * 0.5 : 0);
-  m.rotation.x = onRamp ? -onRamp.slope : k.air ? -clamp(k.vy * 0.035, -0.45, 0.45) : k.fly > 0 ? -0.12 : 0;
-  const u = m.userData; u.wheels.forEach((w, i) => { w.rotation.x += k.speed * dt / 0.45; if (i < 2) w.rotation.y = -k.steer * 0.45; });
-  const sparkOn = k.drift.active && k.drift.charge > 0.35;
-  u.sparks.forEach(sp => { sp.visible = sparkOn; sp.material.color.setHex(k.drift.charge > 2 ? 0xff7a1a : k.drift.charge > 1 ? 0xffd34d : 0x7cc4ff); sp.scale.setScalar(0.7 + Math.random() * 0.8); });
-  u.ring.visible = k.invincible > 0; if (u.ring.visible) u.ring.rotation.z += dt * 4;
-  u.rotor.visible = k.fly > 0; if (u.rotor.visible) u.blades.forEach(b => { b.rotation.y += dt * 40; });
-  u.driver.position.y = 0.75 + (k.stun > 0 ? Math.abs(Math.sin(G.time * 20)) * 0.3 : 0);
-  m.visible = k.phantom > 0 ? (Math.floor(G.time * 14) % 2 === 0) : true;
-}
-
-// ---------- Items ----------
-function pickupItems() {
-  for (const b of G.itemBoxes) {
-    b.mesh.rotation.y += 0.03; b.mesh.rotation.x += 0.01;
-    if (!b.active) { b.timer -= 1 / 60; if (b.timer <= 0) { b.active = true; b.mesh.visible = true; } continue; }
-    for (const k of G.karts) { if (k.item || k.itemRolling > 0 || k.finished || k.fly > 0) continue; const d = (k.pos.x - b.x) ** 2 + (k.pos.z - b.z) ** 2; if (d < 7) { b.active = false; b.timer = 3; b.mesh.visible = false; k.pendingItem = rollItem(k.rank); k.itemRolling = 1.1; if (!k.isAI) sfx('box'); break; } }
-  }
-}
-function useItem(k) {
-  if (!k.item || k.itemRolling > 0) return; const it = k.item; k.item = null;
-  const fx = Math.sin(k.heading), fz = Math.cos(k.heading);
-  if (it === 'turbo') { k.boost = 1.6; k.boostPower = 1.55; sfx('boost'); if (!k.isAI) toast('49.3 ! PASSAGE EN FORCE'); }
-  else if (it === 'greve') { spawnHazard('barricade', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5); k.hazardGrace = 1.0; sfx('drop'); }
-  else if (it === 'sondage') { spawnHazard('fakebox', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5); k.hazardGrace = 1.0; sfx('drop'); }
-  else if (it === 'immunite') { k.invincible = 6; k.stun = 0; sfx('shield'); if (!k.isAI) toast('IMMUNITÉ PARLEMENTAIRE'); }
-  else if (it === 'helico') { k.fly = 4; k.stun = 0; k.drift.active = false; sfx('helico'); if (!k.isAI) toast('HÉLICO PRÉSIDENTIEL'); }
-  else if (it === 'relance') { k.relance = 3; k.relanceTimer = 0; if (!k.isAI) toast('PLAN DE RELANCE : 3 BOOSTS'); }
-  else if (it === 'remaniement') { let n = 0; for (const o of G.karts) if (o !== k && o.rank < k.rank) { if (o.item) o.item = null; if (stunKart(o, 0.7)) n++; } sfx('motion'); toast(k.isAI ? 'REMANIEMENT SURPRISE !' : 'REMANIEMENT : ' + n + ' MINISTRES LIMOGÉS'); }
-  else if (it === 'dossier') { const target = G.karts.find(o => o.rank === k.rank - 1 && !o.finished) || null; spawnProjectile('dossier', k, target); sfx('throw'); if (!k.isAI) toast('FUITE : MEDIAPART EST SUR LE COUP'); }
-  else if (it === 'motion') { let target = G.karts.find(o => o.rank === 0); if (target === k) target = G.karts.find(o => o.rank === 1); spawnProjectile('motion', k, target); sfx('motion'); toast(k.isAI ? 'MOTION DE CENSURE DÉPOSÉE !' : 'MOTION DE CENSURE !'); }
-  else if (it === 'bravm') { const ahead = G.karts.filter(o => o !== k && !o.finished && o.rank < k.rank).sort((a, b) => b.rank - a.rank).slice(0, 2); if (ahead.length) ahead.forEach(t => spawnProjectile('bravm', k, t)); else { spawnProjectile('bravm', k, null); spawnProjectile('bravm', k, null); } sfx('motion'); toast(k.isAI ? 'LA BRAV-M INTERVIENT !' : 'BRAV-M DÉPLOYÉE !'); }
-  else if (it === 'lacrymo') { spawnHazard('lacrymo', k.pos.x - fx * 4, k.pos.z - fz * 4, k); k.hazardGrace = 1.2; sfx('drop'); if (!k.isAI) toast('NUAGE LACRYMOGÈNE LÂCHÉ'); }
-  else if (it === 'casserolade') { let n = 0; for (const o of G.karts) if (o !== k) { const dx = o.pos.x - k.pos.x, dz = o.pos.z - k.pos.z; if (Math.hypot(dx, dz) < 20) { o.speed *= 0.5; if (stunKart(o, 0.8)) n++; } } sfx('motion'); toast(k.isAI ? 'CASSEROLADE !' : 'CASSEROLADE : ' + n + ' SONNÉ' + (n > 1 ? 'S' : '')); }
-  else if (it === 'dissolution') { let n = 0; for (const o of G.karts) if (o !== k && !o.finished) { if (stunKart(o, 0.9)) n++; } sfx('motion'); toast(k.isAI ? 'DISSOLUTION DE L’ASSEMBLÉE !' : 'DISSOLUTION : ' + n + ' KART' + (n > 1 ? 'S' : '') + ' SONNÉ' + (n > 1 ? 'S' : '')); }
-  else if (it === 'niche') { k.invincible = 5; k.phantom = 5; k.boost = Math.max(k.boost, 0.6); k.boostPower = 1.3; k.stun = 0; sfx('shield'); if (!k.isAI) toast('NICHE FISCALE : INTOUCHABLE'); }
-  if (!k.isAI) setHint('Ramassez une urne dorée pour obtenir un objet.');
-}
-function spawnHazard(type, x, z, extra) {
-  const g = new THREE.Group(); let r = 2.2, life = 45, stun = 1.3;
-  setCast(true);
-  if (type === 'barricade') {
-    g.add(box(2.6, 0.5, 0.25, 0xc8102e, 0, 1.0, 0)); [-0.9, 0, 0.9].forEach(o => g.add(box(0.5, 0.5, 0.27, 0xffffff, o, 1.0, 0)));
-    [-1.0, 1.0].forEach(o => { g.add(box(0.15, 1.3, 0.15, 0x333333, o, 0.65, 0.25)); g.add(box(0.15, 1.3, 0.15, 0x333333, o, 0.65, -0.25)); });
-    g.add(box(0.8, 0.5, 0.05, 0xc8102e, 0.9, 1.8, 0)); g.add(cyl(0.04, 0.04, 2.2, 0x333333, 0.5, 1.1, 0, 5)); g.rotation.y = rand(0, 6.28);
-  } else if (type === 'fakebox') {
-    const m = new THREE.Mesh(new THREE.OctahedronGeometry(1.1, 0), new THREE.MeshStandardMaterial({ color: 0xffd34d, emissive: 0x6a4a00, transparent: true, opacity: 0.9, roughness: 0.3, metalness: 0.4 })); m.position.y = 1.4; g.add(m); G.animated.push(dt => { m.rotation.y -= dt * 1.8; m.rotation.x -= dt * 0.6; }); r = 2.4; life = 40; stun = 1.4;
-  } else if (type === 'lisier') {
-    const pl = new THREE.Mesh(new THREE.CircleGeometry(4.2, 18), new THREE.MeshStandardMaterial({ color: 0x5a3b1e, roughness: 1 })); pl.rotation.x = -Math.PI / 2; pl.position.y = 0.1; pl.scale.set(1.3, 1, 1); g.add(pl);
-    for (let i = 0; i < 7; i++) { const sp = new THREE.Mesh(new THREE.CircleGeometry(rand(0.5, 1.2), 10), mat(0x3f2a14)); sp.rotation.x = -Math.PI / 2; sp.position.set(rand(-4, 4), 0.11, rand(-3, 3)); g.add(sp); }
-    r = 4.4; life = 30; stun = 0;
-  } else if (type === 'lacrymo') {
-    const cloud = new THREE.Mesh(new THREE.SphereGeometry(3.4, 10, 8), new THREE.MeshStandardMaterial({ color: 0xd4dcb2, transparent: true, opacity: 0.55, roughness: 1 })); cloud.position.y = 1.5; cloud.scale.y = 0.65; g.add(cloud);
-    for (let i = 0; i < 4; i++) { const pf = new THREE.Mesh(new THREE.SphereGeometry(rand(1.3, 2.1), 8, 6), new THREE.MeshStandardMaterial({ color: 0xe2e6c8, transparent: true, opacity: 0.4, roughness: 1 })); pf.position.set(rand(-2, 2), 1.3 + rand(-0.3, 0.8), rand(-2, 2)); g.add(pf); }
-    r = 4.2; life = 7; stun = 0;
-  } else if (type === 'rondpoint') {
-    g.add(cyl(4.2, 4.4, 0.7, 0x8a8a84, 0, 0.35, 0, 24)); g.add(cyl(3.2, 3.2, 0.4, 0x5f9a48, 0, 0.9, 0, 24)); g.add(cyl(0.4, 0.4, 5, 0xc0c0c0, 0, 3.2, 0, 8)); [-0.8, 0, 0.8].forEach(o => g.add(box(0.4, 2.4, 0.4, 0xc0c0c0, o, 6.5, 0)));
-    const sign = textPlane(2.4, 1.0, 'CÉDEZ', '#fff', '#c8102e', 80); sign.position.set(0, 2.2, 4.3); g.add(sign); g.add(cyl(0.05, 0.05, 2.2, 0x555555, 0, 1.1, 4.3, 5));
-    r = 5.2; life = 18; stun = 1.0;
-  }
-  g.position.set(x, 0, z); G.scene.add(g); G.hazards.push({ type, x, z, mesh: g, life, r, stun, owner: extra || null });
-}
-function spawnProjectile(type, owner, target) {
-  const g = new THREE.Group();
-  if (type === 'dossier') { g.add(box(0.9, 0.12, 1.1, 0xb98b4e, 0, 0, 0)); g.add(box(0.7, 0.14, 0.9, 0xfff5dd, 0, 0.02, 0)); g.add(box(0.3, 0.16, 0.12, 0xc8102e, 0.2, 0.02, 0.5)); }
-  else if (type === 'bravm') {
-    g.add(box(0.55, 0.45, 1.8, 0x14141e, 0, 0.75, 0)); g.add(box(0.6, 0.35, 0.6, 0x20202c, 0, 1.0, -0.4));
-    const wg = new THREE.CylinderGeometry(0.5, 0.5, 0.22, 12); wg.rotateZ(Math.PI / 2); [0.85, -0.85].forEach(zz => { const w = new THREE.Mesh(wg, mat(0x111111)); w.position.set(0, 0.5, zz); g.add(w); });
-    g.add(cyl(0.18, 0.2, 0.9, 0x2b2b38, 0, 1.4, -0.35, 8)); g.add(sph(0.28, 0x3a3a46, 0, 1.95, -0.35, 10));           // rider torso + helmet
-    g.add(box(0.5, 0.2, 0.2, 0x111118, 0, 1.3, 0.75)); const bl = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.18), new THREE.MeshBasicMaterial({ color: 0x3a6bff })); bl.position.set(0, 1.6, 0.1); g.add(bl);
-    g.userData.blink = bl;
-  }
-  else { g.add(box(1.0, 0.8, 1.0, 0xc8102e, 0, 0, 0)); g.add(box(1.1, 0.2, 1.1, 0xfff5dd, 0, 0.5, 0)); g.add(cone(0.5, 0.8, 0xf2c14e, 0, 1.0, 0, 6)); }
-  const fx = Math.sin(owner.heading), fz = Math.cos(owner.heading); const sidespawn = type === 'bravm' ? (Math.random() < 0.5 ? 2 : -2) : 0;
-  const p = { type, x: owner.pos.x + fx * 3 + (-fz) * sidespawn, z: owner.pos.z + fz * 3 + fx * sidespawn, y: type === 'motion' ? 1.5 : type === 'bravm' ? 0 : 1.0, dx: fx, dz: fz, owner, target, speed: type === 'motion' ? 85 : type === 'bravm' ? 74 : 62, life: type === 'motion' ? 12 : type === 'bravm' ? 8 : 5, mesh: g, idx: owner.idx };
-  g.position.set(p.x, p.y, p.z); G.scene.add(g); G.projectiles.push(p);
-}
-function stunKart(k, dur) { if (k.invincible > 0 || k.fly > 0) return false; k.stun = Math.max(k.stun, dur); k.drift.active = false; k.drift.charge = 0; k.boost = 0; if (k === G.player) sfx('hit'); return true; }
-
-// ---------- Special powers ----------
-function usePower(k) {
-  if (k.powerCd > 0 || k.stun > 0 || G.state !== 'race' || k.finished) return;
-  const id = k.def.power.id; const fx = Math.sin(k.heading), fz = Math.cos(k.heading); const me = !k.isAI;
-  if (id === 'rattrapage' && k.rank < 3) { if (me) toast('TEMPS DE PAROLE : SEULEMENT À PARTIR DE LA 4e PLACE'); return; }
-  k.powerCd = k.def.power.cd || CFG.powerCooldown; k.powerUses++;
-  if (id === 'elements') { let n = 0; for (const o of G.karts) if (o !== k && (o.pos.x - k.pos.x) ** 2 + (o.pos.z - k.pos.z) ** 2 < 2500) { o.confused = 3; n++; } sfx('shield'); toast(me ? 'ÉLÉMENTS DE LANGAGE : ' + n + ' ADVERSAIRE' + (n > 1 ? 'S' : '') + ' RECADRÉ' + (n > 1 ? 'S' : '') : (G.player.confused > 0 ? 'ÉLÉMENTS DE LANGAGE : COMMANDES INVERSÉES !' : 'CONFÉRENCE DE PRESSE DE BERNADETTE')); return; }
-  if (id === 'audience') { const t = G.karts.find(o => o.rank === k.rank - 1); if (t && t.item && t.itemRolling <= 0) { k.item = t.item; t.item = null; if (t === G.player) toast('VOTRE OBJET A ÉTÉ VOLÉ !'); } else { k.item = rollItem(k.rank); } k.itemRolling = 0; sfx('pick'); if (me) { toast('VOL D’AUDIENCE : ' + ITEMS[k.item].name.toUpperCase()); setHint(ITEMS[k.item].hint); } return; }
-  if (id === 'examen') { const t = G.karts.find(o => o.rank === k.rank - 1 && !o.finished); if (t) { t.item = null; stunKart(t, 1.8); sfx('motion'); toast(me ? 'MISE EN EXAMEN DE ' + t.def.name.toUpperCase() : (t === G.player ? 'VOUS ÊTES MIS·E EN EXAMEN !' : 'MISE EN EXAMEN SUR LE CIRCUIT')); } else { k.boost = 1.4; k.boostPower = 1.4; sfx('boost'); if (me) toast('NON-LIEU : PERSONNE DEVANT, BOOST'); } return; }
-  if (id === 'epandage') { for (let i = 1; i <= 2; i++) { const s = G.samples[(k.idx - i * 5 + G.N) % G.N]; spawnHazard('lisier', s.x + s.sx * (i % 2 ? 2.5 : -2.5), s.z + s.sz * (i % 2 ? 2.5 : -2.5), k); } sfx('drop'); toast(me ? 'ÉPANDAGE EN COURS' : 'ÉPANDAGE DE PATRICK !'); return; }
-  if (id === 'rattrapage') { k.boost = 2.6; k.boostPower = 1.7; k.stun = 0; sfx('boost'); toast(me ? 'TEMPS DE PAROLE : RATTRAPAGE !' : 'LUCIE REVIENT DANS LA COURSE'); return; }
-  if (id === 'debat') { for (const o of G.karts) if (o !== k) o.slowed = 3; sfx('shield'); toast(me ? 'GRAND DÉBAT : TOUT LE MONDE ÉCOUTE' : k.def.name + ' LANCE UN GRAND DÉBAT'); }
-  else if (id === 'blocage') { for (let i = 1; i <= 4; i++) { const lat = (i % 2 ? 1 : -1) * 3.2; const s = G.samples[(k.idx - i * 4 + G.N) % G.N]; spawnHazard('barricade', s.x + s.sx * lat, s.z + s.sz * lat); } k.hazardGrace = 1.5; sfx('drop'); toast(me ? 'GRÈVE GÉNÉRALE !' : 'GRÈVE GÉNÉRALE DÉCLARÉE'); }
-  else if (id === 'rondpoint') { const s = G.samples[(k.idx + 18) % G.N]; spawnHazard('rondpoint', s.x, s.z, k); sfx('drop'); toast(me ? 'ROND-POINT INAUGURÉ' : 'UN ROND-POINT APPARAÎT'); }
-  else if (id === 'zfe') { let n = 0; for (const o of G.karts) if (o !== k && (o.pos.x - k.pos.x) ** 2 + (o.pos.z - k.pos.z) ** 2 < 1600) { if (stunKart(o, 1.3)) n++; } k.boost = 1.2; k.boostPower = 1.4; sfx('boost'); toast(me ? 'ZFE : ' + n + ' VIGNETTE' + (n > 1 ? 'S' : '') + ' REFUSÉE' + (n > 1 ? 'S' : '') : 'ZONE À FAIBLES ÉMISSIONS !'); }
-  else if (id === 'amendement') {
-    const t = G.karts.find(o => o.rank === k.rank - 1 && !o.finished);
-    if (t) { const p = { ...k.pos }, h = k.heading, i = k.idx, l = k.lap, sp = k.speed; k.pos.x = t.pos.x; k.pos.z = t.pos.z; k.heading = t.heading; k.idx = t.idx; k.lap = t.lap; t.pos.x = p.x; t.pos.z = p.z; t.heading = h; t.idx = i; t.lap = l; k.speed = Math.max(sp, t.speed); t.speed *= 0.6; k.maxLap = Math.max(k.maxLap, k.lap); k.hazardGrace = 1; t.hazardGrace = 1; sfx('shield'); toast(me ? 'AMENDEMENT ADOPTÉ : PLACE ÉCHANGÉE' : 'AMENDEMENT DE DERNIÈRE MINUTE !'); }
-    else { k.boost = 1.4; k.boostPower = 1.4; sfx('boost'); toast(me ? 'AMENDEMENT : PERSONNE DEVANT, BOOST' : ''); }
-  }
-  else if (id === 'megaphone') {
-    let n = 0; for (const o of G.karts) if (o !== k) { const dx = o.pos.x - k.pos.x, dz = o.pos.z - k.pos.z; const d = Math.hypot(dx, dz); if (d < 22) { const push = (22 - d) * 0.45; o.pos.x += dx / d * push; o.pos.z += dz / d * push; o.speed *= 0.3; if (stunKart(o, 0.9)) n++; } }
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.3, 6, 32), new THREE.MeshBasicMaterial({ color: 0xf2c14e, transparent: true, opacity: 0.8 })); ring.rotation.x = Math.PI / 2; ring.position.set(k.pos.x, 1, k.pos.z); G.scene.add(ring); let life = 0.7; const fn = dt => { life -= dt; ring.scale.setScalar(1 + (0.7 - life) * 30); ring.material.opacity = Math.max(0, life); if (life <= 0) { G.scene.remove(ring); G.animated.splice(G.animated.indexOf(fn), 1); } }; G.animated.push(fn);
-    sfx('motion'); toast(me ? 'MÉGAPHONE : ' + n + ' KART' + (n > 1 ? 'S' : '') + ' REPOUSSÉ' + (n > 1 ? 'S' : '') : 'LE MÉGAPHONE DE LULU !');
-  }
-}
-
-function updateProjectiles(dt) {
-  for (let i = G.projectiles.length - 1; i >= 0; i--) {
-    const p = G.projectiles[i]; p.life -= dt;
-    if (p.target && (p.target.finished || p.target.fly > 0)) p.target = null;
-    if (p.target) { const dx = p.target.pos.x - p.x, dz = p.target.pos.z - p.z; const d = Math.hypot(dx, dz) || 1; const want = Math.atan2(dx, dz), cur = Math.atan2(p.dx, p.dz); const a = cur + clamp(wrapAngle(want - cur), -3.5 * dt, 3.5 * dt); p.dx = Math.sin(a); p.dz = Math.cos(a); if (p.type === 'motion') p.y = d > 20 ? 5 : lerp(5, 1, 1 - d / 20); }
-    else if (p.type === 'dossier') {
-      const N = G.N; let best = p.idx, bd = Infinity; for (let o = 0; o <= 14; o++) { const j = (p.idx + o) % N; const s = G.samples[j]; const d = (s.x - p.x) ** 2 + (s.z - p.z) ** 2; if (d < bd) { bd = d; best = j; } } p.idx = best;
-      const t = G.samples[(best + 8) % N]; const a = Math.atan2(t.x - p.x, t.z - p.z); p.dx = Math.sin(a); p.dz = Math.cos(a);
-    }
-    p.x += p.dx * p.speed * dt; p.z += p.dz * p.speed * dt;
-    p.mesh.position.set(p.x, p.y, p.z); p.mesh.rotation.y += dt * 9;
-    let hit = false;
-    if (p.mesh.userData.blink) p.mesh.userData.blink.material.color.setHex(Math.floor(G.time * 10) % 2 ? 0x3a6bff : 0xff3a4a);
-    for (const k of G.karts) { if (k === p.owner && p.life > (p.type === 'motion' ? 11.5 : p.type === 'bravm' ? 7.4 : 4.6)) continue; if (p.type === 'motion' && k !== p.target) continue; if (k.fly > 0 || k.y > 1.5) continue; const d = (k.pos.x - p.x) ** 2 + (k.pos.z - p.z) ** 2; if (d < 6.5) { stunKart(k, p.type === 'motion' ? 2.6 : p.type === 'bravm' ? 1.7 : 1.5); if (k === G.player) toast(p.type === 'motion' ? 'GOUVERNEMENT RENVERSÉ !' : p.type === 'bravm' ? 'INTERPELLÉ PAR LA BRAV-M !' : 'MEDIAPART ENQUÊTE SUR VOUS !'); hit = true; break; } }
-    if (hit || p.life <= 0) { G.scene.remove(p.mesh); G.projectiles.splice(i, 1); }
-  }
-  for (let i = G.hazards.length - 1; i >= 0; i--) {
-    const h = G.hazards[i]; h.life -= dt; let hit = false;
-    for (const k of G.karts) { if ((k.hazardGrace > 0 && h.type !== 'obstacle' && h.type !== 'lacrymo') || k.fly > 0 || k === h.owner || k.y > 1.2) continue; const d = (k.pos.x - h.x) ** 2 + (k.pos.z - h.z) ** 2; if (d < h.r * h.r) {
-      if (h.type === 'lacrymo') { if (k.slowed <= 0 && k === G.player) toast('GAZ LACRYMOGÈNE !'); k.slowed = Math.max(k.slowed, 1.3); k.confused = Math.max(k.confused, 1.0); }
-      else if (h.type === 'lisier') { if (k.slip <= 0 && k === G.player) toast('LISIER : ÇA GLISSE !'); k.slip = Math.max(k.slip, 0.4); }
-      else if (h.type === 'obstacle') { const dx = k.pos.x - h.x, dz = k.pos.z - h.z, dd = Math.hypot(dx, dz) || 1; k.pos.x = h.x + dx / dd * h.r; k.pos.z = h.z + dz / dd * h.r; if (k.speed > 12) { k.speed *= 0.55; if (k === G.player) sfx('bump'); } }
-      else if (h.type === 'rondpoint') { const dx = k.pos.x - h.x, dz = k.pos.z - h.z, dd = Math.hypot(dx, dz) || 1; k.pos.x = h.x + dx / dd * h.r; k.pos.z = h.z + dz / dd * h.r; if (k.speed > 10) { k.speed *= 0.4; if (stunKart(k, h.stun) && k === G.player) toast('PRIORITÉ AU ROND-POINT !'); k.hazardGrace = 0.8; } }
-      else { if (stunKart(k, h.stun) && k === G.player) toast(h.type === 'fakebox' ? 'SONDAGE TRUQUÉ !' : 'BLOQUÉ PAR LA GRÈVE !'); hit = true; break; } } }
-    if (hit || h.life <= 0) { G.scene.remove(h.mesh); G.hazards.splice(i, 1); }
-  }
-}
-function kartCollisions() {
-  for (let i = 0; i < G.karts.length; i++) for (let j = i + 1; j < G.karts.length; j++) {
-    const a = G.karts[i], b = G.karts[j]; if (a.fly > 0 || b.fly > 0) continue; const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z; const d = Math.hypot(dx, dz);
-    if (d < 2.6 && d > 0.001) {
-      const push = (2.6 - d) / 2; const nx = dx / d, nz = dz / d; const wa = a.stats.weight, wb = b.stats.weight; const ta = wb / (wa + wb), tb = wa / (wa + wb);
-      a.pos.x -= nx * push * 2 * ta; a.pos.z -= nz * push * 2 * ta; b.pos.x += nx * push * 2 * tb; b.pos.z += nz * push * 2 * tb;
-      a.speed *= 0.97; b.speed *= 0.97;
-      if (a.invincible > 0 && b.invincible <= 0) stunKart(b, 1.2); if (b.invincible > 0 && a.invincible <= 0) stunKart(a, 1.2);
-      if (a === G.player || b === G.player) sfx('bump');
-    }
-  }
-}
 
 // ---------- Camera & sun ----------
 function updateCamera(dt) {
@@ -410,7 +137,6 @@ function setHint(t) { hud.hint.textContent = t; }
 function toast(t) { if (!t) return; hud.toast.textContent = t; hud.toast.classList.add('on'); G.toastTimer = 2.2; }
 
 // ---------- Results ----------
-function onPlayerFinish() { G.resultsAt = G.time + 5; toast('ARRIVÉE ! ' + ordinal(G.player.rank + 1)); sfx('finish'); }
 function showResults() {
   G.state = 'results'; $('hud').hidden = true;
   const order = [...G.karts].sort((a, b) => a.rank - b.rank);
@@ -438,6 +164,8 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 function inputState() { return { throttle: keys.ArrowUp || keys.KeyW, brake: keys.ArrowDown || keys.KeyS, left: keys.ArrowLeft || keys.KeyA, right: keys.ArrowRight || keys.KeyD, drift: !!keys.Space }; }
+// The engine reads the player's controls through this seam rather than the keys map.
+setInputSource(inputState);
 
 // ---------- Screens ----------
 const SCREENS = ['s-title', 's-select', 's-tracks', 's-pause', 's-results', 's-admin'];
@@ -561,6 +289,8 @@ function frame(now) {
 
   for (const k of G.karts) updateKart(k, dt);
   kartCollisions(); pickupItems(); updateProjectiles(dt); updateRanks();
+  // The engine no longer touches the HUD: everything it wanted to say during the step is queued, and shown here.
+  for (const e of drain()) { if (e.type === 'toast') toast(e.text); else if (e.type === 'hint') setHint(e.text); }
   for (const f of [...G.animated]) f(dt);
   for (const c of G.crossings) { c.t += dt; const p = (c.t * c.speed) % (4 * c.range); const lat = p < 2 * c.range ? p - c.range : 3 * c.range - p; const dir = p < 2 * c.range ? 1 : -1; c.mesh.position.set(c.s.x + c.s.sx * lat, 0, c.s.z + c.s.sz * lat); c.mesh.rotation.y = Math.atan2(c.s.sx * dir, c.s.sz * dir);
     for (const k of G.karts) { if (k.hazardGrace > 0 || k.fly > 0 || k.y > 1.2) continue; const d = (k.pos.x - c.mesh.position.x) ** 2 + (k.pos.z - c.mesh.position.z) ** 2; if (d < 10) { k.hazardGrace = 1.5; k.speed *= 0.3; if (stunKart(k, 1.3) && k === G.player) toast('RENVERSÉ PAR LE CORTÈGE !'); } } }

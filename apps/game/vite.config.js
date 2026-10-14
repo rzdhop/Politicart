@@ -25,4 +25,8 @@ export default defineConfig({
   // somewhere the tests are not looking.
   server: { host: '127.0.0.1', port: 5173, strictPort: true },
   preview: { host: '127.0.0.1', port: 4173, strictPort: true },
+  // Engine unit tests. Node environment on purpose: the modules under test
+  // (the event queue, the input seam) have no DOM, and keeping them that way
+  // is the point.
+  test: { environment: 'node', include: ['src/**/*.test.js'] },
 });
