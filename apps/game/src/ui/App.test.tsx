@@ -13,6 +13,9 @@ vi.mock('../engine/preview.js', () => ({
 vi.mock('../engine/race.js', () => ({
   startRace: vi.fn(),
 }));
+vi.mock('../engine/minimap.js', () => ({
+  attachMinimap: vi.fn(),
+}));
 vi.mock('../engine/audio.js', () => {
   let muted = false;
   return { initAudio: () => {}, isMuted: () => muted, toggleMute: () => { muted = !muted; return muted; } };
@@ -21,6 +24,7 @@ vi.mock('../engine/audio.js', () => {
 import { CHARACTERS, TRACKS } from '../engine/data.js';
 import { resetMachine, transition, getState } from '../engine/machine.js';
 import { App } from './App';
+import { hud } from './Hud';
 
 /** Every id the E2E suite addresses on the six screens and the note. */
 const CONTRACT_IDS = [
@@ -126,5 +130,57 @@ describe('the React screens', () => {
     fireEvent.click(container.querySelector('#b-admin-save')!);
     expect(getState()).toBe('title');
     expect(container.querySelector('#b-admin')?.textContent).toContain('enregistré');
+  });
+});
+
+/** Every id the E2E suite addresses on the HUD, and where the contract puts it. */
+const HUD_IDS: Array<[string, string]> = [
+  ['hud', 'DIV'], ['h-pos', 'DIV'], ['h-lap', 'DIV'], ['h-time', 'DIV'], ['minimap', 'CANVAS'],
+  ['h-item', 'DIV'], ['h-power', 'DIV'], ['h-pname', 'DIV'], ['h-pbar', 'I'], ['h-pkey', 'DIV'], ['h-hint', 'DIV'],
+  ['h-speed', 'SPAN'], ['h-drift', 'I'], ['h-center', 'DIV'], ['h-toast', 'DIV'], ['h-wrong', 'DIV'],
+];
+
+describe('the HUD', () => {
+  it('renders every contract id on the element the original markup put it on', () => {
+    const { container } = render(<App />);
+    for (const [id, tag] of HUD_IDS) {
+      const el = container.querySelector('#' + id);
+      expect(el, '#' + id).not.toBeNull();
+      expect(el!.tagName, '#' + id).toBe(tag);
+    }
+    expect(container.querySelector('#h-item .nm')?.textContent).toBe('aucun objet');
+    expect(container.querySelector('#h-speed')?.textContent).toBe('0');
+  });
+
+  it('is hidden on the menus and registers every handle for the frame writer', () => {
+    const { container } = render(<App />);
+    expect((container.querySelector('#hud') as HTMLElement).hidden).toBe(true);
+    expect((container.querySelector('#h-wrong') as HTMLElement).hidden).toBe(true);
+    for (const key of Object.keys(hud) as Array<keyof typeof hud>) expect(hud[key], key).not.toBeNull();
+  });
+
+  it('writes through the handles without a React render: the DOM changes, the props do not', () => {
+    const { container } = render(<App />);
+    hud.speed!.setValue(123.4);
+    hud.pos!.setPosition(1);
+    hud.lap!.setText('TOUR 2/3');
+    hud.item!.setItem({ icon: '⚡', label: '49.3', filled: true });
+    hud.power!.setReady(true);
+    hud.power!.setKeyHint('F · PRÊT !');
+    hud.drift!.setValue(0.5);
+    hud.wrong!.setVisible(true);
+    hud.toast!.show('FIGURE !');
+    hud.center!.setText('PARTEZ !');
+    expect(container.querySelector('#h-speed')?.textContent).toBe('123');
+    expect(container.querySelector('#h-pos')?.textContent).toBe('1er');
+    expect(container.querySelector('#h-lap')?.textContent).toBe('TOUR 2/3');
+    expect(container.querySelector('#h-item')?.classList.contains('has')).toBe(true);
+    expect(container.querySelector('#h-item .nm')?.textContent).toBe('49.3');
+    expect(container.querySelector('#h-power')?.classList.contains('ready')).toBe(true);
+    expect(container.querySelector('#h-pkey')?.textContent).toBe('F · PRÊT !');
+    expect((container.querySelector('#h-drift') as HTMLElement).style.width).toBe('50%');
+    expect((container.querySelector('#h-wrong') as HTMLElement).hidden).toBe(false);
+    expect(container.querySelector('#h-toast')?.classList.contains('on')).toBe(true);
+    expect(container.querySelector('#h-center')?.textContent).toBe('PARTEZ !');
   });
 });

@@ -12,35 +12,10 @@
 
 <canvas id="c"></canvas>
 
-<!-- ===== HUD =====
-     Still plain markup, driven imperatively by src/game.js from the engine's
-     frame payload. Stage 13 moves it onto the library's HUD components and
-     their imperative handles; until then the ids below are what the HUD
-     writer and the E2E suite address, and the two class names are the
-     library's selectors for what used to be #hud and #minimap. -->
-<div id="hud" class="hud" hidden>
-  <div class="hud-tl">
-    <div class="pos" id="h-pos">6<small>e</small></div>
-    <div class="lap" id="h-lap">TOUR 1/3</div>
-    <div class="timer" id="h-time">0:00.00</div>
-  </div>
-  <div class="hud-tr"><canvas id="minimap" class="minimap" width="300" height="300"></canvas></div>
-  <div class="hud-bl">
-    <div class="item" id="h-item"><div class="ico">·</div><div class="nm">aucun objet</div></div>
-    <div class="power" id="h-power"><div class="pn" id="h-pname">Pouvoir</div><div class="bar"><i id="h-pbar"></i></div><div class="pk" id="h-pkey">F · recharge</div></div>
-    <div class="hint" id="h-hint">Ramassez une urne dorée pour obtenir un objet.</div>
-  </div>
-  <div class="hud-br">
-    <div class="speed"><span id="h-speed">0</span> <small>km/h</small></div>
-    <div class="drift"><i id="h-drift"></i></div>
-  </div>
-  <div class="center" id="h-center"></div>
-  <div class="toast" id="h-toast"></div>
-  <div class="wrong" id="h-wrong" hidden>SENS INTERDIT !</div>
-</div>
-
-<!-- The six screens and the note banner are React, mounted here from src/ui.
-     They render the same element ids the single-file game had (DEC-009). -->
+<!-- The six screens, the HUD and the note banner are React, mounted here from
+     src/ui. They render the same element ids the single-file game had
+     (DEC-009); the HUD is drawn once and then driven through imperative
+     handles from src/game.js, never through React state. -->
 <div id="ui"></div>
 
 <script type="module" src="/src/game.js"></script>

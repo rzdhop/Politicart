@@ -19,6 +19,11 @@ export interface DriftGaugeProps
   value: number;
   /** Fill colour. Defaults to the stylesheet's blue (`#7cc4ff`). */
   color?: string;
+  /**
+   * Props for the fill `<i>` itself, for a consumer that must address the fill
+   * apart from its track -- the game gives it its contract id (DEC-012).
+   */
+  fillProps?: ComponentPropsWithRef<'i'>;
   /** Imperative handle for per-frame updates. */
   ref?: Ref<DriftGaugeHandle>;
 }
@@ -40,7 +45,7 @@ export interface DriftGaugeProps
  * drift.current?.setValue(kart.drift.charge / maxCharge);
  * ```
  */
-export function DriftGauge({ value, color, className, ref, ...rest }: DriftGaugeProps) {
+export function DriftGauge({ value, color, fillProps, className, ref, ...rest }: DriftGaugeProps) {
   const { node, setFraction } = useFillWidth();
 
   useImperativeHandle(
@@ -62,6 +67,7 @@ export function DriftGauge({ value, color, className, ref, ...rest }: DriftGauge
   return (
     <div className={cx('drift', className)} {...rest}>
       <i
+        {...fillProps}
         ref={node as Ref<HTMLElement>}
         style={{
           width: `${Math.round(clamped * 100)}%`,

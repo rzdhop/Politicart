@@ -19,6 +19,11 @@ export interface SpeedReadoutProps
   value: number;
   /** The unit, set small and muted beside the number. Defaults to `km/h`. */
   unit?: ReactNode;
+  /**
+   * Props for the number `<span>` itself, for a consumer that must address it
+   * apart from the unit -- the game gives it its contract id (DEC-012).
+   */
+  valueProps?: ComponentPropsWithRef<'span'>;
   /** Imperative handle for per-frame updates. */
   ref?: Ref<SpeedReadoutHandle>;
 }
@@ -40,6 +45,7 @@ export interface SpeedReadoutProps
 export function SpeedReadout({
   value,
   unit = 'km/h',
+  valueProps,
   className,
   ref,
   ...rest
@@ -61,7 +67,7 @@ export function SpeedReadout({
 
   return (
     <div className={cx('speed', className)} {...rest}>
-      <span ref={number}>{Math.round(Number.isFinite(value) ? value : 0)}</span>{' '}
+      <span {...valueProps} ref={number}>{Math.round(Number.isFinite(value) ? value : 0)}</span>{' '}
       <small>{unit}</small>
     </div>
   );

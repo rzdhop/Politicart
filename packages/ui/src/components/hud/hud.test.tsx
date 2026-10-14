@@ -267,3 +267,41 @@ describe('WrongWay', () => {
     expect((banner as HTMLElement).hidden).toBe(true);
   });
 });
+
+describe('part props (DEC-012)', () => {
+  it('SpeedReadout spreads valueProps onto the number span, apart from the unit', () => {
+    const { container } = render(<SpeedReadout value={42} valueProps={{ id: 'h-speed' }} />);
+    expect(container.querySelector('span#h-speed')?.textContent).toBe('42');
+    expect(container.querySelector('.speed')?.id).toBe('');
+  });
+
+  it('DriftGauge spreads fillProps onto the fill element, whose inline width is the gauge', () => {
+    const { container } = render(<DriftGauge value={0.5} fillProps={{ id: 'h-drift' }} />);
+    expect((container.querySelector('i#h-drift') as HTMLElement | null)?.style.width).toBe('50%');
+  });
+
+  it('PowerGauge spreads nameProps, fillProps and keyHintProps onto their parts', () => {
+    const { container } = render(
+      <PowerGauge name="49.3" charge={0.25} keyHint="F · recharge" nameProps={{ id: 'h-pname' }} fillProps={{ id: 'h-pbar' }} keyHintProps={{ id: 'h-pkey' }} />,
+    );
+    expect(container.querySelector('.pn#h-pname')?.textContent).toBe('49.3');
+    expect((container.querySelector('i#h-pbar') as HTMLElement | null)?.style.width).toBe('25%');
+    expect(container.querySelector('.pk#h-pkey')?.textContent).toBe('F · recharge');
+  });
+
+  it('part props never override the handle: setValue still reaches the span', () => {
+    const ref = createRef<SpeedReadoutHandle>();
+    const { container } = render(<SpeedReadout value={1} valueProps={{ id: 'h-speed' }} ref={ref} />);
+    ref.current?.setValue(77);
+    expect(container.querySelector('#h-speed')?.textContent).toBe('77');
+  });
+
+  it('PowerGauge rewrites the key line through setKeyHint, with a change guard', () => {
+    const ref = createRef<PowerGaugeHandle>();
+    const { container } = render(<PowerGauge name="49.3" charge={0} keyHint="F · recharge" ref={ref} />);
+    ref.current?.setKeyHint('F · PRÊT !');
+    expect(container.querySelector('.pk')?.textContent).toBe('F · PRÊT !');
+    ref.current?.setKeyHint('F · PRÊT !');
+    expect(container.querySelector('.pk')?.textContent).toBe('F · PRÊT !');
+  });
+});

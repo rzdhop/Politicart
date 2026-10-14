@@ -16,6 +16,8 @@ export interface PowerGaugeHandle {
   setReady(ready: boolean): void;
   /** Replace the power's name, which changes when the player changes character. */
   setName(name: string): void;
+  /** Rewrite the key line under the bar, e.g. from "F · recharge" to "F · PRÊT !". */
+  setKeyHint(text: string): void;
 }
 
 export interface PowerGaugeProps
@@ -28,6 +30,14 @@ export interface PowerGaugeProps
   keyHint?: ReactNode;
   /** Whether the power can be used now: green border and glow. */
   ready?: boolean;
+  /**
+   * Props for the name line, the fill `<i>` and the key line, for a consumer
+   * that must address those parts -- the game gives them its contract ids
+   * (DEC-012).
+   */
+  nameProps?: ComponentPropsWithRef<'div'>;
+  fillProps?: ComponentPropsWithRef<'i'>;
+  keyHintProps?: ComponentPropsWithRef<'div'>;
   /** Imperative handle for per-frame updates. */
   ref?: Ref<PowerGaugeHandle>;
 }
@@ -58,12 +68,16 @@ export function PowerGauge({
   charge,
   keyHint,
   ready = false,
+  nameProps,
+  fillProps,
+  keyHintProps,
   className,
   ref,
   ...rest
 }: PowerGaugeProps) {
   const root = useRef<HTMLDivElement | null>(null);
   const nameNode = useRef<HTMLDivElement | null>(null);
+  const keyNode = useRef<HTMLDivElement | null>(null);
   const { node, setFraction } = useFillWidth();
 
   useImperativeHandle(
@@ -78,6 +92,11 @@ export function PowerGauge({
           nameNode.current.textContent = next;
         }
       },
+      setKeyHint(next: string) {
+        if (keyNode.current !== null && keyNode.current.textContent !== next) {
+          keyNode.current.textContent = next;
+        }
+      },
     }),
     [setFraction],
   );
@@ -86,13 +105,13 @@ export function PowerGauge({
 
   return (
     <div ref={root} className={cx('power', ready && 'ready', className)} {...rest}>
-      <div ref={nameNode} className="pn">
+      <div {...nameProps} ref={nameNode} className="pn">
         {name}
       </div>
       <div className="bar">
-        <i ref={node as Ref<HTMLElement>} style={{ width: `${Math.round(clamped * 100)}%` }} />
+        <i {...fillProps} ref={node as Ref<HTMLElement>} style={{ width: `${Math.round(clamped * 100)}%` }} />
       </div>
-      {keyHint === undefined ? null : <div className="pk">{keyHint}</div>}
+      {keyHint === undefined ? null : <div {...keyHintProps} ref={keyNode} className="pk">{keyHint}</div>}
     </div>
   );
 }

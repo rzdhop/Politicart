@@ -6,28 +6,23 @@ Current state only. History lives in git.
 
 - **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
   CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** Stage 12 DONE and committed. The six screens and the
-  note banner are React (`apps/game/src/ui/`), composed from
-  `@kart-republique/ui` and driven by a small external store over the
-  machine (`ui/store.ts`). `index.html` lost its inline stylesheet and the
-  Google Fonts link: the look now comes from the package stylesheet plus
-  two game-only rules in `src/game.css`, and the UI package's parity suite
-  retired itself as designed (Tier 1 is now 238 + 44 tests). `game.js` (148
-  lines) keeps the HUD writer, minimap, keyboard and clock. `ResultsTable`
-  gained `bodyProps` (DEC-012). 27/27 E2E green with no spec selector
-  changed.
-- **Next action:** Stage 13 is IMPLEMENTED BUT NOT CLOSED. Uncommitted in the
-  working tree: `ui/Hud.tsx`, `engine/minimap.js` (+ test), part props and
-  `setKeyHint` on the three HUD components (+ tests), `race.js` drawing the
-  minimap, `App.tsx` mounting the HUD, `index.html` without the HUD markup,
-  `game.js` (135 lines) writing through the handles. Tier 1 is GREEN (243 +
-  52 tests, typecheck, both builds). Tier 2 was NOT completed: the host
-  killed the Playwright run for low system memory before any spec reported.
-  Resume by running `npm run test:e2e`; if 27/27, close the stage with the
-  prepared log line, DEC-012 is already recorded, commit by explicit path,
-  then point the checkpoint at it. Frame-time check still owed (a Playwright
-  script measuring rAF deltas during a race was prepared but not run).
-  Then stage 14 (Pages workflow + README; drafts exist) and stage 15.
+- **Current stage:** Stage 13 DONE and committed -- **Part C, the port, is
+  complete.** The HUD is `ui/Hud.tsx`, composed from the library's HUD
+  components, rendered once and written every frame through their imperative
+  handles by `game.js` (135 lines); nothing in the HUD goes through React
+  state. The minimap canvas is the engine's (`engine/minimap.js`, attached
+  from the HUD's ref, drawn in `stepRace`). `SpeedReadout`, `DriftGauge` and
+  `PowerGauge` gained part props and `PowerGauge` a `setKeyHint` handle
+  (DEC-012). `index.html` is a 22-line shell: canvas, React root, script.
+  Tier 1: 243 + 52 tests. 27/27 E2E green. Frame-time check: deferred, to be done by hand (host was low on memory); a rAF-delta script is in the action log's notes.
+- **Next action:** Stage 14 -- GitHub Pages via a GitHub Actions workflow
+  (DEC-008) and the README rewrite (the accepted loss of DEC-003). The
+  workflow must build `packages/ui` before `apps/game` (the game resolves
+  `@kart-republique/ui` from its `dist/`), run Tier 1, and deploy
+  `apps/game/dist`. `base: './'` in the game's Vite config already makes the
+  build work under `/Politicart/`. Reminder: the repository's Pages source
+  must be switched to "GitHub Actions" by hand before the deploy works
+  (R-15). Then stage 15, the design-sync run against `packages/ui`.
 - **Session note (2026-10-14):** the branch ref file was found zeroed on
   resume and restored from the reflog; see the action log. Nothing was lost.
 - **Plan amendment:** an unplanned **stage 5b** was inserted before stage 6 to

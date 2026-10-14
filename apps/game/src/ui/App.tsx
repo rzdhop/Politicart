@@ -6,6 +6,7 @@ import { ResultsScreen } from './screens/ResultsScreen';
 import { SelectScreen } from './screens/SelectScreen';
 import { TitleScreen } from './screens/TitleScreen';
 import { TracksScreen } from './screens/TracksScreen';
+import { Hud } from './Hud';
 import { useUi } from './store';
 
 /**
@@ -13,7 +14,8 @@ import { useUi } from './store';
  * laid them out. Every screen is always mounted and hides itself when the
  * machine is elsewhere, exactly as the original sections did with `hidden`,
  * so the E2E suite's visibility checks mean the same thing they always did.
- * The HUD is not here: it is driven imperatively from game.js (stage 13).
+ * The HUD sits where the original markup put it, between the circuits and the
+ * pause menu; it is rendered once and then written imperatively (see Hud).
  */
 export function App() {
   const ui = useUi();
@@ -23,6 +25,7 @@ export function App() {
       <AdminScreen ui={ui} />
       <SelectScreen ui={ui} />
       <TracksScreen ui={ui} />
+      <Hud />
       <PauseScreen ui={ui} />
       <ResultsScreen ui={ui} />
       <NoteBanner id="note" hidden={ui.noteHidden}>Jeu au clavier : ouvrez-le sur un ordinateur.</NoteBanner>

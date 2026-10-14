@@ -5,7 +5,8 @@
 // which runs the countdown, the physics contract (updateKart for every kart,
 // then kartCollisions, pickupItems, updateProjectiles, updateRanks -- in that
 // order and no other), the animated props, the crossings, the crowd, the
-// camera and the wrong-way timer, and returns the frame payload. It never
+// camera and the wrong-way timer, draws the minimap on the canvas the UI
+// handed over (engine/minimap.js), and returns the frame payload. It never
 // touches the DOM: text goes out through engine/events.js, the state through
 // engine/machine.js, the readouts through the returned payload.
 //
@@ -21,6 +22,7 @@ import { setHint, toast } from './events.js';
 import { pickupItems, stunKart, updateProjectiles } from './items.js';
 import { buildKart } from './kart.js';
 import { transition } from './machine.js';
+import { buildMinimapBase, drawMinimap } from './minimap.js';
 import { framePayload } from './payload.js';
 import { kartCollisions, updateKart, updateRanks } from './physics.js';
 import { setCast } from './primitives.js';
@@ -57,6 +59,7 @@ export function startRace() {
   sun.castShadow = SHADOWS(); sun.shadow.mapSize.set(2048, 2048); const sc = sun.shadow.camera; sc.left = -110; sc.right = 110; sc.top = 110; sc.bottom = -110; sc.near = 10; sc.far = 500; sun.shadow.bias = -0.0006;
   G.sun = sun; G.scene = scene; G.animated = []; G.hazards = []; G.projectiles = []; G.crowd = [];
   setCast(true); buildTrack(scene, track);
+  buildMinimapBase();
 
   const others = CHARACTERS.filter((c, i) => i !== G.charIdx).sort(() => Math.random() - 0.5).slice(0, CFG.numAI);
   const player = makeKart(CHARACTERS[G.charIdx], false);
@@ -117,6 +120,7 @@ export function stepRace(dt) {
   updateCamera(dt);
   updateWrongWay();
   const payload = framePayload(G, CFG);
+  drawMinimap(payload.kartPositions);
   if (G.time >= G.resultsAt || (G.player.finished && G.karts.every(k => k.finished))) endRace();
   return payload;
 }
