@@ -6,14 +6,18 @@ Current state only. History lives in git.
 
 - **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
   CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** Stage 3 DONE and committed (13 components). Stage 4 next
-  -- the select and tracks groups (8 components).
-- **Next action:** write `packages/ui/src/components/{select,tracks}/` --
-  SelectLayout, Roster, CharacterTile, Showcase, StatBar, PowerBox, CardGrid,
-  TrackCard -- same pattern as stage 3: typed props named `<Name>Props`, class
-  vocabulary from `src/styles/` with no new CSS, a vitest suite per group, and
-  entries added to both `src/index.ts` and the per-component list in
-  `src/dist-contract.test.ts`.
+- **Current stage:** Stage 4 DONE and committed (22 components total). Stage 5
+  next -- hud, results, workshop and misc (the remaining groups).
+- **Next action:** write `packages/ui/src/components/{hud,results,workshop,
+  misc}/` -- HudLayer, HudCorner, PositionReadout, LapCounter, RaceTimer,
+  MinimapFrame, ItemSlot, PowerGauge, HudHint, SpeedReadout, DriftGauge,
+  CenterAnnounce, Toast, WrongWay, ResultsTable, AdminGrid, Field, TextInput,
+  ColorSwatch, LiveryThumb, NoteBanner. Same pattern as stages 3-4. **The HUD
+  group is the one with a design constraint**: per the exploration map, rank,
+  lap, clock, speed, drift and the power bar are written every frame during a
+  race, so these components must expose an imperative handle (a ref to the text
+  node or an `updateX()` method) rather than expecting React state. Stage 13
+  depends on that shape.
 - **Open questions:** none open. A-004 resolved as DEC-008 (Pages via GitHub
   Actions). Reminder carried forward: the repository's Pages source must be
   switched to "GitHub Actions" by hand before stage 14's deploy will work.
@@ -41,7 +45,7 @@ regression contract below began UNVERIFIED.
     npm install            # clean, 95 packages, 0 vulnerabilities
     npm run build          # vite lib build + tsc declarations -> dist/
     npm run typecheck      # tsc --noEmit, clean
-    npm run test           # vitest, 6 files / 156 tests passing
+    npm run test           # vitest, 8 files / 179 tests passing
     npm audit              # 0 vulnerabilities (with and without dev deps)
 
 All four run from the repo root across workspaces. The game's regression

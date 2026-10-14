@@ -38,5 +38,24 @@ export {
 } from './components/controls/ControlsGrid';
 export { KeyCap, type KeyCapProps } from './components/controls/KeyCap';
 
+// Character select.
+export {
+  CharacterTile,
+  type CharacterTileProps,
+} from './components/select/CharacterTile';
+export { PowerBox, type PowerBoxProps } from './components/select/PowerBox';
+export { Roster, type RosterProps } from './components/select/Roster';
+export {
+  SelectLayout,
+  type SelectLayoutProps,
+} from './components/select/SelectLayout';
+export { Showcase, type ShowcaseProps } from './components/select/Showcase';
+export { StatBar, type StatBarProps } from './components/select/StatBar';
+export { StatGrid, type StatGridProps } from './components/select/StatGrid';
+
+// Track select.
+export { CardGrid, type CardGridProps } from './components/tracks/CardGrid';
+export { TrackCard, type TrackCardProps } from './components/tracks/TrackCard';
+
 /** Package version, exported so a consumer can confirm which build it loaded. */
 export const version = '0.1.0';

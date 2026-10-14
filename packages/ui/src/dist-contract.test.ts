@@ -62,6 +62,15 @@ describe.skipIf(!built)('published package contract', () => {
       'components/controls/Button.d.ts',
       'components/controls/ControlsGrid.d.ts',
       'components/controls/KeyCap.d.ts',
+      'components/select/SelectLayout.d.ts',
+      'components/select/Roster.d.ts',
+      'components/select/CharacterTile.d.ts',
+      'components/select/Showcase.d.ts',
+      'components/select/StatGrid.d.ts',
+      'components/select/StatBar.d.ts',
+      'components/select/PowerBox.d.ts',
+      'components/tracks/CardGrid.d.ts',
+      'components/tracks/TrackCard.d.ts',
     ]) {
       expect(existsSync(join(dist, path)), `dist/${path} is missing`).toBe(true);
     }
@@ -84,6 +93,15 @@ describe.skipIf(!built)('published package contract', () => {
       'ButtonProps',
       'ControlsGridProps',
       'KeyCapProps',
+      'SelectLayoutProps',
+      'RosterProps',
+      'CharacterTileProps',
+      'ShowcaseProps',
+      'StatGridProps',
+      'StatBarProps',
+      'PowerBoxProps',
+      'CardGridProps',
+      'TrackCardProps',
     ]) {
       expect(types, `${name} is not exported`).toContain(name);
     }
