@@ -1,0 +1,39 @@
+/* Results: the scrutin table.
+   
+   The game scoped these rules to bare `table`, `td` and `th`. Scoped here to
+   `.results-table` instead, declarations untouched - a library that shipped bare
+   element selectors would restyle every table in a consuming app. */
+
+.results-table {
+  border-collapse:collapse;
+  width:100%;
+  max-width:560px;
+  font-size:15px;
+}
+
+.results-table td,.results-table th {
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+  text-align:left;
+}
+
+.results-table th {
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  color:var(--muted);
+}
+
+.results-table td.r {
+  font-family:var(--font-display);
+  font-size:22px;
+  color:var(--gold);
+  width:40px;
+}
+
+.results-table td.t {
+  font-family:var(--font-mono);
+  text-align:right;
+}
+
+.results-table .you { background:rgba(242,193,78,.12); }

@@ -1,0 +1,17 @@
+/* Brand: the tricolore rule. */
+
+.tricolore {
+  display:flex;
+  height:6px;
+  width:min(420px,80vw);
+  border-radius:3px;
+  overflow:hidden;
+}
+
+.tricolore i { flex:1; }
+
+.tricolore i:nth-child(1) { background:#2f55c7; }
+
+.tricolore i:nth-child(2) { background:#fffaf0; }
+
+.tricolore i:nth-child(3) { background:#e63946; }

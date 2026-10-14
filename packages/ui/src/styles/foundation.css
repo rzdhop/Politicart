@@ -1,0 +1,55 @@
+/* Foundation: the layout primitives every screen is built from.
+   
+   `.bar` lives here rather than with the stat bars because two component groups
+   use it (StatBar in select, PowerGauge in the HUD); the HUD stylesheet loads
+   after this one and recolours its fill. */
+
+.screen {
+  position:fixed;
+  inset:0;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding-block:24px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  box-sizing:border-box;
+  overflow-y:auto;
+  gap:18px;
+  text-align:center;
+}
+
+.screen[hidden] { display:none!important; }
+
+.panel {
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:18px 22px;
+  max-width:min(980px,100%);
+  box-sizing:border-box;
+  backdrop-filter:blur(6px);
+}
+
+.row {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  justify-content:center;
+  align-items:center;
+}
+
+.bar {
+  height:8px;
+  background:rgba(255,255,255,.12);
+  border-radius:4px;
+  overflow:hidden;
+}
+
+.bar i {
+  display:block;
+  height:100%;
+  background:var(--gold);
+  border-radius:4px;
+}

@@ -1,0 +1,55 @@
+/* Controls: the gold button, its ghost variant, and keycap chips. */
+
+.btn {
+  font-family:var(--font-display);
+  font-size:22px;
+  letter-spacing:.04em;
+  color:#0c1230;
+  background:var(--gold);
+  border:0;
+  border-radius:10px;
+  padding:12px 28px;
+  cursor:pointer;
+  box-shadow:0 5px 0 #a8801c;
+  transition:transform .08s,box-shadow .08s;
+}
+
+.btn:hover { transform:translateY(-1px); }
+
+.btn:active {
+  transform:translateY(3px);
+  box-shadow:0 2px 0 #a8801c;
+}
+
+.btn:focus-visible {
+  outline:3px solid #fff;
+  outline-offset:3px;
+}
+
+.btn.ghost {
+  background:transparent;
+  color:var(--fg);
+  box-shadow:none;
+  border:2px solid var(--line);
+  font-size:17px;
+  padding:9px 18px;
+}
+
+.controls {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:10px 22px;
+  font-size:14px;
+  color:var(--muted);
+  text-align:left;
+  max-width:760px;
+}
+
+.controls b {
+  color:var(--fg);
+  font-family:var(--font-mono);
+  font-size:13px;
+  background:rgba(255,255,255,.08);
+  padding:2px 7px;
+  border-radius:5px;
+}

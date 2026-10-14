@@ -16,6 +16,12 @@ export default defineConfig({
       cssFileName: 'index',
     },
     sourcemap: true,
+    // Pin the CSS target. Left to its default, the minifier modernises the
+    // game's `@media (max-width:600px)` into range syntax -- `(width<=600px)`
+    // -- which older browsers do not understand, so the HUD would silently
+    // stop shrinking on them. The game's own CSS makes no such demand, and the
+    // port must not quietly raise the baseline.
+    cssTarget: ['chrome100', 'edge100', 'firefox100', 'safari15'],
     rollupOptions: {
       external: ['react', 'react-dom', 'react/jsx-runtime'],
       output: {

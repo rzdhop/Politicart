@@ -1,0 +1,22 @@
+/* Design tokens.
+   
+   The palette, type stack and hairline colour of Kart Republique, exactly as the
+   game defines them. Everything else in this system is expressed in terms of
+   these; a consumer that wants a different look re-declares these and nothing
+   else. Dark only - the game has one committed look, not a light mode. */
+
+:root {
+  --bg:#0c1230;
+  --panel:rgba(12,18,48,.86);
+  --panel-2:rgba(20,30,78,.9);
+  --fg:#f6f1e4;
+  --muted:#b9b3d8;
+  --blue:#1f3a93;
+  --red:#c8102e;
+  --gold:#f2c14e;
+  --line:rgba(246,241,228,.18);
+  --font-display:'Lilita One','Arial Black',Impact,sans-serif;
+  --font-body:'Nunito','Segoe UI',system-ui,sans-serif;
+  --font-mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  color-scheme:dark;
+}

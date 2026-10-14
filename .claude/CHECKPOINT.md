@@ -6,21 +6,23 @@ Current state only. History lives in git.
 
 - **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
   CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** Stage 1 DONE and committed. Stage 2 next -- move the
-  tokens and stylesheet verbatim out of index.html L1-130.
-- **Next action:** create `packages/ui/src/tokens.css` (the `:root` block, 15
-  custom properties) and `packages/ui/src/styles.css` (the remaining rules),
-  imported from `src/index.ts` so the lib build emits `dist/index.css`. Verify
-  declaration-by-declaration against index.html; the game keeps its own inline
-  copy until stage 12, so nothing may be deleted from index.html in this stage.
+- **Current stage:** Stage 2 DONE and committed. Stage 3 next -- the first 13
+  components (foundation, typography, brand, controls).
+- **Next action:** write `packages/ui/src/components/{foundation,typography,
+  brand,controls}/` -- Screen, Row, Panel, Bar, GameTitle, Subtitle, Heading,
+  Disclaimer, Tricolore, Button (+ghost), KeyCap, ControlsGrid -- each as a
+  typed React component over the class vocabulary already in
+  `src/styles/`, with a vitest suite per group, re-exported from
+  `src/index.ts`. No new CSS: if a component seems to need a rule that is not
+  already in src/styles/, that is a finding, not a licence to add one.
 - **Open questions:** none open. A-004 resolved as DEC-008 (Pages via GitHub
   Actions). Reminder carried forward: the repository's Pages source must be
   switched to "GitHub Actions" by hand before stage 14's deploy will work.
 
 ## Checkpoint commit
 
-- **Hash:** `b21357e501d59443a85c5283a8b2b067023c90ce`
-- **Subject:** Add session artifacts and the plan for the design-system extraction
+- **Hash:** `pending -- set to the stage 2 commit below`
+- **Subject:** Extract the game's tokens and stylesheet into @kart-republique/ui
 - **Branch:** `feat/design-system` (branched from `main` at `f271930`). `main`
   keeps serving the playable single-file game on Pages until the port merges.
 - **Tree at checkpoint:** clean
@@ -40,7 +42,7 @@ regression contract below began UNVERIFIED.
     npm install            # clean, 95 packages, 0 vulnerabilities
     npm run build          # vite lib build + tsc declarations -> dist/
     npm run typecheck      # tsc --noEmit, clean
-    npm run test           # vitest, 1 file / 2 tests passing
+    npm run test           # vitest, 2 files / 113 tests passing
     npm audit              # 0 vulnerabilities (with and without dev deps)
 
 All four run from the repo root across workspaces. The game's regression
