@@ -44,8 +44,8 @@ Current state only. History lives in git.
 
 ## Checkpoint commit
 
-- **Hash:** `daaf44f684b67f56d47302e0e97bca7e4b0e1e90`
-- **Subject:** Extract physics, AI, items and powers behind an event queue
+- **Hash:** `29e59c74bf9c92e189b6a0f4dc0a1d0c5b8fee04`
+- **Subject:** Give the engine a seam: one state machine, a frame payload, no DOM
 - **Branch:** `feat/design-system` (branched from `main` at `f271930`). `main`
   keeps serving the playable single-file game on Pages until the port merges.
 - **Tree at checkpoint:** clean
