@@ -1,6 +1,7 @@
 {
   "pkg": "@kart-republique/ui",
   "globalName": "KartRepubliqueUI",
+  "projectId": "b7586fe5-3495-4448-ab55-58afb71f3c81",
   "shape": "storybook",
   "storybookConfigDir": "packages/ui/.storybook",
   "storybookStatic": ".design-sync/sb-reference",
