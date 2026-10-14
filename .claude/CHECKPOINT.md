@@ -6,15 +6,14 @@ Current state only. History lives in git.
 
 - **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
   CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** Stage 2 DONE and committed. Stage 3 next -- the first 13
-  components (foundation, typography, brand, controls).
-- **Next action:** write `packages/ui/src/components/{foundation,typography,
-  brand,controls}/` -- Screen, Row, Panel, Bar, GameTitle, Subtitle, Heading,
-  Disclaimer, Tricolore, Button (+ghost), KeyCap, ControlsGrid -- each as a
-  typed React component over the class vocabulary already in
-  `src/styles/`, with a vitest suite per group, re-exported from
-  `src/index.ts`. No new CSS: if a component seems to need a rule that is not
-  already in src/styles/, that is a finding, not a licence to add one.
+- **Current stage:** Stage 3 DONE and committed (13 components). Stage 4 next
+  -- the select and tracks groups (8 components).
+- **Next action:** write `packages/ui/src/components/{select,tracks}/` --
+  SelectLayout, Roster, CharacterTile, Showcase, StatBar, PowerBox, CardGrid,
+  TrackCard -- same pattern as stage 3: typed props named `<Name>Props`, class
+  vocabulary from `src/styles/` with no new CSS, a vitest suite per group, and
+  entries added to both `src/index.ts` and the per-component list in
+  `src/dist-contract.test.ts`.
 - **Open questions:** none open. A-004 resolved as DEC-008 (Pages via GitHub
   Actions). Reminder carried forward: the repository's Pages source must be
   switched to "GitHub Actions" by hand before stage 14's deploy will work.
@@ -42,7 +41,7 @@ regression contract below began UNVERIFIED.
     npm install            # clean, 95 packages, 0 vulnerabilities
     npm run build          # vite lib build + tsc declarations -> dist/
     npm run typecheck      # tsc --noEmit, clean
-    npm run test           # vitest, 2 files / 113 tests passing
+    npm run test           # vitest, 6 files / 156 tests passing
     npm audit              # 0 vulnerabilities (with and without dev deps)
 
 All four run from the repo root across workspaces. The game's regression

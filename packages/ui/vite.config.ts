@@ -13,7 +13,7 @@ export default defineConfig({
       name: 'KartRepubliqueUI',
       formats: ['es', 'cjs'],
       fileName: (format) => (format === 'es' ? 'index.js' : 'index.cjs'),
-      cssFileName: 'index',
+      cssFileName: 'styles',
     },
     sourcemap: true,
     // Pin the CSS target. Left to its default, the minifier modernises the
