@@ -25,6 +25,18 @@ Marked UNCONFIRMED / confirmed / invalidated.
   `LapCounter`, `RaceTimer` and `CenterAnnounce` take free text rather than
   lap/time numbers, and `ResultsTable` renders no header row unless given one,
   precisely so no French wording is baked into the library.
+- **A-006 -- Node 26 is available to `actions/setup-node` on ubuntu-latest.**
+  UNCONFIRMED. `.github/workflows/pages.yml` asks for `node-version: 26` to
+  match the toolchain proven locally (A-001). If the runner cannot resolve it
+  the build job fails at setup; the fallback is `node-version: 24`, on which
+  nothing in the lockfile is known to differ. Confirmed by the first green run
+  of the workflow on `main`.
+- **A-007 -- The workflow's test step is sufficient as the deploy gate.**
+  UNCONFIRMED. The workflow runs the design-system build, typecheck and the
+  unit suites, but not the Playwright suite (three minutes, needs a browser
+  install). The E2E net stays a local gate after every stage. To be revisited
+  if a regression ever reaches `main` that the unit suites did not catch.
+
 ## Confirmed
 
 - **A-001 -- Node v26.10.0 is acceptable to the toolchain.** CONFIRMED

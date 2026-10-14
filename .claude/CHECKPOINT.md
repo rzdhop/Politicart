@@ -6,23 +6,20 @@ Current state only. History lives in git.
 
 - **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
   CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** Stage 13 DONE and committed -- **Part C, the port, is
-  complete.** The HUD is `ui/Hud.tsx`, composed from the library's HUD
-  components, rendered once and written every frame through their imperative
-  handles by `game.js` (135 lines); nothing in the HUD goes through React
-  state. The minimap canvas is the engine's (`engine/minimap.js`, attached
-  from the HUD's ref, drawn in `stepRace`). `SpeedReadout`, `DriftGauge` and
-  `PowerGauge` gained part props and `PowerGauge` a `setKeyHint` handle
-  (DEC-012). `index.html` is a 22-line shell: canvas, React root, script.
-  Tier 1: 243 + 52 tests. 27/27 E2E green. Frame-time check: deferred, to be done by hand (host was low on memory); a rAF-delta script is in the action log's notes.
-- **Next action:** Stage 14 -- GitHub Pages via a GitHub Actions workflow
-  (DEC-008) and the README rewrite (the accepted loss of DEC-003). The
-  workflow must build `packages/ui` before `apps/game` (the game resolves
-  `@kart-republique/ui` from its `dist/`), run Tier 1, and deploy
-  `apps/game/dist`. `base: './'` in the game's Vite config already makes the
-  build work under `/Politicart/`. Reminder: the repository's Pages source
-  must be switched to "GitHub Actions" by hand before the deploy works
-  (R-15). Then stage 15, the design-sync run against `packages/ui`.
+- **Current stage:** Stage 14 DONE and committed. `.github/workflows/pages.yml`
+  builds the design system, runs typecheck and both unit suites, builds the
+  game and deploys `apps/game/dist` to Pages on every push to `main`
+  (DEC-008). The exact command sequence was run locally and is green. The
+  README is rewritten for the workspace layout (closes the accepted loss of
+  DEC-003). **R-15 stays UNVERIFIED until two things only the human can do:**
+  switch the repository's Pages source to "GitHub Actions" in Settings >
+  Pages, and merge `feat/design-system` into `main` so the workflow runs.
+- **Next action:** Stage 15 -- the design-sync run against `packages/ui`
+  (DEC-001, DEC-004): converter validates clean, every preview verified
+  against the Storybook render. **Blocked on the human:** the sync tool is
+  only usable from the `/design-sync` skill, which the human must start.
+  Then close-out: the manual checks R-10..R-14 and the 60 fps check by hand,
+  every artifact confirmed current.
 - **Session note (2026-10-14):** the branch ref file was found zeroed on
   resume and restored from the reflog; see the action log. Nothing was lost.
 - **Plan amendment:** an unplanned **stage 5b** was inserted before stage 6 to
@@ -46,11 +43,8 @@ Current state only. History lives in git.
   keeps serving the playable single-file game on Pages until the port merges.
 - **Tree at checkpoint:** clean
 - **Unrelated changes left unstaged:** none
-- **KNOWN STALE:** `README.md` still describes the game as a single file with
-  "No build step, no install", and still points at `index.html` at the
-  repository root, which stage 8 removed. This is the accepted loss recorded in
-  DEC-003; stage 14 rewrites the README. Anyone reading the branch before then
-  should know the instructions are out of date, not that the game is broken.
+- **README:** rewritten in stage 14 for the workspace layout; no longer
+  stale.
 - **Last known-good single-file game:** `f271930`. From stage 8 the game lives
   at `apps/game/` and needs a build; `183fbc2` is the last commit on this
   branch where the original single file was still intact and playable by
