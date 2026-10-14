@@ -16,18 +16,18 @@ Current state only. History lives in git.
   lines) keeps the HUD writer, minimap, keyboard and clock. `ResultsTable`
   gained `bodyProps` (DEC-012). 27/27 E2E green with no spec selector
   changed.
-- **Next action:** Stage 13 -- the HUD on the imperative path. Build
-  `ui/Hud.tsx` from the library's HUD components with their handles
-  (`PositionReadout`, `LapCounter`, `RaceTimer`, `MinimapFrame`, `ItemSlot`,
-  `PowerGauge`, `HudHint`, `SpeedReadout`, `DriftGauge`, `CenterAnnounce`,
-  `Toast`, `WrongWay` inside `HudLayer` and four `HudCorner`s), rendered
-  once; `updateHUD` writes through the handles, never through state. Per
-  DEC-012 add part props to `SpeedReadout` (`valueProps`), `DriftGauge`
-  (`fillProps`) and `PowerGauge` (`nameProps`, `fillProps`, `keyHintProps`)
-  so `#h-speed`, `#h-drift`, `#h-pname`, `#h-pbar`, `#h-pkey` land on the
-  same elements. Hand the minimap canvas to the engine (`engine/minimap.js`
-  draws base and karts from the payload). Remove the HUD markup from
-  `index.html`. Manual 60 fps check. 27/27 E2E after the move.
+- **Next action:** Stage 13 is IMPLEMENTED BUT NOT CLOSED. Uncommitted in the
+  working tree: `ui/Hud.tsx`, `engine/minimap.js` (+ test), part props and
+  `setKeyHint` on the three HUD components (+ tests), `race.js` drawing the
+  minimap, `App.tsx` mounting the HUD, `index.html` without the HUD markup,
+  `game.js` (135 lines) writing through the handles. Tier 1 is GREEN (243 +
+  52 tests, typecheck, both builds). Tier 2 was NOT completed: the host
+  killed the Playwright run for low system memory before any spec reported.
+  Resume by running `npm run test:e2e`; if 27/27, close the stage with the
+  prepared log line, DEC-012 is already recorded, commit by explicit path,
+  then point the checkpoint at it. Frame-time check still owed (a Playwright
+  script measuring rAF deltas during a race was prepared but not run).
+  Then stage 14 (Pages workflow + README; drafts exist) and stage 15.
 - **Session note (2026-10-14):** the branch ref file was found zeroed on
   resume and restored from the reflog; see the action log. Nothing was lost.
 - **Plan amendment:** an unplanned **stage 5b** was inserted before stage 6 to
