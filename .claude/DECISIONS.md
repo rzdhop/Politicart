@@ -225,3 +225,28 @@ component's DOM to patch one in.
 and the E2E suite keeps driving the game through the ids it always has, so
 DEC-009 holds without a single spec selector changing. The cost is a few
 extra optional props on five components, each documented as what it is for.
+
+## DEC-013 -- The design-sync ships a `PreviewRoot` provider rather than relying on the page background
+
+**Context.** Stage 15 synced `@kart-republique/ui` to Claude Design. The
+system is dark-only: its stylesheet paints `body` and every component assumes
+that canvas. The sync tool's preview cards paint their page white, and the
+Storybook decorator that paints the canvas would not bundle (the preview
+imports the source stylesheet, whose font files esbuild has no loader for).
+Options: fork the converter's decorator bundling to add a loader, or supply
+the context through the tool's provider knob.
+
+**Decision.** A repo-owned component, `.design-sync/preview-root.jsx`, is
+added to the bundle through `cfg.extraEntries` and set as `cfg.provider`. It
+wraps each story in the system's background, foreground and body font, with
+horizontal padding only so full-height stories fit the capture viewport. It
+ships as `window.KartRepubliqueUI.PreviewRoot` and the conventions header
+tells the design agent when to use it (fragments on a page that does not
+carry the system's `body` rule).
+
+**Consequence.** Config-only, no converter fork; the fix persists across
+re-syncs. The bundle carries one extra export that is not part of the
+package's own API, documented as such. The target project is "Politicart
+Design System" (`b7586fe5-3495-4448-ab55-58afb71f3c81`), pinned in
+`.design-sync/config.json`; re-syncs run from `/design-sync` and skip
+unchanged components through the uploaded anchor.
