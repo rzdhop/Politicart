@@ -128,3 +128,105 @@ the staging exists to avoid. Worth doing as their own task.
   confirm nothing else has joined them. (A third finding, an unused
   `ITEM_ODDS` import in `game.js`, went away in stage 11 when that import
   line was rewritten for the seam.)
+
+## design-sync run (stage 15, 2026-10-14)
+
+Learnings from the storybook-shape sync of `packages/ui`, in the order found.
+
+- **[GENERAL] The product card paints its page white; this system is dark-only.**
+  The card template sets `body{background:#fff}`, so without context every
+  component rendered on white (ghost buttons invisible, cream text gone).
+  Storybook only looks right because `.storybook/preview.ts` paints the canvas
+  `var(--bg)` from a decorator. The decorator bundle fails to build
+  (`No loader is configured for ".woff2"` -- the preview imports the source
+  stylesheet, whose fonts are local files), and `cfg.storyImports.loaders`
+  does not reach that bundle. Fix: `cfg.provider = {component: "PreviewRoot"}`
+  with `cfg.extraEntries = ["../../.design-sync/preview-root.jsx"]` -- a
+  repo-owned component that wraps each story in the system's background,
+  foreground and body font, exactly what the decorator supplied. It ships in
+  the bundle as `window.KartRepubliqueUI.PreviewRoot`; a full page does not
+  need it (the stylesheet's `body` rule does the same), fragments on a foreign
+  page do.
+- **[GENERAL] `[FONT_MISSING] "Arial Black", "Impact"` is the fallback stack,
+  not a missing font.** `--font-display` is `"Lilita One","Arial Black",Impact,
+  sans-serif`; Lilita One and Nunito ship embedded in `styles.css`. Accepted
+  as substitutes; nothing to add.
+- **[GENERAL] Thirteen `[GRID_OVERFLOW]` warnings on the first validate**, all
+  from stories wider than a grid cell (full-width HUD banners, rosters, card
+  grids, the title) or fixed-position screens. Applied the overrides the
+  validator named: `cardMode: "column"` for Tricolore, CenterAnnounce,
+  HudCorner, Toast, WrongWay, CharacterTile, SelectLayout, CardGrid,
+  TrackCard, GameTitle, AdminGrid; `cardMode: "single"` with a `primaryStory`
+  for Screen (TitleScreen) and NoteBanner (Default), which position content
+  with `position: fixed`.
+- **The storybook reference crops wide stories at the story root's width**
+  (e.g. CharacterTile "In Roster" shows two of four columns). The raw `__sb`
+  capture confirms the content; judge from it when the sheet's left side
+  looks truncated.
+- **ResultsTable "Empty"** renders an empty table -- no root content in
+  Storybook either (`sb-error`). To be skipped via
+  `cfg.overrides.ResultsTable.skip` together with any other empty-state story
+  the roster pass finds; batched into one rebuild.
+- **[GENERAL] The compare sheet shrinks the preview side.** The preview is
+  captured at 900x700 and scaled about 0.5x on the sheet while the storybook
+  side is a tight crop, so previews look smaller. Raw PNGs show identical
+  absolute sizes (confirmed on Button, DriftGauge 160x8, CenterAnnounce
+  440x260, ItemSlot 96px, Showcase). Judge from the raw captures.
+- **[GENERAL] Full-height stories overflowed the capture.** HudLayer's
+  "Mid Race" story root is `height: 100vh`; with `PreviewRoot` padding 16px
+  on all sides the root overflowed the viewport and the bottom corners were
+  clipped. Fix: `PreviewRoot` now pads horizontally only (`0 16px`), so a
+  100vh story fits the viewport exactly.
+- **Wave 1 of the fan-out (26 components) needed no owned previews**: the
+  generated story-module previews were faithful everywhere, including the
+  workshop components whose styling is scoped under `.admin` (the story
+  module carries the AdminGrid context). AdminGrid wraps to two columns in
+  the preview where Storybook shows three: a narrower container, not a defect.
+- **[GENERAL] Storybook's `layout: 'centered'` shrink-wraps a story; a
+  full-width preview cell does not.** Paint that depends on the element's
+  own width differs: GameTitle's tricolore gradient (`32%/68%` stops clipped
+  to text) landed on different glyphs. Owned preview
+  `.design-sync/previews/GameTitle.tsx` wraps the story in
+  `width: fit-content`. The same wrapper was tried on Disclaimer, Heading and
+  Subtitle and made no visible difference, so those owned files were removed
+  again (an owned preview shadows the generated one forever).
+- **Fixed-position stories need a sized frame.** Screen (a full-screen
+  overlay, `position: fixed; inset: 0`) and NoteBanner (a fixed bottom note)
+  have no height in the card's flow: the generated previews rendered 0px
+  tall (`[RENDER_THIN]` / `[RENDER_BLANK]`). Owned previews
+  `.design-sync/previews/{Screen,NoteBanner}.tsx` wrap the story in a
+  `position: relative; height: calc(100vh - 48px); transform: translateZ(0)`
+  frame (the 48px is the card page's own body padding), which contains the
+  fixed content. Both grade match.
+- **HudLayer "Mid Race" is accepted as `close`.** The story frame is
+  `100vh`; the card page pads its body 24px top and bottom, so the bottom
+  48px of the frame is clipped in the capture. HUD content, positions and
+  sizes are identical; the card scrolls. The card template is app-contract
+  and cannot be changed; PreviewRoot already pads horizontally only.
+- **Wave 2 (foundation, brand, controls, typography, workshop inputs)**:
+  Lilita One and Nunito confirmed rendering on the preview side from raw
+  captures; Tricolore "Narrow" overflows its 160px story wrapper on both
+  sides (the component is `min(420px, 80vw)` wide) and only the storybook
+  crop hides it.
+
+## Re-sync risks
+
+- `.design-sync/preview-root.jsx` is a bundle entry (`cfg.extraEntries`) and
+  the `cfg.provider`. It ships as `PreviewRoot` in `_ds_bundle.js`. If the
+  stylesheet's tokens are renamed (`--bg`, `--fg`, `--font-body`) it goes
+  stale silently: previews render on a wrong background with no error.
+- The three owned previews (GameTitle, Screen, NoteBanner) import the story
+  modules by path (`@ds-stories/packages/ui/src/components/...`). Renaming or
+  moving those story files breaks the preview build (`! preview build
+  failed`); re-derive from the generated cache twin and re-apply the wrapper.
+- `cfg.overrides.ResultsTable.skip` names the story id
+  `results-resultstable--empty`; a retitled story changes the id and the skip
+  silently stops applying (the sb-error returns).
+- Thirteen `cardMode` overrides are keyed by component name; a renamed
+  component drops its override and the `[GRID_OVERFLOW]` warn returns.
+- `[FONT_MISSING] "Arial Black", "Impact"` is a known, accepted warn (the
+  display font's fallback stack). `[STORY_CAP]` never fired: no component has
+  more than six stories.
+- Verified on Node v26.10.0, Storybook 10.6.2, the skill's converter of
+  2026-10-14, Chromium via Playwright in `.ds-sync/`. The reference
+  storybook must be rebuilt whenever `packages/ui/src` changes.

@@ -23,3 +23,13 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# design-sync: staged converter, regenerated output, machine-local state.
+# The durable set (.design-sync/config.json, NOTES.md, conventions.md,
+# previews/, overrides/) is committed.
+.ds-sync/
+ds-bundle/
+.design-sync/sb-reference/
+.design-sync/learnings/
+.design-sync/.cache/
+.design-sync/node_modules
