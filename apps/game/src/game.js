@@ -1,38 +1,31 @@
-// Kart Republique -- the game.
+// Kart Republique -- the UI layer.
 //
-// This is the original single-file script, moved out of index.html unchanged.
-// Only two things differ: Three.js is imported here instead of arriving as a
-// global from a CDN script tag, and the file is a module rather than an inline
-// block.
+// What is left here after stages 9 to 11 is the DOM side of the game: the HUD
+// writer, the minimap, the menus and their buttons, the keyboard, the
+// workshop form and the frame clock. The engine lives in ./engine and never
+// touches the DOM: it returns one payload per frame (engine/race.js), queues
+// the text it wants shown (engine/events.js), reads the controls through a
+// seam (engine/input.js) and moves between screens through one state machine
+// (engine/machine.js) that this file listens to. Stage 12 rebuilds these
+// screens in React on top of @kart-republique/ui; the element ids written
+// here are the contract it keeps (DEC-009).
 //
 // Three.js is pinned to 0.128.0 to match the r128 build the CDN served (see
-// .claude/DECISIONS.md DEC-007). It is not an upgrade: THREE.sRGBEncoding,
-// used below, was removed in three >= 0.152, and moving versions is its own
-// task with its own test pass rather than a side effect of repackaging.
-//
-// The order of everything below is load-bearing and must not be rearranged:
-// textures() has to run before any builder reads TEX.*, buildTrack has to set
-// G.samples and G.N before buildFeatures, crowdZone and grandstand read them,
-// and the physics step inside frame() runs in a fixed sequence. The module is
-// deliberately left as one file here; splitting it into modules is stage 9.
+// .claude/DECISIONS.md DEC-007).
 import * as THREE from 'three';
 
-// Engine modules, pulled out of this file in stage 9. The rest of the game
-// still lives here and is moved out in the stages that follow.
-import { initAudio, isMuted, sfx, toggleMute, updateEngine } from './engine/audio.js';
+import { initAudio, isMuted, toggleMute, updateEngine } from './engine/audio.js';
 import { getCustom, loadCustom, resetCustom, saveCustom, applyCustom } from './engine/custom.js';
-import { BASE, CHARACTERS, ITEMS, ITEM_ODDS, TRACKS } from './engine/data.js';
+import { BASE, CHARACTERS, ITEMS, TRACKS } from './engine/data.js';
 import { drain } from './engine/events.js';
 import { setInputSource } from './engine/input.js';
-import { pickupItems, stunKart, updateProjectiles, useItem } from './engine/items.js';
-import { buildKart } from './engine/kart.js';
-import { kartCollisions, updateKart, updateRanks } from './engine/physics.js';
+import { useItem } from './engine/items.js';
+import { getState, onTransition, transition } from './engine/machine.js';
 import { usePower } from './engine/powers.js';
-import { setCast } from './engine/primitives.js';
-import { camera, renderer, resize } from './engine/render.js';
-import { CFG, G, SHADOWS, getPoly, togglePoly } from './engine/state.js';
-import { buildTrack } from './engine/track.js';
-import { $, clamp, fmtTime, hex, lerp, ordinal, rand } from './engine/util.js';
+import { hasPreview, makeThumbs, renderPreview, setPreview } from './engine/preview.js';
+import { endRace, renderRace, startRace, stepRace } from './engine/race.js';
+import { G, togglePoly } from './engine/state.js';
+import { $, clamp, fmtTime, hex, ordinal } from './engine/util.js';
 
 'use strict';
 /* =====================================================================================
@@ -42,63 +35,10 @@ import { $, clamp, fmtTime, hex, lerp, ordinal, rand } from './engine/util.js';
    procedural textures, shadow mapping, WebAudio sound.
    ===================================================================================== */
 
-
-
-
-// ---------- Kart entities ----------
-function makeKart(def, isAI) {
-  const mesh = buildKart(def);
-  return {
-    def, stats: def.stats, isAI, mesh, pos: { x: 0, z: 0 }, heading: 0, speed: 0,
-    drift: { active: false, dir: 0, charge: 0 }, boost: 0, boostPower: 1.4, stun: 0, invincible: 0, slowed: 0, fly: 0, relance: 0, relanceTimer: 0,
-    item: null, itemRolling: 0, pendingItem: null, itemTimer: 0, powerCd: 8 + rand(0, 6), powerUses: 0,
-    y: 0, vy: 0, air: false, trick: false, rampPrev: null, slip: 0, confused: 0, pitGrace: 0, padGrace: 0, steer: 0, phantom: 0,
-    idx: 0, lap: 0, progress: 0, rank: 0, finished: false, finishTime: 0,
-    lane: isAI ? rand(-3.5, 3.5) : 0, laneTimer: rand(2, 6), aiSpeedMul: 1, skill: rand(-0.03, 0.03), hazardGrace: 0, lapStart: 0, bestLap: Infinity, maxLap: 0,
-  };
-}
-
-function startRace() {
-  if (G.scene) disposeScene(G.scene);
-  const track = TRACKS[G.trackIdx]; G.track = track;
-  const scene = new THREE.Scene(); scene.background = new THREE.Color(track.fog); scene.fog = new THREE.Fog(track.fog, 220, 700);
-  scene.add(new THREE.HemisphereLight(0xdfefff, 0x55663a, 0.55));
-  scene.add(new THREE.AmbientLight(0xffffff, 0.15));
-  const sun = new THREE.DirectionalLight(0xfff4d6, 1.15); sun.position.set(120, 200, 80); scene.add(sun); scene.add(sun.target);
-  sun.castShadow = SHADOWS(); sun.shadow.mapSize.set(2048, 2048); const sc = sun.shadow.camera; sc.left = -110; sc.right = 110; sc.top = 110; sc.bottom = -110; sc.near = 10; sc.far = 500; sun.shadow.bias = -0.0006;
-  G.sun = sun; G.scene = scene; G.animated = []; G.hazards = []; G.projectiles = []; G.crowd = [];
-  setCast(true); buildTrack(scene, track);
-
-  const others = CHARACTERS.filter((c, i) => i !== G.charIdx).sort(() => Math.random() - 0.5).slice(0, CFG.numAI);
-  const player = makeKart(CHARACTERS[G.charIdx], false);
-  G.karts = [...others.map(d => makeKart(d, true)), player]; G.player = player;
-  G.karts.forEach((k, i) => {
-    const s = G.samples[6 + i * 4]; const lane = (i % 2 === 0 ? 1 : -1) * 3.5;
-    k.pos.x = s.x + s.sx * lane; k.pos.z = s.z + s.sz * lane; k.heading = Math.atan2(s.tx, s.tz); k.idx = 6 + i * 4;
-    k.mesh.position.set(k.pos.x, 0, k.pos.z); k.mesh.rotation.y = k.heading; scene.add(k.mesh);
-  });
-  G.time = 0; G.countdown = 3.6; G.resultsAt = Infinity; G.state = 'countdown';
-  showScreen(null); $('hud').hidden = false; $('note').hidden = true;
-  const s = G.samples[0]; camera.position.set(s.x - s.tx * 14, 7, s.z - s.tz * 14); camera.fov = 65;
-  drawMinimapBase(); setHint('Ramassez une urne dorée pour obtenir un objet.');
-  $('h-pname').textContent = player.def.power.name;
-}
-function disposeScene(scene) { scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
-
-// ---------- Camera & sun ----------
-function updateCamera(dt) {
-  const k = G.player; const fx = Math.sin(k.heading), fz = Math.cos(k.heading);
-  const back = k.speed < -2 ? -11 : 12 - Math.min(2, k.boost * 2);
-  const ty = 6.2 + (k.fly > 0 ? 3 : 0) + k.y * 0.6;
-  const tx = k.pos.x - fx * back, tz = k.pos.z - fz * back;
-  const a = 1 - Math.exp(-dt * (G.state === 'countdown' ? 1.6 : 6));
-  camera.position.x = lerp(camera.position.x, tx, a); camera.position.z = lerp(camera.position.z, tz, a); camera.position.y = lerp(camera.position.y, ty, a);
-  camera.lookAt(k.pos.x + fx * 5, 1.2 + k.mesh.position.y * 0.5, k.pos.z + fz * 5);
-  camera.fov = lerp(camera.fov, k.boost > 0 ? 76 : 65, 1 - Math.exp(-dt * 5)); camera.updateProjectionMatrix();
-  if (G.sun) { G.sun.position.set(k.pos.x + 120, 200, k.pos.z + 80); G.sun.target.position.set(k.pos.x, 0, k.pos.z); G.sun.target.updateMatrixWorld(); }
-}
-
 // ---------- HUD ----------
+// Written once per frame from the engine's payload. Each readout keeps its
+// last value and skips the DOM when nothing changed, which is what makes
+// this cheap enough to run at 60 fps.
 const hud = { pos: $('h-pos'), lap: $('h-lap'), time: $('h-time'), item: $('h-item'), hint: $('h-hint'), speed: $('h-speed'), drift: $('h-drift'), center: $('h-center'), toast: $('h-toast'), wrong: $('h-wrong'), power: $('h-power'), pbar: $('h-pbar'), pkey: $('h-pkey') };
 const mm = $('minimap').getContext('2d'); let mmScale = 1, mmOffX = 0, mmOffZ = 0; let mmBase = null;
 function drawMinimapBase() {
@@ -111,39 +51,42 @@ function drawMinimapBase() {
   const s0 = G.samples[0]; c.fillStyle = '#f2c14e'; c.beginPath(); c.arc(s0.x * mmScale + mmOffX, W - (s0.z * mmScale + mmOffZ), 6, 0, 7); c.fill();
   mmBase = cv;
 }
-function drawMinimap() {
+function drawMinimap(positions) {
   const W = 300; mm.clearRect(0, 0, W, W); mm.drawImage(mmBase, 0, 0);
-  for (const k of G.karts) { const x = k.pos.x * mmScale + mmOffX, y = W - (k.pos.z * mmScale + mmOffZ); mm.beginPath(); mm.arc(x, y, k === G.player ? 9 : 6, 0, 7); mm.fillStyle = hex(k.def.kart); mm.fill(); mm.lineWidth = k === G.player ? 3 : 1.5; mm.strokeStyle = k === G.player ? '#fff' : 'rgba(0,0,0,.6)'; mm.stroke(); }
+  for (const k of positions) { const x = k.x * mmScale + mmOffX, y = W - (k.z * mmScale + mmOffZ); mm.beginPath(); mm.arc(x, y, k.isPlayer ? 9 : 6, 0, 7); mm.fillStyle = hex(k.color); mm.fill(); mm.lineWidth = k.isPlayer ? 3 : 1.5; mm.strokeStyle = k.isPlayer ? '#fff' : 'rgba(0,0,0,.6)'; mm.stroke(); }
 }
-let lastItemShown = '', lastPowerReady = null;
-function updateHUD() {
-  const k = G.player;
-  hud.pos.innerHTML = (k.rank + 1) + '<small>' + (k.rank === 0 ? 'er' : 'e') + '</small>';
-  hud.lap.textContent = k.finished ? 'ARRIVÉE' : 'TOUR ' + Math.min(k.lap + 1, CFG.laps) + '/' + CFG.laps;
-  hud.time.textContent = fmtTime(k.finished ? k.finishTime : G.time) + (k.bestLap < Infinity ? '  ·  meilleur tour ' + fmtTime(k.bestLap) : '');
-  hud.speed.textContent = Math.round(Math.abs(k.speed) * 3.2);
-  hud.drift.style.width = (clamp(k.drift.charge / 2, 0, 1) * 100) + '%'; hud.drift.style.background = k.drift.charge > 2 ? '#ff7a1a' : k.drift.charge > 1 ? '#ffd34d' : '#7cc4ff';
+let lastItemShown = '', lastPowerReady = null, lastPowerName = '', lastAnnounce = '';
+function updateHUD(p) {
+  hud.pos.innerHTML = (p.rank + 1) + '<small>' + (p.rank === 0 ? 'er' : 'e') + '</small>';
+  hud.lap.textContent = p.finished ? 'ARRIVÉE' : 'TOUR ' + Math.min(p.lap + 1, p.laps) + '/' + p.laps;
+  hud.time.textContent = fmtTime(p.finished ? p.finishTime : p.time) + (p.bestLap < Infinity ? '  ·  meilleur tour ' + fmtTime(p.bestLap) : '');
+  hud.speed.textContent = Math.round(p.speed * 3.2);
+  hud.drift.style.width = (clamp(p.driftCharge / 2, 0, 1) * 100) + '%'; hud.drift.style.background = p.driftCharge > 2 ? '#ff7a1a' : p.driftCharge > 1 ? '#ffd34d' : '#7cc4ff';
   let shown;
-  if (k.itemRolling > 0) { const keys = Object.keys(ITEMS); const it = ITEMS[keys[Math.floor(G.time * 12) % keys.length]]; shown = it.icon + '|…'; }
-  else if (k.item) shown = ITEMS[k.item].icon + '|' + ITEMS[k.item].name; else shown = '·|aucun objet';
-  if (shown !== lastItemShown) { lastItemShown = shown; const [ico, nm] = shown.split('|'); hud.item.querySelector('.ico').textContent = ico; hud.item.querySelector('.nm').textContent = nm; hud.item.classList.toggle('has', !!k.item); }
-  const ready = k.powerCd <= 0; hud.pbar.style.width = ((1 - k.powerCd / (k.def.power.cd || CFG.powerCooldown)) * 100) + '%';
-  if (ready !== lastPowerReady) { lastPowerReady = ready; hud.power.classList.toggle('ready', ready); hud.pkey.textContent = ready ? 'F · PRÊT !' : 'F · recharge'; }
-  const s = G.samples[k.idx]; const dot = Math.sin(k.heading) * s.tx + Math.cos(k.heading) * s.tz;
-  G.wrongTimer = (dot < -0.2 && k.speed > 3 && !k.finished) ? G.wrongTimer + 1 / 60 : 0; hud.wrong.hidden = G.wrongTimer < 1.2;
-  drawMinimap();
+  if (p.itemRolling) { const ids = Object.keys(ITEMS); const it = ITEMS[ids[Math.floor(p.time * 12) % ids.length]]; shown = it.icon + '|…'; }
+  else if (p.item) shown = ITEMS[p.item].icon + '|' + ITEMS[p.item].name; else shown = '·|aucun objet';
+  if (shown !== lastItemShown) { lastItemShown = shown; const [ico, nm] = shown.split('|'); hud.item.querySelector('.ico').textContent = ico; hud.item.querySelector('.nm').textContent = nm; hud.item.classList.toggle('has', !!p.item); }
+  hud.pbar.style.width = ((1 - p.powerCd / p.powerCdMax) * 100) + '%';
+  if (p.powerReady !== lastPowerReady) { lastPowerReady = p.powerReady; hud.power.classList.toggle('ready', p.powerReady); hud.pkey.textContent = p.powerReady ? 'F · PRÊT !' : 'F · recharge'; }
+  if (p.powerName !== lastPowerName) { lastPowerName = p.powerName; $('h-pname').textContent = p.powerName; }
+  if (p.announce !== lastAnnounce) { lastAnnounce = p.announce; hud.center.textContent = p.announce; }
+  hud.wrong.hidden = !p.wrongWay;
+  drawMinimap(p.kartPositions);
 }
+// The two text channels the engine's event queue feeds. The toast fades on
+// its own clock, which belongs here with the element it fades.
+let toastTimer = 0;
 function setHint(t) { hud.hint.textContent = t; }
-function toast(t) { if (!t) return; hud.toast.textContent = t; hud.toast.classList.add('on'); G.toastTimer = 2.2; }
+function toast(t) { if (!t) return; hud.toast.textContent = t; hud.toast.classList.add('on'); toastTimer = 2.2; }
+function tickToast(dt) { if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0) hud.toast.classList.remove('on'); } }
 
 // ---------- Results ----------
-function showResults() {
-  G.state = 'results'; $('hud').hidden = true;
+// Rendered when the machine enters 'results'; the engine decides when.
+function renderResults() {
   const order = [...G.karts].sort((a, b) => a.rank - b.rank);
   const p = G.player; const msgs = ['Majorité absolue ! Vous gouvernez seul·e.', 'Second tour obligatoire, mais c’est bien parti.', 'Sur le podium : un poste de ministre vous attend.', 'Coalition nécessaire. Négociations en cours.', 'Score en demi-teinte. Les sondages pardonnent peu.', 'Dernière place : retour à la base, pour écouter le pays.'];
   $('r-sub').textContent = ordinal(p.rank + 1) + ' sur ' + G.karts.length + ' — ' + msgs[p.rank] + (p.bestLap < Infinity ? '  ·  Meilleur tour : ' + fmtTime(p.bestLap) : '') + '  ·  Pouvoir utilisé ' + p.powerUses + '×';
   $('r-body').innerHTML = order.map(k => '<tr class="' + (k === p ? 'you' : '') + '"><td class="r">' + ordinal(k.rank + 1) + '</td><td><b>' + k.def.name + '</b><br><span style="font-size:12px;color:var(--muted)">' + k.def.title + '</span></td><td class="t">' + (k.finished ? fmtTime(k.finishTime) : 'en course…') + '</td></tr>').join('');
-  showScreen('s-results');
 }
 
 // ---------- Input ----------
@@ -168,41 +111,20 @@ function inputState() { return { throttle: keys.ArrowUp || keys.KeyW, brake: key
 setInputSource(inputState);
 
 // ---------- Screens ----------
+// One listener shows the screen for each state. Nothing else toggles a
+// section, which is what keeps the sections and the machine in step.
 const SCREENS = ['s-title', 's-select', 's-tracks', 's-pause', 's-results', 's-admin'];
-function showScreen(id) { SCREENS.forEach(s => { $(s).hidden = s !== id; }); }
-function pause() { G.state = 'paused'; showScreen('s-pause'); }
-function resume() { G.state = G.countdown > 0 ? 'countdown' : 'race'; showScreen(null); lastFrame = performance.now(); }
+const SCREEN_FOR = { title: 's-title', select: 's-select', tracks: 's-tracks', admin: 's-admin', paused: 's-pause', results: 's-results', countdown: null, race: null };
+onTransition((to, from) => {
+  SCREENS.forEach(s => { $(s).hidden = s !== SCREEN_FOR[to]; });
+  $('hud').hidden = !(to === 'countdown' || to === 'race' || to === 'paused');
+  if (to === 'countdown' && from !== 'paused') { $('note').hidden = true; drawMinimapBase(); }
+  if (to === 'results') renderResults();
+});
+function pause() { transition('paused'); }
+function resume() { transition(G.countdown > 0 ? 'countdown' : 'race'); lastFrame = performance.now(); }
 
 // ---------- Select screen: rendered portraits + 3D showcase ----------
-function ensurePreviewScene() {
-  if (G.previewScene) return;
-  const s = new THREE.Scene(); s.background = new THREE.Color(0x0c1230);
-  s.add(new THREE.HemisphereLight(0xffffff, 0x334466, 0.9)); s.add(new THREE.AmbientLight(0xffffff, 0.2));
-  const d = new THREE.DirectionalLight(0xfff4d6, 1.1); d.position.set(5, 10, 6); d.castShadow = true; d.shadow.mapSize.set(1024, 1024); const sc = d.shadow.camera; sc.left = sc.bottom = -8; sc.right = sc.top = 8; s.add(d);
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(3.4, 48), new THREE.MeshStandardMaterial({ color: 0x1f2a5e, roughness: 0.9 })); disc.rotation.x = -Math.PI / 2; disc.receiveShadow = true; s.add(disc);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.08, 8, 48), new THREE.MeshBasicMaterial({ color: 0xf2c14e })); ring.rotation.x = Math.PI / 2; ring.position.y = 0.02; s.add(ring);
-  G.previewScene = s; G.previewHolder = new THREE.Group(); s.add(G.previewHolder);
-}
-function setPreview(i) {
-  ensurePreviewScene();
-  while (G.previewHolder.children.length) { const c = G.previewHolder.children[0]; G.previewHolder.remove(c); disposeScene(c); }
-  setCast(true); G.previewKart = buildKart(CHARACTERS[i]); G.previewHolder.add(G.previewKart);
-}
-function renderPreview(dt) {
-  if (!G.previewKart) setPreview(G.charIdx);
-  G.previewKart.rotation.y += dt * 0.7;
-  const wide = window.innerWidth > 760 && G.state === 'select'; const sx = wide ? -2.9 : 0, sy = wide ? 0 : 0.6;
-  camera.position.set(sx, 3.6, 10.5); camera.lookAt(sx, 1.4 + sy, 0); camera.fov = 38; camera.updateProjectionMatrix(); renderer.render(G.previewScene, camera);
-}
-function makeThumbs() {
-  // Render each character once into a small square and keep the data URL for the roster tiles.
-  const poly = getPoly();
-  if (G.thumbPoly === poly) return; G.thumbPoly = poly; G.thumbs = {};
-  ensurePreviewScene(); const keep = G.previewKart; const prevChildren = [...G.previewHolder.children]; prevChildren.forEach(c => G.previewHolder.remove(c));
-  renderer.setSize(220, 220, false); camera.aspect = 1; camera.fov = 34; camera.updateProjectionMatrix(); camera.position.set(0.8, 3.2, 7.5); camera.lookAt(0, 1.7, 0);
-  CHARACTERS.forEach(c => { const k = buildKart(c); k.rotation.y = -0.5; G.previewHolder.add(k); renderer.render(G.previewScene, camera); G.thumbs[c.id] = renderer.domElement.toDataURL('image/png'); G.previewHolder.remove(k); disposeScene(k); });
-  prevChildren.forEach(c => G.previewHolder.add(c)); G.previewKart = keep; resize();
-}
 function selectChar(i) {
   G.charIdx = i; [...$('roster').children].forEach((e, j) => e.classList.toggle('sel', j === i)); setPreview(i);
   const c = CHARACTERS[i]; const lbl = { speed: 'Vitesse', accel: 'Accélération', handling: 'Tenue de route' };
@@ -211,8 +133,8 @@ function selectChar(i) {
     '<div class="powerbox"><b>Pouvoir : ' + c.power.name + '</b><p>' + c.power.desc + ' <span style="color:var(--muted)">(touche F)</span></p></div>';
 }
 function buildRoster() {
-  makeThumbs(); const wrap = $('roster'); wrap.innerHTML = '';
-  CHARACTERS.forEach((c, i) => { const el = document.createElement('button'); el.className = 'tile' + (i === G.charIdx ? ' sel' : ''); el.type = 'button'; el.innerHTML = '<img alt="' + c.name + '" src="' + G.thumbs[c.id] + '"><div class="tname">' + c.name + '</div>'; el.addEventListener('click', () => { initAudio(); selectChar(i); }); wrap.appendChild(el); });
+  const thumbs = makeThumbs(); const wrap = $('roster'); wrap.innerHTML = '';
+  CHARACTERS.forEach((c, i) => { const el = document.createElement('button'); el.className = 'tile' + (i === G.charIdx ? ' sel' : ''); el.type = 'button'; el.innerHTML = '<img alt="' + c.name + '" src="' + thumbs[c.id] + '"><div class="tname">' + c.name + '</div>'; el.addEventListener('click', () => { initAudio(); selectChar(i); }); wrap.appendChild(el); });
   selectChar(G.charIdx);
 }
 function buildTrackCards() {
@@ -255,50 +177,40 @@ function buildAdmin() {
 }
 function renderAdPreview() { $('ad-preview').innerHTML = getCustom().ads.map(u => '<img alt="" src="' + u + '">').join('') || '<span class="disclaimer">Aucune affiche personnalisée : les panneaux du jeu sont utilisés.</span>'; }
 $('ad-files').addEventListener('change', ev => { const files = [...(ev.target.files || [])].slice(0, 8); if (!files.length) return; const custom = getCustom(); custom.ads = []; let left = files.length; files.forEach((f, i) => readImage(f, 640, url => { custom.ads[i] = url; if (--left === 0) renderAdPreview(); })); });
-$('b-admin').addEventListener('click', () => { buildAdmin(); showScreen('s-admin'); G.state = 'admin'; });
-$('b-admin-save').addEventListener('click', () => { applyCustom(); const ok = saveCustom(); if (G.previewHolder) setPreview(G.charIdx); showScreen('s-title'); G.state = 'title'; $('b-admin').textContent = ok ? 'Atelier (admin) · enregistré' : 'Atelier (admin) · non sauvegardé (stockage plein)'; });
-$('b-admin-reset').addEventListener('click', () => { resetCustom(); buildAdmin(); if (G.previewHolder) setPreview(G.charIdx); });
+$('b-admin').addEventListener('click', () => { buildAdmin(); transition('admin'); });
+$('b-admin-save').addEventListener('click', () => { applyCustom(); const ok = saveCustom(); if (hasPreview()) setPreview(G.charIdx); transition('title'); $('b-admin').textContent = ok ? 'Atelier (admin) · enregistré' : 'Atelier (admin) · non sauvegardé (stockage plein)'; });
+$('b-admin-reset').addEventListener('click', () => { resetCustom(); buildAdmin(); if (hasPreview()) setPreview(G.charIdx); });
 loadCustom();
 
 // buttons
-$('b-play').addEventListener('click', () => { initAudio(); buildRoster(); showScreen('s-select'); G.state = 'select'; });
-$('b-poly').addEventListener('click', () => { const poly = togglePoly(); $('b-poly').textContent = poly === 'low' ? 'Graphismes : légers (low-poly)' : 'Graphismes : détaillés (ombres)'; if (G.previewHolder) setPreview(G.charIdx); });
+$('b-play').addEventListener('click', () => { initAudio(); buildRoster(); transition('select'); });
+$('b-poly').addEventListener('click', () => { const poly = togglePoly(); $('b-poly').textContent = poly === 'low' ? 'Graphismes : légers (low-poly)' : 'Graphismes : détaillés (ombres)'; if (hasPreview()) setPreview(G.charIdx); });
 $('b-mute').addEventListener('click', () => { initAudio(); toggleMute(); syncMuteButton(); });
-$('b-back1').addEventListener('click', () => { showScreen('s-title'); G.state = 'title'; });
-$('b-next1').addEventListener('click', () => { buildTrackCards(); showScreen('s-tracks'); G.state = 'tracks'; });
-$('b-back2').addEventListener('click', () => { showScreen('s-select'); G.state = 'select'; });
+$('b-back1').addEventListener('click', () => transition('title'));
+$('b-next1').addEventListener('click', () => { buildTrackCards(); transition('tracks'); });
+$('b-back2').addEventListener('click', () => transition('select'));
 $('b-start').addEventListener('click', () => { initAudio(); startRace(); });
 $('b-resume').addEventListener('click', resume);
-$('b-quit').addEventListener('click', () => { G.state = 'title'; $('hud').hidden = true; showScreen('s-title'); });
+$('b-quit').addEventListener('click', () => transition('title'));
 $('b-again').addEventListener('click', () => { initAudio(); startRace(); });
-$('b-menu').addEventListener('click', () => { G.state = 'title'; showScreen('s-title'); });
+$('b-menu').addEventListener('click', () => transition('title'));
 
 // ---------- Main loop ----------
+// The UI owns the clock. The engine steps only while the race is live; while
+// paused or on the results the scene is redrawn but not advanced.
 let lastFrame = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
-  if (G.state === 'select' || G.state === 'tracks' || G.state === 'title' || G.state === 'admin') { if (G.state === 'select' || G.state === 'tracks' || G.previewScene) renderPreview(dt); return; }
-  if (G.state === 'paused' || G.state === 'results') { if (G.scene) renderer.render(G.scene, camera); updateEngine(); return; }
+  const state = getState();
+  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin') { if (state === 'select' || state === 'tracks' || hasPreview()) renderPreview(dt); return; }
+  if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
 
-  if (G.state === 'countdown') {
-    const before = Math.ceil(G.countdown); G.countdown -= dt; const after = Math.ceil(G.countdown);
-    if (G.countdown <= 0) { G.state = 'race'; hud.center.textContent = 'PARTEZ !'; setTimeout(() => { if (hud.center.textContent === 'PARTEZ !') hud.center.textContent = ''; }, 900); sfx('go'); G.karts.forEach(k => { k.lapStart = 0; }); }
-    else { hud.center.textContent = Math.min(3, after); if (before !== after) sfx('count'); }
-  } else G.time += dt;
-
-  for (const k of G.karts) updateKart(k, dt);
-  kartCollisions(); pickupItems(); updateProjectiles(dt); updateRanks();
-  // The engine no longer touches the HUD: everything it wanted to say during the step is queued, and shown here.
+  const payload = stepRace(dt);
   for (const e of drain()) { if (e.type === 'toast') toast(e.text); else if (e.type === 'hint') setHint(e.text); }
-  for (const f of [...G.animated]) f(dt);
-  for (const c of G.crossings) { c.t += dt; const p = (c.t * c.speed) % (4 * c.range); const lat = p < 2 * c.range ? p - c.range : 3 * c.range - p; const dir = p < 2 * c.range ? 1 : -1; c.mesh.position.set(c.s.x + c.s.sx * lat, 0, c.s.z + c.s.sz * lat); c.mesh.rotation.y = Math.atan2(c.s.sx * dir, c.s.sz * dir);
-    for (const k of G.karts) { if (k.hazardGrace > 0 || k.fly > 0 || k.y > 1.2) continue; const d = (k.pos.x - c.mesh.position.x) ** 2 + (k.pos.z - c.mesh.position.z) ** 2; if (d < 10) { k.hazardGrace = 1.5; k.speed *= 0.3; if (stunKart(k, 1.3) && k === G.player) toast('RENVERSÉ PAR LE CORTÈGE !'); } } }
-  const ct = G.time * 5; for (const c of G.crowd) if (c.amp) c.g.position.y = Math.abs(Math.sin(ct + c.ph)) * c.amp + (c.base || 0);
-  if (G.toastTimer > 0) { G.toastTimer -= dt; if (G.toastTimer <= 0) hud.toast.classList.remove('on'); }
-  updateCamera(dt); updateHUD(); updateEngine();
-  renderer.render(G.scene, camera);
-  if (G.time >= G.resultsAt || (G.player.finished && G.karts.every(k => k.finished))) showResults();
+  tickToast(dt);
+  updateHUD(payload); updateEngine();
+  renderRace();
 }
 requestAnimationFrame(frame);
 
@@ -315,7 +227,6 @@ function syncMuteButton() {
 // --- Test hook -------------------------------------------------------------
 // The end-to-end suite needs to reach the results screen, which is otherwise
 // unreachable: there is no race time cap, so a race ends only when the player
-// completes three laps. Exposing this one function keeps that spec working
-// across the repackaging. See DEC-009 and the note in e2e/game.spec.ts; it
-// goes away when stage 11 gives the engine a real seam.
-window.showResults = showResults;
+// completes three laps. The engine's own endRace() is the seam for that. See
+// DEC-009 and the note in e2e/game.spec.ts.
+window.__kr = { endRace };

@@ -4,9 +4,13 @@
 // same tunables without importing each other -- which is what would otherwise
 // make this split circular, since `game.js` imports them all.
 //
-// `G` is a single mutable object, carried over unchanged from the original
-// file. It mixes engine state (karts, samples, hazards) with UI state
-// (charIdx, thumbs); separating those is stage 11's job, not this one.
+// `G` is a single mutable object, carried over from the original file. It
+// mixes engine state (karts, samples, hazards) with selection state (charIdx,
+// trackIdx, thumbs) that the menus write. `G.state` is not a field any more:
+// it is a read-only view of engine/machine.js, so there is one record of
+// where the game is and assigning to it throws (see stage 11, DEC-011).
+
+import { getState } from './machine.js';
 
 export const CFG = { roadHalfWidth: 9, samples: 600, laps: 3, numAI: 5, powerCooldown: 24 };
 
@@ -28,10 +32,11 @@ export function togglePoly() {
 }
 
 export const G = {
-  state: 'title', scene: null, track: null, karts: [], player: null, samples: [], N: 0, trackLength: 0,
+  scene: null, track: null, karts: [], player: null, samples: [], N: 0, trackLength: 0,
   hazards: [], projectiles: [], itemBoxes: [], animated: [], crowd: [], ramps: [], pits: [], pads: [], crossings: [], time: 0, countdown: 0, charIdx: 0, trackIdx: 0,
-  resultsAt: Infinity, wrongTimer: 0, toastTimer: 0, previewKart: null, previewScene: null, sun: null, thumbs: {}, thumbPoly: null,
+  resultsAt: Infinity, wrongTimer: 0, previewKart: null, previewScene: null, sun: null, thumbs: {}, thumbPoly: null,
 };
+Object.defineProperty(G, 'state', { enumerable: true, get: getState });
 export function isClear(x, z, margin) {
   const lim = (CFG.roadHalfWidth + margin) ** 2;
   for (let i = 0; i < G.N; i += 2) { const s = G.samples[i]; if ((s.x - x) ** 2 + (s.z - z) ** 2 < lim) return false; }

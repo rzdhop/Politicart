@@ -174,3 +174,32 @@ triggered from the keyboard now shows its toast on the next frame rather than
 synchronously, at most 16 ms later. The queue is unit-tested in isolation
 (`events.test.js`, `input.test.js`), which gave `apps/game` its first vitest
 setup.
+
+## DEC-011 -- One state machine owns the game's flow; `G.state` is a read-only view of it
+
+**Context.** The original game kept two parallel records of where it was:
+`G.state`, a string assigned by hand at every transition, and the `hidden`
+attribute on six screen sections toggled by `showScreen()`. Each transition
+wrote both, in whichever order the call site chose, and nothing checked that
+they agreed. The exploration map named this a desync bug class the port would
+inherit unless the two collapsed into one source of truth.
+
+**Decision.** `engine/machine.js` holds the current state and a transition
+table of the game's real paths (title, select, tracks, admin, countdown, race,
+paused, results). `transition()` throws on a move not in the table and
+notifies listeners after an accepted one. The UI shows screens, the HUD and
+the note banner from a single listener; nothing else toggles a section.
+`G.state` stays readable for the engine code that branches on it, as a getter
+over the machine, and assigning to it throws. The engine's own moves
+(`startRace` into countdown, the countdown into race, `endRace` into results)
+go through the same call. The engine returns one payload per frame
+(`engine/payload.js`, pure and unit-tested) and the UI renders it;
+`stepRace()` performs no DOM writes at all.
+
+**Consequence.** A wrong screen is now impossible without a thrown error at
+the call site, which the E2E net catches. The cost is strictness: a path the
+table does not list (a double click on "start" while already counting down,
+say) throws instead of silently restarting as the single file did. That is
+the intended trade. The results-screen E2E spec, which DEC-009 said would
+break here, now calls the engine's `endRace()` through `window.__kr`, the one
+hook the game installs for the suite.

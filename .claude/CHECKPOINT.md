@@ -6,25 +6,27 @@ Current state only. History lives in git.
 
 - **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
   CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** Stage 10 DONE and committed. Physics, AI, items and
-  powers now live in `apps/game/src/engine/{physics,ai,items,powers}.js`;
-  player-facing text leaves the engine through `engine/events.js` (a FIFO
-  that `frame()` drains right after the physics step) and player input
-  enters through `engine/input.js`. See DEC-010 for why sound stays a
-  direct call. The moved bodies are byte-identical apart from the export
-  keywords and one `inputState()` -> `readInput()` rename. `game.js` is
-  down to 321 lines. `apps/game` got its first vitest setup (12 tests on
-  the queue and the input seam). 27/27 E2E green.
-- **Next action:** Stage 11 -- the seam. The engine publishes a frame
-  payload (`rank, lap, time, speed, driftCharge, item, powerReady, powerCd,
-  wrongWay, kartPositions[]`) and performs zero DOM writes; `G.state` and
-  `showScreen` collapse into one state machine with unit tests. What still
-  writes the DOM from `game.js` today: `updateHUD`, `drawMinimap*`, the
-  countdown writes to `hud.center` inside `frame()`, `toast`/`setHint`,
-  `showResults`, `showScreen`, the select/track/admin screen builders and
-  `syncMuteButton`. The results-screen E2E spec calls `showResults()`
-  through the test hook and is expected to need re-pointing here (DEC-009).
-  27/27 E2E after the move.
+- **Current stage:** Stage 11 DONE and committed. The seam exists:
+  `engine/machine.js` is the one record of where the game is (`G.state` is
+  a read-only getter over it, DEC-011), `engine/race.js` steps the race and
+  returns the frame payload built by `engine/payload.js`, `engine/preview.js`
+  renders the showcase and thumbnails, and `game.js` (232 lines) is now only
+  the UI layer: it listens to the machine for screens, writes the HUD from
+  the payload, drains the event queue, and owns the clock. The engine makes
+  zero DOM writes. The results E2E spec was re-pointed at `window.__kr.endRace`
+  as DEC-009 anticipated. 36 game unit tests; 27/27 E2E green.
+- **Next action:** Stage 12 -- the React UI layer. All six screens (title,
+  select, tracks, pause, results, workshop) composed from `@kart-republique/ui`
+  in `apps/game/src/ui/*`, mounted over the canvas, driven by the machine
+  (`onTransition`) and calling the same engine entry points `game.js` calls
+  today (`startRace`, `transition`, `setPreview`, `makeThumbs`, `buildAdmin`
+  logic, `useItem`/`usePower` on keys). Element ids are the contract
+  (DEC-009): `#s-*`, `#b-*`, `#roster`, `#showcase`, `#trackcards`,
+  `#admin-chars`, `#adm-*-<id>`, `#ad-files`, `#ad-preview`, `#r-sub`,
+  `#r-body`, `#hud`, `#h-*`, `#minimap`, `#note`, `#c`. The HUD stays on the
+  imperative path (stage 13), so stage 12 may keep `updateHUD`/minimap in
+  plain DOM behind refs. Needs react, react-dom and @vitejs/plugin-react in
+  apps/game (same pins as packages/ui). 27/27 E2E after the move.
 - **Session note (2026-10-14):** the branch ref file was found zeroed on
   resume and restored from the reflog; see the action log. Nothing was lost.
 - **Plan amendment:** an unplanned **stage 5b** was inserted before stage 6 to

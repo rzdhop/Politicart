@@ -128,20 +128,19 @@ test.describe('R-01b results screen', () => {
    * ends only when the player completes three laps. Reaching the results
    * screen by driving would mean several minutes of competent automated
    * steering per run, which is neither fast enough to run after every stage
-   * nor reliable. So this calls the game's own `showResults()` with the real
-   * kart state a real race produced.
+   * nor reliable. So this ends the race through the engine's own seam,
+   * `endRace()`, with the real kart state a real race produced, and checks
+   * that the results screen follows from the state machine.
    *
-   * It therefore depends on `showResults` being a global, which it is only
-   * because the game is one plain `<script>`. **Stage 11 or 12 will break
-   * this**, and that is expected: when it does, re-point it at whatever the
-   * port exposes rather than treating it as a regression. Everything the
-   * results table itself does is covered by unit tests and stories in
-   * packages/ui.
+   * Before stage 11 this called a `showResults()` global that the single-file
+   * game happened to expose; the port replaced it with `window.__kr.endRace`,
+   * a hook the game installs for exactly this purpose. Everything the results
+   * table itself does is covered by unit tests and stories in packages/ui.
    */
   test('renders the finishing order, with the player highlighted', async ({ page }) => {
     await startRace(page);
     await page.evaluate(() => {
-      (window as unknown as { showResults: () => void }).showResults();
+      (window as unknown as { __kr: { endRace: () => void } }).__kr.endRace();
     });
 
     await expect(page.locator('#s-results')).toBeVisible();
