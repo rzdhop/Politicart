@@ -45,8 +45,8 @@ Current state only. History lives in git.
 
 ## Checkpoint commit
 
-- **Hash:** `29e59c74bf9c92e189b6a0f4dc0a1d0c5b8fee04`
-- **Subject:** Give the engine a seam: one state machine, a frame payload, no DOM
+- **Hash:** `b4d484c0ded80777bb150e9b9c8109baa4420d64`
+- **Subject:** Rebuild the six screens in React on @kart-republique/ui
 - **Branch:** `feat/design-system` (branched from `main` at `f271930`). `main`
   keeps serving the playable single-file game on Pages until the port merges.
 - **Tree at checkpoint:** clean
