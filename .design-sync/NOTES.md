@@ -104,7 +104,7 @@ lose their steering.
 
 ## Cleanup candidates found while splitting the engine (stage 9)
 
-Both carried over unchanged rather than fixed, because stage 9 is a
+All carried over unchanged rather than fixed, because stage 9 is a
 repackaging: a behaviour change hidden inside a 1200-line move is exactly what
 the staging exists to avoid. Worth doing as their own task.
 
@@ -121,3 +121,10 @@ the staging exists to avoid. Worth doing as their own task.
   never mattered in practice -- but the HUD's phone layout and the select
   screen's stacked layout are therefore unreachable on a real phone, which is
   worth knowing before anyone tests them there.
+- **Two dead bindings surfaced by the stage 9d split.** `game.js` imports
+  `ITEM_ODDS` from `engine/data.js` and never reads it (the odds are consumed
+  inside `rollItem`, which lives next to them), and `buildBourbon` in
+  `engine/track.js` declares `hw` and `pb` without using either. All three
+  predate the split and were carried over as-is; `tsc --noUnusedLocals` over
+  the game sources lists exactly these, so a later cleanup can re-run that
+  check to confirm nothing else has joined them.

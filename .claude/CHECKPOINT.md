@@ -6,19 +6,22 @@ Current state only. History lives in git.
 
 - **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
   CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** Stage 8 DONE and committed -- **the riskiest stage is
-  behind us**. The game is now a Vite app at `apps/game/`, bundling
-  `three@0.128.0` instead of the CDN global. Packaging only: the markup, the
-  stylesheet and all 1207 script lines were carried across mechanically and
-  verified byte-identical. 27/27 E2E green against the production build.
-- **Next action:** Stage 9 -- split `apps/game/src/game.js` into engine
-  modules, still driving the original DOM, in the low-risk order the
-  exploration map recommended: audio first (already self-contained behind
-  `sfx`/`initAudio`/`updateEngine`/`toggleMute`), then the data literals, then
-  the scene and mesh builders. Do NOT touch physics, items or AI in this stage
-  -- those call `toast()` and `sfx()` from inside the physics step and need the
-  event queue that stage 10 introduces. Preserve init order exactly. 27/27
-  E2E after each move.
+- **Current stage:** Stage 9 DONE and committed in four sub-stages (9a util,
+  state, audio; 9b data, workshop persistence; 9c renderer, primitives,
+  textures; 9d kart and track builders). `apps/game/src/game.js` is down to
+  605 lines from 1207; the engine lives in `apps/game/src/engine/` as ten
+  modules. Every move was mechanical and verified byte-identical. 27/27 E2E
+  green after each sub-stage.
+- **Next action:** Stage 10 -- engine split 2: physics (updateKart,
+  kartCollisions, updateProgress, updateRanks), items (pickupItems, useItem,
+  spawnHazard, spawnProjectile, updateProjectiles, stunKart), powers
+  (usePower) and AI (aiInput) out of game.js, with the roughly 30 inline
+  `toast()` / `setHint()` / `sfx()` calls inside them replaced by an event
+  queue the engine emits and game.js drains. The plan calls for engine unit
+  tests on the event queue (Tier 3). The physics step order inside frame()
+  is a strict contract and must not change. 27/27 E2E after the move.
+- **Session note (2026-10-14):** the branch ref file was found zeroed on
+  resume and restored from the reflog; see the action log. Nothing was lost.
 - **Plan amendment:** an unplanned **stage 5b** was inserted before stage 6 to
   self-host the two web fonts. Reason: stage 6's stories are what design-sync
   screenshots in stage 15, and the package shipped no fonts, so every preview
@@ -34,8 +37,8 @@ Current state only. History lives in git.
 
 ## Checkpoint commit
 
-- **Hash:** `01a9dd0f7efef5ab3f3ad184b6b43acff6a12470`
-- **Subject:** Extract the game's tokens and stylesheet into @kart-republique/ui
+- **Hash:** `41b3694da4e08793b343d4828cf30ea6b470789c`
+- **Subject:** Extract the renderer, mesh primitives and procedural textures
 - **Branch:** `feat/design-system` (branched from `main` at `f271930`). `main`
   keeps serving the playable single-file game on Pages until the port merges.
 - **Tree at checkpoint:** clean
