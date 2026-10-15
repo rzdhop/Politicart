@@ -1,0 +1,36 @@
+# Fly.io configuration for the game server (team races online).
+#
+#   fly launch --no-deploy --copy-config   # pick your own app name and region
+#   fly deploy
+#   fly scale count 1                      # rooms live in memory: run exactly one machine
+#
+# The app name below is a placeholder; `fly launch` replaces it with yours.
+app = "kart-republique"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  HOST = "0.0.0.0"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Stop the machine when nobody is connected; the first visitor wakes it.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/api/kr"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

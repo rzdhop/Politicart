@@ -40,6 +40,21 @@ The server prints its addresses. Everyone on the same network opens `http://<tha
 
 The server runs each race at 60 steps a second in its own worker thread and sends every player 20 snapshots a second. Each browser draws the race about 100 ms behind the server and sends its controls back 30 times a second. On a local network the delay is not noticeable. Over the internet, a player's own kart reacts with roughly half a round trip of extra lag.
 
+### Hosting a team race online
+
+The `Dockerfile` packages the server and the built game into one image, and `fly.toml` deploys it to [Fly.io](https://fly.io):
+
+```sh
+docker build -t kart-republique .
+docker run --rm -p 8080:8080 kart-republique     # the same server, in a container
+
+fly launch --no-deploy --copy-config             # choose your own app name and region
+fly deploy
+fly scale count 1                                # rooms live in memory: exactly one machine
+```
+
+Any host that runs a container and passes WebSockets through works the same way (Render, Railway, a VPS behind Caddy). Two cautions. Rooms are kept in memory, so run a single instance. A free tier that sleeps when idle drops every open race when it does.
+
 ## Controls
 
 | Key | Action |
