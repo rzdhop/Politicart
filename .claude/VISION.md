@@ -41,3 +41,11 @@ How it serves the project:
   living as class names one developer remembers.
 
 The game itself remains the product. The library serves it, never the reverse.
+
+## Team races
+
+Friends can now race each other: Bleu against Rouge, two to six players, AI
+filling the grid, points per finishing place. One small Node server serves
+the game and runs every race on the game's own engine (DEC-014), on a LAN
+today and in a container on a host later. The published GitHub Pages game
+stays the instant single-player experience the showcase is built around.

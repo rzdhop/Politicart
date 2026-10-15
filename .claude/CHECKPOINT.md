@@ -5,21 +5,31 @@ Current state only. History lives in git.
 ## In progress
 
 - **Task:** online team multiplayer (plan in `.claude/PLAN.md`, DEC-014).
-  Approved by the human 2026-10-15. Branch `feat/multiplayer`, cut from
-  `main` at `e819070`.
-- **Current phase:** IMPLEMENT. Phases 0-4 done (LOAD, EXPLORE with two
-  agents plus web research, CLARIFY with two question rounds, PLAN,
-  CHECKPOINT).
-- **Current stage:** 1 of 10 -- headless-safe engine.
-- **Next action:** stage 1: guard the browser-only calls, split `stepRace`.
-- **Open questions:** none blocking. A-008..A-011 are the defaults chosen.
+  Branch `feat/multiplayer`, cut from `main` at `e819070`. Not pushed.
+- **Current phase:** DOCUMENT, done. **All 10 stages committed**:
+  8449249 (plan), e8134bc (headless engine), be8de1c (routing by kart),
+  7c850d9 (teams and points), e3c8944 (snapshot codec), 7229652 (server
+  lobby), 1b32d6c (race worker), ce4486b (client lobby), 053eb9c
+  (networked race), 61163cd (two-browser e2e), 06bc141 (container).
+- **Next action:** the human decides whether to push and merge
+  `feat/multiplayer`, and owes the manual checks below.
+- **Owed by hand:** R-10..R-12 in a real solo race (stage 2 rewired every
+  toast and sound; the e2e suite and unit tests pass, but a full three-lap
+  race with items was not played by a person). A team race on two real
+  machines on the LAN.
+- **Known limits:** no local-kart prediction, so your own kart answers about
+  half a round trip plus 100 ms late (fine on a LAN, felt over the
+  internet). Below 20 fps the chase camera trails a networked kart, because
+  its easing uses frame time capped at 50 ms. Remote players' workshop edits
+  are not shown (A-011). Rooms live in one process's memory.
+- **Open questions:** A-008..A-011 are the defaults chosen; none blocks.
 - **Known working-tree noise:** 46 files show as modified after a
-  line-ending restore (empty `git diff`; see `.design-sync/NOTES.md`). They
-  are never staged.
+  line-ending restore (empty `git diff`; see `.design-sync/NOTES.md`).
 
 ## Checkpoint commit
 
-- **Hash:** `e819070` (main and feat/design-system point here)
+- **Hash:** `e819070` (the pre-task checkpoint; main and feat/design-system point here)
+- **Branch tip:** `06bc141` on `feat/multiplayer`, Tier 1 green, e2e 29/29
 - **Subject:** Record the line-ending trap found on the design-sync re-sync
 - **Branch:** `feat/multiplayer`
 - **Tree at checkpoint:** clean in content (`git diff` empty)
@@ -68,6 +78,7 @@ The game at `index.html` must keep working. No item here may break.
 | R-12 | 14 items with rank-weighted odds from golden ballot boxes | none | UNVERIFIED (manual) |
 | R-13 | 3 circuits with ramps, tricks, pits, dash panels, chicanes, crossings | none | UNVERIFIED (manual) |
 | R-14 | Synthesized WebAudio sound and music | none | UNVERIFIED (manual) |
+| R-16 | Team race: two players join one room by code, race on opposite teams, see team points; the static (Pages) build offers no Multijoueur | `e2e/multiplayer.spec.ts` (2 specs) + `apps/server/src/*.test.js` | COVERED 2026-10-15 |
 | R-15 | Playable from GitHub Pages at the documented URL | Pages workflow run 38699287498 + HTTP check of the published index and bundle | VERIFIED 2026-10-15 |
 
 **Stage 7 maps the contract to specs** in `e2e/game.spec.ts`, whose describe
