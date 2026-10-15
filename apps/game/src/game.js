@@ -20,7 +20,7 @@ import './game.css';
 import { updateEngine } from './engine/audio.js';
 import { loadCustom } from './engine/custom.js';
 import { CHARACTERS, ITEMS } from './engine/data.js';
-import { drain } from './engine/events.js';
+import { drain, resolveFor } from './engine/events.js';
 import { setInputSource } from './engine/input.js';
 import { useItem } from './engine/items.js';
 import { getState, onTransition } from './engine/machine.js';
@@ -120,7 +120,8 @@ function frame(now) {
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
 
   const payload = stepRace(dt);
-  for (const e of drain()) { if (e.type === 'toast') toast(e.text); else if (e.type === 'hint') setHint(e.text); }
+  // Routed events (say/tell/hintFor) resolve for the local driver, G.player.
+  for (const e of drain()) { const text = resolveFor(e, G.player); if (text === null) continue; if (e.type === 'toast') toast(text); else if (e.type === 'hint') setHint(text); }
   tickToast(dt);
   updateHUD(payload); updateEngine();
   renderRace();

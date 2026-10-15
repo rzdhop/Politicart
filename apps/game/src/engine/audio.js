@@ -30,7 +30,7 @@ function scheduleMusic() {
   }
   setTimeout(scheduleMusic, 120);
 }
-export function sfx(name) {
+function playSfx(name) {
   if (!AC || muted) return; const t = AC.currentTime; const o = AC.createOscillator(), g = AC.createGain(); o.connect(g); g.connect(master);
   const env = (v, d) => { g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.001, t + d); o.start(t); o.stop(t + d + 0.02); };
   switch (name) {
@@ -67,3 +67,22 @@ export function toggleMute() {
 
 /** Whether sound is currently muted. */
 export const isMuted = () => muted;
+
+// ---------- Routing by kart (DEC-014) ----------
+// sfx(name) is heard by everyone in the race; sfxFor(k, name) only by kart
+// k's driver -- the old `if (k === G.player) sfx(...)` and `if (!k.isAI)`
+// checks. With no sink installed both play here, which is solo play. The
+// game server installs a sink and forwards each sound to the right sockets.
+let sink = null;
+
+/** Route every sound to `fn(name, kartOrNull)` instead of playing it. Pass null to restore. */
+export function setSfxSink(fn) { sink = typeof fn === 'function' ? fn : null; }
+
+/** A sound for everyone in the race. */
+export function sfx(name) { if (sink) sink(name, null); else playSfx(name); }
+
+/** A sound for kart k's driver only. Silent for AI karts. */
+export function sfxFor(k, name) {
+  if (!k || k.isAI) return;
+  if (sink) sink(name, k); else if (k === G.player) playSfx(name);
+}

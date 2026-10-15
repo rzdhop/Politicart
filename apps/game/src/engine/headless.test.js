@@ -7,7 +7,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { TRACKS } from './data.js';
 import { getState, resetMachine } from './machine.js';
 import { simStep, startRace } from './race.js';
-import { G } from './state.js';
+import { drain, resolveFor } from './events.js';
+import { CFG, G } from './state.js';
 
 const STEP = 1 / 60;
 
@@ -32,5 +33,38 @@ describe('headless engine', () => {
     ai.forEach((k, j) => expect(k.progress).toBeGreaterThan(start[j] + 0.2));
     expect(G.karts.map(k => k.rank).sort()).toEqual([0, 1, 2, 3, 4, 5]);
     for (const k of G.karts) { expect(Number.isFinite(k.pos.x)).toBe(true); expect(Number.isFinite(k.pos.z)).toBe(true); }
+  });
+});
+
+describe('several humans in one race', () => {
+  beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; G.trackIdx = 0; startRace(); drain(); });
+
+  // Put kart k just before the line on its last lap, so the next step finishes it.
+  function onFinalStraight(k) {
+    k.lap = CFG.laps - 1; k.maxLap = CFG.laps - 1; k.idx = G.N - 2;
+    const s = G.samples[1]; k.pos.x = s.x; k.pos.z = s.z;
+  }
+
+  it('drives each human from its own controls', () => {
+    const [a, b] = G.karts;
+    a.isAI = false; a.ctrl = () => ({ throttle: true, brake: false, left: false, right: false, drift: false });
+    b.isAI = false; b.ctrl = () => ({ throttle: false, brake: false, left: false, right: false, drift: false });
+    for (let n = 0; n < 5 * 60; n++) simStep(STEP);
+    expect(a.speed).toBeGreaterThan(10);
+    expect(Math.abs(b.speed)).toBeLessThan(3);   // idle controls: b coasts at the line
+  });
+
+  it('arms the results timer only once every human has finished, and tells each one', () => {
+    const [a, b] = G.karts;
+    for (const k of [a, b]) { k.isAI = false; k.ctrl = () => ({ throttle: true, brake: false, left: false, right: false, drift: false }); }
+    for (let n = 0; n < 4 * 60; n++) simStep(STEP);   // countdown over, race running
+    drain();
+    onFinalStraight(a); simStep(STEP);
+    expect(a.finished).toBe(true);
+    expect(G.resultsAt).toBe(Infinity);                // b and the player are still racing
+    const toA = drain().map(e => resolveFor(e, a)).filter(Boolean);
+    expect(toA.some(t => t.startsWith('ARRIVÉE !'))).toBe(true);
+    onFinalStraight(b); onFinalStraight(G.player); simStep(STEP);
+    expect(G.resultsAt).toBeLessThan(Infinity);
   });
 });

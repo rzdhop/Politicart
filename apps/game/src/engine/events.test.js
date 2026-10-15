@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { drain, emit, pending, setHint, toast } from './events.js';
+import { drain, emit, hintFor, pending, resolveFor, say, setHint, tell, toast } from './events.js';
 
 // The queue is module state, so every test starts from empty.
 beforeEach(() => { drain(); });
@@ -56,5 +56,49 @@ describe('events queue', () => {
     batch.push({ type: 'toast', text: 'stray' });
     expect(pending()).toBe(0);
     expect(drain()).toEqual([]);
+  });
+});
+
+describe('routing by kart', () => {
+  const player = { isAI: false }, other = { isAI: false }, bot = { isAI: true };
+
+  it('say() reaches only that driver, and never an AI kart', () => {
+    say(player, 'TOUR 2');
+    say(bot, 'ignored');
+    const [e, ...rest] = drain();
+    expect(rest).toEqual([]);
+    expect(resolveFor(e, player)).toBe('TOUR 2');
+    expect(resolveFor(e, other)).toBeNull();
+  });
+
+  it('tell() gives the actor one text and everyone else another', () => {
+    tell(player, 'MOTION DE CENSURE !', 'MOTION DE CENSURE DÉPOSÉE !');
+    const events = drain();
+    expect(events.map(e => resolveFor(e, player)).filter(Boolean)).toEqual(['MOTION DE CENSURE !']);
+    expect(events.map(e => resolveFor(e, other)).filter(Boolean)).toEqual(['MOTION DE CENSURE DÉPOSÉE !']);
+  });
+
+  it('tell() from an AI kart reaches every human with the others text', () => {
+    tell(bot, 'never shown', 'CASSEROLADE !');
+    const events = drain();
+    expect(events).toHaveLength(1);
+    expect(resolveFor(events[0], player)).toBe('CASSEROLADE !');
+  });
+
+  it('resolves text that depends on the reader', () => {
+    tell(bot, 'x', o => (o === player ? 'VOUS ÊTES MIS·E EN EXAMEN !' : 'MISE EN EXAMEN SUR LE CIRCUIT'));
+    const [e] = drain();
+    expect(resolveFor(e, player)).toBe('VOUS ÊTES MIS·E EN EXAMEN !');
+    expect(resolveFor(e, other)).toBe('MISE EN EXAMEN SUR LE CIRCUIT');
+  });
+
+  it('hintFor() is a hint for one driver; unrouted events reach everyone', () => {
+    hintFor(other, 'Lancez-le !');
+    toast('PARTEZ !');
+    const [h, t] = drain();
+    expect(h.type).toBe('hint');
+    expect(resolveFor(h, player)).toBeNull();
+    expect(resolveFor(h, other)).toBe('Lancez-le !');
+    expect(resolveFor(t, player)).toBe('PARTEZ !');
   });
 });

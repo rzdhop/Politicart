@@ -15,10 +15,10 @@
 // **The step order inside frame() -- updateKart for every kart, then
 // kartCollisions, pickupItems, updateProjectiles, updateRanks -- is a
 // contract.** Each function assumes what the previous one left in G.
-import { sfx } from './audio.js';
+import { sfx, sfxFor } from './audio.js';
 import { aiInput } from './ai.js';
 import { ITEMS } from './data.js';
-import { setHint, toast } from './events.js';
+import { hintFor, say } from './events.js';
 import { readInput } from './input.js';
 import { stunKart } from './items.js';
 import { CFG, G } from './state.js';
@@ -34,8 +34,8 @@ export function updateProgress(k) {
     if (k.lap > k.maxLap) {
       k.maxLap = k.lap;
       const lapTime = G.time - k.lapStart; k.lapStart = G.time; if (lapTime < k.bestLap) k.bestLap = lapTime;
-      if (k.lap >= CFG.laps && !k.finished) { k.finished = true; k.finishTime = G.time; if (k === G.player) onPlayerFinish(); }
-      else if (k === G.player) { toast(k.lap === CFG.laps - 1 ? 'DERNIER TOUR !' : 'TOUR ' + (k.lap + 1) + ' — ' + fmtTime(lapTime)); sfx('lap'); }
+      if (k.lap >= CFG.laps && !k.finished) { k.finished = true; k.finishTime = G.time; if (!k.isAI) onHumanFinish(k); }
+      else if (!k.isAI) { say(k, k.lap === CFG.laps - 1 ? 'DERNIER TOUR !' : 'TOUR ' + (k.lap + 1) + ' — ' + fmtTime(lapTime)); sfxFor(k, 'lap'); }
     }
   } else if (prev < N * 0.2 && best > N * 0.8) k.lap--;
   k.progress = k.lap + best / N;
@@ -43,13 +43,15 @@ export function updateProgress(k) {
 export function updateRanks() {
   const sorted = [...G.karts].sort((a, b) => (a.finished && b.finished) ? a.finishTime - b.finishTime : (a.finished ? -1 : b.finished ? 1 : b.progress - a.progress));
   sorted.forEach((k, i) => { k.rank = i; });
-  const p = G.player;
-  for (const k of G.karts) if (k.isAI) { const gap = p.progress - k.progress; k.aiSpeedMul = clamp(1 + gap * 0.55, 0.84, 1.14) + k.skill; }
+  // Rubber-banding is measured against the leading human: the only one in solo play.
+  const lead = G.karts.reduce((m, o) => (o.isAI ? m : Math.max(m, o.progress)), -Infinity);
+  for (const k of G.karts) if (k.isAI) { const gap = lead === -Infinity ? 0 : lead - k.progress; k.aiSpeedMul = clamp(1 + gap * 0.55, 0.84, 1.14) + k.skill; }
 }
 
-// ---------- Player finish ----------
-// Arms the results timer; the arrival toast reaches the HUD through the queue.
-function onPlayerFinish() { G.resultsAt = G.time + 5; toast('ARRIVÉE ! ' + ordinal(G.player.rank + 1)); sfx('finish'); }
+// ---------- A human finishes ----------
+// The arrival toast goes to that driver. The results timer is armed once
+// every human has finished -- in solo play, the moment the player does.
+function onHumanFinish(k) { if (G.karts.every(o => o.isAI || o.finished)) G.resultsAt = G.time + 5; say(k, 'ARRIVÉE ! ' + ordinal(k.rank + 1)); sfxFor(k, 'finish'); }
 
 // ---------- Kart physics ----------
 export function updateKart(k, dt) {
@@ -68,16 +70,16 @@ export function updateKart(k, dt) {
   let inp;
   if (k.stun > 0) inp = { throttle: 0, brake: 0, steer: 0, drift: false };
   else if (k.isAI || k.finished) inp = aiInput(k, dt, lateral);
-  else { const i = readInput(); inp = { throttle: i.throttle ? 1 : 0, brake: i.brake ? 1 : 0, steer: (i.right ? 1 : 0) - (i.left ? 1 : 0), drift: i.drift }; }
+  else { const i = k.ctrl ? k.ctrl() : readInput(); inp = { throttle: i.throttle ? 1 : 0, brake: i.brake ? 1 : 0, steer: (i.right ? 1 : 0) - (i.left ? 1 : 0), drift: i.drift }; }
   if (G.state === 'countdown') { inp.throttle = 0; inp.brake = 0; inp.drift = false; }
   if (k.fly > 0) inp.throttle = 1;
   if (k.confused > 0 && !k.isAI) inp.steer = -inp.steer;                           // éléments de langage: inverted controls
   // ramps: ground height follows the plank; leaving its end launches the kart
   let groundY = 0, onRamp = null;
   for (const r of G.ramps) { const rel = (k.idx - r.i0 + G.N) % G.N; if (rel < r.len && Math.abs(lateral) < hw) { onRamp = r; groundY = r.h * clamp((rel + 0.5) / r.len, 0, 1); } }
-  if (k.rampPrev && !onRamp && !k.air) { const r = k.rampPrev; const rel = (k.idx - r.i0 + G.N) % G.N; if (rel >= r.len && rel < r.len + 8 && k.speed > 6) { k.air = true; k.y = r.h; k.vy = k.speed * (r.h / r.L) * 1.35 + 2.5; k.trick = false; if (!k.isAI) sfx('jump'); } }
+  if (k.rampPrev && !onRamp && !k.air) { const r = k.rampPrev; const rel = (k.idx - r.i0 + G.N) % G.N; if (rel >= r.len && rel < r.len + 8 && k.speed > 6) { k.air = true; k.y = r.h; k.vy = k.speed * (r.h / r.L) * 1.35 + 2.5; k.trick = false; sfxFor(k, 'jump'); } }
   k.rampPrev = onRamp;
-  if (k.air) { if (inp.drift && !k.trick) { k.trick = true; if (!k.isAI) toast('FIGURE !'); } if (k.isAI && !k.trick && Math.random() < dt * 2) k.trick = true; inp.drift = false; }
+  if (k.air) { if (inp.drift && !k.trick) { k.trick = true; say(k, 'FIGURE !'); } if (k.isAI && !k.trick && Math.random() < dt * 2) k.trick = true; inp.drift = false; }
 
   const sfA = clamp(Math.abs(k.speed) / baseMax, 0, 1);
   const accel = 26 * S.accel * (1.45 - 0.6 * sfA);   // punchy launch, tapering near top speed
@@ -94,7 +96,7 @@ export function updateKart(k, dt) {
   if (k.drift.active) {
     if (!inp.drift || k.speed < baseMax * 0.25 || k.stun > 0) {
       const c = k.drift.charge;
-      if (c > 2.0) { k.boost = Math.max(k.boost, 1.1); k.boostPower = 1.45; sfx('boost'); if (!k.isAI) toast('SUPER MINI-TURBO'); }
+      if (c > 2.0) { k.boost = Math.max(k.boost, 1.1); k.boostPower = 1.45; sfx('boost'); say(k, 'SUPER MINI-TURBO'); }
       else if (c > 1.0) { k.boost = Math.max(k.boost, 0.55); k.boostPower = 1.3; sfx('boost'); }
       k.drift.active = false; k.drift.charge = 0;
     } else { k.drift.charge += dt; turnRate = 2.4 * S.handling * (k.drift.dir * 1.15 + k.steer * 0.55) * (0.5 + 0.5 * sf); k.speed *= Math.exp(-dt * 0.12); }
@@ -115,7 +117,7 @@ export function updateKart(k, dt) {
     const th = Math.atan2(s.tx, s.tz);
     const ang = Math.min(Math.abs(wrapAngle(moveDir - th)), Math.PI / 2);          // approach angle against the wall
     const loss = clamp(Math.sin(ang) * 0.9, 0.04, 0.9);                             // scraping along keeps speed, head-on costs it
-    if (k.speed > 8 && k.fly <= 0) { k.speed *= 1 - loss * 0.6; if (!k.isAI && loss > 0.3) sfx('bump'); }
+    if (k.speed > 8 && k.fly <= 0) { k.speed *= 1 - loss * 0.6; if (loss > 0.3) sfxFor(k, 'bump'); }
     k.heading += wrapAngle(th - k.heading) * (0.2 + loss * 0.45);
     if (k.drift.active && loss > 0.4) { k.drift.active = false; k.drift.charge = 0; }
   }
@@ -126,17 +128,17 @@ export function updateKart(k, dt) {
   // pits, dash pads
   if (!k.air && k.y <= 0.1 && k.fly <= 0) {
     if (k.pitGrace <= 0) for (const p of G.pits) { const rel = (k.idx - p.i0 + G.N) % G.N; if (rel < p.len && Math.abs(lateral) < hw) { k.pitGrace = 2;
-      if (p.kind === 'water') { k.speed *= 0.3; if (stunKart(k, 0.8) && !k.isAI) toast('PLOUF !'); }
-      else if (p.kind === 'works') { k.slowed = Math.max(k.slowed, 2.2); k.speed *= 0.6; if (!k.isAI) { toast('ZONE DE TRAVAUX !'); sfx('bump'); } }
-      else if (p.kind === 'manif') { if (stunKart(k, 1.0) && !k.isAI) toast('PRIS DANS LA MANIF !'); } break; } }
-    if (k.padGrace <= 0) for (const p of G.pads) { const rel = (k.idx - p.i0 + G.N) % G.N; if (rel < p.len && Math.abs(lateral) < hw) { k.padGrace = 2; k.boost = Math.max(k.boost, 0.9); k.boostPower = 1.5; if (!k.isAI) sfx('boost'); break; } }
+      if (p.kind === 'water') { k.speed *= 0.3; if (stunKart(k, 0.8)) say(k, 'PLOUF !'); }
+      else if (p.kind === 'works') { k.slowed = Math.max(k.slowed, 2.2); k.speed *= 0.6; { say(k, 'ZONE DE TRAVAUX !'); sfxFor(k, 'bump'); } }
+      else if (p.kind === 'manif') { if (stunKart(k, 1.0)) say(k, 'PRIS DANS LA MANIF !'); } break; } }
+    if (k.padGrace <= 0) for (const p of G.pads) { const rel = (k.idx - p.i0 + G.N) % G.N; if (rel < p.len && Math.abs(lateral) < hw) { k.padGrace = 2; k.boost = Math.max(k.boost, 0.9); k.boostPower = 1.5; sfxFor(k, 'boost'); break; } }
   }
   // timers
   k.slip = Math.max(0, k.slip - dt); k.confused = Math.max(0, k.confused - dt); k.pitGrace = Math.max(0, k.pitGrace - dt); k.padGrace = Math.max(0, k.padGrace - dt); k.phantom = Math.max(0, k.phantom - dt);
   k.boost = Math.max(0, k.boost - dt); k.stun = Math.max(0, k.stun - dt); k.invincible = Math.max(0, k.invincible - dt); k.hazardGrace = Math.max(0, k.hazardGrace - dt);
   k.slowed = Math.max(0, k.slowed - dt); k.fly = Math.max(0, k.fly - dt); k.powerCd = Math.max(0, k.powerCd - dt);
   if (k.relance > 0) { k.relanceTimer -= dt; if (k.relanceTimer <= 0) { k.relance--; k.relanceTimer = 1.1; k.boost = 0.7; k.boostPower = 1.45; sfx('boost'); } }
-  if (k.itemRolling > 0) { k.itemRolling -= dt; if (k.itemRolling <= 0) { k.item = k.pendingItem; k.pendingItem = null; if (!k.isAI) { sfx('pick'); setHint(ITEMS[k.item].hint); } else k.itemTimer = rand(0.8, 4); } }
+  if (k.itemRolling > 0) { k.itemRolling -= dt; if (k.itemRolling <= 0) { k.item = k.pendingItem; k.pendingItem = null; if (!k.isAI) { sfxFor(k, 'pick'); hintFor(k, ITEMS[k.item].hint); } else k.itemTimer = rand(0.8, 4); } }
 
   // visuals
   const m = k.mesh; const flyY = k.fly > 0 ? Math.min(5, k.fly > 3.5 ? (4 - k.fly) * 10 : k.fly < 0.5 ? k.fly * 10 : 5) : 0;
@@ -160,7 +162,7 @@ export function kartCollisions() {
       a.pos.x -= nx * push * 2 * ta; a.pos.z -= nz * push * 2 * ta; b.pos.x += nx * push * 2 * tb; b.pos.z += nz * push * 2 * tb;
       a.speed *= 0.97; b.speed *= 0.97;
       if (a.invincible > 0 && b.invincible <= 0) stunKart(b, 1.2); if (b.invincible > 0 && a.invincible <= 0) stunKart(a, 1.2);
-      if (a === G.player || b === G.player) sfx('bump');
+      sfxFor(a, 'bump'); sfxFor(b, 'bump');
     }
   }
 }

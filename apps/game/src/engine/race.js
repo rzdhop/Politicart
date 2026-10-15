@@ -18,7 +18,7 @@ import * as THREE from 'three';
 
 import { sfx } from './audio.js';
 import { CHARACTERS, TRACKS } from './data.js';
-import { setHint, toast } from './events.js';
+import { say, setHint } from './events.js';
 import { pickupItems, stunKart, updateProjectiles } from './items.js';
 import { buildKart } from './kart.js';
 import { transition } from './machine.js';
@@ -110,7 +110,7 @@ export function stepRace(dt) {
   updateWrongWay();
   const payload = framePayload(G, CFG);
   drawMinimap(payload.kartPositions);
-  if (G.time >= G.resultsAt || (G.player.finished && G.karts.every(k => k.finished))) endRace();
+  if (raceOver()) endRace();
   return payload;
 }
 
@@ -131,7 +131,7 @@ export function simStep(dt) {
   kartCollisions(); pickupItems(); updateProjectiles(dt); updateRanks();
   for (const f of [...G.animated]) f(dt);
   for (const c of G.crossings) { c.t += dt; const p = (c.t * c.speed) % (4 * c.range); const lat = p < 2 * c.range ? p - c.range : 3 * c.range - p; const dir = p < 2 * c.range ? 1 : -1; c.mesh.position.set(c.s.x + c.s.sx * lat, 0, c.s.z + c.s.sz * lat); c.mesh.rotation.y = Math.atan2(c.s.sx * dir, c.s.sz * dir);
-    for (const k of G.karts) { if (k.hazardGrace > 0 || k.fly > 0 || k.y > 1.2) continue; const d = (k.pos.x - c.mesh.position.x) ** 2 + (k.pos.z - c.mesh.position.z) ** 2; if (d < 10) { k.hazardGrace = 1.5; k.speed *= 0.3; if (stunKart(k, 1.3) && k === G.player) toast('RENVERSÉ PAR LE CORTÈGE !'); } } }
+    for (const k of G.karts) { if (k.hazardGrace > 0 || k.fly > 0 || k.y > 1.2) continue; const d = (k.pos.x - c.mesh.position.x) ** 2 + (k.pos.z - c.mesh.position.z) ** 2; if (d < 10) { k.hazardGrace = 1.5; k.speed *= 0.3; if (stunKart(k, 1.3)) say(k, 'RENVERSÉ PAR LE CORTÈGE !'); } } }
   const ct = G.time * 5; for (const c of G.crowd) if (c.amp) c.g.position.y = Math.abs(Math.sin(ct + c.ph)) * c.amp + (c.base || 0);
 }
 
@@ -139,6 +139,9 @@ export function simStep(dt) {
 export function renderRace() {
   if (G.scene) getRenderer().render(G.scene, camera);
 }
+
+/** Whether the race is over: the results timer ran out, or every kart has finished. */
+export function raceOver() { return G.time >= G.resultsAt || G.karts.every(k => k.finished); }
 
 /** End the race now: the results screen follows from the transition. */
 export function endRace() {

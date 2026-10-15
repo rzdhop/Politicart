@@ -43,3 +43,45 @@ export function drain() {
 export function pending() {
   return queue.length;
 }
+
+// ---------- Routing by kart (DEC-014) ----------
+// With several humans in one race, "tell the player" has to say which
+// player. These emitters carry the kart instead of deciding locally:
+//
+//   say(k, text)            only k's driver sees it (dropped for AI karts)
+//   tell(k, mine, others)   k's driver sees `mine`, every other driver sees
+//                           `others` -- a string, or a function of the
+//                           receiving kart, for text that depends on who reads
+//   hintFor(k, text)        the persistent hint, for k's driver only
+//
+// The consumer resolves them with resolveFor(event, kart): in solo play that
+// kart is G.player, which reproduces the old `k === G.player` checks
+// exactly; on the server it is each human in turn, one socket each.
+
+/** Toast for kart k's driver only. */
+export function say(k, text) {
+  if (!k || k.isAI) return;
+  queue.push({ type: 'toast', text, to: k });
+}
+
+/** k's driver reads `mine`; every other driver reads `others`. */
+export function tell(k, mine, others) {
+  say(k, mine);
+  queue.push({ type: 'toast', text: others, except: k });
+}
+
+/** Persistent hint for kart k's driver only. */
+export function hintFor(k, text) {
+  if (!k || k.isAI) return;
+  queue.push({ type: 'hint', text, to: k });
+}
+
+/**
+ * The text event `e` shows to the driver of `kart`, or null if it is not
+ * addressed to them. Unrouted events reach everyone.
+ */
+export function resolveFor(e, kart) {
+  if (e.to && e.to !== kart) return null;
+  if (e.except && e.except === kart) return null;
+  return typeof e.text === 'function' ? e.text(kart) : e.text;
+}
