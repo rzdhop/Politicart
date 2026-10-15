@@ -24,6 +24,7 @@ import { drain, resolveFor } from './engine/events.js';
 import { setInputSource } from './engine/input.js';
 import { useItem } from './engine/items.js';
 import { getState, onTransition } from './engine/machine.js';
+import { isNetRace, netStep, pressItem, pressPower } from './engine/netrace.js';
 import { usePower } from './engine/powers.js';
 import { hasPreview, renderPreview } from './engine/preview.js';
 import { endRace, renderRace, stepRace } from './engine/race.js';
@@ -79,9 +80,10 @@ window.addEventListener('keydown', e => {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   if (keys[e.code]) return; keys[e.code] = true;
-  if (G.state === 'race' && ['ControlLeft', 'ControlRight', 'KeyE', 'Enter'].includes(e.code)) useItem(G.player);
-  if (G.state === 'race' && ['KeyF', 'ShiftLeft', 'ShiftRight'].includes(e.code)) usePower(G.player);
-  if (e.code === 'Escape') { if (G.state === 'race' || G.state === 'countdown') actions.pause(); else if (G.state === 'paused') actions.resume(); }
+  // In a team race the server resolves presses (engine/netrace.js); there is no pause either.
+  if (G.state === 'race' && ['ControlLeft', 'ControlRight', 'KeyE', 'Enter'].includes(e.code)) { if (isNetRace()) pressItem(); else useItem(G.player); }
+  if (G.state === 'race' && ['KeyF', 'ShiftLeft', 'ShiftRight'].includes(e.code)) { if (isNetRace()) pressPower(); else usePower(G.player); }
+  if (e.code === 'Escape' && !isNetRace()) { if (G.state === 'race' || G.state === 'countdown') actions.pause(); else if (G.state === 'paused') actions.resume(); }
   if (e.code === 'KeyM') actions.toggleMute(false);
   if (e.code === 'Enter' && G.state === 'title') $('b-play').click();
   if (e.code === 'Enter' && G.state === 'results') $('b-again').click();
@@ -121,7 +123,7 @@ function frame(now) {
   if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby') { if (state === 'select' || state === 'tracks' || hasPreview()) renderPreview(dt); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
 
-  const payload = stepRace(dt);
+  const payload = isNetRace() ? netStep(dt) : stepRace(dt);
   // Routed events (say/tell/hintFor) resolve for the local driver, G.player.
   for (const e of drain()) { const text = resolveFor(e, G.player); if (text === null) continue; if (e.type === 'toast') toast(text); else if (e.type === 'hint') setHint(text); }
   tickToast(dt);

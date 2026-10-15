@@ -1,9 +1,11 @@
 import { Button, Heading, Panel, ResultsTable, Row, Screen, Subtitle, type ResultsRow } from '@kart-republique/ui';
 
+import { CHARACTERS } from '../../engine/data.js';
 import { G } from '../../engine/state.js';
+import { TEAM_NAMES } from '../../engine/teams.js';
 import { fmtTime, ordinal } from '../../engine/util.js';
-import { actions, type UiSnapshot } from '../store';
-import type { Racer } from '../types';
+import { actions, type NetResults, type UiSnapshot } from '../store';
+import type { Character, Racer } from '../types';
 
 const COLUMN = { display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' } as const;
 
@@ -28,6 +30,7 @@ function summary(player: Racer, field: number) {
  * its table only then.
  */
 export function ResultsScreen({ ui }: { ui: UiSnapshot }) {
+  if (ui.netResults) return <TeamResults ui={ui} results={ui.netResults} />;
   const live = ui.state === 'results';
   const karts = (live ? (G.karts as unknown as Racer[]) : []);
   const player = live ? (G.player as unknown as Racer) : null;
@@ -49,6 +52,45 @@ export function ResultsScreen({ ui }: { ui: UiSnapshot }) {
         <Row>
           <Button id="b-again" onClick={actions.start}>Rejouer</Button>
           <Button id="b-menu" variant="ghost" onClick={actions.toTitle}>Menu</Button>
+        </Row>
+      </Panel>
+    </Screen>
+  );
+}
+
+/** A team race's results, as the server scored them: places, points, and the teams' totals. */
+function TeamResults({ ui, results }: { ui: UiSnapshot; results: NetResults }) {
+  const live = ui.state === 'results';
+  const chars = CHARACTERS as unknown as Character[];
+  const rows: ResultsRow[] = results.ranking.map(r => {
+    const c = chars.find(x => x.id === r.charId);
+    return {
+      id: r.slot,
+      rank: ordinal(r.rank + 1),
+      name: r.isAI ? (c?.name ?? r.name) : r.name,
+      detail: r.isAI ? 'IA' : (c?.name ?? '') + (r.team ? ' · ' + TEAM_NAMES[r.team] : ''),
+      time: (r.time !== null ? fmtTime(r.time) : 'en course…') + (r.points ? '  +' + r.points : ''),
+      highlighted: r.slot === results.you,
+    };
+  });
+  const teamRows: ResultsRow[] = results.teams.map((t, i) => ({
+    id: t.team, rank: ordinal(i + 1), name: 'Équipe ' + t.name, detail: t.drivers.length + ' pilote' + (t.drivers.length > 1 ? 's' : ''), time: t.points + ' pts',
+  }));
+  const [first, second] = results.teams;
+  const verdict = results.error ? 'La course a été interrompue.'
+    : !first ? 'Aucune équipe classée.'
+    : second && first.points === second.points && first.drivers.length && second.drivers.length ? 'Égalité aux points : départagée au meilleur classement. Victoire ' + first.name + ' !'
+    : 'Victoire de l’équipe ' + first.name + ' !';
+  return (
+    <Screen id="s-results" hidden={!live}>
+      <Panel style={COLUMN}>
+        <Heading id="r-title">Résultats du scrutin</Heading>
+        <Subtitle id="r-sub" style={{ fontSize: 16 }}>{verdict}</Subtitle>
+        <ResultsTable rows={teamRows} columns={['', 'Équipe', 'Points']} bodyProps={{ id: 'r-teams' }} />
+        <ResultsTable rows={rows} columns={['', 'Pilote', 'Temps · points']} bodyProps={{ id: 'r-body' }} />
+        <Row>
+          <Button id="b-again" onClick={actions.backToLobby}>Retour au salon</Button>
+          <Button id="b-menu" variant="ghost" onClick={actions.lobbyBack}>Menu</Button>
         </Row>
       </Panel>
     </Screen>

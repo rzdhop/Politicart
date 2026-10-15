@@ -16,6 +16,7 @@ import { initAudio, isMuted, toggleMute as toggleAudioMute } from '../engine/aud
 import { applyCustom, resetCustom, saveCustom } from '../engine/custom.js';
 import { getState, onTransition, transition } from '../engine/machine.js';
 import * as net from '../engine/net.js';
+import { onNetResults } from '../engine/netrace.js';
 import { hasPreview, makeThumbs, setPreview } from '../engine/preview.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
@@ -52,7 +53,14 @@ export interface UiSnapshot {
   net: NetView;
   /** The name shown to the other players, remembered in this browser. */
   netName: string;
+  /** The last team race's results, until a solo race starts. */
+  netResults: NetResults | null;
 }
+
+export interface NetRankRow { slot: number; name: string; charId: string; team: TeamId | null; isAI: boolean; rank: number; finished: boolean; time: number | null; bestLap: number | null; points: number }
+export interface NetTeamRow { team: TeamId; name: string; points: number; drivers: number[] }
+/** What the server reports when a team race ends, and which slot was ours. */
+export interface NetResults { ranking: NetRankRow[]; teams: NetTeamRow[]; you: number; error?: boolean }
 
 // The lobby name lives under its own key, so resetting the workshop keeps it.
 function loadName(): string { try { return JSON.parse(localStorage.getItem('kr-net') || '{}').name || ''; } catch { return ''; } }
@@ -72,6 +80,7 @@ let snapshot: UiSnapshot = {
   netAvailable: false,
   net: net.getNet() as NetView,
   netName: loadName(),
+  netResults: null,
 };
 
 const listeners = new Set<() => void>();
@@ -101,6 +110,7 @@ onTransition((to: string, from: string) => {
 });
 
 net.onNet((view: NetView) => set({ net: view }));
+onNetResults((r: NetResults) => set({ netResults: r }));
 
 const socketUrl = () => net.serverUrl(window.location);
 
@@ -112,6 +122,7 @@ export const actions = {
   /** "Jouer": render the portraits, open the roster, put the chosen kart on the turntable. */
   play() {
     initAudio();
+    set({ netResults: null });
     const thumbs = makeThumbs() as Record<string, string>;
     set({ thumbs });
     transition('select');
@@ -161,6 +172,7 @@ export const actions = {
   toTracks() { transition('tracks'); },
   start() {
     initAudio();
+    set({ netResults: null });
     startRace();
   },
   pause() { transition('paused'); },
@@ -184,6 +196,8 @@ export const actions = {
   pickTrack(i: number) { net.pickTrack(i); },
   startNetRace() { initAudio(); net.startNetRace(); },
   leaveRoom() { net.leaveRoom(); },
+  /** From a team race's results back to the room. */
+  backToLobby() { transition('lobby'); },
   /** Back to the title: leave the room and hang up. */
   lobbyBack() { net.disconnect(); transition('title'); },
 };

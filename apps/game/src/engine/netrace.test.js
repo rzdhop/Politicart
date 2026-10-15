@@ -1,0 +1,101 @@
+// The networked client, end to end in node: a real headless race is recorded
+// as the server would send it, then replayed into the client.
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+
+import { CHARACTERS } from './data.js';
+import { drain } from './events.js';
+import { useItem } from './items.js';
+import { getState, resetMachine, transition } from './machine.js';
+import { connect, disconnect, setTransport } from './net.js';
+import { encodeSnapshot } from './netstate.js';
+import { abortNetRace, beginNetRace, finishNetRace, isNetRace, netStep, onNetResults, pressItem, receiveSnap } from './netrace.js';
+import { simStep, startField } from './race.js';
+import { G } from './state.js';
+
+const ROSTER = ['victor', 'gege', 'maurice', 'capucine', 'hubert', 'lulu'].map((charId, i) => ({ charId, isAI: i < 4, team: i < 4 ? null : (i === 4 ? 'bleu' : 'rouge'), name: 'P' + i }));
+const SNAPS = [];
+let barricadeId = null;
+
+beforeAll(() => {
+  // "Server": race 6 s at 60 Hz, a snapshot every third tick, a barricade dropped at 5 s.
+  resetMachine('tracks'); G.trackIdx = 0;
+  startField(ROSTER.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team })));
+  for (let tick = 1; tick <= 360; tick++) {
+    if (tick === 300) { const k = G.karts[4]; k.item = 'greve'; k.itemRolling = 0; useItem(k); barricadeId = G.hazards.at(-1).id; }
+    simStep(1 / 60);
+    if (tick % 3 === 0) SNAPS.push(JSON.parse(JSON.stringify(encodeSnapshot(G, tick))));
+  }
+  drain();
+});
+afterEach(() => { abortNetRace(); disconnect(); });
+
+function clientInLobby() { resetMachine('title'); transition('lobby'); }
+
+describe('a networked race on the client', () => {
+  it('builds the announced grid and follows our slot', () => {
+    clientInLobby();
+    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5 });
+    expect(isNetRace()).toBe(true);
+    expect(getState()).toBe('countdown');
+    expect(G.karts.map(k => k.def.id)).toEqual(ROSTER.map(s => s.charId));
+    expect(G.player).toBe(G.karts[5]);
+    expect(G.karts[4].team).toBe('bleu');
+  });
+
+  it('draws the karts between snapshots, goes green with the server, and mirrors hazards', () => {
+    clientInLobby();
+    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5 });
+    for (const s of SNAPS) receiveSnap({ s, ev: [], fx: [] });
+    const payload = netStep(1 / 60);
+    // Rendered six ticks behind the newest snapshot (tick 360): snapshot 354, give or take the
+    // milliseconds between receiving and stepping, which is a fraction of a tick.
+    const at354 = SNAPS.find(s => s.tk === 354);
+    G.karts.forEach((k, i) => { expect(k.pos.x).toBeCloseTo(at354.k[i].x, 0); expect(k.pos.z).toBeCloseTo(at354.k[i].z, 0); });
+    expect(getState()).toBe('race');
+    expect(payload.rank).toBe(at354.k[5].rk);
+    expect(G.karts[0].mesh.position.x).toBeCloseTo(G.karts[0].pos.x, 5);
+    const ids = at354.h.map(h => h.id);
+    expect(ids).toContain(barricadeId);
+    expect(G.scene.children.filter(o => o.isGroup && Math.abs(o.position.x - at354.h.at(-1).x) < 1e-6)).not.toHaveLength(0);
+  });
+
+  it('replays our messages through the usual queue and ignores stale snapshots', () => {
+    clientInLobby();
+    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5 });
+    drain();
+    receiveSnap({ s: SNAPS[10], ev: [['toast', 'TOUR 2 — 0:31.2']], fx: [] });
+    receiveSnap({ s: SNAPS[5], ev: [['toast', 'stale']], fx: [] });
+    expect(drain()).toEqual([{ type: 'toast', text: 'TOUR 2 — 0:31.2' }]);
+  });
+
+  it('sends controls and counts presses so none is lost or doubled', () => {
+    const sent = [];
+    class Sock { constructor() { this.readyState = 1; queueMicrotask(() => this.onopen?.()); } send(s) { sent.push(JSON.parse(s)); } close() {} }
+    setTransport(Sock); connect('ws://x/ws', 'me');
+    return new Promise(r => setTimeout(r, 0)).then(() => {
+      clientInLobby(); beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5 });
+      pressItem(); pressItem();
+      netStep(1 / 60);
+      const inputs = sent.filter(m => m.t === 'input');
+      expect(inputs.at(-1)).toMatchObject({ item: 2, power: 0, c: { throttle: false } });
+    });
+  });
+
+  it('shows the results the server sends and hands them to the UI', () => {
+    let got = null; onNetResults(r => { got = r; });
+    clientInLobby(); beginNetRace({ trackIdx: 0, roster: ROSTER, you: 4 });
+    for (const s of SNAPS) receiveSnap({ s, ev: [], fx: [] });
+    netStep(1 / 60);
+    finishNetRace({ ranking: [], teams: [{ team: 'bleu', name: 'Bleu', points: 10, drivers: [4] }] });
+    expect(getState()).toBe('results');
+    expect(isNetRace()).toBe(false);
+    expect(got).toMatchObject({ you: 4, teams: [{ team: 'bleu', points: 10 }] });
+  });
+
+  it('falls back to the lobby when the race is abandoned', () => {
+    clientInLobby(); beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5 });
+    abortNetRace();
+    expect(getState()).toBe('lobby');
+    expect(isNetRace()).toBe(false);
+  });
+});
