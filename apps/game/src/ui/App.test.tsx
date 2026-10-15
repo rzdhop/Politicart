@@ -43,7 +43,7 @@ beforeEach(() => {
   // we only ever reset to 'title' without clearing by going through transitions.
   while (getState() !== 'title') {
     const s = getState();
-    transition(s === 'select' || s === 'admin' || s === 'paused' || s === 'results' ? 'title' : s === 'tracks' ? 'select' : 'paused');
+    transition(s === 'select' || s === 'admin' || s === 'paused' || s === 'results' || s === 'lobby' ? 'title' : s === 'tracks' ? 'select' : 'paused');
   }
 });
 afterEach(() => { cleanup(); });

@@ -15,11 +15,20 @@ import { useSyncExternalStore } from 'react';
 import { initAudio, isMuted, toggleMute as toggleAudioMute } from '../engine/audio.js';
 import { applyCustom, resetCustom, saveCustom } from '../engine/custom.js';
 import { getState, onTransition, transition } from '../engine/machine.js';
+import * as net from '../engine/net.js';
 import { hasPreview, makeThumbs, setPreview } from '../engine/preview.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
 
-export type GameState = 'title' | 'select' | 'tracks' | 'admin' | 'countdown' | 'race' | 'paused' | 'results';
+export type GameState = 'title' | 'select' | 'tracks' | 'admin' | 'countdown' | 'race' | 'paused' | 'results' | 'lobby';
+export type TeamId = 'bleu' | 'rouge';
+
+/** One player in a team-race room, as the game server describes it. */
+export interface LobbyPlayer { id: string; name: string; team: TeamId; charId: string; ready: boolean }
+/** A team-race room: its code, host, circuit and players (DEC-014). */
+export interface RoomView { code: string; host: string | null; trackIdx: number; phase: 'lobby' | 'race'; players: LobbyPlayer[] }
+/** The connection to the game server. */
+export interface NetView { status: 'idle' | 'connecting' | 'open' | 'closed'; id: string | null; room: RoomView | null; error: string | null }
 export type AdminStatus = 'idle' | 'saved' | 'full';
 
 export interface UiSnapshot {
@@ -38,7 +47,16 @@ export interface UiSnapshot {
   adsVersion: number;
   /** The "play on a computer" note: shown until the first race starts, then never again. */
   noteHidden: boolean;
+  /** Whether the page was served by the game server, so team races are possible. */
+  netAvailable: boolean;
+  net: NetView;
+  /** The name shown to the other players, remembered in this browser. */
+  netName: string;
 }
+
+// The lobby name lives under its own key, so resetting the workshop keeps it.
+function loadName(): string { try { return JSON.parse(localStorage.getItem('kr-net') || '{}').name || ''; } catch { return ''; } }
+function saveName(name: string) { try { localStorage.setItem('kr-net', JSON.stringify({ name })); } catch { /* storage full or blocked: the name is just not remembered */ } }
 
 let snapshot: UiSnapshot = {
   state: getState() as GameState,
@@ -51,6 +69,9 @@ let snapshot: UiSnapshot = {
   formVersion: 0,
   adsVersion: 0,
   noteHidden: false,
+  netAvailable: false,
+  net: net.getNet() as NetView,
+  netName: loadName(),
 };
 
 const listeners = new Set<() => void>();
@@ -78,6 +99,10 @@ onTransition((to: string, from: string) => {
   if (to === 'countdown' && from !== 'paused') patch.noteHidden = true;
   set(patch);
 });
+
+net.onNet((view: NetView) => set({ net: view }));
+
+const socketUrl = () => net.serverUrl(window.location);
 
 function refreshPreview() {
   if (hasPreview()) setPreview(G.charIdx);
@@ -140,4 +165,25 @@ export const actions = {
   },
   pause() { transition('paused'); },
   resume() { transition(G.countdown > 0 ? 'countdown' : 'race'); },
+
+  // ---- Team races (DEC-014) ----
+  /** Ask the page's origin whether it is the game server; shows the Multijoueur button if so. */
+  detectServer() { net.probeServer().then((ok: boolean) => set({ netAvailable: ok })); },
+  /** "Multijoueur": open the lobby and connect. */
+  multiplayer() {
+    initAudio();
+    transition('lobby');
+    net.connect(socketUrl(), snapshot.netName);
+  },
+  setNetName(name: string) { saveName(name); set({ netName: name }); },
+  createRoom() { net.connect(socketUrl(), snapshot.netName); net.createRoom(); },
+  joinRoom(code: string) { net.connect(socketUrl(), snapshot.netName); net.joinRoom(code); },
+  setTeam(team: TeamId) { net.setMine({ team }); },
+  setChar(charId: string) { net.setMine({ charId }); },
+  setReady(ready: boolean) { net.setMine({ ready }); },
+  pickTrack(i: number) { net.pickTrack(i); },
+  startNetRace() { initAudio(); net.startNetRace(); },
+  leaveRoom() { net.leaveRoom(); },
+  /** Back to the title: leave the room and hang up. */
+  lobbyBack() { net.disconnect(); transition('title'); },
 };

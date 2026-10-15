@@ -31,6 +31,7 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
       <Panel style={COLUMN}>
         <Row>
           <Button id="b-play" onClick={actions.play}>Jouer</Button>
+          {ui.netAvailable && <Button id="b-multi" onClick={actions.multiplayer}>Multijoueur</Button>}
           <Button id="b-poly" variant="ghost" onClick={actions.togglePoly}>
             {ui.poly === 'low' ? 'Graphismes : légers (low-poly)' : 'Graphismes : détaillés (ombres)'}
           </Button>

@@ -1,6 +1,7 @@
 import { NoteBanner } from '@kart-republique/ui';
 
 import { AdminScreen } from './screens/AdminScreen';
+import { LobbyScreen } from './screens/LobbyScreen';
 import { PauseScreen } from './screens/PauseScreen';
 import { ResultsScreen } from './screens/ResultsScreen';
 import { SelectScreen } from './screens/SelectScreen';
@@ -28,6 +29,7 @@ export function App() {
       <Hud />
       <PauseScreen ui={ui} />
       <ResultsScreen ui={ui} />
+      <LobbyScreen ui={ui} />
       <NoteBanner id="note" hidden={ui.noteHidden}>Jeu au clavier : ouvrez-le sur un ordinateur.</NoteBanner>
     </>
   );

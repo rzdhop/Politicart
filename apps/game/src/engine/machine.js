@@ -17,18 +17,25 @@
 // countdown into the race, race to the results, pause from either phase of
 // the race and back, and quit or menu back to the title. A move not listed
 // here is a bug, so transition() throws rather than silently desyncing.
+//
+// `lobby` is the team race's waiting room (DEC-014): reached from the title,
+// left for the title or -- when the server starts the race -- straight into
+// the countdown. A networked race returns to it from the countdown, the
+// race or the results, because the room outlives each race. There is no
+// pause in a networked race: the world does not stop for one player.
 
-export const STATES = Object.freeze(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results']);
+export const STATES = Object.freeze(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby']);
 
 const NEXT = Object.freeze({
-  title: Object.freeze(['select', 'admin']),
+  title: Object.freeze(['select', 'admin', 'lobby']),
   select: Object.freeze(['title', 'tracks']),
   tracks: Object.freeze(['select', 'countdown']),
   admin: Object.freeze(['title']),
-  countdown: Object.freeze(['race', 'paused']),
-  race: Object.freeze(['paused', 'results']),
+  countdown: Object.freeze(['race', 'paused', 'lobby']),
+  race: Object.freeze(['paused', 'results', 'lobby']),
   paused: Object.freeze(['race', 'countdown', 'title']),
-  results: Object.freeze(['countdown', 'title']),
+  results: Object.freeze(['countdown', 'title', 'lobby']),
+  lobby: Object.freeze(['title', 'countdown']),
 });
 
 let current = 'title';

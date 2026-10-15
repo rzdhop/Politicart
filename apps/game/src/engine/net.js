@@ -1,0 +1,95 @@
+// The client's side of the team race: one WebSocket to the game server, and
+// what it last said (DEC-014).
+//
+// DOM-free, like every engine module. The transport is the platform's
+// WebSocket unless a test injects another with setTransport(), in the same
+// spirit as input.js's setInputSource. The module keeps a small immutable
+// view -- connection status, own id, the room, the last error -- that the UI
+// store mirrors through onNet(). Race traffic does not go through that view:
+// the race start, the 20 Hz snapshots and the results go to the handlers
+// registered with onRace/onSnap/onResults, which the networked race (netrace.js)
+// consumes without re-rendering React twenty times a second.
+
+let Transport = typeof WebSocket === 'undefined' ? null : WebSocket;
+let ws = null;
+let view = Object.freeze({ status: 'idle', id: null, room: null, error: null });
+const viewListeners = new Set();
+const handlers = { race: null, snap: null, results: null };
+let pendingName = '';
+
+function publish(patch) {
+  view = Object.freeze({ ...view, ...patch });
+  for (const fn of viewListeners) fn(view);
+}
+
+/** Use another WebSocket implementation (tests). */
+export function setTransport(Impl) { Transport = Impl; }
+
+/** The current connection view: { status, id, room, error }. */
+export const getNet = () => view;
+
+/** Subscribe to view changes. Returns the unsubscribe function. */
+export function onNet(fn) { viewListeners.add(fn); return () => { viewListeners.delete(fn); }; }
+
+/** Register the race consumers. Each takes the server's message. */
+export function onRace(fn) { handlers.race = fn; }
+export function onSnap(fn) { handlers.snap = fn; }
+export function onResults(fn) { handlers.results = fn; }
+
+/** ws://host/ws or wss://host/ws for the page's own origin. */
+export function serverUrl(loc) {
+  return (loc.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + loc.host + '/ws';
+}
+
+/** Whether the page was served by the game server: its /api/kr answers. */
+export async function probeServer(fetchImpl = globalThis.fetch) {
+  if (typeof fetchImpl !== 'function') return false;
+  try {
+    const r = await fetchImpl('./api/kr', { cache: 'no-store' });
+    if (!r.ok) return false;
+    const j = await r.json();
+    return j && j.kr === 'server';
+  } catch { return false; }
+}
+
+const send = m => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
+
+function onMessage(raw) {
+  let m; try { m = JSON.parse(typeof raw === 'string' ? raw : String(raw)); } catch { return; }
+  if (m.t === 'welcome') publish({ id: m.id });
+  else if (m.t === 'room') publish({ room: m.room, error: null });
+  else if (m.t === 'error') publish({ error: m.msg });
+  else if (m.t === 'race') handlers.race?.(m);
+  else if (m.t === 'snap') handlers.snap?.(m);
+  else if (m.t === 'results') handlers.results?.(m);
+}
+
+/** Open the connection (no-op if one is open or opening) and introduce ourselves. */
+export function connect(url, name) {
+  pendingName = name ?? pendingName;
+  if (ws && (ws.readyState === 0 || ws.readyState === 1)) { if (ws.readyState === 1) send({ t: 'hello', name: pendingName }); return; }
+  if (!Transport) { publish({ status: 'closed', error: 'Pas de WebSocket dans ce navigateur.' }); return; }
+  publish({ status: 'connecting', error: null });
+  const sock = new Transport(url); ws = sock;
+  sock.onopen = () => { if (ws !== sock) return; publish({ status: 'open' }); send({ t: 'hello', name: pendingName }); };
+  sock.onmessage = e => { if (ws === sock) onMessage(e.data); };
+  sock.onclose = () => { if (ws !== sock) return; ws = null; publish({ status: 'closed', room: null, error: view.error ?? 'Connexion au serveur perdue.' }); };
+  sock.onerror = () => { if (ws === sock) publish({ error: 'Serveur injoignable.' }); };
+}
+
+/** Close the connection and forget the room. */
+export function disconnect() {
+  const sock = ws; ws = null;
+  if (sock) try { sock.close(); } catch { /* already closed */ }
+  publish({ status: 'idle', room: null, error: null });
+}
+
+export const createRoom = () => send({ t: 'create' });
+export const joinRoom = code => send({ t: 'join', code });
+export const setMine = patch => send({ t: 'set', ...patch });
+export const pickTrack = trackIdx => send({ t: 'track', trackIdx });
+export const startNetRace = () => send({ t: 'start' });
+export const leaveRoom = () => { send({ t: 'leave' }); publish({ room: null }); };
+
+/** Controls for this tick, plus the running counts of item and power presses. */
+export const sendInput = (c, item, power) => send({ t: 'input', c, item, power });

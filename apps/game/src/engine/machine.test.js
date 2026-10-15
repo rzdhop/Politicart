@@ -15,6 +15,9 @@ const FLOWS = [
   ['title', 'select', 'tracks', 'countdown', 'paused', 'countdown', 'race'],        // pause during the countdown
   ['title', 'select', 'tracks', 'countdown', 'race', 'paused', 'race'],             // pause during the race
   ['title', 'select', 'tracks', 'countdown', 'race', 'paused', 'title'],            // quit from the pause menu
+  ['title', 'lobby', 'countdown', 'race', 'results', 'lobby', 'title'],               // a team race, back to the room, then home
+  ['title', 'lobby', 'countdown', 'lobby'],                                         // left the room during the countdown
+  ['title', 'lobby', 'countdown', 'race', 'lobby'],                                 // left mid-race
 ];
 
 describe('game state machine', () => {
@@ -22,8 +25,8 @@ describe('game state machine', () => {
     expect(getState()).toBe('title');
   });
 
-  it('lists exactly the eight states the game has', () => {
-    expect([...STATES]).toEqual(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results']);
+  it('lists exactly the nine states the game has', () => {
+    expect([...STATES]).toEqual(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby']);
   });
 
   it.each(FLOWS)('accepts the flow %s -> %s -> %s ...', (...flow) => {
@@ -36,7 +39,7 @@ describe('game state machine', () => {
   });
 
   it('refuses moves the game has no path for, and stays put', () => {
-    for (const [from, to] of [['title', 'race'], ['title', 'results'], ['select', 'countdown'], ['race', 'title'], ['race', 'select'], ['admin', 'select'], ['results', 'race'], ['countdown', 'results']]) {
+    for (const [from, to] of [['title', 'race'], ['title', 'results'], ['select', 'countdown'], ['race', 'title'], ['race', 'select'], ['admin', 'select'], ['results', 'race'], ['countdown', 'results'], ['lobby', 'race'], ['lobby', 'select'], ['lobby', 'paused'], ['select', 'lobby']]) {
       resetMachine(from);
       expect(canTransition(to)).toBe(false);
       expect(() => transition(to)).toThrow(/Illegal game state transition: /);

@@ -107,6 +107,8 @@ onTransition((to, from) => {
 // The workshop's saved edits are applied before anything renders, as before.
 loadCustom();
 mountUi($('ui'));
+// Served by the game server (not GitHub Pages)? Then team races are on offer.
+actions.detectServer();
 
 // ---------- Main loop ----------
 // The UI owns the clock. The engine steps only while the race is live; while
@@ -116,7 +118,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
   const state = getState();
-  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin') { if (state === 'select' || state === 'tracks' || hasPreview()) renderPreview(dt); return; }
+  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby') { if (state === 'select' || state === 'tracks' || hasPreview()) renderPreview(dt); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
 
   const payload = stepRace(dt);
