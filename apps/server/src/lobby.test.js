@@ -1,0 +1,75 @@
+import { describe, expect, it } from 'vitest';
+
+import { cleanName, MAX_PLAYERS, newCode, Room } from './lobby.js';
+
+describe('names and codes', () => {
+  it('trims, caps and strips markup from names', () => {
+    expect(cleanName('  Jean-Mi  ')).toBe('Jean-Mi');
+    expect(cleanName('<b>x</b>')).toBe('bx/b');
+    expect(cleanName('a'.repeat(40))).toHaveLength(16);
+    expect(cleanName('   ')).toBe('Député·e');
+  });
+
+  it('makes four-letter codes without I or O, avoiding taken ones', () => {
+    const seq = [0, 0, 0, 0, 0.99, 0.99, 0.99, 0.99]; let i = 0;
+    const code = newCode(new Set(['AAAA']), () => seq[i++]);
+    expect(code).toBe('ZZZZ');
+    expect(newCode(new Set())).toMatch(/^[A-HJ-NP-Z]{4}$/);
+  });
+});
+
+describe('a room', () => {
+  it('makes the first player host and balances teams as people join', () => {
+    const r = new Room('ABCD');
+    const a = r.join('a', 'Alice'), b = r.join('b', 'Bob'), c = r.join('c', 'Chloé');
+    expect(r.host).toBe('a');
+    expect([a.team, b.team, c.team]).toEqual(['bleu', 'rouge', 'bleu']);
+    expect(new Set([a.charId, b.charId, c.charId]).size).toBe(3);
+  });
+
+  it('refuses a seventh player and a taken candidate', () => {
+    const r = new Room('ABCD');
+    for (let i = 0; i < MAX_PLAYERS; i++) r.join('p' + i, 'P' + i);
+    expect(r.join('x', 'X')).toMatch(/complète/);
+    expect(r.set('p1', { charId: r.player('p0').charId })).toMatch(/déjà pris/);
+    expect(r.set('p1', { team: 'vert' })).toMatch(/inconnue/);
+    expect(r.set('p1', { team: 'bleu' })).toBeNull();
+  });
+
+  it('lets only the host pick the circuit and start, once everyone else is ready', () => {
+    const r = new Room('ABCD'); r.join('a', 'A'); r.join('b', 'B');
+    expect(r.setTrack('b', 1)).toMatch(/hôte/);
+    expect(r.setTrack('a', 9)).toMatch(/inconnu/);
+    expect(r.setTrack('a', 2)).toBeNull();
+    expect(r.cannotStart('b')).toMatch(/hôte/);
+    expect(r.cannotStart('a')).toMatch(/prêt/);
+    r.set('b', { ready: true });
+    expect(r.cannotStart('a')).toBeNull();
+  });
+
+  it('hands the host role on when the host leaves', () => {
+    const r = new Room('ABCD'); r.join('a', 'A'); r.join('b', 'B');
+    r.leave('a');
+    expect(r.host).toBe('b');
+    r.leave('b');
+    expect(r.empty).toBe(true);
+  });
+
+  it('fills the grid to six with AI candidates nobody picked, humans last', () => {
+    const r = new Room('ABCD'); r.join('a', 'A'); r.join('b', 'B');
+    const grid = r.roster();
+    expect(grid).toHaveLength(6);
+    expect(grid.filter(s => s.isAI)).toHaveLength(4);
+    expect(grid.slice(4).map(s => s.playerId)).toEqual(['a', 'b']);
+    expect(new Set(grid.map(s => s.charId)).size).toBe(6);
+    expect(grid.filter(s => s.isAI).every(s => s.team === null)).toBe(true);
+  });
+
+  it('resets readiness after a race', () => {
+    const r = new Room('ABCD'); r.join('a', 'A'); r.set('a', { ready: true }); r.phase = 'race';
+    expect(r.join('b', 'B')).toMatch(/commencé/);
+    r.endRace();
+    expect(r.phase).toBe('lobby');
+    expect(r.player('a').ready).toBe(false);
+  });
+});
