@@ -30,6 +30,7 @@ export function buildMinimapBase() {
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
   for (const s of G.samples) { minX = Math.min(minX, s.x); maxX = Math.max(maxX, s.x); minZ = Math.min(minZ, s.z); maxZ = Math.max(maxZ, s.z); }
   const pad = 26; scale = Math.min((W - pad * 2) / (maxX - minX), (W - pad * 2) / (maxZ - minZ)); offX = (W - (maxX - minX) * scale) / 2 - minX * scale; offZ = (W - (maxZ - minZ) * scale) / 2 - minZ * scale;
+  if (typeof document === 'undefined') { base = null; return; }   // headless: nothing to draw on
   const cv = document.createElement('canvas'); cv.width = cv.height = W; const c = cv.getContext('2d');
   c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath(); G.samples.forEach((s, i) => { const x = s.x * scale + offX, y = W - (s.z * scale + offZ); i ? c.lineTo(x, y) : c.moveTo(x, y); }); c.closePath();
   c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 10; c.stroke(); c.strokeStyle = '#3a3b40'; c.lineWidth = 6; c.stroke();

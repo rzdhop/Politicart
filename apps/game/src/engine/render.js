@@ -6,16 +6,27 @@
 // anything that changes its fov or position is responsible for what the next
 // user of it sees.
 //
-// The canvas is looked up at module scope, which is safe because the entry is
-// loaded as a module and so runs after the document is parsed.
+// The renderer is created on first use, not at import. The engine also runs
+// headless on the game server (DEC-014), where there is no canvas and no
+// WebGL: importing this module there must not touch the DOM, and nothing on
+// the server ever asks for the renderer. In the browser the first caller is
+// the menu's preview, a frame after load, so the canvas is sized as before.
 import * as THREE from 'three';
 
 import { $ } from './util.js';
 
-export const canvas = $('c');
-export const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 export const camera = new THREE.PerspectiveCamera(65, 1, 0.5, 2000);
-export function resize() { renderer.setSize(window.innerWidth, window.innerHeight, false); camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); }
-window.addEventListener('resize', resize); resize();
+
+let renderer = null;
+
+/** The one WebGL renderer, created and sized on the first call. */
+export function getRenderer() {
+  if (renderer) return renderer;
+  renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  window.addEventListener('resize', resize); resize();
+  return renderer;
+}
+
+export function resize() { const r = getRenderer(); r.setSize(window.innerWidth, window.innerHeight, false); camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); }

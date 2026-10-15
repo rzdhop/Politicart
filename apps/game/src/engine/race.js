@@ -26,7 +26,7 @@ import { buildMinimapBase, drawMinimap } from './minimap.js';
 import { framePayload } from './payload.js';
 import { kartCollisions, updateKart, updateRanks } from './physics.js';
 import { setCast } from './primitives.js';
-import { camera, renderer } from './render.js';
+import { camera, getRenderer } from './render.js';
 import { CFG, G, SHADOWS } from './state.js';
 import { buildTrack } from './track.js';
 import { lerp, rand } from './util.js';
@@ -105,6 +105,22 @@ function updateWrongWay() {
  * and the UI's listener has already rendered the results.
  */
 export function stepRace(dt) {
+  simStep(dt);
+  updateCamera(dt);
+  updateWrongWay();
+  const payload = framePayload(G, CFG);
+  drawMinimap(payload.kartPositions);
+  if (G.time >= G.resultsAt || (G.player.finished && G.karts.every(k => k.finished))) endRace();
+  return payload;
+}
+
+/**
+ * The simulation half of a frame: the countdown, the physics contract, the
+ * animated props, the crossings and the crowd. No camera, no payload, no
+ * minimap. This is what the game server steps headless (DEC-014); stepRace
+ * wraps it with the view half for the browser.
+ */
+export function simStep(dt) {
   if (G.state === 'countdown') {
     const before = Math.ceil(G.countdown); G.countdown -= dt; const after = Math.ceil(G.countdown);
     if (G.countdown <= 0) { transition('race'); sfx('go'); G.karts.forEach(k => { k.lapStart = 0; }); }
@@ -117,17 +133,11 @@ export function stepRace(dt) {
   for (const c of G.crossings) { c.t += dt; const p = (c.t * c.speed) % (4 * c.range); const lat = p < 2 * c.range ? p - c.range : 3 * c.range - p; const dir = p < 2 * c.range ? 1 : -1; c.mesh.position.set(c.s.x + c.s.sx * lat, 0, c.s.z + c.s.sz * lat); c.mesh.rotation.y = Math.atan2(c.s.sx * dir, c.s.sz * dir);
     for (const k of G.karts) { if (k.hazardGrace > 0 || k.fly > 0 || k.y > 1.2) continue; const d = (k.pos.x - c.mesh.position.x) ** 2 + (k.pos.z - c.mesh.position.z) ** 2; if (d < 10) { k.hazardGrace = 1.5; k.speed *= 0.3; if (stunKart(k, 1.3) && k === G.player) toast('RENVERSÉ PAR LE CORTÈGE !'); } } }
   const ct = G.time * 5; for (const c of G.crowd) if (c.amp) c.g.position.y = Math.abs(Math.sin(ct + c.ph)) * c.amp + (c.base || 0);
-  updateCamera(dt);
-  updateWrongWay();
-  const payload = framePayload(G, CFG);
-  drawMinimap(payload.kartPositions);
-  if (G.time >= G.resultsAt || (G.player.finished && G.karts.every(k => k.finished))) endRace();
-  return payload;
 }
 
 /** Draw the race scene with the race camera. Safe to call while paused. */
 export function renderRace() {
-  if (G.scene) renderer.render(G.scene, camera);
+  if (G.scene) getRenderer().render(G.scene, camera);
 }
 
 /** End the race now: the results screen follows from the transition. */

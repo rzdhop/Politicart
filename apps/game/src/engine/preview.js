@@ -16,7 +16,7 @@ import { CHARACTERS } from './data.js';
 import { buildKart } from './kart.js';
 import { setCast } from './primitives.js';
 import { disposeScene } from './race.js';
-import { camera, renderer, resize } from './render.js';
+import { camera, getRenderer, resize } from './render.js';
 import { G, getPoly } from './state.js';
 
 function ensurePreviewScene() {
@@ -44,7 +44,7 @@ export function renderPreview(dt) {
   if (!G.previewKart) setPreview(G.charIdx);
   G.previewKart.rotation.y += dt * 0.7;
   const wide = window.innerWidth > 760 && G.state === 'select'; const sx = wide ? -2.9 : 0, sy = wide ? 0 : 0.6;
-  camera.position.set(sx, 3.6, 10.5); camera.lookAt(sx, 1.4 + sy, 0); camera.fov = 38; camera.updateProjectionMatrix(); renderer.render(G.previewScene, camera);
+  camera.position.set(sx, 3.6, 10.5); camera.lookAt(sx, 1.4 + sy, 0); camera.fov = 38; camera.updateProjectionMatrix(); getRenderer().render(G.previewScene, camera);
 }
 
 /**
@@ -56,7 +56,7 @@ export function makeThumbs() {
   const poly = getPoly();
   if (G.thumbPoly === poly) return G.thumbs; G.thumbPoly = poly; G.thumbs = {};
   ensurePreviewScene(); const keep = G.previewKart; const prevChildren = [...G.previewHolder.children]; prevChildren.forEach(c => G.previewHolder.remove(c));
-  renderer.setSize(220, 220, false); camera.aspect = 1; camera.fov = 34; camera.updateProjectionMatrix(); camera.position.set(0.8, 3.2, 7.5); camera.lookAt(0, 1.7, 0);
+  const renderer = getRenderer(); renderer.setSize(220, 220, false); camera.aspect = 1; camera.fov = 34; camera.updateProjectionMatrix(); camera.position.set(0.8, 3.2, 7.5); camera.lookAt(0, 1.7, 0);
   CHARACTERS.forEach(c => { const k = buildKart(c); k.rotation.y = -0.5; G.previewHolder.add(k); renderer.render(G.previewScene, camera); G.thumbs[c.id] = renderer.domElement.toDataURL('image/png'); G.previewHolder.remove(k); disposeScene(k); });
   prevChildren.forEach(c => G.previewHolder.add(c)); G.previewKart = keep; resize();
   return G.thumbs;
