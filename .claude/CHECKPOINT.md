@@ -4,56 +4,36 @@ Current state only. History lives in git.
 
 ## In progress
 
-- **Current phase:** IMPLEMENT (phases 0-4 done: LOAD, EXPLORE, CLARIFY, PLAN,
-  CHECKPOINT). Plan approved by the human: all 15 stages, see `.claude/PLAN.md`.
-- **Current stage:** ALL 15 STAGES DONE. Stage 15 synced `packages/ui` to
-  the Claude Design project "Politicart Design System"
-  (`b7586fe5-3495-4448-ab55-58afb71f3c81`, pinned in `.design-sync/config.json`):
-  46 components, 45 matching their Storybook render on every story, HudLayer
-  accepted as close; validate exit 0; anchor uploaded, so a re-sync skips
-  unchanged components. DEC-013 records the provider choice.
-- **Next action:** `feat/design-system` is merged into `main` (224df02) and
-  the Pages workflow ran green; https://rzdhop.github.io/Politicart/ serves
-  the new build (R-15 verified). Remaining, by hand: the manual checks
-  R-10..R-14 and the 60 fps check in a real race, and a spot-check of the
-  Claude Design project
-  https://claude.ai/design/p/b7586fe5-3495-4448-ab55-58afb71f3c81.
-- **Session note (2026-10-14):** the branch ref file was found zeroed on
-  resume and restored from the reflog; see the action log. Nothing was lost.
-- **Plan amendment:** an unplanned **stage 5b** was inserted before stage 6 to
-  self-host the two web fonts. Reason: stage 6's stories are what design-sync
-  screenshots in stage 15, and the package shipped no fonts, so every preview
-  would have silently fallen back to Arial Black and Segoe UI. Doing it before
-  the stories exist keeps those previews honest. Kept as its own commit so it
-  reverts alone.
-- **Component count:** 46, not the ~30 the plan estimated. The estimate
-  collapsed the HUD's twelve readouts and the workshop's nine form parts into
-  single inventory lines. Same scope ("the whole surface"), more accurate count.
-- **Open questions:** none open. A-004 resolved as DEC-008 (Pages via GitHub
-  Actions). Reminder carried forward: the repository's Pages source must be
-  switched to "GitHub Actions" by hand before stage 14's deploy will work.
+- **Task:** online team multiplayer (plan in `.claude/PLAN.md`, DEC-014).
+  Approved by the human 2026-10-15. Branch `feat/multiplayer`, cut from
+  `main` at `e819070`.
+- **Current phase:** IMPLEMENT. Phases 0-4 done (LOAD, EXPLORE with two
+  agents plus web research, CLARIFY with two question rounds, PLAN,
+  CHECKPOINT).
+- **Current stage:** 1 of 10 -- headless-safe engine.
+- **Next action:** stage 1: guard the browser-only calls, split `stepRace`.
+- **Open questions:** none blocking. A-008..A-011 are the defaults chosen.
+- **Known working-tree noise:** 46 files show as modified after a
+  line-ending restore (empty `git diff`; see `.design-sync/NOTES.md`). They
+  are never staged.
 
 ## Checkpoint commit
 
-- **Hash:** `65998b184998bc785f043ba55274cb37eabf25f7`
-- **Subject:** Publish the game from a GitHub Actions workflow and rewrite the README
-- **Branch:** `feat/design-system` (branched from `main` at `f271930`). `main`
-  keeps serving the playable single-file game on Pages until the port merges.
-- **Tree at checkpoint:** clean
-- **Unrelated changes left unstaged:** none
-- **README:** rewritten in stage 14 for the workspace layout; no longer
-  stale.
-- **Last known-good single-file game:** `f271930`. From stage 8 the game lives
-  at `apps/game/` and needs a build; `183fbc2` is the last commit on this
-  branch where the original single file was still intact and playable by
-  double-clicking.
+- **Hash:** `e819070` (main and feat/design-system point here)
+- **Subject:** Record the line-ending trap found on the design-sync re-sync
+- **Branch:** `feat/multiplayer`
+- **Tree at checkpoint:** clean in content (`git diff` empty)
+- **Pages:** run 38709974819 green for this commit.
 
 ## Tier-1 baseline
 
-At the task's start there was no automated check of any kind in this repo: no
-`package.json`, no test runner, no type check, no linter. The Tier-1 baseline
-was therefore empty by definition, not green-by-passing, and every item in the
-regression contract below began UNVERIFIED.
+Measured 2026-10-15 at `e819070`, before any multiplayer change:
+
+    npm run typecheck   # clean
+    npm run test        # ui: 13 files, 235 passed + 8 skipped; game: 6 files, 52 passed
+    npm audit --omit=dev  # 0 vulnerabilities
+
+Historic, from the design-system task:
 
 **Tier 1 as of stage 1 (green):**
 

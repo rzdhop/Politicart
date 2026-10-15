@@ -250,3 +250,25 @@ package's own API, documented as such. The target project is "Politicart
 Design System" (`b7586fe5-3495-4448-ab55-58afb71f3c81`), pinned in
 `.design-sync/config.json`; re-syncs run from `/design-sync` and skip
 unchanged components through the uploaded anchor.
+
+## DEC-014 -- Team multiplayer runs on an authoritative Node server that reuses the engine headless
+
+**Context.** The human asked for players to race together in teams: a local
+server first, deployable to a container host later, serving the game itself.
+The engine keeps truth in plain objects but was written for one player: a
+global input, `G.player` checks for every message and sound, variable dt and
+unseeded randomness. Options: lockstep, host-in-browser, a framework such as
+Colyseus 0.18.9, or an authoritative server on `ws`.
+
+**Decision.** The server imports the existing engine modules and steps them
+at a fixed 60 Hz inside one `worker_thread` per race (`G` and the machine are
+module singletons). Browser-only calls get a headless guard. Player checks
+become routing by kart (`say`, `tell`, `sfxFor`), resolved locally in solo
+and per socket on the server. Clients send controls and render snapshots
+interpolated ~100 ms behind. Transport is `ws@8.22.0` with JSON. Teams are a
+`k.team` field and an `isFoe` filter; points 10/8/6/4/2/1.
+
+**Consequence.** One rule set for solo and multiplayer, no reimplementation.
+Solo keeps its variable dt and feel. Every new engine call must stay
+DOM-free or guarded, or the server stops booting. The local kart lags by
+about half a round trip plus 100 ms until prediction is added.

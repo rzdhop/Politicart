@@ -31,6 +31,18 @@ Marked UNCONFIRMED / confirmed / invalidated.
   install). The E2E net stays a local gate after every stage. To be revisited
   if a regression ever reaches `main` that the unit suites did not catch.
 
+- **A-008 -- Placement points are 10/8/6/4/2/1.** UNCONFIRMED. The human
+  chose "summed placement points"; this scale is a six-kart cut of the usual
+  kart-racing tables. Only human karts score; AI karts take places but no
+  team points.
+- **A-009 -- AI karts are neutral.** UNCONFIRMED. AI fills the grid to six
+  and belongs to no team, so items and powers treat it as a foe of everyone.
+- **A-010 -- Two teams, Bleu and Rouge.** UNCONFIRMED. Named for the
+  palette's Marianne blue and republican red. Teams may be uneven.
+- **A-011 -- Remote players' workshop edits are not shown.** UNCONFIRMED.
+  Each client draws every character with its own local customisations, so a
+  player's renamed character or livery is seen only by that player.
+
 ## Confirmed
 
 - **A-006 -- Node 26 is available to `actions/setup-node` on ubuntu-latest.**
