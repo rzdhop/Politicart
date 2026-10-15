@@ -230,3 +230,23 @@ Learnings from the storybook-shape sync of `packages/ui`, in the order found.
 - Verified on Node v26.10.0, Storybook 10.6.2, the skill's converter of
   2026-10-14, Chromium via Playwright in `.ds-sync/`. The reference
   storybook must be rebuilt whenever `packages/ui/src` changes.
+- **[GENERAL] Line endings move every grade key (found on the 2026-10-15
+  re-sync).** The story-file fingerprint and the owned previews are hashed as
+  raw bytes, and this machine runs `core.autocrlf=true`. The merge to `main`
+  and the checkout back rewrote the working tree with CRLF, so the driver
+  reported 41 of 46 components "changed" and asked for 115 re-grades with
+  `git diff` empty. The anchor was built from a mixed tree: 41 story files,
+  the three owned previews, `preview-root.jsx` and `conventions.md` were LF;
+  the CharacterTile, HudCorner, ResultsTable, StatBar and TrackCard story
+  files were already CRLF. Recovery that matched the anchor exactly
+  (46/46 unchanged, nothing to upload): strip `\r` from every story file
+  except those five, plus the files under `.design-sync/` named above, then
+  re-run the driver. Before grading a mass `[STORY_CHANGED]`, check
+  `git diff` first: empty means line endings, not design drift. Lasting fix,
+  not yet applied: a `.gitattributes` with `* text=auto eol=lf`, after which
+  one full re-grade re-anchors on LF everywhere.
+- The synced `.d.ts` files type each HUD readout's `ref` as a bare
+  `React.Ref`; the handle methods (`setValue`, `setText`, ...) appear only in
+  the package's own `dist/components/hud/*.d.ts` and the bundle. The
+  conventions header is what tells the design agent about them; keep its
+  handle list in step with `packages/ui/src/components/hud/handles.ts`.
