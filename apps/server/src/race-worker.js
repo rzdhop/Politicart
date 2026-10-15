@@ -28,7 +28,8 @@ import { placementPoints, teamStandings } from '../../game/src/engine/teams.js';
 
 const STEP = 1 / 60;
 const SNAP_EVERY = 3;            // 60 Hz / 3 = 20 snapshots a second
-const MAX_RACE_TIME = 8 * 60;    // a race nobody can finish still ends
+// A race nobody can finish still ends. KR_MAX_RACE_S shortens it (the end-to-end suite does).
+const MAX_RACE_TIME = Number(process.env.KR_MAX_RACE_S) || 8 * 60;
 
 const { trackIdx, roster, fast } = workerData;
 const IDLE = Object.freeze({ throttle: false, brake: false, left: false, right: false, drift: false });

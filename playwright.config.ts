@@ -62,15 +62,30 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    // The suite runs against a production build, not the dev server. The port
-    // changes how the game is packaged, so a bug that only appears once Vite
-    // has bundled and minified it is exactly the kind this net should catch.
-    command: 'npm run build -w @kart-republique/game && npm run preview -w @kart-republique/game',
-    url: 'http://127.0.0.1:4173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-    stdout: 'ignore',
-    stderr: 'pipe',
-  },
+  webServer: [
+    {
+      // The suite runs against a production build, not the dev server. The port
+      // changes how the game is packaged, so a bug that only appears once Vite
+      // has bundled and minified it is exactly the kind this net should catch.
+      // This static preview also stands in for GitHub Pages: single player only.
+      command: 'npm run build -w @kart-republique/game && npm run preview -w @kart-republique/game',
+      url: 'http://127.0.0.1:4173',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    },
+    {
+      // The game server serves the same build plus the team-race WebSocket
+      // (e2e/multiplayer.spec.ts). Races are capped at 15 s here so a spec can
+      // reach the results without three real laps.
+      command: 'npm start -w @kart-republique/server',
+      url: 'http://127.0.0.1:4180/api/kr',
+      env: { PORT: '4180', HOST: '127.0.0.1', KR_MAX_RACE_S: '15' },
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    },
+  ],
 });
