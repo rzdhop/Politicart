@@ -20,6 +20,9 @@ import { G } from './state.js';
 import { foeAhead, isFoe, leadingFoe } from './teams.js';
 import { clamp, lerp, rand, wrapAngle } from './util.js';
 
+// Hazards and projectiles carry an id so a snapshot can name them (DEC-014).
+const nextEntityId = () => (G.entitySeq = (G.entitySeq || 0) + 1);
+
 // ---------- Items ----------
 export function pickupItems() {
   for (const b of G.itemBoxes) {
@@ -47,7 +50,8 @@ export function useItem(k) {
   else if (it === 'niche') { k.invincible = 5; k.phantom = 5; k.boost = Math.max(k.boost, 0.6); k.boostPower = 1.3; k.stun = 0; sfx('shield'); say(k, 'NICHE FISCALE : INTOUCHABLE'); }
   hintFor(k, 'Ramassez une urne dorée pour obtenir un objet.');
 }
-export function spawnHazard(type, x, z, extra, team) {
+/** The mesh and parameters of a hazard of `type`, unplaced. Shared by the simulation and networked clients. */
+export function buildHazard(type) {
   const g = new THREE.Group(); let r = 2.2, life = 45, stun = 1.3;
   setCast(true);
   if (type === 'barricade') {
@@ -69,9 +73,14 @@ export function spawnHazard(type, x, z, extra, team) {
     const sign = textPlane(2.4, 1.0, 'CÉDEZ', '#fff', '#c8102e', 80); sign.position.set(0, 2.2, 4.3); g.add(sign); g.add(cyl(0.05, 0.05, 2.2, 0x555555, 0, 1.1, 4.3, 5));
     r = 5.2; life = 18; stun = 1.0;
   }
-  g.position.set(x, 0, z); G.scene.add(g); G.hazards.push({ type, x, z, mesh: g, life, r, stun, owner: extra || null, team: team ?? (extra ? extra.team : null) ?? null });
+  return { g, r, life, stun };
 }
-export function spawnProjectile(type, owner, target) {
+export function spawnHazard(type, x, z, extra, team) {
+  const { g, r, life, stun } = buildHazard(type);
+  g.position.set(x, 0, z); G.scene.add(g); G.hazards.push({ id: nextEntityId(), type, x, z, mesh: g, life, r, stun, owner: extra || null, team: team ?? (extra ? extra.team : null) ?? null });
+}
+/** The mesh of a projectile of `type`, unplaced. Shared by the simulation and networked clients. */
+export function buildProjectileMesh(type) {
   const g = new THREE.Group();
   if (type === 'dossier') { g.add(box(0.9, 0.12, 1.1, 0xb98b4e, 0, 0, 0)); g.add(box(0.7, 0.14, 0.9, 0xfff5dd, 0, 0.02, 0)); g.add(box(0.3, 0.16, 0.12, 0xc8102e, 0.2, 0.02, 0.5)); }
   else if (type === 'bravm') {
@@ -82,8 +91,12 @@ export function spawnProjectile(type, owner, target) {
     g.userData.blink = bl;
   }
   else { g.add(box(1.0, 0.8, 1.0, 0xc8102e, 0, 0, 0)); g.add(box(1.1, 0.2, 1.1, 0xfff5dd, 0, 0.5, 0)); g.add(cone(0.5, 0.8, 0xf2c14e, 0, 1.0, 0, 6)); }
+  return g;
+}
+export function spawnProjectile(type, owner, target) {
+  const g = buildProjectileMesh(type);
   const fx = Math.sin(owner.heading), fz = Math.cos(owner.heading); const sidespawn = type === 'bravm' ? (Math.random() < 0.5 ? 2 : -2) : 0;
-  const p = { type, x: owner.pos.x + fx * 3 + (-fz) * sidespawn, z: owner.pos.z + fz * 3 + fx * sidespawn, y: type === 'motion' ? 1.5 : type === 'bravm' ? 0 : 1.0, dx: fx, dz: fz, owner, target, speed: type === 'motion' ? 85 : type === 'bravm' ? 74 : 62, life: type === 'motion' ? 12 : type === 'bravm' ? 8 : 5, mesh: g, idx: owner.idx };
+  const p = { id: nextEntityId(), type, x: owner.pos.x + fx * 3 + (-fz) * sidespawn, z: owner.pos.z + fz * 3 + fx * sidespawn, y: type === 'motion' ? 1.5 : type === 'bravm' ? 0 : 1.0, dx: fx, dz: fz, owner, target, speed: type === 'motion' ? 85 : type === 'bravm' ? 74 : 62, life: type === 'motion' ? 12 : type === 'bravm' ? 8 : 5, mesh: g, idx: owner.idx };
   g.position.set(p.x, p.y, p.z); G.scene.add(g); G.projectiles.push(p);
 }
 export function stunKart(k, dur) { if (k.invincible > 0 || k.fly > 0) return false; k.stun = Math.max(k.stun, dur); k.drift.active = false; k.drift.charge = 0; k.boost = 0; sfxFor(k, 'hit'); return true; }

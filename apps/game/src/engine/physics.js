@@ -141,10 +141,21 @@ export function updateKart(k, dt) {
   if (k.relance > 0) { k.relanceTimer -= dt; if (k.relanceTimer <= 0) { k.relance--; k.relanceTimer = 1.1; k.boost = 0.7; k.boostPower = 1.45; sfx('boost'); } }
   if (k.itemRolling > 0) { k.itemRolling -= dt; if (k.itemRolling <= 0) { k.item = k.pendingItem; k.pendingItem = null; if (!k.isAI) { sfxFor(k, 'pick'); hintFor(k, ITEMS[k.item].hint); } else k.itemTimer = rand(0.8, 4); } }
 
-  // visuals
+  k.rampSlope = onRamp ? onRamp.slope : 0;
+  updateKartVisual(k, dt, sf);
+}
+
+/**
+ * Pose kart k's mesh from its state: position, lean, wheels, drift sparks,
+ * shield ring, rotor, the stunned driver's bob and the phantom blink. `sf` is
+ * the speed factor the physics step computed. Split out of updateKart so a
+ * networked client, which receives the state instead of simulating it, can
+ * draw karts exactly the way the simulation does (DEC-014).
+ */
+export function updateKartVisual(k, dt, sf) {
   const m = k.mesh; const flyY = k.fly > 0 ? Math.min(5, k.fly > 3.5 ? (4 - k.fly) * 10 : k.fly < 0.5 ? k.fly * 10 : 5) : 0;
   m.position.set(k.pos.x, k.y + flyY, k.pos.z); m.rotation.y = k.heading; m.rotation.z = k.steer * 0.06 * sf + (k.air && k.trick ? Math.sin(G.time * 12) * 0.5 : 0);
-  m.rotation.x = onRamp ? -onRamp.slope : k.air ? -clamp(k.vy * 0.035, -0.45, 0.45) : k.fly > 0 ? -0.12 : 0;
+  m.rotation.x = k.rampSlope ? -k.rampSlope : k.air ? -clamp(k.vy * 0.035, -0.45, 0.45) : k.fly > 0 ? -0.12 : 0;
   const u = m.userData; u.wheels.forEach((w, i) => { w.rotation.x += k.speed * dt / 0.45; if (i < 2) w.rotation.y = -k.steer * 0.45; });
   const sparkOn = k.drift.active && k.drift.charge > 0.35;
   u.sparks.forEach(sp => { sp.visible = sparkOn; sp.material.color.setHex(k.drift.charge > 2 ? 0xff7a1a : k.drift.charge > 1 ? 0xffd34d : 0x7cc4ff); sp.scale.setScalar(0.7 + Math.random() * 0.8); });
