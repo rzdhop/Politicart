@@ -1,0 +1,21 @@
+/* Base layer: document reset and motion preference.
+   
+   NOTE on `body { overflow: hidden }`: this is faithful to the game, which is a
+   fixed full-screen WebGL canvas and must never scroll. A page built with this
+   system that DOES need to scroll should override it on its own root element. */
+
+html,body { height:100%; }
+
+body {
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--font-body);
+  overflow:hidden;
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .btn,.card,.tile {
+    transition:none;
+  }
+}

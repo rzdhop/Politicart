@@ -1,0 +1,52 @@
+/* Track select: the card grid and its cards. */
+
+.cards {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  gap:12px;
+  width:min(980px,100%);
+}
+
+.card {
+  background:var(--panel-2);
+  border:2px solid var(--line);
+  border-radius:12px;
+  padding:12px;
+  cursor:pointer;
+  text-align:left;
+  color:var(--fg);
+  font-family:var(--font-body);
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  min-width:0;
+  transition:transform .1s,border-color .1s;
+}
+
+.card:hover { transform:translateY(-2px); }
+
+.card.sel {
+  border-color:var(--gold);
+  box-shadow:0 0 0 3px rgba(242,193,78,.35);
+}
+
+.card:focus-visible { outline:3px solid #fff; }
+
+.card .name {
+  font-family:var(--font-display);
+  font-size:19px;
+  line-height:1.05;
+}
+
+.card canvas {
+  width:100%;
+  height:auto;
+  background:rgba(0,0,0,.25);
+  border-radius:8px;
+}
+
+.card .desc {
+  font-size:12.5px;
+  color:var(--muted);
+  line-height:1.35;
+}

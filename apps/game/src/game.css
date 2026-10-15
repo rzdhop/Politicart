@@ -1,0 +1,8 @@
+/* The two rules that belong to the game shell, not the design system.
+   Everything else the game looks like comes from @kart-republique/ui, whose
+   stylesheet is imported before this one. Both rules were withheld from the
+   library on purpose (see .design-sync/NOTES.md, "CSS extraction"): #c is the
+   WebGL canvas, and #s-select is one screen's layout override. Declarations
+   are verbatim from the original index.html. */
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;}
+#s-select{justify-content:flex-start;gap:12px;}

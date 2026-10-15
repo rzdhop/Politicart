@@ -1,0 +1,252 @@
+# Decisions
+
+Append-only. Context -> decision -> consequence. IDs never renumber.
+
+## DEC-001 -- Extract a component library rather than sync the game as-is
+
+**Context.** `/design-sync` was invoked on this repo. The repo held two files
+(`README.md`, `index.html`) and no component package: no `package.json`, no
+build, no exported components, no stories. The sync pipeline needs compiled
+components to produce a bundle, prop contracts and preview cards; run against
+this repo it would have produced an empty design system.
+
+**Decision.** Build a real component library in this repo first, extracted from
+the visual language already present in `index.html` (tokens, panels, buttons,
+HUD readouts), then sync that package.
+
+**Consequence.** The sync is deferred behind an implementation task. The repo
+gains a `packages/ui` workspace and a build step it did not have.
+
+## DEC-002 -- React + TypeScript + Vite for the library
+
+**Context.** The converter needs an esbuild-bundlable package with a compiled
+`dist/`. Claude Design renders React. Options weighed: React+TS, React+JS,
+framework-free web components.
+
+**Decision.** React 19 + TypeScript, Vite library build, emitting
+`dist/index.js` plus `dist/index.css`. Package name `@kart-republique/ui`.
+
+**Consequence.** TypeScript prop types become the `.d.ts` contracts the design
+agent codes against -- the strongest fidelity signal available. Cost: the repo,
+previously zero-dependency, acquires a toolchain. Web components were rejected
+because Claude Design renders React, so the design agent would have had far less
+to work with; plain JS was rejected because hand-written JSDoc yields weaker
+generated contracts.
+
+## DEC-003 -- Port the game UI layer to React
+
+**Context.** The library could have been extracted *alongside* an untouched
+`index.html` (zero risk, but the two drift apart), or the game UI could be
+ported onto the library (single source of truth, much larger blast radius).
+The risk of the larger path was raised explicitly with the human before
+planning; they chose the port.
+
+**Decision.** Port the DOM overlay layer (title, workshop, character select,
+track select, HUD, pause, results) to React components consuming
+`@kart-republique/ui`. The Three.js engine -- physics, scene building, AI, items,
+audio -- is moved behind a seam, not rewritten.
+
+**Consequence.** No drift: the game and the design system share one definition of
+every button, panel and HUD readout. **Accepted loss:** `index.html` is no
+longer playable by double-clicking it; the game acquires a build step, which the
+current README advertises against ("No build step, no install: the whole game is
+in that single file"). GitHub Pages therefore needs either a committed build
+output or a CI workflow -- planned, not incidental. The 60fps HUD is the named
+riskiest part of this port and is staged to keep imperative per-frame writes
+rather than React state.
+
+## DEC-004 -- Storybook in the package
+
+**Context.** `design-sync` has two fidelity paths: with a Storybook it verifies
+every generated preview against the repo own Storybook render (true screenshot
+pairs); without one, previews are authored and graded on an absolute rubric.
+
+**Decision.** Add Storybook with one story per component.
+
+**Consequence.** Highest-fidelity preview verification, and the stories double as
+the repo own component documentation. Cost: a large dev-dependency install and
+a longer sync run.
+
+## DEC-005 -- Full UI surface in scope (~30 components)
+
+**Context.** Either the whole surface, or a ~12-component core menu kit skipping
+the HUD and admin form.
+
+**Decision.** Cover the whole surface: tokens, typography, Button, Panel,
+Screen, Row, Tricolore, roster tiles, showcase, stat bars, power box, track
+cards, all HUD readouts, results table, admin form fields, note banner.
+
+**Consequence.** The HUD readouts -- the most distinctive part of the look -- are
+included. The surface is small enough that cherry-picking would have saved
+little.
+
+## DEC-006 -- npm workspaces as the monorepo tool
+
+**Context.** Only npm is installed on this machine (npm 11.13.0, Node v26.10.0);
+pnpm, yarn and bun are all absent. The repo has no lockfile yet.
+
+**Decision.** npm workspaces. A `package-lock.json` at the repo root becomes the
+single lockfile, which also fixes the install command `design-sync` will detect
+(`npm ci`).
+
+**Consequence.** No new package manager to install. Node v26 is very new; if a
+dev dependency rejects it, that is recorded as an assumption to revisit rather
+than worked around silently.
+
+## DEC-007 -- Pin three@0.128.0 rather than upgrade
+
+**Context.** The game loads Three.js r128 from cdnjs as a global. Bundling the
+engine means taking `three` as an npm dependency. Exploration found
+`THREE.sRGBEncoding` at index.html L327, which was removed in three >= 0.152;
+other r128-era APIs may be similarly affected.
+
+**Decision.** Depend on `three@0.128.0` exactly, matching the CDN build.
+
+**Consequence.** The port changes packaging only, not rendering behaviour. The
+engine stays on a 2021 Three.js, which is a known debt. Upgrading is its own
+task -- changelog review plus a full test pass -- and explicitly not a side
+effect of this one.
+
+## DEC-008 -- GitHub Pages deploys from a GitHub Actions workflow
+
+**Context.** The React port requires a build step, so Pages can no longer serve
+the repo root directly (DEC-003's accepted loss). Options: commit the build
+output to `docs/`, or build in CI.
+
+**Decision.** A GitHub Actions workflow builds on push to `main` and deploys to
+Pages. Resolves assumption A-004.
+
+**Consequence.** Build artifacts stay out of git and the published site can
+never go stale from a forgotten local build. Requires the repository's Pages
+source to be set to "GitHub Actions" once, by hand, in repo settings -- noted
+here because the deploy will not work until that click happens.
+
+## DEC-009 -- The game's element ids are a contract the port must keep
+
+**Context.** Stage 7 builds the Playwright suite that is the regression net for
+the whole port (stages 8-13). For that net to mean anything, it has to drive the
+game the way a player does -- through the DOM and the keyboard -- rather than
+through internal functions, which the port will move or delete. That makes it
+depend on the game's element ids: `#s-title`, `#roster`, `#h-speed`,
+`#adm-name-victor`, and the rest.
+
+**Decision.** Treat the existing element ids as a public contract. The React
+components written in stage 12 must render the same ids on the same elements.
+
+**Consequence.** The suite keeps testing *the game* across the port instead of
+testing the port's choice of markup, so a red test means a real regression. The
+cost is that the React layer inherits id names it would not otherwise choose,
+and ids must stay unique -- which is already why the library renamed `#hud` and
+`#minimap` to classes (see `.design-sync/NOTES.md`): the components are reusable
+and carry classes, while the game's instances of them carry the ids.
+
+**One deliberate exception.** The results screen is unreachable without
+white-box access: `G.resultsAt` starts at `Infinity` and the race ends only when
+the player completes three laps, so reaching it by driving would take minutes of
+reliable automated steering per run. That one spec calls the game's own
+`showResults()` and is expected to break at stage 11 or 12, where it should be
+re-pointed rather than treated as a regression. It is labelled as such in
+`e2e/game.spec.ts`.
+
+## DEC-010 -- The engine's event queue carries player-facing text only; sound stays a direct call
+
+**Context.** Stage 10 moves physics, items, powers and AI out of `game.js`.
+The plan said their inline `toast()` and `sfx()` calls would be replaced by
+an event queue the engine emits. Roughly 45 call sites were involved: toasts
+and hints that wrote straight into the HUD from inside the physics step, and
+sound effects that call the WebAudio module.
+
+**Decision.** `engine/events.js` is a FIFO of `{type, text}` events for
+`toast` and `hint` only. The engine modules import `toast` and `setHint` from
+it, so the moved bodies keep their original call shapes unchanged, and
+`frame()` drains the queue once per frame straight after the physics step,
+at the point where the text used to be written. `sfx()` keeps being called
+directly from the engine. Player input reaches the engine through a second
+small seam, `engine/input.js`, where the owner of the controls registers a
+source once and physics reads through it.
+
+**Consequence.** The engine makes zero HUD writes from inside the step, which
+is the property stage 11 needs, and the drain point keeps the on-screen order
+of toasts within a frame identical to before. Sound is not deferred because
+`engine/audio.js` is already engine-side and DOM-free, and a one-frame delay
+between a bump and its sound would be audible for no gain. Item and power use
+triggered from the keyboard now shows its toast on the next frame rather than
+synchronously, at most 16 ms later. The queue is unit-tested in isolation
+(`events.test.js`, `input.test.js`), which gave `apps/game` its first vitest
+setup.
+
+## DEC-011 -- One state machine owns the game's flow; `G.state` is a read-only view of it
+
+**Context.** The original game kept two parallel records of where it was:
+`G.state`, a string assigned by hand at every transition, and the `hidden`
+attribute on six screen sections toggled by `showScreen()`. Each transition
+wrote both, in whichever order the call site chose, and nothing checked that
+they agreed. The exploration map named this a desync bug class the port would
+inherit unless the two collapsed into one source of truth.
+
+**Decision.** `engine/machine.js` holds the current state and a transition
+table of the game's real paths (title, select, tracks, admin, countdown, race,
+paused, results). `transition()` throws on a move not in the table and
+notifies listeners after an accepted one. The UI shows screens, the HUD and
+the note banner from a single listener; nothing else toggles a section.
+`G.state` stays readable for the engine code that branches on it, as a getter
+over the machine, and assigning to it throws. The engine's own moves
+(`startRace` into countdown, the countdown into race, `endRace` into results)
+go through the same call. The engine returns one payload per frame
+(`engine/payload.js`, pure and unit-tested) and the UI renders it;
+`stepRace()` performs no DOM writes at all.
+
+**Consequence.** A wrong screen is now impossible without a thrown error at
+the call site, which the E2E net catches. The cost is strictness: a path the
+table does not list (a double click on "start" while already counting down,
+say) throws instead of silently restarting as the single file did. That is
+the intended trade. The results-screen E2E spec, which DEC-009 said would
+break here, now calls the engine's `endRace()` through `window.__kr`, the one
+hook the game installs for the suite.
+
+## DEC-012 -- Library components expose inner parts through explicit part props, never through ids they invent
+
+**Context.** DEC-009 makes the game's element ids a contract: the E2E suite
+drives `#r-body`, `#h-speed`, `#h-drift`, `#h-pname` and `#h-pkey`, and
+several of those sit on an *inner* element of what is now one library
+component -- the `<tbody>` of `ResultsTable`, the number `<span>` of
+`SpeedReadout`, the fill `<i>` of `DriftGauge`, the name and key-hint lines
+of `PowerGauge`. A component's own props spread onto its root, so a consumer
+had no way to put an id on the part the contract names.
+
+**Decision.** Where the contract needs an inner part addressed, the component
+takes an explicit, optional props bag for that part (`bodyProps` on
+`ResultsTable` in stage 12; `valueProps`, `fillProps`, `nameProps` and
+`keyHintProps` on the HUD readouts in stage 13), spread onto that element.
+The library never bakes in a game id, and the game never reaches into a
+component's DOM to patch one in.
+
+**Consequence.** The design system stays reusable (no ids, no game knowledge)
+and the E2E suite keeps driving the game through the ids it always has, so
+DEC-009 holds without a single spec selector changing. The cost is a few
+extra optional props on five components, each documented as what it is for.
+
+## DEC-013 -- The design-sync ships a `PreviewRoot` provider rather than relying on the page background
+
+**Context.** Stage 15 synced `@kart-republique/ui` to Claude Design. The
+system is dark-only: its stylesheet paints `body` and every component assumes
+that canvas. The sync tool's preview cards paint their page white, and the
+Storybook decorator that paints the canvas would not bundle (the preview
+imports the source stylesheet, whose font files esbuild has no loader for).
+Options: fork the converter's decorator bundling to add a loader, or supply
+the context through the tool's provider knob.
+
+**Decision.** A repo-owned component, `.design-sync/preview-root.jsx`, is
+added to the bundle through `cfg.extraEntries` and set as `cfg.provider`. It
+wraps each story in the system's background, foreground and body font, with
+horizontal padding only so full-height stories fit the capture viewport. It
+ships as `window.KartRepubliqueUI.PreviewRoot` and the conventions header
+tells the design agent when to use it (fragments on a page that does not
+carry the system's `body` rule).
+
+**Consequence.** Config-only, no converter fork; the fix persists across
+re-syncs. The bundle carries one extra export that is not part of the
+package's own API, documented as such. The target project is "Politicart
+Design System" (`b7586fe5-3495-4448-ab55-58afb71f3c81`), pinned in
+`.design-sync/config.json`; re-syncs run from `/design-sync` and skip
+unchanged components through the uploaded anchor.

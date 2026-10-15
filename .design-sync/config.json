@@ -1,0 +1,65 @@
+{
+  "pkg": "@kart-republique/ui",
+  "globalName": "KartRepubliqueUI",
+  "projectId": "b7586fe5-3495-4448-ab55-58afb71f3c81",
+  "shape": "storybook",
+  "storybookConfigDir": "packages/ui/.storybook",
+  "storybookStatic": ".design-sync/sb-reference",
+  "buildCmd": "npm run build -w @kart-republique/ui",
+  "cssEntry": "dist/styles.css",
+  "overrides": {
+    "Tricolore": {
+      "cardMode": "column"
+    },
+    "CenterAnnounce": {
+      "cardMode": "column"
+    },
+    "HudCorner": {
+      "cardMode": "column"
+    },
+    "Toast": {
+      "cardMode": "column"
+    },
+    "WrongWay": {
+      "cardMode": "column"
+    },
+    "CharacterTile": {
+      "cardMode": "column"
+    },
+    "SelectLayout": {
+      "cardMode": "column"
+    },
+    "CardGrid": {
+      "cardMode": "column"
+    },
+    "TrackCard": {
+      "cardMode": "column"
+    },
+    "GameTitle": {
+      "cardMode": "column"
+    },
+    "AdminGrid": {
+      "cardMode": "column"
+    },
+    "Screen": {
+      "cardMode": "single",
+      "primaryStory": "TitleScreen"
+    },
+    "NoteBanner": {
+      "cardMode": "single",
+      "primaryStory": "Default"
+    },
+    "ResultsTable": {
+      "skip": [
+        "results-resultstable--empty"
+      ]
+    }
+  },
+  "extraEntries": [
+    "../../.design-sync/preview-root.jsx"
+  ],
+  "provider": {
+    "component": "PreviewRoot"
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}
