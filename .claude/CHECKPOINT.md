@@ -12,14 +12,12 @@ Current state only. History lives in git.
   46 components, 45 matching their Storybook render on every story, HudLayer
   accepted as close; validate exit 0; anchor uploaded, so a re-sync skips
   unchanged components. DEC-013 records the provider choice.
-- **Next action:** close-out items only the human can do: (1) switch the
-  repository's Pages source to "GitHub Actions" and merge
-  `feat/design-system` into `main` so the deploy runs (R-15); (2) the manual
-  checks R-10..R-14 and the 60 fps check in a real race; (3) open the design
-  project at https://claude.ai/design/p/b7586fe5-3495-4448-ab55-58afb71f3c81
-  and spot-check a few cards. A re-sync is `/design-sync` after `npm ci`,
-  staging the skill scripts into `.ds-sync/` and rebuilding the reference
-  storybook (see NOTES.md, Re-sync risks).
+- **Next action:** `feat/design-system` is merged into `main` (224df02) and
+  the Pages workflow ran green; https://rzdhop.github.io/Politicart/ serves
+  the new build (R-15 verified). Remaining, by hand: the manual checks
+  R-10..R-14 and the 60 fps check in a real race, and a spot-check of the
+  Claude Design project
+  https://claude.ai/design/p/b7586fe5-3495-4448-ab55-58afb71f3c81.
 - **Session note (2026-10-14):** the branch ref file was found zeroed on
   resume and restored from the reflog; see the action log. Nothing was lost.
 - **Plan amendment:** an unplanned **stage 5b** was inserted before stage 6 to
@@ -90,7 +88,7 @@ The game at `index.html` must keep working. No item here may break.
 | R-12 | 14 items with rank-weighted odds from golden ballot boxes | none | UNVERIFIED (manual) |
 | R-13 | 3 circuits with ramps, tricks, pits, dash panels, chicanes, crossings | none | UNVERIFIED (manual) |
 | R-14 | Synthesized WebAudio sound and music | none | UNVERIFIED (manual) |
-| R-15 | Playable from GitHub Pages at the documented URL | none | UNVERIFIED (manual) |
+| R-15 | Playable from GitHub Pages at the documented URL | Pages workflow run 38699287498 + HTTP check of the published index and bundle | VERIFIED 2026-10-15 |
 
 **Stage 7 maps the contract to specs** in `e2e/game.spec.ts`, whose describe
 blocks are named for the items above (R-01 .. R-09, plus R-01b for the results

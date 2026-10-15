@@ -25,12 +25,6 @@ Marked UNCONFIRMED / confirmed / invalidated.
   `LapCounter`, `RaceTimer` and `CenterAnnounce` take free text rather than
   lap/time numbers, and `ResultsTable` renders no header row unless given one,
   precisely so no French wording is baked into the library.
-- **A-006 -- Node 26 is available to `actions/setup-node` on ubuntu-latest.**
-  UNCONFIRMED. `.github/workflows/pages.yml` asks for `node-version: 26` to
-  match the toolchain proven locally (A-001). If the runner cannot resolve it
-  the build job fails at setup; the fallback is `node-version: 24`, on which
-  nothing in the lockfile is known to differ. Confirmed by the first green run
-  of the workflow on `main`.
 - **A-007 -- The workflow's test step is sufficient as the deploy gate.**
   UNCONFIRMED. The workflow runs the design-system build, typecheck and the
   unit suites, but not the Playwright suite (three minutes, needs a browser
@@ -38,6 +32,11 @@ Marked UNCONFIRMED / confirmed / invalidated.
   if a regression ever reaches `main` that the unit suites did not catch.
 
 ## Confirmed
+
+- **A-006 -- Node 26 is available to `actions/setup-node` on ubuntu-latest.**
+  CONFIRMED 2026-10-15 by the first run of `.github/workflows/pages.yml` on
+  `main` (run 38699287498: build, typecheck, both unit suites, game build and
+  deploy all green; the published bundle hash matches the local build).
 
 - **A-001 -- Node v26.10.0 is acceptable to the toolchain.** CONFIRMED
   2026-10-14 for the stage-1 dependency set: React 19.3.1, Vite 8.3.4,
