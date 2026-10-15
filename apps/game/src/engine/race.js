@@ -50,6 +50,17 @@ function makeKart(def, isAI) {
  * the UI to show the HUD and redraw the minimap base.
  */
 export function startRace() {
+  const others = CHARACTERS.filter((c, i) => i !== G.charIdx).sort(() => Math.random() - 0.5).slice(0, CFG.numAI);
+  startField([...others.map(def => ({ def, isAI: true })), { def: CHARACTERS[G.charIdx], isAI: false, local: true }]);
+}
+
+/**
+ * Start a race on circuit G.trackIdx with a given grid, in grid order. Each
+ * slot is `{ def, isAI, team?, local? }`; the `local` slot becomes G.player,
+ * the kart this screen follows. Solo play passes five AI and the player
+ * last; the game server and its clients pass the lobby's roster (DEC-014).
+ */
+export function startField(slots) {
   if (G.scene) disposeScene(G.scene);
   const track = TRACKS[G.trackIdx]; G.track = track;
   const scene = new THREE.Scene(); scene.background = new THREE.Color(track.fog); scene.fog = new THREE.Fog(track.fog, 220, 700);
@@ -61,9 +72,10 @@ export function startRace() {
   setCast(true); buildTrack(scene, track);
   buildMinimapBase();
 
-  const others = CHARACTERS.filter((c, i) => i !== G.charIdx).sort(() => Math.random() - 0.5).slice(0, CFG.numAI);
-  const player = makeKart(CHARACTERS[G.charIdx], false);
-  G.karts = [...others.map(d => makeKart(d, true)), player]; G.player = player;
+  G.karts = slots.map(sl => { const k = makeKart(sl.def, sl.isAI); k.team = sl.team ?? null; return k; });
+  const local = slots.findIndex(sl => sl.local);
+  G.player = G.karts[local] ?? G.karts.find(k => !k.isAI) ?? G.karts[G.karts.length - 1];
+  G.entitySeq = 0;
   G.karts.forEach((k, i) => {
     const s = G.samples[6 + i * 4]; const lane = (i % 2 === 0 ? 1 : -1) * 3.5;
     k.pos.x = s.x + s.sx * lane; k.pos.z = s.z + s.sz * lane; k.heading = Math.atan2(s.tx, s.tz); k.idx = 6 + i * 4;
