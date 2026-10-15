@@ -22,6 +22,7 @@ import { hintFor, say } from './events.js';
 import { readInput } from './input.js';
 import { stunKart } from './items.js';
 import { CFG, G } from './state.js';
+import { isFoe } from './teams.js';
 import { clamp, fmtTime, lerp, ordinal, rand, wrapAngle } from './util.js';
 
 // ---------- Progress & ranking ----------
@@ -161,7 +162,7 @@ export function kartCollisions() {
       const push = (2.6 - d) / 2; const nx = dx / d, nz = dz / d; const wa = a.stats.weight, wb = b.stats.weight; const ta = wb / (wa + wb), tb = wa / (wa + wb);
       a.pos.x -= nx * push * 2 * ta; a.pos.z -= nz * push * 2 * ta; b.pos.x += nx * push * 2 * tb; b.pos.z += nz * push * 2 * tb;
       a.speed *= 0.97; b.speed *= 0.97;
-      if (a.invincible > 0 && b.invincible <= 0) stunKart(b, 1.2); if (b.invincible > 0 && a.invincible <= 0) stunKart(a, 1.2);
+      if (isFoe(a, b)) { if (a.invincible > 0 && b.invincible <= 0) stunKart(b, 1.2); if (b.invincible > 0 && a.invincible <= 0) stunKart(a, 1.2); }
       sfxFor(a, 'bump'); sfxFor(b, 'bump');
     }
   }

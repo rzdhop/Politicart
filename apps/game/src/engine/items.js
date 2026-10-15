@@ -17,6 +17,7 @@ import { rollItem } from './data.js';
 import { hintFor, say, tell } from './events.js';
 import { box, cone, cyl, mat, setCast, sph, textPlane } from './primitives.js';
 import { G } from './state.js';
+import { foeAhead, isFoe, leadingFoe } from './teams.js';
 import { clamp, lerp, rand, wrapAngle } from './util.js';
 
 // ---------- Items ----------
@@ -31,22 +32,22 @@ export function useItem(k) {
   if (!k.item || k.itemRolling > 0) return; const it = k.item; k.item = null;
   const fx = Math.sin(k.heading), fz = Math.cos(k.heading);
   if (it === 'turbo') { k.boost = 1.6; k.boostPower = 1.55; sfx('boost'); say(k, '49.3 ! PASSAGE EN FORCE'); }
-  else if (it === 'greve') { spawnHazard('barricade', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5); k.hazardGrace = 1.0; sfx('drop'); }
-  else if (it === 'sondage') { spawnHazard('fakebox', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5); k.hazardGrace = 1.0; sfx('drop'); }
+  else if (it === 'greve') { spawnHazard('barricade', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5, null, k.team); k.hazardGrace = 1.0; sfx('drop'); }
+  else if (it === 'sondage') { spawnHazard('fakebox', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5, null, k.team); k.hazardGrace = 1.0; sfx('drop'); }
   else if (it === 'immunite') { k.invincible = 6; k.stun = 0; sfx('shield'); say(k, 'IMMUNITÉ PARLEMENTAIRE'); }
   else if (it === 'helico') { k.fly = 4; k.stun = 0; k.drift.active = false; sfx('helico'); say(k, 'HÉLICO PRÉSIDENTIEL'); }
   else if (it === 'relance') { k.relance = 3; k.relanceTimer = 0; say(k, 'PLAN DE RELANCE : 3 BOOSTS'); }
-  else if (it === 'remaniement') { let n = 0; for (const o of G.karts) if (o !== k && o.rank < k.rank) { if (o.item) o.item = null; if (stunKart(o, 0.7)) n++; } sfx('motion'); tell(k, 'REMANIEMENT : ' + n + ' MINISTRES LIMOGÉS', 'REMANIEMENT SURPRISE !'); }
-  else if (it === 'dossier') { const target = G.karts.find(o => o.rank === k.rank - 1 && !o.finished) || null; spawnProjectile('dossier', k, target); sfx('throw'); say(k, 'FUITE : MEDIAPART EST SUR LE COUP'); }
-  else if (it === 'motion') { let target = G.karts.find(o => o.rank === 0); if (target === k) target = G.karts.find(o => o.rank === 1); spawnProjectile('motion', k, target); sfx('motion'); tell(k, 'MOTION DE CENSURE !', 'MOTION DE CENSURE DÉPOSÉE !'); }
-  else if (it === 'bravm') { const ahead = G.karts.filter(o => o !== k && !o.finished && o.rank < k.rank).sort((a, b) => b.rank - a.rank).slice(0, 2); if (ahead.length) ahead.forEach(t => spawnProjectile('bravm', k, t)); else { spawnProjectile('bravm', k, null); spawnProjectile('bravm', k, null); } sfx('motion'); tell(k, 'BRAV-M DÉPLOYÉE !', 'LA BRAV-M INTERVIENT !'); }
+  else if (it === 'remaniement') { let n = 0; for (const o of G.karts) if (isFoe(k, o) && o.rank < k.rank) { if (o.item) o.item = null; if (stunKart(o, 0.7)) n++; } sfx('motion'); tell(k, 'REMANIEMENT : ' + n + ' MINISTRES LIMOGÉS', 'REMANIEMENT SURPRISE !'); }
+  else if (it === 'dossier') { const ahead = foeAhead(k, G.karts); const target = ahead && !ahead.finished ? ahead : null; spawnProjectile('dossier', k, target); sfx('throw'); say(k, 'FUITE : MEDIAPART EST SUR LE COUP'); }
+  else if (it === 'motion') { const target = leadingFoe(k, G.karts); spawnProjectile('motion', k, target); sfx('motion'); tell(k, 'MOTION DE CENSURE !', 'MOTION DE CENSURE DÉPOSÉE !'); }
+  else if (it === 'bravm') { const ahead = G.karts.filter(o => isFoe(k, o) && !o.finished && o.rank < k.rank).sort((a, b) => b.rank - a.rank).slice(0, 2); if (ahead.length) ahead.forEach(t => spawnProjectile('bravm', k, t)); else { spawnProjectile('bravm', k, null); spawnProjectile('bravm', k, null); } sfx('motion'); tell(k, 'BRAV-M DÉPLOYÉE !', 'LA BRAV-M INTERVIENT !'); }
   else if (it === 'lacrymo') { spawnHazard('lacrymo', k.pos.x - fx * 4, k.pos.z - fz * 4, k); k.hazardGrace = 1.2; sfx('drop'); say(k, 'NUAGE LACRYMOGÈNE LÂCHÉ'); }
-  else if (it === 'casserolade') { let n = 0; for (const o of G.karts) if (o !== k) { const dx = o.pos.x - k.pos.x, dz = o.pos.z - k.pos.z; if (Math.hypot(dx, dz) < 20) { o.speed *= 0.5; if (stunKart(o, 0.8)) n++; } } sfx('motion'); tell(k, 'CASSEROLADE : ' + n + ' SONNÉ' + (n > 1 ? 'S' : ''), 'CASSEROLADE !'); }
-  else if (it === 'dissolution') { let n = 0; for (const o of G.karts) if (o !== k && !o.finished) { if (stunKart(o, 0.9)) n++; } sfx('motion'); tell(k, 'DISSOLUTION : ' + n + ' KART' + (n > 1 ? 'S' : '') + ' SONNÉ' + (n > 1 ? 'S' : ''), 'DISSOLUTION DE L’ASSEMBLÉE !'); }
+  else if (it === 'casserolade') { let n = 0; for (const o of G.karts) if (isFoe(k, o)) { const dx = o.pos.x - k.pos.x, dz = o.pos.z - k.pos.z; if (Math.hypot(dx, dz) < 20) { o.speed *= 0.5; if (stunKart(o, 0.8)) n++; } } sfx('motion'); tell(k, 'CASSEROLADE : ' + n + ' SONNÉ' + (n > 1 ? 'S' : ''), 'CASSEROLADE !'); }
+  else if (it === 'dissolution') { let n = 0; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { if (stunKart(o, 0.9)) n++; } sfx('motion'); tell(k, 'DISSOLUTION : ' + n + ' KART' + (n > 1 ? 'S' : '') + ' SONNÉ' + (n > 1 ? 'S' : ''), 'DISSOLUTION DE L’ASSEMBLÉE !'); }
   else if (it === 'niche') { k.invincible = 5; k.phantom = 5; k.boost = Math.max(k.boost, 0.6); k.boostPower = 1.3; k.stun = 0; sfx('shield'); say(k, 'NICHE FISCALE : INTOUCHABLE'); }
   hintFor(k, 'Ramassez une urne dorée pour obtenir un objet.');
 }
-export function spawnHazard(type, x, z, extra) {
+export function spawnHazard(type, x, z, extra, team) {
   const g = new THREE.Group(); let r = 2.2, life = 45, stun = 1.3;
   setCast(true);
   if (type === 'barricade') {
@@ -68,7 +69,7 @@ export function spawnHazard(type, x, z, extra) {
     const sign = textPlane(2.4, 1.0, 'CÉDEZ', '#fff', '#c8102e', 80); sign.position.set(0, 2.2, 4.3); g.add(sign); g.add(cyl(0.05, 0.05, 2.2, 0x555555, 0, 1.1, 4.3, 5));
     r = 5.2; life = 18; stun = 1.0;
   }
-  g.position.set(x, 0, z); G.scene.add(g); G.hazards.push({ type, x, z, mesh: g, life, r, stun, owner: extra || null });
+  g.position.set(x, 0, z); G.scene.add(g); G.hazards.push({ type, x, z, mesh: g, life, r, stun, owner: extra || null, team: team ?? (extra ? extra.team : null) ?? null });
 }
 export function spawnProjectile(type, owner, target) {
   const g = new THREE.Group();
@@ -101,12 +102,12 @@ export function updateProjectiles(dt) {
     p.mesh.position.set(p.x, p.y, p.z); p.mesh.rotation.y += dt * 9;
     let hit = false;
     if (p.mesh.userData.blink) p.mesh.userData.blink.material.color.setHex(Math.floor(G.time * 10) % 2 ? 0x3a6bff : 0xff3a4a);
-    for (const k of G.karts) { if (k === p.owner && p.life > (p.type === 'motion' ? 11.5 : p.type === 'bravm' ? 7.4 : 4.6)) continue; if (p.type === 'motion' && k !== p.target) continue; if (k.fly > 0 || k.y > 1.5) continue; const d = (k.pos.x - p.x) ** 2 + (k.pos.z - p.z) ** 2; if (d < 6.5) { stunKart(k, p.type === 'motion' ? 2.6 : p.type === 'bravm' ? 1.7 : 1.5); say(k, p.type === 'motion' ? 'GOUVERNEMENT RENVERSÉ !' : p.type === 'bravm' ? 'INTERPELLÉ PAR LA BRAV-M !' : 'MEDIAPART ENQUÊTE SUR VOUS !'); hit = true; break; } }
+    for (const k of G.karts) { if (k === p.owner && p.life > (p.type === 'motion' ? 11.5 : p.type === 'bravm' ? 7.4 : 4.6)) continue; if (k !== p.owner && !isFoe(p.owner, k)) continue; if (p.type === 'motion' && k !== p.target) continue; if (k.fly > 0 || k.y > 1.5) continue; const d = (k.pos.x - p.x) ** 2 + (k.pos.z - p.z) ** 2; if (d < 6.5) { stunKart(k, p.type === 'motion' ? 2.6 : p.type === 'bravm' ? 1.7 : 1.5); say(k, p.type === 'motion' ? 'GOUVERNEMENT RENVERSÉ !' : p.type === 'bravm' ? 'INTERPELLÉ PAR LA BRAV-M !' : 'MEDIAPART ENQUÊTE SUR VOUS !'); hit = true; break; } }
     if (hit || p.life <= 0) { G.scene.remove(p.mesh); G.projectiles.splice(i, 1); }
   }
   for (let i = G.hazards.length - 1; i >= 0; i--) {
     const h = G.hazards[i]; h.life -= dt; let hit = false;
-    for (const k of G.karts) { if ((k.hazardGrace > 0 && h.type !== 'obstacle' && h.type !== 'lacrymo') || k.fly > 0 || k === h.owner || k.y > 1.2) continue; const d = (k.pos.x - h.x) ** 2 + (k.pos.z - h.z) ** 2; if (d < h.r * h.r) {
+    for (const k of G.karts) { if ((k.hazardGrace > 0 && h.type !== 'obstacle' && h.type !== 'lacrymo') || k.fly > 0 || k === h.owner || (h.team != null && k.team === h.team) || k.y > 1.2) continue; const d = (k.pos.x - h.x) ** 2 + (k.pos.z - h.z) ** 2; if (d < h.r * h.r) {
       if (h.type === 'lacrymo') { if (k.slowed <= 0) say(k, 'GAZ LACRYMOGÈNE !'); k.slowed = Math.max(k.slowed, 1.3); k.confused = Math.max(k.confused, 1.0); }
       else if (h.type === 'lisier') { if (k.slip <= 0) say(k, 'LISIER : ÇA GLISSE !'); k.slip = Math.max(k.slip, 0.4); }
       else if (h.type === 'obstacle') { const dx = k.pos.x - h.x, dz = k.pos.z - h.z, dd = Math.hypot(dx, dz) || 1; k.pos.x = h.x + dx / dd * h.r; k.pos.z = h.z + dz / dd * h.r; if (k.speed > 12) { k.speed *= 0.55; sfxFor(k, 'bump'); } }
