@@ -34,7 +34,11 @@ beforeAll(() => {
   resetMachine('tracks'); G.trackIdx = 0;
   startField(ROSTER.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team })));
   for (let tick = 1; tick <= 360; tick++) {
-    if (tick === 300) { const k = G.karts[4]; k.item = 'greve'; k.itemRolling = 0; useItem(k); barricadeId = G.hazards.at(-1).id; }
+    if (tick === 300) {
+      const k = G.karts[4]; k.item = 'greve'; k.itemRolling = 0; useItem(k);
+      // parked well off the road, so no kart can drive into it before snapshot 354, whatever the AI does
+      const h = G.hazards.at(-1); h.x += 500; h.z += 500; barricadeId = h.id;
+    }
     simStep(1 / 60);
     if (tick % 3 === 0) SNAPS.push(JSON.parse(JSON.stringify(encodeSnapshot(G, tick))));
   }

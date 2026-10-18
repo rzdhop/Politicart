@@ -44,6 +44,9 @@ function buildDriver(def) {
     case 'bun': g.add(box(1.02, 0.28, 1.0, L.hairColor, 0, 1.8, -0.1)); g.add(box(1.02, 0.5, 0.3, L.hairColor, 0, 1.5, -0.42)); g.add(sph(0.26, L.hairColor, 0, 1.75, -0.5, S)); break;
     case 'strawhat': g.add(cyl(0.55, 0.55, 0.25, L.hairColor, 0, 1.78, 0, S)); g.add(cyl(1.05, 1.05, 0.08, 0xe0c060, 0, 1.68, 0, S)); g.add(cyl(0.56, 0.56, 0.4, 0xe0c060, 0, 1.9, 0, S)); g.add(box(1.1, 0.08, 0.1, 0x8a3a2a, 0, 1.78, 0.5)); break;
     case 'ponytail': g.add(box(1.02, 0.3, 1.0, L.hairColor, 0, 1.78, -0.08)); g.add(box(1.02, 0.5, 0.3, L.hairColor, 0, 1.5, -0.42)); { const pt = cyl(0.12, 0.08, 0.9, L.hairColor, 0, 1.25, -0.62, S); pt.rotation.x = 0.35; g.add(pt); } break;
+    case 'sidepart': g.add(box(1.04, 0.26, 1.0, L.hairColor, 0, 1.78, -0.1)); g.add(box(1.04, 0.5, 0.3, L.hairColor, 0, 1.5, -0.42)); g.add(box(0.06, 0.06, 0.9, 0xf1c27d, -0.22, 1.92, -0.05)); break;   // parting drawn with a ruler
+    case 'quiff': g.add(box(1.04, 0.24, 1.0, L.hairColor, 0, 1.76, -0.12)); g.add(box(1.04, 0.5, 0.3, L.hairColor, 0, 1.5, -0.42)); { const q = sph(0.36, L.hairColor, 0, 2.0, 0.28, S); q.scale.set(1.3, 0.8, 1.1); g.add(q); } break;   // the televised banana
+    case 'kepi': g.add(box(1.02, 0.3, 1.0, L.hairColor, 0, 1.62, -0.1)); g.add(cyl(0.52, 0.56, 0.42, 0x1b2a49, 0, 1.95, 0, S)); g.add(box(0.7, 0.06, 0.4, 0x111111, 0, 1.76, 0.52)); g.add(box(1.08, 0.1, 0.1, 0xd4af37, 0, 1.8, 0.5)); g.add(sph(0.08, 0xd4af37, 0, 2.05, 0.53, 6)); break;
     case 'wild': for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2; g.add(sph(0.24, L.hairColor, Math.cos(a) * 0.42, 1.8 + Math.sin(i * 2) * 0.1, Math.sin(a) * 0.42 - 0.1, S)); } g.add(sph(0.3, L.hairColor, 0, 1.95, -0.1, S)); break;
   }
   for (const a of L.acc) {
@@ -67,6 +70,20 @@ function buildDriver(def) {
     if (a === 'rabat') { g.add(box(0.34, 0.4, 0.06, 0xffffff, 0, 0.72, 0.36)); g.add(box(1.1, 0.95, 0.75, 0x111111, 0, 0.42, -0.02)); g.add(box(0.34, 0.4, 0.06, 0xffffff, 0, 0.72, 0.4)); }
     if (a === 'overalls') { g.add(box(0.95, 0.95, 0.66, 0x2f55c7, 0, 0.45, 0)); [-0.25, 0.25].forEach(x => g.add(box(0.12, 0.5, 0.05, 0x2f55c7, x, 0.75, 0.34))); g.add(box(0.5, 0.3, 0.05, 0x1f3a93, 0, 0.55, 0.34)); }
     if (a === 'straw') { const st = cyl(0.02, 0.02, 0.5, 0xe0c060, 0.25, 1.1, 0.55, 4); st.rotation.x = 1.2; st.rotation.z = -0.4; g.add(st); }
+    if (a === 'calculator') { g.add(box(0.3, 0.42, 0.06, 0x2b2b2b, 0.52, 0.9, 0.72)); g.add(box(0.22, 0.1, 0.02, 0x9fd89f, 0.52, 1.03, 0.76)); for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) g.add(box(0.05, 0.05, 0.02, 0xdddddd, 0.45 + c * 0.07, 0.78 + r * 0.07, 0.76)); }
+    if (a === 'mic') { g.add(cyl(0.05, 0.04, 0.4, 0x222222, 0.5, 1.0, 0.7, 6)); g.add(sph(0.12, 0x555555, 0.5, 1.24, 0.72, 8)); g.add(box(0.2, 0.14, 0.14, 0xc8102e, 0.5, 1.08, 0.72)); }
+    if (a === 'opencollar') { [-0.14, 0.14].forEach(x => { const c = box(0.2, 0.08, 0.14, L.shirt, x, 0.92, 0.3); c.rotation.z = x > 0 ? -0.6 : 0.6; g.add(c); }); g.add(cyl(0.02, 0.02, 0.3, 0xd4af37, 0, 0.8, 0.34, 5)); }
+    if (a === 'whistle') { g.add(box(0.14, 0.08, 0.2, 0xd4af37, 0.15, 0.95, 0.42)); const cord = torus(0.25, 0.02, 0xc8102e, 0.05, 0.85, 0.25); cord.rotation.x = 1.2; g.add(cord); }
+    if (a === 'eurobadge') { g.add(cyl(0.11, 0.11, 0.03, 0x003399, 0.3, 0.74, 0.37, 12)); for (let i = 0; i < 6; i++) { const a2 = i / 6 * Math.PI * 2; g.add(box(0.03, 0.03, 0.02, 0xffcc00, 0.3 + Math.cos(a2) * 0.07, 0.74 + Math.sin(a2) * 0.07, 0.39)); } }
+    if (a === 'briefcase') { g.add(box(0.7, 0.5, 0.18, 0x5a3a1e, 0, 0.55, -0.45)); g.add(box(0.26, 0.08, 0.06, 0xd4af37, 0, 0.83, -0.45)); g.add(box(0.72, 0.04, 0.2, 0xd4af37, 0, 0.55, -0.45)); }
+    if (a === 'weathervane') {
+      // a weathervane bolted to his head: the arrow points wherever the wind blows
+      g.add(cyl(0.04, 0.04, 0.8, 0x444444, 0, 2.2, 0, 5)); g.add(box(0.7, 0.04, 0.04, 0x444444, 0, 2.35, 0)); g.add(box(0.04, 0.04, 0.7, 0x444444, 0, 2.35, 0));
+      const vane = new THREE.Group(); vane.position.set(0, 2.6, 0); vane.rotation.y = 0.6;
+      vane.add(box(1.3, 0.1, 0.1, 0xd4af37, 0, 0, 0)); const tip = cone(0.16, 0.34, 0xd4af37, 0.75, 0, 0, 4); tip.rotation.z = -Math.PI / 2; vane.add(tip);
+      vane.add(box(0.36, 0.4, 0.05, 0xd4af37, -0.55, 0.2, 0)); g.add(vane); g.add(sph(0.1, 0xd4af37, 0, 2.6, 0, 8));
+    }
+    if (a === 'rosettes') { [0x2f55c7, 0xc8102e, 0x2e8b57, 0xf2c14e, 0x7b2cbf].forEach((c, i) => g.add(sph(0.07, c, -0.36 + i * 0.13, 0.76 + (i % 2) * 0.06, 0.36, 6))); }   // one per party he has belonged to
     if (a === 'badge') { g.add(cyl(0.12, 0.12, 0.04, 0xffffff, 0.32, 0.72, 0.36, 10)); g.add(cyl(0.07, 0.07, 0.05, 0xc8102e, 0.32, 0.72, 0.37, 10)); }
   }
   [-0.42, 0.42].forEach(x => { const a = box(0.2, 0.2, 0.7, L.suit, x, 0.72, 0.35); a.rotation.x = -0.5; g.add(a); g.add(sph(0.12, L.skin, x * 0.85, 0.88, 0.68, S)); });
@@ -125,6 +142,12 @@ export function buildKart(def) {
   [-0.9, 0.9].forEach(x => { const s = new THREE.Mesh(new THREE.SphereGeometry(0.25, 6, 6), new THREE.MeshBasicMaterial({ color: 0x7cc4ff })); s.position.set(x, 0.25, -1.3); s.visible = false; k.add(s); sparks.push(s); });
   const ring = new THREE.Mesh(new THREE.TorusGeometry(2.1, 0.12, 6, 24), new THREE.MeshBasicMaterial({ color: 0xf2c14e })); ring.rotation.x = Math.PI / 2; ring.position.y = 0.6; ring.visible = false; k.add(ring);
   const rotor = new THREE.Group(); rotor.add(cyl(0.08, 0.08, 1.6, 0x444444, 0, 0.8, 0, 6)); const bl = box(5, 0.06, 0.3, 0x333333, 0, 1.6, 0); rotor.add(bl); const bl2 = bl.clone(); bl2.rotation.y = Math.PI / 2; rotor.add(bl2); rotor.position.set(0, 1.4, -0.4); rotor.visible = false; k.add(rotor);
-  k.userData = { wheels, sparks, ring, driver, rotor, blades: [bl, bl2] };
+  // a star of sparks around the kart, shown for an instant after a bump
+  const bumpSparks = new THREE.Group(); const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffe08a });
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; const sp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.7), sparkMat); sp.position.set(Math.sin(a) * 1.7, 0.7 + (i % 2) * 0.35, Math.cos(a) * 1.7); sp.rotation.y = a; bumpSparks.add(sp); }
+  bumpSparks.visible = false; k.add(bumpSparks);
+  // the shield of "Langue de bois": a blue ring that waits for the next hit
+  const shield = new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.1, 6, 24), new THREE.MeshBasicMaterial({ color: 0x7cc4ff, transparent: true, opacity: 0.8 })); shield.rotation.x = Math.PI / 2; shield.position.y = 1.1; shield.visible = false; k.add(shield);
+  k.userData = { wheels, sparks, ring, driver, rotor, blades: [bl, bl2], bumpSparks, shield };
   return k;
 }

@@ -61,8 +61,8 @@ test.describe('R-01 title -> select -> tracks -> race', () => {
     await expect(page.locator('#s-select')).toBeVisible();
     await expect(page.locator('#s-title')).toBeHidden();
     // Eleven candidates, each a focusable tile with a portrait.
-    await expect(page.locator('#roster .tile')).toHaveCount(11);
-    await expect(page.locator('#roster .tile img')).toHaveCount(11);
+    await expect(page.locator('#roster .tile')).toHaveCount(16);
+    await expect(page.locator('#roster .tile img')).toHaveCount(16);
     // The first is selected, and the showcase describes them.
     await expect(page.locator('#roster .tile').first()).toHaveClass(/sel/);
     await expect(page.locator('#showcase .big')).not.toBeEmpty();
@@ -101,7 +101,7 @@ test.describe('R-01 title -> select -> tracks -> race', () => {
     await expect(page.locator('#s-title')).toBeVisible();
     // And forward again, to prove nothing was torn down.
     await page.locator('#b-play').click();
-    await expect(page.locator('#roster .tile')).toHaveCount(11);
+    await expect(page.locator('#roster .tile')).toHaveCount(16);
   });
 
   test('starts a race, counting down first', async ({ page }) => {
@@ -284,7 +284,7 @@ test.describe('R-06 workshop', () => {
     await page.locator('#b-admin').click();
     await expect(page.locator('#s-admin')).toBeVisible();
     // One card per candidate.
-    await expect(page.locator('#admin-chars .card')).toHaveCount(11);
+    await expect(page.locator('#admin-chars .card')).toHaveCount(16);
 
     const field = page.locator('#adm-name-victor');
     const original = await field.inputValue();

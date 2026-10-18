@@ -12,7 +12,8 @@
 
 import { getState } from './machine.js';
 
-export const CFG = { roadHalfWidth: 9, samples: 600, laps: 3, numAI: 5, powerCooldown: 24 };
+// samples grew from 600 to 900 with the circuits (scale 1.5), keeping the spacing between them.
+export const CFG = { roadHalfWidth: 9, samples: 900, laps: 3, numAI: 5, powerCooldown: 24 };
 
 /**
  * Graphics detail. 'high' adds segments and shadows, 'low' lightens both.
