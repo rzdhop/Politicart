@@ -112,7 +112,11 @@ onTransition((to: string, from: string) => {
 net.onNet((view: NetView) => set({ net: view }));
 onNetResults((r: NetResults) => set({ netResults: r }));
 
-const socketUrl = () => net.serverUrl(window.location);
+// The game server to use when the page is not served by it: set at build time
+// (the Pages workflow passes the KR_SERVER_URL repository variable). Empty
+// means the page's own origin, as with `npm run serve`.
+const remoteServer: string = import.meta.env.VITE_KR_SERVER ?? '';
+const socketUrl = () => net.serverUrl(window.location, remoteServer);
 
 function refreshPreview() {
   if (hasPreview()) setPreview(G.charIdx);
@@ -179,8 +183,8 @@ export const actions = {
   resume() { transition(G.countdown > 0 ? 'countdown' : 'race'); },
 
   // ---- Team races (DEC-014) ----
-  /** Ask the page's origin whether it is the game server; shows the Multijoueur button if so. */
-  detectServer() { net.probeServer().then((ok: boolean) => set({ netAvailable: ok })); },
+  /** Ask the game server (this origin, or the remote one) whether it is up; shows the Multijoueur button if so. */
+  detectServer() { net.probeServer(globalThis.fetch, remoteServer).then((ok: boolean) => set({ netAvailable: ok })); },
   /** "Multijoueur": open the lobby and connect. */
   multiplayer() {
     initAudio();

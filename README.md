@@ -22,7 +22,7 @@ npm run dev -w @kart-republique/game   # http://127.0.0.1:5173
 
 Two to six players race in two teams, Bleu and Rouge; AI candidates fill the grid to six. Every finishing place scores points for its team (10, 8, 6, 4, 2, 1) and the highest total wins. Items and powers never hit a teammate.
 
-Team races need the game server, which serves the game and the race connection on one port. GitHub Pages is static, so the published page stays single-player and shows no Multijoueur button.
+Team races need the game server, which serves the game and the race connection on one port. GitHub Pages is static, so the published page shows the Multijoueur button only once it is pointed at a server hosted elsewhere (see [Playing online](#playing-online-render--github-pages)).
 
 ```sh
 npm ci
@@ -38,7 +38,18 @@ The server prints its addresses. Everyone on the same network opens `http://<tha
 | `KR_STATIC` | `apps/game/dist` | The built game to serve. |
 | `KR_MAX_RACE_S` | `480` | A race ends after this many seconds even if nobody finishes. |
 
+The game build reads one variable: `VITE_KR_SERVER`, the origin of a game server on another host (e.g. `https://kr.onrender.com`). Unset, the game looks for the server at its own origin.
+
 The server runs each race at 60 steps a second in its own worker thread and sends every player 20 snapshots a second. Each browser draws the race about 100 ms behind the server and sends its controls back 30 times a second. On a local network the delay is not noticeable. Over the internet, a player's own kart reacts with roughly half a round trip of extra lag.
+
+### Playing online (Render + GitHub Pages)
+
+The free way to play team races over the internet, with no machine of your own left running:
+
+1. **Host the server on Render.** On [render.com](https://render.com), choose **New > Blueprint**, pick this repository and apply. `render.yaml` builds the `Dockerfile` on the free plan as a single instance. The game, solo and team races, is then playable at the address Render gives, `https://<name>.onrender.com/`.
+2. **Point the GitHub page at it.** In the repository's **Settings > Secrets and variables > Actions > Variables**, add `KR_SERVER_URL` = `https://<name>.onrender.com` (no trailing path), then re-run the **Deploy to GitHub Pages** workflow. `https://rzdhop.github.io/Politicart/` now shows **Multijoueur** whenever the server answers.
+
+The free plan sleeps after 15 minutes with nobody connected. The first visitor after that waits about a minute before the Multijoueur button appears, and a race in progress when it falls asleep is lost. Delete the variable and re-run the workflow to make the page solo again.
 
 ### Hosting a team race online
 

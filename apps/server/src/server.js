@@ -1,9 +1,10 @@
 // The game server: the built game over HTTP, and rooms over a WebSocket, on
 // one origin and one port (DEC-014).
 //
-//   GET /api/kr   -> {"kr":"server",...}  the client's "am I served by the
-//                    game server?" probe; the Multijoueur button shows only
-//                    when it answers. GitHub Pages has no such route.
+//   GET /api/kr   -> {"kr":"server",...}  the client's "is the game server
+//                    up?" probe; the Multijoueur button shows only when it
+//                    answers. Open to every origin (CORS), so a static build
+//                    elsewhere (GitHub Pages) can probe a remote server.
 //   GET /*        -> apps/game/dist, read-only, no directory escapes
 //   WS  /ws       -> the lobby protocol below; races run in a worker
 //
@@ -44,7 +45,8 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace }) 
   const http = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
     if (url.pathname === '/api/kr') {
-      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      // Readable from any origin: the GitHub Pages build probes a remote server.
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' });
       res.end(JSON.stringify({ kr: 'server', protocol: PROTOCOL, rooms: rooms.size }));
       return;
     }

@@ -272,3 +272,28 @@ interpolated ~100 ms behind. Transport is `ws@8.22.0` with JSON. Teams are a
 Solo keeps its variable dt and feel. Every new engine call must stay
 DOM-free or guarded, or the server stops booting. The local kart lags by
 about half a round trip plus 100 ms until prediction is added.
+
+## DEC-015 -- The Pages build can name a remote game server; Render hosts it for free
+
+**Context.** The human wanted team races playable from the web for free. Pages
+is static and DEC-014's client only looked for the server at the page's own
+origin, so the published page was single-player. A temporary tunnel
+(Cloudflare quick tunnel) from a cloud session was tried: the session's
+network allows only an HTTPS proxy and the session itself is reclaimed when
+idle, so the link could not open and would not have lasted. Fly.io, already
+configured, needs a payment card.
+
+**Decision.** The game build reads `VITE_KR_SERVER`, a remote server origin;
+`net.serverUrl` and `net.probeServer` take it as an optional base and fall
+back to the page's origin. The Pages workflow passes the `KR_SERVER_URL`
+repository variable. The server's `/api/kr` probe sends
+`access-control-allow-origin: *` so the cross-origin probe can be read; the
+WebSocket needs no CORS. `render.yaml` deploys the existing `Dockerfile` on
+Render's free plan, one instance.
+
+**Consequence.** One click on Render and one repository variable make the
+published page multiplayer, with no code change; unset, nothing changes. The
+free instance sleeps after 15 idle minutes: a cold probe takes about a minute
+and a sleeping server drops a running race. The server accepts sockets from
+any origin, as it already did.
+

@@ -45,6 +45,10 @@ jobs:
           npm run test
       - name: Build the game
         run: npm run build -w @kart-republique/game
+        # The remote game server for team races (DEC-015), from the
+        # KR_SERVER_URL repository variable. Unset: the page stays solo.
+        env:
+          VITE_KR_SERVER: ${{ vars.KR_SERVER_URL }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
