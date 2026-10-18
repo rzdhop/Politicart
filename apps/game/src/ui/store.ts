@@ -16,7 +16,9 @@ import { initAudio, isMuted, toggleMute as toggleAudioMute } from '../engine/aud
 import { applyCustom, resetCustom, saveCustom } from '../engine/custom.js';
 import { getState, onTransition, transition } from '../engine/machine.js';
 import * as net from '../engine/net.js';
-import { onNetResults } from '../engine/netrace.js';
+import { isNetRace, onNetResults, pressItem, pressPower } from '../engine/netrace.js';
+import { useItem as engineUseItem } from '../engine/items.js';
+import { usePower as engineUsePower } from '../engine/powers.js';
 import { hasPreview, makeThumbs, setPreview } from '../engine/preview.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
@@ -181,6 +183,12 @@ export const actions = {
   },
   pause() { transition('paused'); },
   resume() { transition(G.countdown > 0 ? 'countdown' : 'race'); },
+  /** Use the held item: the keyboard's Ctrl/E and the touch OBJET button. In a team race the server resolves it. */
+  useItem() { if (getState() !== 'race') return; if (isNetRace()) pressItem(); else engineUseItem(G.player); },
+  /** Fire the special power: the keyboard's F/Shift and the touch POUVOIR button. */
+  usePower() { if (getState() !== 'race') return; if (isNetRace()) pressPower(); else engineUsePower(G.player); },
+  /** Pause from the touch HUD; a team race cannot be paused. */
+  pauseIfSolo() { const st = getState(); if (!isNetRace() && (st === 'race' || st === 'countdown')) transition('paused'); },
 
   // ---- Team races (DEC-014) ----
   /** Ask the game server (this origin, or the remote one) whether it is up; shows the Multijoueur button if so. */

@@ -7,9 +7,12 @@
 // are rendered off-screen once per detail level and kept as data URLs. The
 // UI gets a string per character out of makeThumbs(), never a scene.
 //
-// renderPreview reads the window width to frame the kart beside the roster
-// on wide layouts and above it on narrow ones. That is a read of the
-// viewport, not a DOM write, and it mirrors the stylesheet's 760px break.
+// renderPreview reads the window size to frame the kart beside the roster on
+// wide layouts. On phones -- narrow, or short in landscape -- the UI hands it
+// a frame instead (setPreviewFrame): the free band of the showcase above the
+// candidate's name, which it reads from the page each frame. The kart is then
+// drawn into that rectangle alone, so it sits above the text whichever way
+// the phone is held and follows the screen when it scrolls.
 import * as THREE from 'three';
 
 import { CHARACTERS } from './data.js';
@@ -39,12 +42,33 @@ export function setPreview(i) {
 /** Whether a turntable exists yet (the title screen renders it only if so). */
 export const hasPreview = () => !!G.previewScene;
 
+let framer = null;
+
+/**
+ * Register the function that says where the kart goes on small screens:
+ * `() => ({ x, y, w, h })` in CSS pixels from the top left, or null when
+ * there is no room. Pass null to unregister.
+ */
+export function setPreviewFrame(fn) { framer = typeof fn === 'function' ? fn : null; }
+
 /** Advance the turntable and draw it. */
 export function renderPreview(dt) {
   if (!G.previewKart) setPreview(G.charIdx);
   G.previewKart.rotation.y += dt * 0.7;
-  const wide = window.innerWidth > 760 && G.state === 'select'; const sx = wide ? -2.9 : 0, sy = wide ? 0 : 0.6;
-  camera.position.set(sx, 3.6, 10.5); camera.lookAt(sx, 1.4 + sy, 0); camera.fov = 38; camera.updateProjectionMatrix(); getRenderer().render(G.previewScene, camera);
+  const r = getRenderer(); const W = window.innerWidth, H = window.innerHeight;
+  const select = G.state === 'select'; const wide = W > 760 && H > 520 && select;
+  const f = select && !wide && framer ? framer() : null;
+  if (f && f.w > 40 && f.h > 60) {
+    // small screen: the kart alone in its frame, the rest of the canvas cleared to the scene colour
+    r.setScissorTest(false); r.setClearColor(G.previewScene.background); r.clear();
+    const y = H - f.y - f.h; r.setViewport(f.x, y, f.w, f.h); r.setScissor(f.x, y, f.w, f.h); r.setScissorTest(true);
+    camera.aspect = f.w / f.h; camera.position.set(0, 3.6, 10.5); camera.lookAt(0, 1.4, 0); camera.fov = 38 * Math.max(1, 1.1 / camera.aspect); camera.updateProjectionMatrix();
+    r.render(G.previewScene, camera);
+    r.setScissorTest(false); r.setViewport(0, 0, W, H); camera.aspect = W / H; camera.updateProjectionMatrix();
+    return;
+  }
+  const sx = wide ? -2.9 : 0, sy = wide ? 0 : 0.6;
+  camera.position.set(sx, 3.6, 10.5); camera.lookAt(sx, 1.4 + sy, 0); camera.fov = 38; camera.updateProjectionMatrix(); r.render(G.previewScene, camera);
 }
 
 /**

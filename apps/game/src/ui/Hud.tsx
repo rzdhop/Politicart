@@ -26,6 +26,7 @@ import {
 
 import { attachMinimap } from '../engine/minimap.js';
 import { useUi } from './store';
+import { TouchControls } from './TouchControls';
 
 /**
  * The HUD's imperative handles, filled in by the readouts' refs when the HUD
@@ -94,13 +95,14 @@ const Readouts = memo(function Readouts() {
   );
 });
 
-/** The HUD layer: visible while a race is live or paused, hidden on every menu. */
+/** The HUD layer: visible while a race is live or paused, hidden on every menu. The touch buttons ride on it. */
 export function Hud() {
   const ui = useUi();
   const live = ui.state === 'countdown' || ui.state === 'race' || ui.state === 'paused';
   return (
     <HudLayer id="hud" hidden={!live}>
       <Readouts />
+      <TouchControls live={live} paused={ui.state === 'paused'} />
     </HudLayer>
   );
 }

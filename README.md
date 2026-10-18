@@ -2,7 +2,7 @@
 
 *Grand Prix de l'Hémicycle* — a satirical 3D kart racer in the browser, starring a cast of fictional French politicians.
 
-Keyboard only. Three laps, five AI opponents, no cohabitation.
+Keyboard on a computer, touch on a phone or tablet, held either way. Three laps, five AI opponents, no cohabitation.
 
 ## Play
 
@@ -80,6 +80,21 @@ Any host that runs a container and passes WebSockets through works the same way 
 | M | Mute |
 
 The game reads physical key codes, so the same keys work on AZERTY and QWERTY keyboards.
+
+### On a phone or tablet
+
+The race shows on-screen buttons as soon as the device's main pointer is a finger (or after the first touch); a driving key on a keyboard hides them again. The kart **accelerates by itself**, so the right thumb only has to brake, drift and fire.
+
+| Button | Action |
+| --- | --- |
+| ◀ ▶ (bottom left) | Steer; slide from one side to the other without lifting |
+| ▼ Frein | Brake, reverse while held |
+| ↯ Dérapage | Drift while held (release for mini-turbo); in the air, do a trick |
+| Objet | Use the item (the button shows it) |
+| ★ Pouvoir | Special power (the button fills as it recharges) |
+| ❚❚ / ⛶ (top) | Pause / full screen (full screen where the browser allows it: not on iPhone) |
+
+Both orientations work: in portrait the camera widens and pulls back. Phones start on the light graphics and render at 1.5× at most, to keep the frame rate.
 
 ## Content
 

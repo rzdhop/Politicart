@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import {
   Button,
   CharacterTile,
@@ -14,7 +15,9 @@ import {
 
 import { initAudio } from '../../engine/audio.js';
 import { CHARACTERS } from '../../engine/data.js';
+import { setPreviewFrame } from '../../engine/preview.js';
 import { actions, type UiSnapshot } from '../store';
+import { useTouchMode } from '../TouchControls';
 import type { Character } from '../types';
 
 const STATS = [
@@ -26,8 +29,21 @@ const STATS = [
 /** Stats run from 0.6 to 1.2 in the data; the bar shows that span as 0 to 100 %. */
 const fraction = (stat: number) => (stat - 0.6) / 0.6;
 
-/** The roster of eleven candidates and the showcase of the chosen one. */
+/** The roster of candidates and the showcase of the chosen one. */
+/**
+ * Where the turntable kart goes on a small screen: the showcase's free band
+ * above the candidate's name (engine/preview.js draws it there).
+ */
+function showcaseBand() {
+  const sc = document.getElementById('showcase'); const big = sc?.querySelector('.big');
+  if (!sc || !big) return null;
+  const a = sc.getBoundingClientRect(), b = big.getBoundingClientRect();
+  return { x: a.left, y: a.top, w: a.width, h: b.top - a.top - 6 };
+}
+
 export function SelectScreen({ ui }: { ui: UiSnapshot }) {
+  const touch = useTouchMode();
+  useEffect(() => { setPreviewFrame(showcaseBand); return () => setPreviewFrame(null); }, []);
   const characters = CHARACTERS as unknown as Character[];
   const chosen = characters[ui.charIdx] ?? characters[0]!;
   return (
@@ -51,7 +67,7 @@ export function SelectScreen({ ui }: { ui: UiSnapshot }) {
               <StatBar key={key} label={label} value={fraction(chosen.stats[key])} />
             ))}
           </StatGrid>
-          <PowerBox name={'Pouvoir : ' + chosen.power.name} hint="(touche F)">{chosen.power.desc}</PowerBox>
+          <PowerBox name={'Pouvoir : ' + chosen.power.name} hint={touch ? '(bouton ★)' : '(touche F)'}>{chosen.power.desc}</PowerBox>
         </Showcase>
       </SelectLayout>
       <Row>

@@ -23,7 +23,9 @@ let renderer = null;
 export function getRenderer() {
   if (renderer) return renderer;
   renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // Phones have 3x screens and mobile GPUs: 1.5x is sharp enough and keeps the frame rate.
+  const phone = typeof matchMedia === 'function' && matchMedia('(hover: none) and (pointer: coarse)').matches;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, phone ? 1.5 : 2));
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   window.addEventListener('resize', resize); resize();
   return renderer;
