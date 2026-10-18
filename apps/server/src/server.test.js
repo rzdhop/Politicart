@@ -55,6 +55,11 @@ describe('http', () => {
     expect(await r.json()).toMatchObject({ kr: 'server', protocol: 1 });
   });
 
+  it('lets a page on another origin read the probe', async () => {
+    const r = await fetch(url('/api/kr'), { headers: { origin: 'https://rzdhop.github.io' } });
+    expect(r.headers.get('access-control-allow-origin')).toBe('*');
+  });
+
   it('serves the built game with content types', async () => {
     const page = await fetch(url('/'));
     expect(page.headers.get('content-type')).toMatch(/text\/html/);

@@ -36,16 +36,21 @@ export function onRace(fn) { handlers.race = fn; }
 export function onSnap(fn) { handlers.snap = fn; }
 export function onResults(fn) { handlers.results = fn; }
 
-/** ws://host/ws or wss://host/ws for the page's own origin. */
-export function serverUrl(loc) {
-  return (loc.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + loc.host + '/ws';
+/**
+ * ws://host/ws or wss://host/ws for the game server. That is the page's own
+ * origin, unless `base` names a remote server (e.g. https://kr.onrender.com),
+ * as the GitHub Pages build does: Pages is static and cannot host the rooms.
+ */
+export function serverUrl(loc, base = '') {
+  const at = base ? new URL(base) : loc;
+  return (at.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + at.host + '/ws';
 }
 
-/** Whether the page was served by the game server: its /api/kr answers. */
-export async function probeServer(fetchImpl = globalThis.fetch) {
+/** Whether the game server answers its /api/kr probe, at the page's origin or at `base`. */
+export async function probeServer(fetchImpl = globalThis.fetch, base = '') {
   if (typeof fetchImpl !== 'function') return false;
   try {
-    const r = await fetchImpl('./api/kr', { cache: 'no-store' });
+    const r = await fetchImpl(base ? base.replace(/\/+$/, '') + '/api/kr' : './api/kr', { cache: 'no-store' });
     if (!r.ok) return false;
     const j = await r.json();
     return j && j.kr === 'server';

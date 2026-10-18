@@ -21,6 +21,21 @@ describe('net client', () => {
     expect(serverUrl({ protocol: 'https:', host: 'kr.fly.dev' })).toBe('wss://kr.fly.dev/ws');
   });
 
+  it('points at a remote server when the build names one', () => {
+    const pages = { protocol: 'https:', host: 'rzdhop.github.io' };
+    expect(serverUrl(pages, 'https://kr.onrender.com')).toBe('wss://kr.onrender.com/ws');
+    expect(serverUrl(pages, 'https://kr.onrender.com/')).toBe('wss://kr.onrender.com/ws');
+    expect(serverUrl(pages, 'http://192.168.1.20:8080')).toBe('ws://192.168.1.20:8080/ws');
+  });
+
+  it('probes the remote server rather than the page when the build names one', async () => {
+    const asked = [];
+    const fetchImpl = async u => { asked.push(u); return { ok: true, json: async () => ({ kr: 'server' }) }; };
+    expect(await probeServer(fetchImpl, 'https://kr.onrender.com/')).toBe(true);
+    expect(await probeServer(fetchImpl)).toBe(true);
+    expect(asked).toEqual(['https://kr.onrender.com/api/kr', './api/kr']);
+  });
+
   it('detects the game server only from its own probe', async () => {
     expect(await probeServer(async () => ({ ok: true, json: async () => ({ kr: 'server' }) }))).toBe(true);
     expect(await probeServer(async () => ({ ok: true, json: async () => { throw new Error('html'); } }))).toBe(false);
