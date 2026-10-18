@@ -4,6 +4,14 @@
      server does not. Without it Chrome falls back to a locale default and
      every accented character in the French copy renders as mojibake. -->
 <title>Kart République</title>
+<!-- Phones: lay the page out at the device's width (not a zoomed-out desktop
+     page), reach under the notch and the home bar (the HUD keeps clear of them
+     with env(safe-area-inset-*)), and never zoom: a double tap on a touch
+     button must not zoom the race. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0c1230">
 <meta name="claude:viewport-fit-sides" content="cover">
 <!-- The look comes from @kart-republique/ui, imported by src/game.js, which also
      self-hosts the two web fonts the original fetched from Google Fonts. The

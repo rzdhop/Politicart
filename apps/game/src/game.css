@@ -6,3 +6,106 @@
    are verbatim from the original index.html. */
 #c{position:fixed;inset:0;width:100%;height:100%;display:block;}
 #s-select{justify-content:flex-start;gap:12px;}
+
+/* ---------- Phones and tablets ----------
+   The page never scrolls, zooms or selects text under a finger during play:
+   a drag on the canvas or a long press on a button must not pan the page,
+   open the magnifier or start a selection. Menus still scroll (.screen sets
+   overflow-y itself). */
+html,body{overscroll-behavior:none;}
+#c,.hud{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;}
+
+/* Touch controls (ui/TouchControls.tsx): steering under the left thumb,
+   brake / drift / item / power under the right, pause and full screen at the
+   top centre. Sizes follow the shorter side of the screen so the buttons stay
+   thumb-sized held either way. */
+.touch{position:absolute;inset:0;pointer-events:none;--u:clamp(54px,15vmin,84px);}
+.touch[hidden]{display:none!important;}
+.touch button,.touch-steer{pointer-events:auto;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;}
+.touch-top{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);display:flex;gap:10px;}
+.touch-small{width:42px;height:42px;border-radius:12px;border:2px solid var(--line);background:rgba(12,18,48,.6);color:var(--fg);font-size:16px;line-height:1;padding:0;}
+.touch-steer{position:absolute;left:max(14px,env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));width:calc(var(--u) * 2.6);height:calc(var(--u) * 1.25);display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.touch-half{display:flex;align-items:center;justify-content:center;border-radius:18px;border:2px solid rgba(255,255,255,.35);background:rgba(12,18,48,.45);color:var(--fg);font-size:calc(var(--u) * .5);text-shadow:0 2px 0 #000;}
+.touch-steer[data-dir="left"] .touch-half:first-child,.touch-steer[data-dir="right"] .touch-half:last-child{background:rgba(242,193,78,.55);border-color:var(--gold);}
+.touch-btn{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:var(--u);height:var(--u);border-radius:50%;border:2px solid rgba(255,255,255,.35);background:rgba(12,18,48,.5);color:var(--fg);padding:0;font-family:var(--font-display);}
+.touch-btn.on{background:rgba(242,193,78,.55);border-color:var(--gold);}
+.touch-ico{font-size:calc(var(--u) * .38);line-height:1;text-shadow:0 2px 0 #000;}
+.touch-lbl{font-size:10px;letter-spacing:.04em;text-transform:uppercase;opacity:.85;}
+.touch-drift{right:max(14px,env(safe-area-inset-right,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));width:calc(var(--u) * 1.25);height:calc(var(--u) * 1.25);}
+.touch-brake{right:calc(max(14px,env(safe-area-inset-right,0px)) + var(--u) * 1.25 + 12px);bottom:calc(14px + env(safe-area-inset-bottom,0px));}
+.touch-item{right:max(14px,env(safe-area-inset-right,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px) + var(--u) * 1.25 + 12px);}
+.touch-item.ready{border-color:var(--gold);box-shadow:0 0 0 3px rgba(242,193,78,.35);}
+.touch-power{right:calc(max(14px,env(safe-area-inset-right,0px)) + var(--u) + 14px);bottom:calc(14px + env(safe-area-inset-bottom,0px) + var(--u) * 1.05 + 12px);background:conic-gradient(rgba(242,193,78,.5) calc(var(--charge,0) * 360deg),rgba(12,18,48,.5) 0);}
+.touch-power.ready{border-color:var(--gold);box-shadow:0 0 0 3px rgba(242,193,78,.45);background:rgba(242,193,78,.55);}
+
+/* In touch mode the buttons stand where the HUD's bottom corners were: the
+   item and the power show on their own buttons, the hint gives way, and the
+   speed moves to the bottom centre in landscape or under the minimap in
+   portrait, where no thumb covers it. */
+.kr-touch .hud-bl{display:none;}
+.kr-touch .hud-br{right:auto;left:50%;transform:translateX(-50%);text-align:center;bottom:calc(10px + env(safe-area-inset-bottom,0px));}
+.kr-touch .hud-br .speed{font-size:30px;}
+@media (orientation:portrait){
+  .kr-touch .hud-br{left:auto;transform:none;right:max(16px,env(safe-area-inset-right,0px));bottom:auto;top:calc(130px + env(safe-area-inset-top,0px));text-align:right;}
+  .kr-touch .hud-br .speed{font-size:24px;}
+}
+
+/* ---------- Candidate select on phones ----------
+   Upright, the showcase sits above the roster (the library's 760px break)
+   and is made tall enough for the turntable kart to have a band of its own
+   above the candidate's name; engine/preview.js draws the kart into that
+   band. Sideways, a phone is too short for the desktop layout: the roster
+   packs six to a row on the left, the showcase drops its quote on the
+   right, and everything shrinks to fit without a scroll. */
+@media (max-width:760px){
+  #s-select .showcase{min-height:54vh;}
+  /* the roster takes the height it needs and the screen scrolls, instead of squeezing it over the buttons */
+  #s-select .select-layout{flex:none;}
+}
+@media (max-height:520px) and (orientation:landscape){
+  #s-select{padding-block:8px;gap:8px;}
+  #s-select>h2{font-size:22px!important;}
+  #s-select .select-layout{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:14px;flex:1;min-height:0;}
+  #s-select .roster{grid-template-columns:repeat(6,1fr);gap:6px;align-self:start;}
+  #s-select .tile{border-width:2px;border-radius:10px;}
+  #s-select .tile .tname{font-size:9px;padding:2px 3px;}
+  #s-select .showcase{order:0;min-height:0;align-items:flex-start;text-align:left;gap:4px;}
+  #s-select .showcase .big{font-size:24px;}
+  #s-select .showcase .title{font-size:11px;}
+  #s-select .showcase .quote{display:none;}
+  #s-select .showcase .stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 10px;}
+  #s-select .powerbox{padding:6px 10px;}
+  #s-select .powerbox b{font-size:14px;}
+  #s-select .powerbox p{font-size:11px;line-height:1.25;}
+  #s-select .btn{font-size:16px;padding:8px 16px;}
+}
+
+/* ---------- Every screen on a small display ----------
+   A screen taller than the display scrolls; centred with justify-content it
+   would lose its top to the overflow, out of reach. Auto margins centre it
+   when it fits and let it start at the top when it does not. The roster
+   screen keeps its top alignment. */
+.screen{justify-content:flex-start;}
+.screen>:first-child{margin-top:auto;}
+.screen>:last-child{margin-bottom:auto;}
+#s-select>:first-child{margin-top:0;}
+/* Upright phones: the circuit cards stack, so their previews stay short. */
+@media (max-width:600px){
+  #s-tracks .card canvas{max-height:24vh;object-fit:contain;}
+}
+/* Phones held sideways: the title, the circuits and the other menus shrink to the short side. */
+@media (max-height:520px) and (orientation:landscape){
+  .screen{padding-block:10px;gap:10px;}
+  #s-title h1{font-size:clamp(30px,11vh,60px);}
+  #s-title .controls{font-size:12px;gap:4px 14px;}
+  #s-tracks .card{padding:8px;gap:6px;}
+  #s-tracks .card .name{font-size:15px;}
+  #s-tracks .card canvas{max-height:30vh;object-fit:contain;}
+  #s-tracks .card .desc{font-size:11px;line-height:1.25;}
+  #s-tracks>h2,#s-results>h2,#s-lobby>h2,#s-admin>h2{font-size:22px!important;}
+  #s-results .results-table{font-size:13px;}
+  #s-results .results-table td,#s-results .results-table th{padding:3px 8px;}
+  #s-results .results-table td.r{font-size:17px;}
+  #s-results .results-table td span[style]{display:none;}   /* the epithet line under each name */
+  #s-results .results-table br{display:none;}
+}

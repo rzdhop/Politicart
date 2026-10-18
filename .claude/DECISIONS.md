@@ -327,3 +327,33 @@ candidates (Gaspard Tableur, Jean-Mi Vérité, Martine Fichet, Aymeric de
 Bruxelles, Thierry Volte-Face) join; `applyPower` lets Ralliement play
 another candidate's power. Big decor is stretched horizontally, not taller.
 
+## DEC-017 -- Touch play goes through the input seam; touch mode follows the player
+
+**Context.** The human asked for the game to be playable on phones as well
+as computers. The page had no viewport meta (a phone drew it as a zoomed-out
+desktop page), the controls were keyboard only, pause was Escape, and the
+note told phone users to come back on a computer. The human chose ◀ ▶
+buttons over a joystick or tilt, automatic acceleration, and racing in both
+orientations.
+
+**Decision.** `src/touch.ts` keeps what the on-screen buttons hold and a
+"touch mode" flag: on at load for a coarse pointer, on at the first touch,
+off at a driving key. game.js's one input source merges the keyboard with
+it, and in touch mode throttles unless the brake is held. The buttons
+(`ui/TouchControls.tsx`) ride on the HUD layer and use pointer capture, so
+multi-touch works and a thumb can roll across the steering pad; item and
+power taps go through the same store actions as the keys (`useItem`,
+`usePower`), which already route to the server in a team race. Their item
+icon and power charge are written imperatively from the HUD writer. The
+camera widens and pulls back as the aspect drops below 1. On small screens
+the select screen hands the preview a frame (`setPreviewFrame`) and the kart
+is drawn into that rectangle only. Layout fixes live in game.css; the one
+library change is the controls grid filling its panel.
+
+**Consequence.** One input path for keyboard, touch and both together; the
+engine is unchanged except the portrait camera and the preview frame.
+Phones start on low-poly graphics at a 1.5 pixel ratio. Full screen is
+offered where `document.fullscreenEnabled` (not on iPhone). Screens centre
+with auto margins, so a screen taller than the display scrolls from its
+top.
+

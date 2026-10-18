@@ -29,7 +29,7 @@ import { setCast } from './primitives.js';
 import { camera, getRenderer } from './render.js';
 import { CFG, G, SHADOWS } from './state.js';
 import { buildTrack } from './track.js';
-import { lerp, rand } from './util.js';
+import { clamp, lerp, rand } from './util.js';
 
 // ---------- Kart entities ----------
 function makeKart(def, isAI) {
@@ -94,15 +94,19 @@ export function disposeScene(scene) { scene.traverse(o => { if (o.geometry) o.ge
 // ---------- Camera & sun ----------
 function updateCamera(dt) {
   const k = G.player; const fx = Math.sin(k.heading), fz = Math.cos(k.heading);
-  const back = k.speed < -2 ? -11 : 12 - Math.min(2, k.boost * 2);
-  const ty = 6.2 + (k.fly > 0 ? 3 : 0) + k.y * 0.6;
+  // A screen held upright sees a narrow slice of the road: widen the lens and
+  // pull back and up as the aspect drops below 1, so a phone in portrait
+  // still shows the road ahead and the karts beside it.
+  const narrow = clamp(1 - camera.aspect, 0, 0.6);
+  const back = (k.speed < -2 ? -11 : 12 - Math.min(2, k.boost * 2)) + narrow * 9;
+  const ty = 6.2 + (k.fly > 0 ? 3 : 0) + k.y * 0.6 + narrow * 5;
   const tx = k.pos.x - fx * back, tz = k.pos.z - fz * back;
   const a = 1 - Math.exp(-dt * (G.state === 'countdown' ? 1.6 : 6));
   camera.position.x = lerp(camera.position.x, tx, a); camera.position.z = lerp(camera.position.z, tz, a); camera.position.y = lerp(camera.position.y, ty, a);
   camera.lookAt(k.pos.x + fx * 5, 1.2 + k.mesh.position.y * 0.5, k.pos.z + fz * 5);
   // a short camera shake when the followed kart is bumped
   if (k.bump > 0) { const e = k.bump * (k.bumpPower || 1) * 0.5; camera.position.x += Math.sin(G.time * 71) * e; camera.position.y += Math.sin(G.time * 53) * e * 0.6; }
-  camera.fov = lerp(camera.fov, k.boost > 0 ? 76 : 65, 1 - Math.exp(-dt * 5)); camera.updateProjectionMatrix();
+  camera.fov = lerp(camera.fov, (k.boost > 0 ? 76 : 65) + narrow * 30, 1 - Math.exp(-dt * 5)); camera.updateProjectionMatrix();
   if (G.sun) { G.sun.position.set(k.pos.x + 120, 200, k.pos.z + 80); G.sun.target.position.set(k.pos.x, 0, k.pos.z); G.sun.target.updateMatrixWorld(); }
 }
 

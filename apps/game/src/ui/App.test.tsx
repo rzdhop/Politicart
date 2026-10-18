@@ -9,6 +9,7 @@ vi.mock('../engine/preview.js', () => ({
   hasPreview: () => false,
   makeThumbs: () => ({}),
   setPreview: () => {},
+  setPreviewFrame: () => {},
 }));
 vi.mock('../engine/race.js', () => ({
   startRace: vi.fn(),

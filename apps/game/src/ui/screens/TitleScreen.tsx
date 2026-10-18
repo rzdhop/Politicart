@@ -12,6 +12,7 @@ import {
 } from '@kart-republique/ui';
 
 import { actions, type UiSnapshot } from '../store';
+import { useTouchMode } from '../TouchControls';
 
 const COLUMN = { display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' } as const;
 
@@ -23,6 +24,7 @@ const ADMIN_LABEL = {
 
 /** The title screen: brand, the four buttons, the controls legend, the disclaimer. */
 export function TitleScreen({ ui }: { ui: UiSnapshot }) {
+  const touch = useTouchMode();
   return (
     <Screen id="s-title" hidden={ui.state !== 'title'}>
       <Tricolore />
@@ -40,6 +42,16 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
           </Button>
           <Button id="b-admin" variant="ghost" onClick={actions.openAdmin}>{ADMIN_LABEL[ui.adminStatus]}</Button>
         </Row>
+        {touch ? (
+          <ControlsGrid id="touch-legend">
+            <div>Le kart <strong>accélère tout seul</strong></div>
+            <div><KeyCap>◀</KeyCap> <KeyCap>▶</KeyCap> tourner (glissez d’un côté à l’autre)</div>
+            <div><KeyCap>▼</KeyCap> freiner, reculer</div>
+            <div><KeyCap>↯</KeyCap> dérapage (mini-turbo)</div>
+            <div><KeyCap>Objet</KeyCap> utiliser l’objet</div>
+            <div><KeyCap>★</KeyCap> pouvoir spécial · <KeyCap>❚❚</KeyCap> pause</div>
+          </ControlsGrid>
+        ) : (
         <ControlsGrid>
           <div><KeyCap>↑</KeyCap> / <KeyCap>Z</KeyCap> accélérer</div>
           <div><KeyCap>↓</KeyCap> / <KeyCap>S</KeyCap> freiner, reculer</div>
@@ -49,6 +61,7 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
           <div><KeyCap>F</KeyCap> / <KeyCap>Maj</KeyCap> pouvoir spécial</div>
           <div><KeyCap>Échap</KeyCap> pause · <KeyCap>M</KeyCap> son</div>
         </ControlsGrid>
+        )}
         <Disclaimer>
           Toute ressemblance avec des personnalités existantes serait purement électorale. Personnages, partis et scandales sont fictifs. Trois tours, cinq adversaires, aucune cohabitation.
         </Disclaimer>

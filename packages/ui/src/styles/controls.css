@@ -42,7 +42,9 @@
   font-size:14px;
   color:var(--muted);
   text-align:left;
+  width:100%;
   max-width:760px;
+  box-sizing:border-box;
 }
 
 .controls b {

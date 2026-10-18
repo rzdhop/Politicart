@@ -22,10 +22,8 @@ import { loadCustom } from './engine/custom.js';
 import { CHARACTERS, ITEMS } from './engine/data.js';
 import { drain, resolveFor } from './engine/events.js';
 import { setInputSource } from './engine/input.js';
-import { useItem } from './engine/items.js';
 import { getState, onTransition } from './engine/machine.js';
-import { isNetRace, netStep, pressItem, pressPower } from './engine/netrace.js';
-import { usePower } from './engine/powers.js';
+import { isNetRace, netStep } from './engine/netrace.js';
 import { hasPreview, renderPreview } from './engine/preview.js';
 import { endRace, renderRace, stepRace } from './engine/race.js';
 import { G } from './engine/state.js';
@@ -33,6 +31,8 @@ import { $, clamp, fmtTime } from './engine/util.js';
 import { hud } from './ui/Hud.tsx';
 import { mountUi } from './ui/mount.tsx';
 import { actions } from './ui/store.ts';
+import { touchHud } from './ui/TouchControls.tsx';
+import { initTouch, isCoarsePointer, isTouchMode, setTouchMode, touchHeld } from './touch.ts';
 
 'use strict';
 /* =====================================================================================
@@ -66,6 +66,9 @@ function updateHUD(p) {
   h.power.setName(p.powerName);
   h.center.setText(p.announce);
   h.wrong.setVisible(p.wrongWay);
+  // the touch buttons carry the item and the power state themselves (the HUD's own slots make way for them)
+  touchHud.item?.(shown.split('|')[0], !!p.item && !p.itemRolling);
+  touchHud.power?.(1 - p.powerCd / p.powerCdMax, p.powerReady);
 }
 // The two text channels the engine's event queue feeds. The toast fades on
 // its own clock, which belongs here with the writer that showed it.
@@ -80,9 +83,11 @@ window.addEventListener('keydown', e => {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   if (keys[e.code]) return; keys[e.code] = true;
+  // Driving from the keyboard hands the kart back to it: no touch buttons, no auto-acceleration.
+  if (DRIVE_KEYS.includes(e.code)) setTouchMode(false);
   // In a team race the server resolves presses (engine/netrace.js); there is no pause either.
-  if (G.state === 'race' && ['ControlLeft', 'ControlRight', 'KeyE', 'Enter'].includes(e.code)) { if (isNetRace()) pressItem(); else useItem(G.player); }
-  if (G.state === 'race' && ['KeyF', 'ShiftLeft', 'ShiftRight'].includes(e.code)) { if (isNetRace()) pressPower(); else usePower(G.player); }
+  if (['ControlLeft', 'ControlRight', 'KeyE', 'Enter'].includes(e.code)) actions.useItem();
+  if (['KeyF', 'ShiftLeft', 'ShiftRight'].includes(e.code)) actions.usePower();
   if (e.code === 'Escape' && !isNetRace()) { if (G.state === 'race' || G.state === 'countdown') actions.pause(); else if (G.state === 'paused') actions.resume(); }
   if (e.code === 'KeyM') actions.toggleMute(false);
   if (e.code === 'Enter' && G.state === 'title') $('b-play').click();
@@ -92,9 +97,27 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
-function inputState() { return { throttle: keys.ArrowUp || keys.KeyW, brake: keys.ArrowDown || keys.KeyS, left: keys.ArrowLeft || keys.KeyA, right: keys.ArrowRight || keys.KeyD, drift: !!keys.Space }; }
+const DRIVE_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space'];
+/**
+ * The keyboard and the touch buttons, merged. In touch mode the kart
+ * accelerates by itself unless the brake button is held: there is no
+ * accelerate button, so the right thumb only has to brake, drift and fire.
+ */
+function inputState() {
+  const t = touchHeld; const auto = isTouchMode();
+  return {
+    throttle: !!(keys.ArrowUp || keys.KeyW || (auto && !t.brake)),
+    brake: !!(keys.ArrowDown || keys.KeyS || t.brake),
+    left: !!(keys.ArrowLeft || keys.KeyA || t.left),
+    right: !!(keys.ArrowRight || keys.KeyD || t.right),
+    drift: !!(keys.Space || t.drift),
+  };
+}
 // The engine reads the player's controls through this seam rather than the keys map.
 setInputSource(inputState);
+initTouch();
+// Phones and tablets start on the light graphics: shadows and round meshes cost frames a phone cannot spare.
+if (isCoarsePointer()) actions.togglePoly();
 
 // ---------- Screens ----------
 // The screens and the HUD are React (./ui), subscribed to the machine through

@@ -9,6 +9,7 @@ import { TitleScreen } from './screens/TitleScreen';
 import { TracksScreen } from './screens/TracksScreen';
 import { Hud } from './Hud';
 import { useUi } from './store';
+import { useTouchMode } from './TouchControls';
 
 /**
  * The six screens and the note banner, in the order the single-file game
@@ -20,6 +21,7 @@ import { useUi } from './store';
  */
 export function App() {
   const ui = useUi();
+  const touch = useTouchMode();
   return (
     <>
       <TitleScreen ui={ui} />
@@ -30,7 +32,9 @@ export function App() {
       <PauseScreen ui={ui} />
       <ResultsScreen ui={ui} />
       <LobbyScreen ui={ui} />
-      <NoteBanner id="note" hidden={ui.noteHidden}>Jeu au clavier : ouvrez-le sur un ordinateur.</NoteBanner>
+      <NoteBanner id="note" hidden={ui.noteHidden}>
+        {touch ? 'Tactile : le kart accélère tout seul, ◀ ▶ pour tourner. Jouable en paysage comme en portrait.' : 'Au clavier sur ordinateur, au doigt sur téléphone.'}
+      </NoteBanner>
     </>
   );
 }
