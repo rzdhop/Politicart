@@ -61,7 +61,9 @@ export function updateKart(k, dt) {
   if (k.invincible > 0) maxSpeed *= 1.2;
   if (k.fly > 0) maxSpeed *= 1.5;
   if (k.slowed > 0) maxSpeed *= 0.55;
+  if (k.rabot > 0) maxSpeed *= 0.85;                                                   // coup de rabot: -15 %
   if (k.isAI || k.finished) maxSpeed *= k.aiSpeedMul;
+  if (k.capped > 0) maxSpeed = Math.min(maxSpeed, DIRECTIVE_CAP);                     // directive européenne: 110 km/h, rubber-banding included
   updateProgress(k);
   const s = G.samples[k.idx]; const hw = CFG.roadHalfWidth;
   let lateral = (k.pos.x - s.x) * s.sx + (k.pos.z - s.z) * s.sz;
@@ -102,13 +104,17 @@ export function updateKart(k, dt) {
       k.drift.active = false; k.drift.charge = 0;
     } else { k.drift.charge += dt; turnRate = 2.4 * S.handling * (k.drift.dir * 1.15 + k.steer * 0.55) * (0.5 + 0.5 * sf); k.speed *= Math.exp(-dt * 0.12); }
   }
-  if (k.stun > 0) turnRate = 11;
+  // A stunned kart spins on the spot, then straightens up along the road for
+  // its last 0.4 s, so it never comes out of a spin facing the wrong way.
+  if (k.stun > 0) { if (k.stun > 0.4) turnRate = 11; else { turnRate = 0; k.heading += wrapAngle(Math.atan2(s.tx, s.tz) - k.heading) * (1 - Math.exp(-dt * 14)); } }
   if (k.air) turnRate *= 0.45;
   if (k.slip > 0 && k.stun <= 0) { turnRate *= 0.3; k.heading += Math.sin(G.time * 13) * 0.7 * dt; k.speed *= Math.exp(-dt * 0.6); }
   k.heading -= turnRate * dt;
 
   let moveDir = k.heading; if (k.drift.active) moveDir += k.drift.dir * 0.35;
   k.pos.x += Math.sin(moveDir) * k.speed * dt; k.pos.z += Math.cos(moveDir) * k.speed * dt;
+  // knock-back from a kart-on-kart contact: a sideways shove that dies out in a fraction of a second
+  if (k.kx || k.kz) { k.pos.x += k.kx * dt; k.pos.z += k.kz * dt; const f = Math.exp(-dt * 7); k.kx *= f; k.kz *= f; if (Math.abs(k.kx) + Math.abs(k.kz) < 0.05) { k.kx = 0; k.kz = 0; } }
 
   lateral = (k.pos.x - s.x) * s.sx + (k.pos.z - s.z) * s.sz;
   const limit = hw + 0.1;
@@ -138,6 +144,8 @@ export function updateKart(k, dt) {
   k.slip = Math.max(0, k.slip - dt); k.confused = Math.max(0, k.confused - dt); k.pitGrace = Math.max(0, k.pitGrace - dt); k.padGrace = Math.max(0, k.padGrace - dt); k.phantom = Math.max(0, k.phantom - dt);
   k.boost = Math.max(0, k.boost - dt); k.stun = Math.max(0, k.stun - dt); k.invincible = Math.max(0, k.invincible - dt); k.hazardGrace = Math.max(0, k.hazardGrace - dt);
   k.slowed = Math.max(0, k.slowed - dt); k.fly = Math.max(0, k.fly - dt); k.powerCd = Math.max(0, k.powerCd - dt);
+  k.bump = Math.max(0, (k.bump || 0) - dt); k.bumpCd = Math.max(0, (k.bumpCd || 0) - dt);
+  k.shield = Math.max(0, (k.shield || 0) - dt); k.rabot = Math.max(0, (k.rabot || 0) - dt); k.capped = Math.max(0, (k.capped || 0) - dt);
   if (k.relance > 0) { k.relanceTimer -= dt; if (k.relanceTimer <= 0) { k.relance--; k.relanceTimer = 1.1; k.boost = 0.7; k.boostPower = 1.45; sfx('boost'); } }
   if (k.itemRolling > 0) { k.itemRolling -= dt; if (k.itemRolling <= 0) { k.item = k.pendingItem; k.pendingItem = null; if (!k.isAI) { sfxFor(k, 'pick'); hintFor(k, ITEMS[k.item].hint); } else k.itemTimer = rand(0.8, 4); } }
 
@@ -154,25 +162,58 @@ export function updateKart(k, dt) {
  */
 export function updateKartVisual(k, dt, sf) {
   const m = k.mesh; const flyY = k.fly > 0 ? Math.min(5, k.fly > 3.5 ? (4 - k.fly) * 10 : k.fly < 0.5 ? k.fly * 10 : 5) : 0;
-  m.position.set(k.pos.x, k.y + flyY, k.pos.z); m.rotation.y = k.heading; m.rotation.z = k.steer * 0.06 * sf + (k.air && k.trick ? Math.sin(G.time * 12) * 0.5 : 0);
+  // a bumped kart hops and rocks for BUMP_TIME seconds
+  const bump = k.bump > 0 ? k.bump / BUMP_TIME : 0; const hop = Math.sin(bump * Math.PI) * 0.45 * (k.bumpPower || 1);
+  m.position.set(k.pos.x, k.y + flyY + hop, k.pos.z); m.rotation.y = k.heading; m.rotation.z = k.steer * 0.06 * sf + (k.air && k.trick ? Math.sin(G.time * 12) * 0.5 : 0) + Math.sin(bump * Math.PI * 4) * 0.18 * bump * (k.bumpSide || 1);
   m.rotation.x = k.rampSlope ? -k.rampSlope : k.air ? -clamp(k.vy * 0.035, -0.45, 0.45) : k.fly > 0 ? -0.12 : 0;
   const u = m.userData; u.wheels.forEach((w, i) => { w.rotation.x += k.speed * dt / 0.45; if (i < 2) w.rotation.y = -k.steer * 0.45; });
   const sparkOn = k.drift.active && k.drift.charge > 0.35;
   u.sparks.forEach(sp => { sp.visible = sparkOn; sp.material.color.setHex(k.drift.charge > 2 ? 0xff7a1a : k.drift.charge > 1 ? 0xffd34d : 0x7cc4ff); sp.scale.setScalar(0.7 + Math.random() * 0.8); });
   u.ring.visible = k.invincible > 0; if (u.ring.visible) u.ring.rotation.z += dt * 4;
+  if (u.shield) { u.shield.visible = k.shield > 0; if (u.shield.visible) { u.shield.rotation.z -= dt * 3; u.shield.position.y = 1.1 + Math.sin(G.time * 4) * 0.15; } }
   u.rotor.visible = k.fly > 0; if (u.rotor.visible) u.blades.forEach(b => { b.rotation.y += dt * 40; });
   u.driver.position.y = 0.75 + (k.stun > 0 ? Math.abs(Math.sin(G.time * 20)) * 0.3 : 0);
+  if (u.bumpSparks) { const on = bump > 0.35; u.bumpSparks.visible = on; if (on) { u.bumpSparks.rotation.y += dt * 25; u.bumpSparks.scale.setScalar(0.6 + (1 - bump) * 1.4); } }
   m.visible = k.phantom > 0 ? (Math.floor(G.time * 14) % 2 === 0) : true;
 }
 
 // ---------- Kart-on-kart contact ----------
+/** The top speed under a "Directive européenne": 110 km/h on the speedometer, which reads speed x 3.2. */
+export const DIRECTIVE_CAP = 110 / 3.2;
+
+/** How long a bump's hop, rock and sparks last, in seconds. */
+export const BUMP_TIME = 0.45;
+
+/**
+ * Resolve contact between every pair of karts. Overlap is pushed apart every
+ * frame, but the bump itself -- the shove, the speed it costs, the sound, the
+ * hop and the sparks -- happens once per contact: a kart that has just been
+ * bumped (bumpCd) is only separated until it lets go. The shove goes into the
+ * knock-back velocity (kx, kz), which updateKart spends over the next few
+ * frames, and the lighter kart takes most of it. The speed lost depends on
+ * how head-on the contact was: rubbing door to door costs about 2 %, ramming
+ * the kart in front about 10 %.
+ */
 export function kartCollisions() {
   for (let i = 0; i < G.karts.length; i++) for (let j = i + 1; j < G.karts.length; j++) {
     const a = G.karts[i], b = G.karts[j]; if (a.fly > 0 || b.fly > 0) continue; const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z; const d = Math.hypot(dx, dz);
     if (d < 2.6 && d > 0.001) {
       const push = (2.6 - d) / 2; const nx = dx / d, nz = dz / d; const wa = a.stats.weight, wb = b.stats.weight; const ta = wb / (wa + wb), tb = wa / (wa + wb);
       a.pos.x -= nx * push * 2 * ta; a.pos.z -= nz * push * 2 * ta; b.pos.x += nx * push * 2 * tb; b.pos.z += nz * push * 2 * tb;
-      a.speed *= 0.97; b.speed *= 0.97;
+      if (a.bumpCd > 0 || b.bumpCd > 0) continue;
+      // closing speed along the contact normal, and how much of the motion that is
+      const va = (Math.sin(a.heading) * nx + Math.cos(a.heading) * nz) * a.speed, vb = (Math.sin(b.heading) * nx + Math.cos(b.heading) * nz) * b.speed;
+      const closing = Math.max(0, va - vb); const headOn = clamp(closing / Math.max(8, Math.abs(a.speed), Math.abs(b.speed)), 0, 1);
+      const shove = 7 + closing * 0.55;
+      a.kx = (a.kx || 0) - nx * shove * ta * 2; a.kz = (a.kz || 0) - nz * shove * ta * 2;
+      b.kx = (b.kx || 0) + nx * shove * tb * 2; b.kz = (b.kz || 0) + nz * shove * tb * 2;
+      const loss = 0.02 + 0.08 * headOn;
+      a.speed *= 1 - loss * ta * 2; b.speed *= 1 - loss * tb * 2;
+      // each kart rocks away from the side it was hit on
+      const side = (o, ox, oz) => (Math.sign(Math.cos(o.heading) * ox - Math.sin(o.heading) * oz) || 1);
+      const power = clamp(0.6 + headOn, 0.6, 1.6);
+      a.bump = BUMP_TIME; a.bumpPower = power * ta * 2; a.bumpSide = side(a, nx, nz); a.bumpCd = 0.3;
+      b.bump = BUMP_TIME; b.bumpPower = power * tb * 2; b.bumpSide = side(b, -nx, -nz); b.bumpCd = 0.3;
       if (isFoe(a, b)) { if (a.invincible > 0 && b.invincible <= 0) stunKart(b, 1.2); if (b.invincible > 0 && a.invincible <= 0) stunKart(a, 1.2); }
       sfxFor(a, 'bump'); sfxFor(b, 'bump');
     }

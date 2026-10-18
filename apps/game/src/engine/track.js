@@ -185,7 +185,11 @@ function cloudsAndSky(scene, top, horizon) {
 // ---------- Track construction ----------
 export function buildTrack(scene, track) {
   textures();
-  const pts = track.points.map(p => new THREE.Vector3(p[0], 0, p[1]));
+  // The circuit is drawn at track.scale; CFG.samples grows with it so the
+  // samples stay about as far apart as before and every distance counted in
+  // samples (feature lengths, AI look-ahead, power offsets) keeps its meaning.
+  const S = track.scale || 1; DS = S;
+  const pts = track.points.map(p => new THREE.Vector3(p[0] * S, 0, p[1] * S));
   const curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
   curve.arcLengthDivisions = 2000;
   const N = CFG.samples, samples = [];
@@ -230,10 +234,10 @@ export function buildTrack(scene, track) {
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), new THREE.MeshStandardMaterial({ map: gt, roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
   cloudsAndSky(scene, track.sky[0], track.sky[1]);
 
-  // item boxes: 4 rows of 3 golden urns
+  // item boxes: rows of 3 golden urns, four unless the track lists more
   G.itemBoxes = [];
   const boxGeo = new THREE.OctahedronGeometry(1.1, 0); const boxMat = new THREE.MeshStandardMaterial({ color: 0xffd34d, emissive: 0x6a4a00, transparent: true, opacity: 0.9, roughness: 0.3, metalness: 0.4 });
-  [0.18, 0.42, 0.66, 0.88].forEach(f => { const s = samples[Math.floor(f * N)]; [-5, 0, 5].forEach(o => { const m = new THREE.Mesh(boxGeo, boxMat); m.position.set(s.x + s.sx * o, 1.4, s.z + s.sz * o); scene.add(m); G.itemBoxes.push({ x: m.position.x, z: m.position.z, mesh: m, active: true, timer: 0 }); }); });
+  (track.boxRows || [0.18, 0.42, 0.66, 0.88]).forEach(f => { const s = samples[Math.floor(f * N)]; [-5, 0, 5].forEach(o => { const m = new THREE.Mesh(boxGeo, boxMat); m.position.set(s.x + s.sx * o, 1.4, s.z + s.sz * o); scene.add(m); G.itemBoxes.push({ x: m.position.x, z: m.position.z, mesh: m, active: true, timer: 0 }); }); });
 
   // shared street furniture: lamps, ad boards, crowd zones, grandstand
   for (let i = 0; i < N; i += 36) { const s = samples[i]; const sg = (i / 36) % 2 ? 1 : -1; lamp(scene, s.x + s.sx * sg * (hw + 5.2), s.z + s.sz * sg * (hw + 5.2), track.gravel ? 'plain' : 'paris'); }
@@ -244,13 +248,37 @@ export function buildTrack(scene, track) {
   [0.28, 0.5, 0.74].forEach((f, i) => crowdZone(scene, Math.floor(N * f), Math.floor(N * f) + 36, i % 2 ? 1 : -1, false));
 
   buildFeatures(scene, track);
-  // themed decor
-  if (track.id === 'elysee') buildElysee(scene, track);
-  else if (track.id === 'bourbon') buildBourbon(scene, track);
-  else buildVersailles(scene, track);
+  // themed decor, laid out at scale 1 and then spread out to the circuit's scale
+  const decor = new THREE.Group();
+  if (track.id === 'elysee') buildElysee(decor, scene);
+  else if (track.id === 'bourbon') buildBourbon(decor, scene);
+  else buildVersailles(decor, scene);
+  spreadDecor(decor, scene, S);
 }
 
-function buildElysee(scene) {
+// Scale of the circuit being built; the themed decor is written in scale-1
+// coordinates, so its clearance checks against the road multiply by it.
+let DS = 1;
+const clearAt = (x, z, margin) => isClear(x * DS, z * DS, margin * DS);
+
+/**
+ * Spread the themed decor, written for a scale-1 circuit, over a circuit
+ * drawn at scale S. Big pieces -- palaces, buildings, lawns, the river, walls
+ * -- stretch horizontally with the circuit, so they keep framing the road.
+ * Small ones -- people, trees, lamps, cars, statues -- only move: they keep
+ * their size, next to karts that kept theirs.
+ */
+function spreadDecor(decor, world, S) {
+  decor.updateMatrixWorld(true);
+  const size = new THREE.Vector3(), bb = new THREE.Box3();
+  for (const child of [...decor.children]) {
+    bb.setFromObject(child).getSize(size);
+    if (Math.max(size.x, size.z) < 14) { child.position.x *= S; child.position.z *= S; world.add(child); }
+  }
+  decor.scale.set(S, 1, S); world.add(decor);
+}
+
+function buildElysee(scene, world) {
   const hw = CFG.roadHalfWidth;
   // palace, cour d'honneur, gate on the Faubourg
   palace(scene, 0, 72, 76, 15, 24, 0, 0x4a4f5a);
@@ -270,12 +298,12 @@ function buildElysee(scene) {
   // garden behind the palace
   scene.add(plane(120, 40, 0x5f9a48, 0, 100)); fountain(scene, 0, 102, 7, 1, false); [-30, 30].forEach(x => { hedgeWall(scene, x, 96, 24, 1.2, 2); tree(scene, x, 106, 'cypress'); tree(scene, x + 8, 106, 'cypress'); tree(scene, x - 8, 106, 'cypress'); });
   // Haussmann ring outside the loop, plane trees, pigeons
-  for (let a = 0; a < Math.PI * 2; a += 0.2) { const r = 242; const x = Math.cos(a) * r, z = Math.sin(a) * r; if (isClear(x, z, 18)) building(scene, x, z, rand(22, 30), rand(16, 22), rand(16, 24), -a + Math.PI / 2); }
-  for (let i = 0; i < 70; i++) { const x = rand(-270, 270), z = rand(-230, 270); if (isClear(x, z, 9) && !(Math.abs(z) < 120 && Math.abs(x) < 140)) tree(scene, x, z, 'plane'); }
+  for (let a = 0; a < Math.PI * 2; a += 0.2) { const r = 242; const x = Math.cos(a) * r, z = Math.sin(a) * r; if (clearAt(x, z, 18)) building(scene, x, z, rand(22, 30), rand(16, 22), rand(16, 24), -a + Math.PI / 2); }
+  for (let i = 0; i < 70; i++) { const x = rand(-270, 270), z = rand(-230, 270); if (clearAt(x, z, 9) && !(Math.abs(z) < 120 && Math.abs(x) < 140)) tree(scene, x, z, 'plane'); }
   for (let i = 0; i < 24; i++) { const x = rand(-60, 60), z = rand(12, 55); pigeon(scene, x, z); }
-  for (let i = 0; i < G.N; i += 60) { const s = G.samples[i]; if (isClear(s.x + s.sx * (hw + 9), s.z + s.sz * (hw + 9), 7)) tree(scene, s.x + s.sx * (hw + 9), s.z + s.sz * (hw + 9), 'plane'); }
+  for (let i = 0; i < G.N; i += 60) { const s = G.samples[i]; if (isClear(s.x + s.sx * (hw + 9), s.z + s.sz * (hw + 9), 7)) tree(world, s.x + s.sx * (hw + 9), s.z + s.sz * (hw + 9), 'plane'); }
 }
-function buildBourbon(scene) {
+function buildBourbon(scene, world) {
   const hw = CFG.roadHalfWidth;
   // the Seine, embankment, bridge, obelisk on the far bank
   const water = new THREE.Mesh(new THREE.PlaneGeometry(1600, 90), new THREE.MeshStandardMaterial({ map: TEX.water.clone(), roughness: 0.15, metalness: 0.3 })); water.material.map.needsUpdate = true; water.material.map.repeat.set(60, 4); water.rotation.x = -Math.PI / 2; water.position.set(0, -0.6, -170); scene.add(water);
@@ -295,12 +323,12 @@ function buildBourbon(scene) {
   [[-60, -113, 1.5], [75, -114, 1.6]].forEach(p => sedan(scene, p[0], p[1], p[2], 0x111111));
   kiosk(scene, 120, -116, 0x2e8b57, 'JOURNAUX', 0);
   // Haussmann ring on the land side, plane trees
-  for (let a = 0.15; a < Math.PI - 0.15; a += 0.19) { const r = 236; const x = Math.cos(a) * r, z = Math.sin(a) * r; if (isClear(x, z, 18)) building(scene, x, z, rand(22, 30), rand(16, 22), rand(16, 24), -a + Math.PI / 2); }
-  for (let i = 0; i < 60; i++) { const x = rand(-270, 270), z = rand(-110, 270); if (isClear(x, z, 9)) tree(scene, x, z, 'plane'); }
+  for (let a = 0.15; a < Math.PI - 0.15; a += 0.19) { const r = 236; const x = Math.cos(a) * r, z = Math.sin(a) * r; if (clearAt(x, z, 18)) building(scene, x, z, rand(22, 30), rand(16, 22), rand(16, 24), -a + Math.PI / 2); }
+  for (let i = 0; i < 60; i++) { const x = rand(-270, 270), z = rand(-110, 270); if (clearAt(x, z, 9)) tree(scene, x, z, 'plane'); }
   for (let x = -100; x <= 100; x += 25) tree(scene, x, -112, 'plane');
   for (let i = 0; i < 16; i++) pigeon(scene, rand(-40, 40), rand(-45, -20));
 }
-function buildVersailles(scene) {
+function buildVersailles(scene, world) {
   // château along the north edge, parterres and water terrace in front
   palace(scene, 0, 182, 200, 18, 30, 0, 0x6b6f78);
   [-70, 70].forEach(x => { scene.add(box(50, 14, 26, 0xeadfc8, x, 7, 200)); scene.add(box(48, 3, 24, 0x6b6f78, x, 15.5, 200)); });
@@ -314,13 +342,13 @@ function buildVersailles(scene) {
   scene.add(plane(26, 100, 0x4f8f3f, 0, -20));
   for (let z = -60; z <= 20; z += 16) { statue(scene, -18, z, Math.PI / 2); statue(scene, 18, z, -Math.PI / 2); tree(scene, -24, z + 8, 'topiary'); tree(scene, 24, z + 8, 'topiary'); }
   fountain(scene, 0, -95, 18, 2, true);
-  [[-62, -25], [62, -25], [-62, 45], [62, 45]].forEach(p => { if (isClear(p[0], p[1], 20)) { hedgeWall(scene, p[0], p[1] - 14, 30, 1.6, 4); hedgeWall(scene, p[0], p[1] + 14, 30, 1.6, 4); hedgeWall(scene, p[0] - 14, p[1], 1.6, 26, 4); hedgeWall(scene, p[0] + 14, p[1], 1.6, 26, 4); fountain(scene, p[0], p[1], 5, 1, false); } });
+  [[-62, -25], [62, -25], [-62, 45], [62, 45]].forEach(p => { if (clearAt(p[0], p[1], 20)) { hedgeWall(scene, p[0], p[1] - 14, 30, 1.6, 4); hedgeWall(scene, p[0], p[1] + 14, 30, 1.6, 4); hedgeWall(scene, p[0] - 14, p[1], 1.6, 26, 4); hedgeWall(scene, p[0] + 14, p[1], 1.6, 26, 4); fountain(scene, p[0], p[1], 5, 1, false); } });
   // Grand Canal and its tree lines south of the loop
   const canal = new THREE.Mesh(new THREE.PlaneGeometry(44, 240), new THREE.MeshStandardMaterial({ map: TEX.water.clone(), roughness: 0.15, metalness: 0.3 })); canal.material.map.needsUpdate = true; canal.material.map.repeat.set(2, 12); canal.rotation.x = -Math.PI / 2; canal.position.set(0, -0.4, -305); scene.add(canal);
   const cross = canal.clone(); cross.geometry = new THREE.PlaneGeometry(240, 36); cross.position.set(0, -0.4, -330); scene.add(cross);
   for (let z = -200; z >= -420; z -= 18) { tree(scene, -34, z, 'cypress'); tree(scene, 34, z, 'cypress'); }
-  for (let i = 0; i < 160; i++) { const x = rand(-330, 330), z = rand(-330, 100); if (isClear(x, z, 9) && Math.abs(x) > 110) tree(scene, x, z, Math.random() < 0.5 ? 'cypress' : 'round'); }
+  for (let i = 0; i < 160; i++) { const x = rand(-330, 330), z = rand(-330, 100); if (clearAt(x, z, 9) && Math.abs(x) > 110) tree(scene, x, z, Math.random() < 0.5 ? 'cypress' : 'round'); }
   // topiary and gravel edges all along the circuit
-  for (let i = 0; i < G.N; i += 12) { const s = G.samples[i]; const sg = (i / 12) % 2 ? 1 : -1; const x = s.x + s.sx * sg * (CFG.roadHalfWidth + 8), z = s.z + s.sz * sg * (CFG.roadHalfWidth + 8); if (isClear(x, z, 6.5)) tree(scene, x, z, 'topiary'); }
+  for (let i = 0; i < G.N; i += 12) { const s = G.samples[i]; const sg = (i / 12) % 2 ? 1 : -1; const x = s.x + s.sx * sg * (CFG.roadHalfWidth + 8), z = s.z + s.sz * sg * (CFG.roadHalfWidth + 8); if (isClear(x, z, 6.5)) tree(world, x, z, 'topiary'); }
   for (let i = 0; i < 10; i++) { const f = figure(0x1f2a5e, pick(SKINS), 'guard'); f.position.set(-50 + i * 11, 0, 164); f.rotation.y = Math.PI; scene.add(f); }
 }

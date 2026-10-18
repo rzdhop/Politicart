@@ -83,9 +83,10 @@ The game reads physical key codes, so the same keys work on AZERTY and QWERTY ke
 
 ## Content
 
-- **11 fictional candidates**, each with stats (speed, acceleration, handling, weight) and a signature satirical power: Grand débat, Grève générale, Rond-point surprise, Zone à faibles émissions, Amendement de dernière minute, Mégaphone, Éléments de langage, Vol d'audience, Mise en examen, Épandage, Temps de parole.
-- **14 items** from golden ballot boxes, weighted by race position: 49.3 Turbo, Grève surprise, Dossier Mediapart, Motion de censure, Immunité parlementaire, Sondage truqué, Hélico présidentiel, Remaniement, Plan de relance, BRAV-M, Nuage lacrymogène, Casserolade, Dissolution, Niche fiscale.
-- **3 circuits**: L'Élysée (Faubourg Saint-Honoré), Palais Bourbon (quais de Seine), Versailles (jardins du Congrès) — with ramps and tricks, pits, dash panels, chicanes and crossing traffic.
+- **16 fictional candidates**, each with stats (speed, acceleration, handling, weight) and a signature satirical power: Grand débat, Grève générale, Rond-point surprise, Zone à faibles émissions, Amendement de dernière minute, Mégaphone, Éléments de langage, Vol d'audience, Mise en examen, Épandage, Temps de parole, Coup de rabot (Gaspard Tableur, le technocrate de Bercy), Fake news (Jean-Mi Vérité, le populiste de plateau télé), Contrôle d'identité (Martine Fichet, la ministre de l'Intérieur), Directive européenne (Aymeric de Bruxelles, le lobbyiste européen), Ralliement (Thierry Volte-Face, le transfuge, who copies the power of the kart ahead).
+- **19 items** from golden ballot boxes, weighted by race position: 49.3 Turbo, Grève surprise, Dossier Mediapart, Motion de censure, Immunité parlementaire, Sondage truqué, Hélico présidentiel, Remaniement, Plan de relance, BRAV-M, Nuage lacrymogène, Casserolade, Dissolution, Niche fiscale, Langue de bois (absorbs the next hit), Cumul des mandats (two items at once), Fact-checking (goes through immunity), Pantouflage (a jump down the road), Référendum (yes, no or abstention, at random).
+- **3 circuits**: L'Élysée (Faubourg Saint-Honoré), Palais Bourbon (quais de Seine), Versailles (jardins du Congrès) — with ramps and tricks, pits, dash panels, chicanes and crossing traffic. Each is drawn at 1.5 times its original size (`scale` in `data.js`), with its decor spread out to match.
+- **Contact**: karts bounce off each other once per contact, with a hop, sparks and a camera shake; rubbing door to door costs about 2 % of speed, ramming the kart in front about 10 %, and the lighter kart takes more of it. A spun-out kart always straightens up along the road before it drives off.
 - **Workshop (admin)**: rename candidates, change colours, upload kart liveries and campaign posters. Settings are stored in the browser's `localStorage`.
 - Graphics toggle (detailed with shadows / light low-poly), synthesized sound and music via WebAudio.
 
@@ -111,7 +112,7 @@ The engine never touches the DOM; the UI never touches the simulation. They meet
 | --- | --- |
 | `src/engine/data.js` | The cast, the items and their rank-weighted odds, the circuits (spline points and `features`). |
 | `src/engine/kart.js`, `track.js`, `primitives.js`, `textures.js` | Procedural karts, drivers, decor and tracks; cached materials; canvas-painted textures. |
-| `src/engine/physics.js`, `ai.js`, `items.js`, `powers.js` | Kart physics (drift, jumps, pits, hazards), AI with rubber-banding, the 14 items, the 11 powers. |
+| `src/engine/physics.js`, `ai.js`, `items.js`, `powers.js` | Kart physics (drift, jumps, pits, hazards, kart contact), AI with rubber-banding, the 19 items, the 16 powers. |
 | `src/engine/race.js` | Sets up a race, steps it one frame at a time and returns the **frame payload** the HUD shows. |
 | `src/engine/machine.js` | The **state machine**: title, select, tracks, admin, countdown, race, paused, results, lobby. |
 | `src/engine/teams.js` | Teams: who counts as a foe, the points table, team standings. |

@@ -297,3 +297,33 @@ free instance sleeps after 15 idle minutes: a cold probe takes about a minute
 and a sleeping server drops a running race. The server accepts sockets from
 any origin, as it already did.
 
+## DEC-016 -- Kart contact is one impulse per contact; circuits scale with their sample count
+
+**Context.** The human found kart-on-kart contact flat and too costly, spun
+karts often drove off backwards, and asked for bigger circuits, more items
+and five new candidates. Contact multiplied both speeds by 0.97 on every
+frame of overlap (a ten-frame rub cost about 26 %) and replayed the bump
+sound each frame; a stun spun the kart at 11 rad/s and left it at whatever
+angle it stopped. Scaling the spline points alone would have stretched the
+600 samples apart and changed every distance counted in samples (feature
+lengths, the AI look-ahead, power offsets, lap detection), and moved the
+road under the hand-placed decor.
+
+**Decision.** Overlap is still pushed apart every frame, but the bump --
+shove, speed loss, sound, hop, sparks, camera shake -- happens once per
+contact (a 0.3 s `bumpCd`). The shove goes into a decaying knock-back
+velocity (`kx`, `kz`) split by weight; speed loss runs from 2 % (side by
+side) to 10 % (head-on). The last 0.4 s of a stun blends the heading to the
+road's tangent, and `endStun` does the same when an item cuts a stun short.
+Circuits carry a `scale` (1.5) applied to their points, `CFG.samples` grows
+to 900 to keep the sample spacing, and the themed decor is laid out at scale
+1 in a group: pieces 14 m and wider stretch with the circuit, smaller ones
+only move. Bump and shield state travel in snapshots (`bu`, `bp`, `bs`,
+`sh`) so team races draw them too.
+
+**Consequence.** Races are about 1.5 times longer. Five items (Langue de
+bois, Cumul des mandats, Fact-checking, Pantouflage, Référendum) and five
+candidates (Gaspard Tableur, Jean-Mi Vérité, Martine Fichet, Aymeric de
+Bruxelles, Thierry Volte-Face) join; `applyPower` lets Ralliement play
+another candidate's power. Big decor is stretched horizontally, not taller.
+

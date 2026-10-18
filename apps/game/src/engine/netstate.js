@@ -21,6 +21,7 @@ export function encodeKart(k) {
   return {
     x: k.pos.x, z: k.pos.z, y: k.y, h: k.heading, s: k.speed, st: k.steer || 0, vy: k.vy,
     air: k.air, tr: k.trick, rs: k.rampSlope || 0, fly: k.fly, inv: k.invincible, stun: k.stun, ph: k.phantom, b: k.boost,
+    bu: k.bump || 0, bp: k.bumpPower || 1, bs: k.bumpSide || 1, sh: k.shield || 0,
     da: k.drift.active, dd: k.drift.dir, dc: k.drift.charge,
     it: k.item, ir: k.itemRolling > 0, pc: k.powerCd,
     lap: k.lap, idx: k.idx, pr: k.progress, rk: k.rank, fin: k.finished, ft: k.finishTime, bl: finite(k.bestLap),
@@ -31,6 +32,7 @@ export function encodeKart(k) {
 export function applyKart(k, s) {
   k.pos.x = s.x; k.pos.z = s.z; k.y = s.y; k.heading = s.h; k.speed = s.s; k.steer = s.st; k.vy = s.vy;
   k.air = s.air; k.trick = s.tr; k.rampSlope = s.rs; k.fly = s.fly; k.invincible = s.inv; k.stun = s.stun; k.phantom = s.ph; k.boost = s.b;
+  k.bump = s.bu ?? 0; k.bumpPower = s.bp ?? 1; k.bumpSide = s.bs ?? 1; k.shield = s.sh ?? 0;
   k.drift.active = s.da; k.drift.dir = s.dd; k.drift.charge = s.dc;
   k.item = s.it; k.itemRolling = s.ir ? 1 : 0; k.powerCd = s.pc;
   k.lap = s.lap; k.idx = s.idx; k.progress = s.pr; k.rank = s.rk; k.finished = s.fin; k.finishTime = s.ft; k.bestLap = unfinite(s.bl);
@@ -61,7 +63,7 @@ export function lerpKart(a, b, t) {
     ...b,
     x: mix(a.x, b.x, t), z: mix(a.z, b.z, t), y: mix(a.y, b.y, t),
     h: a.h + wrap(b.h - a.h) * t, s: mix(a.s, b.s, t), st: mix(a.st, b.st, t), vy: mix(a.vy, b.vy, t),
-    dc: mix(a.dc, b.dc, t), pc: mix(a.pc, b.pc, t), pr: mix(a.pr, b.pr, t),
+    dc: mix(a.dc, b.dc, t), pc: mix(a.pc, b.pc, t), pr: mix(a.pr, b.pr, t), bu: a.bu === undefined || b.bu > a.bu ? b.bu : mix(a.bu, b.bu, t),
   };
 }
 
