@@ -34,8 +34,10 @@ Current state only. History lives in git.
   and on a full rerun. It is timing-sensitive under load, not caused by
   this task.
 - **Stage 1 done** (pun names): Tier 1 green (game 103), e2e 29/29.
-- **Current stage:** 2 (kart style model). **Next action:** implement
-  `engine/kartstyle.js` and its tests.
+- **Stage 2 committed** (kart style model): Tier 1 green (game 118). E2E
+  deferred to Stage 3 -- awaiting the human's acknowledgement.
+- **Current stage:** 3 (kart mesh renders a style). **Next action:** scope
+  `kart.js`, `race.js` and `preview.js` callers, then implement.
 
 ## Previous task -- closed
 
