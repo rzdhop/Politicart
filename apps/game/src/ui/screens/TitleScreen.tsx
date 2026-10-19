@@ -22,7 +22,13 @@ const ADMIN_LABEL = {
   full: 'Atelier (admin) · non sauvegardé (stockage plein)',
 } as const;
 
-/** The title screen: brand, the four buttons, the controls legend, the disclaimer. */
+/** Pending friend requests, as a count after the account's name. */
+function friendBadge(ui: UiSnapshot) {
+  const n = ui.net.friends.filter(f => f.status === 'incoming').length;
+  return n ? ' · ✉ ' + n : '';
+}
+
+/** The title screen: brand, the buttons, the controls legend, the disclaimer. */
 export function TitleScreen({ ui }: { ui: UiSnapshot }) {
   const touch = useTouchMode();
   return (
@@ -34,6 +40,11 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
         <Row>
           <Button id="b-play" onClick={actions.play}>Jouer</Button>
           {ui.netAvailable && <Button id="b-multi" onClick={actions.multiplayer}>Multijoueur</Button>}
+          {ui.netAvailable && (
+            <Button id="b-account" variant={ui.account ? 'primary' : 'ghost'} onClick={actions.openAccount}>
+              {ui.account ? ui.account.profile.name + ' · niv. ' + ui.account.profile.level + friendBadge(ui) : 'Compte · se connecter'}
+            </Button>
+          )}
           <Button id="b-poly" variant="ghost" onClick={actions.togglePoly}>
             {ui.poly === 'low' ? 'Graphismes : légers (low-poly)' : 'Graphismes : détaillés (ombres)'}
           </Button>

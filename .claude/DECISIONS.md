@@ -357,3 +357,54 @@ offered where `document.fullscreenEnabled` (not on iPhone). Screens centre
 with auto margins, so a screen taller than the display scrolls from its
 top.
 
+
+## DEC-018 -- Race messages reach only the drivers they concern
+
+**Context.** The human found the banners noisy in a race: every item and
+power another kart used was announced to everyone ("LA BRAV-M INTERVIENT !"
+when the BRAV-M was nowhere near). `tell(k, mine, others)` sent `others` to
+every driver but k.
+
+**Decision.** `tell(k, mine, others, to)` sends `others` only to the karts in
+`to`, the ones the move actually hit (stunned, slowed, swapped, robbed,
+boosted). Without `to`, only k is told. Moves that affect nobody else
+(Pantouflage, Épandage, Grève générale, Rond-point, Fake news, Temps de
+parole) now use `say`. The victims' texts were rewritten in the second
+person.
+
+**Consequence.** A driver sees what they did and what was done to them,
+nothing else. BRAV-M also always sends two bikes, one on each side, both at
+the single kart ahead when there is only one.
+
+## DEC-019 -- Accounts live on the game server, in a JSON file or Postgres
+
+**Context.** The human asked for accounts, levels that unlock candidates,
+friends and invitations into team races, and chose (2026-10-19): storage in
+a file by default and Postgres when configured; four starting candidates
+and one more per level; request-and-accept friendships; guests limited to
+the four starters, no level, a pseudo of their choice, and joining rooms
+but never creating them. Render's free disk does not survive a restart.
+
+**Decision.** `apps/server/src/store.js` is one async interface with two
+backends: a JSON file rewritten atomically (KR_DATA, default
+`apps/server/data/kr-accounts.json`, `:memory:` for tests) and Postgres
+through `pg` 8.23.1 when `DATABASE_URL` is set (tables `kr_users`,
+`kr_sessions`, `kr_friends`, created on start). `accounts.js` serves
+`/api/register|login|logout|me|progress` open to every origin with bearer
+tokens (no cookies), scrypt hashes, and a per-address limit on sign-ups
+and failed logins. The WebSocket `hello` carries the token: an
+authenticated connection is that account for presence, friends, invites,
+room creation and team-race experience. Levels, unlocks and experience are
+pure rules in `apps/game/src/engine/progress.js`, shared by both sides; the
+lobby enforces each player's unlocked candidates. Solo races are reported
+by the client (at most one reward a minute), team races are scored by the
+server.
+
+Rejected: OAuth providers (a dependency and a registered app for a
+showcase game), cookies (would need credentialed CORS from GitHub Pages),
+SQLite (a native module in the container, and no help on Render).
+
+**Consequence.** Accounts need a game server; the Pages build without one
+plays as a guest. A logged-in player keeps a socket open from the title
+screen so friends see them online and invitations arrive in any menu.
+Experience from a solo race is trusted, in line with "not serious for now".

@@ -12,8 +12,10 @@
 
 import { getState } from './machine.js';
 
-// samples grew from 600 to 900 with the circuits (scale 1.5), keeping the spacing between them.
-export const CFG = { roadHalfWidth: 9, samples: 900, laps: 3, numAI: 5, powerCooldown: 24 };
+// samples grew from 600 to 900 and then 1800 with the circuits (scale 1.5, then 3), keeping
+// the spacing between them. The road is 30 m wide (it was 18): a bike lane runs along its
+// right-hand edge, between bikeLane.inner and bikeLane.outer (lateral offsets, right is +).
+export const CFG = { roadHalfWidth: 15, samples: 1800, laps: 3, numAI: 5, powerCooldown: 24, bikeLane: { inner: 10.3, outer: 13.9 } };
 
 /**
  * Graphics detail. 'high' adds segments and shadows, 'low' lightens both.

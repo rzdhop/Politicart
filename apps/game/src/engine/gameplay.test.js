@@ -154,3 +154,31 @@ describe('new powers', () => {
     expect(k.boost).toBeGreaterThan(1);
   });
 });
+
+describe('BRAV-M and who hears about it', () => {
+  beforeEach(() => race());
+
+  it('always sends two bikes, one on each side, even with a single kart ahead', () => {
+    const [a, b] = G.karts;
+    for (const k of G.karts) k.finished = true;
+    a.finished = false; b.finished = false; a.rank = 0; b.rank = 1;
+    place(a, 200, 0, 30); place(b, 150, 0, 30);
+    G.projectiles = []; b.item = 'bravm'; b.itemRolling = 0; useItem(b);
+    const bikes = G.projectiles.filter(p => p.type === 'bravm');
+    expect(bikes).toHaveLength(2);
+    expect(bikes.every(p => p.target === a)).toBe(true);
+    const s = G.samples[b.idx]; const lat = p => (p.x - b.pos.x) * s.sx + (p.z - b.pos.z) * s.sz;
+    expect(Math.sign(lat(bikes[0]))).toBe(-Math.sign(lat(bikes[1])));
+  });
+
+  it('tells only the driver hit, not the bystanders', () => {
+    const [a, b, c] = G.karts;
+    for (const k of [a, b, c]) k.isAI = false;
+    place(a, 200, 0, 30); place(b, 205, 0, 30); place(c, 600, 0, 30);   // c is far away
+    a.item = 'casserolade'; a.itemRolling = 0; useItem(a);
+    const events = drain().filter(e => e.type === 'toast');
+    const readers = k => events.filter(e => (!e.to || e.to === k) && e.except !== k);
+    expect(readers(b).length).toBeGreaterThan(0);
+    expect(readers(c)).toHaveLength(0);
+  });
+});

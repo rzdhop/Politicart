@@ -29,14 +29,33 @@ npm ci
 npm run serve        # builds the design system and the game, then starts the server on port 8080
 ```
 
-The server prints its addresses. Everyone on the same network opens `http://<that address>:8080/` and clicks **Multijoueur**. One player creates a room and reads out its four-letter code; the others join with it, pick a team and a candidate, and click ready. The host picks the circuit and starts.
+The server prints its addresses. Everyone on the same network opens `http://<that address>:8080/` and clicks **Multijoueur**. A player with an account creates a room and reads out its four-letter code, or invites friends straight into it; the others join with the code (or the invitation), pick a team and a candidate, and click ready. The host picks the circuit and starts.
+
+## Accounts, levels and friends
+
+When a game server answers, the title screen shows **Compte**. An account is a pseudo (3 to 16 letters, digits, `-`, `_`, `.`) and a password; the server stores only a salted scrypt hash.
+
+- **Levels.** Every race earns experience: 70 for a win down to 20 for last place, 10 for an unfinished race, plus 20 when your team wins a team race. Level 2 takes 120 XP, and each level costs 40 more than the one before.
+- **Candidates.** Victor, Gégé, Maurice and Capucine are free. Each level from 2 to 13 unlocks one more: Lucie, Patrick, Bernadette, Kevin, Odile, Lulu, Hubert, Gaspard, Jean-Mi, Martine, Aymeric, then Thierry. Locked candidates show on the roster with the level that unlocks them.
+- **Friends.** Add someone by pseudo; they accept or refuse. The list shows who is online and in which room. From your room in the lobby, **Inviter** sends an online friend an invitation that appears over their menus; **Rejoindre** takes them straight into your room.
+- **Guests** (no account, or no server reachable, as on a plain GitHub Pages build) choose a pseudo and play the four starting candidates, without levels. In team races they can join a room by code or by invitation but cannot create one.
+
+Solo races are scored by the browser and reported to the server (at most one reward a minute); team races are scored by the server. The game is not built to resist cheating.
+
+Accounts are kept in a JSON file by default, or in Postgres when `DATABASE_URL` is set:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `DATABASE_URL` | unset | A Postgres connection string. The server creates its three tables (`kr_users`, `kr_sessions`, `kr_friends`) on start. Hosted databases give a URL ending in `?sslmode=require`. |
+| `KR_DATA` | `apps/server/data/kr-accounts.json` (`/data/kr-accounts.json` in the container) | The JSON file used without `DATABASE_URL`. `:memory:` keeps accounts in memory only. |
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `PORT` | `8080` | Port to listen on. |
 | `HOST` | `0.0.0.0` | Interface to bind. `0.0.0.0` lets the local network in. |
 | `KR_STATIC` | `apps/game/dist` | The built game to serve. |
-| `KR_MAX_RACE_S` | `480` | A race ends after this many seconds even if nobody finishes. |
+| `KR_MAX_RACE_S` | `720` | A race ends after this many seconds even if nobody finishes. |
+| `DATABASE_URL`, `KR_DATA` | | Where accounts are kept; see [Accounts](#accounts-levels-and-friends). |
 
 The game build reads one variable: `VITE_KR_SERVER`, the origin of a game server on another host (e.g. `https://kr.onrender.com`). Unset, the game looks for the server at its own origin.
 
@@ -48,6 +67,8 @@ The free way to play team races over the internet, with no machine of your own l
 
 1. **Host the server on Render.** On [render.com](https://render.com), choose **New > Blueprint**, pick this repository and apply. `render.yaml` builds the `Dockerfile` on the free plan as a single instance. The game, solo and team races, is then playable at the address Render gives, `https://<name>.onrender.com/`.
 2. **Point the GitHub page at it.** In the repository's **Settings > Secrets and variables > Actions > Variables**, add `KR_SERVER_URL` = `https://<name>.onrender.com` (no trailing path), then re-run the **Deploy to GitHub Pages** workflow. `https://rzdhop.github.io/Politicart/` now shows **Multijoueur** whenever the server answers.
+
+Render's free disk is wiped whenever the service sleeps, so accounts need a database there: create a free Postgres (for example on [Neon](https://neon.tech) or Supabase) and paste its URL into the service's `DATABASE_URL` variable, which the Blueprint leaves for you to fill. Without it the server still runs, but every account vanishes at each restart.
 
 The free plan sleeps after 15 minutes with nobody connected. The first visitor after that waits about a minute before the Multijoueur button appears, and a race in progress when it falls asleep is lost. Delete the variable and re-run the workflow to make the page solo again.
 
@@ -61,6 +82,7 @@ docker run --rm -p 8080:8080 kart-republique     # the same server, in a contain
 
 fly launch --no-deploy --copy-config             # choose your own app name and region
 fly deploy
+fly volumes create kr_data --size 1              # once: the accounts file lives on it (/data)
 fly scale count 1                                # rooms live in memory: exactly one machine
 ```
 
@@ -100,7 +122,9 @@ Both orientations work: in portrait the camera widens and pulls back. Phones sta
 
 - **16 fictional candidates**, each with stats (speed, acceleration, handling, weight) and a signature satirical power: Grand débat, Grève générale, Rond-point surprise, Zone à faibles émissions, Amendement de dernière minute, Mégaphone, Éléments de langage, Vol d'audience, Mise en examen, Épandage, Temps de parole, Coup de rabot (Gaspard Tableur, le technocrate de Bercy), Fake news (Jean-Mi Vérité, le populiste de plateau télé), Contrôle d'identité (Martine Fichet, la ministre de l'Intérieur), Directive européenne (Aymeric de Bruxelles, le lobbyiste européen), Ralliement (Thierry Volte-Face, le transfuge, who copies the power of the kart ahead).
 - **19 items** from golden ballot boxes, weighted by race position: 49.3 Turbo, Grève surprise, Dossier Mediapart, Motion de censure, Immunité parlementaire, Sondage truqué, Hélico présidentiel, Remaniement, Plan de relance, BRAV-M, Nuage lacrymogène, Casserolade, Dissolution, Niche fiscale, Langue de bois (absorbs the next hit), Cumul des mandats (two items at once), Fact-checking (goes through immunity), Pantouflage (a jump down the road), Référendum (yes, no or abstention, at random).
-- **3 circuits**: L'Élysée (Faubourg Saint-Honoré), Palais Bourbon (quais de Seine), Versailles (jardins du Congrès) — with ramps and tricks, pits, dash panels, chicanes and crossing traffic. Each is drawn at 1.5 times its original size (`scale` in `data.js`), with its decor spread out to match.
+- **3 circuits**: L'Élysée (Faubourg Saint-Honoré), Palais Bourbon (quais de Seine), Versailles (jardins du Congrès) — with ramps and tricks, pits, dash panels, chicanes and crossing traffic. Each is drawn at 3 times its original size (`scale` in `data.js`, about 3 km a lap), with its decor spread out to match. The road is 30 m wide.
+- **Bike lane**: a green cycle lane runs along the right-hand edge of every circuit. Its cyclists ride where they like: they swerve into the karts' lanes, cut across the road, hop onto the pavement, stop dead or ride the wrong way. Hitting one knocks the rider over and shakes your kart.
+- **Messages**: the banners during a race only concern you: what you did, and what was done to you. Nobody else's item is announced to the whole field.
 - **Contact**: karts bounce off each other once per contact, with a hop, sparks and a camera shake; rubbing door to door costs about 2 % of speed, ramming the kart in front about 10 %, and the lighter kart takes more of it. A spun-out kart always straightens up along the road before it drives off.
 - **Workshop (admin)**: rename candidates, change colours, upload kart liveries and campaign posters. Settings are stored in the browser's `localStorage`.
 - Graphics toggle (detailed with shadows / light low-poly), synthesized sound and music via WebAudio.
@@ -114,7 +138,7 @@ An npm workspace with three packages.
 | Path | What it is |
 | --- | --- |
 | `apps/game` | The game: a Vite app. Three.js 0.128 engine, React screens. |
-| `apps/server` | The game server for team races: static files, rooms over WebSocket (`ws`), one worker thread per race running the game's own engine. |
+| `apps/server` | The game server: static files, accounts and friends (`accounts.js`, `store.js`: a JSON file or Postgres via `pg`), rooms over WebSocket (`ws`), one worker thread per race running the game's own engine. |
 | `packages/ui` | `@kart-republique/ui`, the design system: the game's look as React components, with Storybook. |
 | `e2e` | The Playwright suite that drives the game through its screens and HUD. |
 | `.github/workflows/pages.yml` | Builds, checks and publishes the game to GitHub Pages on every push to `main`. |
@@ -129,8 +153,10 @@ The engine never touches the DOM; the UI never touches the simulation. They meet
 | `src/engine/kart.js`, `track.js`, `primitives.js`, `textures.js` | Procedural karts, drivers, decor and tracks; cached materials; canvas-painted textures. |
 | `src/engine/physics.js`, `ai.js`, `items.js`, `powers.js` | Kart physics (drift, jumps, pits, hazards, kart contact), AI with rubber-banding, the 19 items, the 16 powers. |
 | `src/engine/race.js` | Sets up a race, steps it one frame at a time and returns the **frame payload** the HUD shows. |
-| `src/engine/machine.js` | The **state machine**: title, select, tracks, admin, countdown, race, paused, results, lobby. |
+| `src/engine/machine.js` | The **state machine**: title, select, tracks, admin, countdown, race, paused, results, lobby, account. |
 | `src/engine/teams.js` | Teams: who counts as a foe, the points table, team standings. |
+| `src/engine/cyclists.js` | The bike lane's cyclists: their whims, their run-ins with karts, and placing them from snapshots. |
+| `src/engine/progress.js`, `account.js` | Levels, experience and unlocks (shared with the server); the account API client. |
 | `src/engine/net.js`, `netstate.js`, `netrace.js` | Team races on the client: the server connection, the snapshot format, and drawing a race from snapshots. |
 | `src/engine/events.js` | The **event queue** for the text the engine wants shown (toasts, hints). |
 | `src/engine/input.js` | The **input seam**: the engine reads the controls through it. |

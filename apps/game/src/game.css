@@ -109,3 +109,14 @@ html,body{overscroll-behavior:none;}
   #s-results .results-table td span[style]{display:none;}   /* the epithet line under each name */
   #s-results .results-table br{display:none;}
 }
+
+/* ---------- Accounts ----------
+   A candidate the account has not unlocked yet: dimmed, not clickable, with
+   the level that unlocks it over the portrait. The password field takes the
+   workshop inputs' look. A friend's invitation pins itself to the top. */
+.tile.locked{filter:grayscale(1);opacity:.55;cursor:not-allowed;position:relative;}
+.tile.locked::after{content:attr(data-lock);position:absolute;top:6px;left:50%;transform:translateX(-50%);white-space:nowrap;font-family:var(--font-display);font-size:12px;letter-spacing:.03em;padding:2px 8px;border-radius:999px;background:rgba(12,18,48,.85);color:var(--gold);border:1px solid var(--gold);}
+.tile.locked:hover{transform:none;}
+.admin input[type=password]{font:inherit;font-size:14px;color:var(--fg);background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:7px;padding:6px 8px;}
+.invite-banner{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:30;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;width:max-content;max-width:calc(100vw - 32px);border:2px solid var(--gold);}
+.xp-gain{color:var(--gold);font-family:var(--font-display);font-size:18px;letter-spacing:.02em;}

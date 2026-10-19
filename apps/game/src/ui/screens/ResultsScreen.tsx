@@ -1,10 +1,10 @@
-import { Button, Heading, Panel, ResultsTable, Row, Screen, Subtitle, type ResultsRow } from '@kart-republique/ui';
+import { Button, Disclaimer, Heading, Panel, ResultsTable, Row, Screen, Subtitle, type ResultsRow } from '@kart-republique/ui';
 
 import { CHARACTERS } from '../../engine/data.js';
 import { G } from '../../engine/state.js';
 import { TEAM_NAMES } from '../../engine/teams.js';
 import { fmtTime, ordinal } from '../../engine/util.js';
-import { actions, type NetResults, type UiSnapshot } from '../store';
+import { actions, type Gain, type NetResults, type UiSnapshot } from '../store';
 import type { Character, Racer } from '../types';
 
 const COLUMN = { display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' } as const;
@@ -17,6 +17,22 @@ const VERDICTS = [
   'Score en demi-teinte. Les sondages pardonnent peu.',
   'Dernière place : retour à la base, pour écouter le pays.',
 ];
+
+/** What the race earned the account: experience, a new level, new candidates. Guests see an invitation to sign up. */
+export function XpLine({ ui }: { ui: UiSnapshot }) {
+  const g: Gain | null = ui.lastGain;
+  if (!ui.account) return ui.netAvailable ? <Disclaimer id="r-xp">Créez un compte pour gagner de l’expérience et débloquer des candidat·es.</Disclaimer> : null;
+  if (!g) return <Disclaimer id="r-xp">{'Niveau ' + ui.account.profile.level}</Disclaimer>;
+  const chars = CHARACTERS as unknown as Character[];
+  const names = g.unlockedNow.map(id => chars.find(c => c.id === id)?.name ?? id);
+  return (
+    <div id="r-xp" className="xp-gain">
+      {'+' + g.gained + ' XP'}
+      {g.levelUp ? ' · Niveau ' + g.level + ' atteint !' : ''}
+      {names.length ? ' · Débloqué : ' + names.join(', ') : ''}
+    </div>
+  );
+}
 
 function summary(player: Racer, field: number) {
   return ordinal(player.rank + 1) + ' sur ' + field + ' — ' + VERDICTS[player.rank]
@@ -48,6 +64,7 @@ export function ResultsScreen({ ui }: { ui: UiSnapshot }) {
       <Panel style={COLUMN}>
         <Heading id="r-title">Résultats du scrutin</Heading>
         <Subtitle id="r-sub" style={{ fontSize: 16 }}>{player ? summary(player, karts.length) : ''}</Subtitle>
+        <XpLine ui={ui} />
         <ResultsTable rows={rows} columns={['', 'Candidat·e', 'Temps']} bodyProps={{ id: 'r-body' }} />
         <Row>
           <Button id="b-again" onClick={actions.start}>Rejouer</Button>
@@ -86,6 +103,7 @@ function TeamResults({ ui, results }: { ui: UiSnapshot; results: NetResults }) {
       <Panel style={COLUMN}>
         <Heading id="r-title">Résultats du scrutin</Heading>
         <Subtitle id="r-sub" style={{ fontSize: 16 }}>{verdict}</Subtitle>
+        <XpLine ui={ui} />
         <ResultsTable rows={teamRows} columns={['', 'Équipe', 'Points']} bodyProps={{ id: 'r-teams' }} />
         <ResultsTable rows={rows} columns={['', 'Pilote', 'Temps · points']} bodyProps={{ id: 'r-body' }} />
         <Row>

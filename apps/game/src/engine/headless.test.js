@@ -29,10 +29,34 @@ describe('headless engine', () => {
     for (let n = 0; n < 30 * 60; n++) simStep(STEP);
     expect(getState()).toBe('race');
     const ai = G.karts.filter(k => k.isAI);
-    // Every AI kart has moved forward along the circuit, and the ranks are a permutation.
-    ai.forEach((k, j) => expect(k.progress).toBeGreaterThan(start[j] + 0.2));
+    // Every AI kart has moved forward along the circuit (a lap is about 3 km now), and the ranks are a permutation.
+    ai.forEach((k, j) => expect(k.progress).toBeGreaterThan(start[j] + 0.1));
     expect(G.karts.map(k => k.rank).sort()).toEqual([0, 1, 2, 3, 4, 5]);
     for (const k of G.karts) { expect(Number.isFinite(k.pos.x)).toBe(true); expect(Number.isFinite(k.pos.z)).toBe(true); }
+  });
+});
+
+describe('the bike lane', () => {
+  beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; G.trackIdx = 0; startRace(); drain(); });
+
+  it('puts cyclists on every circuit, and they keep riding', () => {
+    expect(G.cyclists.length).toBeGreaterThan(8);
+    const before = G.cyclists.map(c => [c.x, c.z]);
+    for (let n = 0; n < 10 * 60; n++) simStep(STEP);
+    const moved = G.cyclists.filter((c, i) => Math.hypot(c.x - before[i][0], c.z - before[i][1]) > 5);
+    expect(moved.length).toBeGreaterThan(G.cyclists.length / 2);
+    for (const c of G.cyclists) { expect(Number.isFinite(c.x)).toBe(true); expect(Math.abs(c.lat)).toBeLessThan(CFG.roadHalfWidth + 3); }
+  });
+
+  it('knocks over a cyclist a kart drives into, and shakes the kart', () => {
+    for (let n = 0; n < 4 * 60; n++) simStep(STEP);   // racing
+    drain();
+    const k = G.player, c = G.cyclists[0];
+    k.hazardGrace = 0; k.invincible = 0; k.shield = 0; k.speed = 30; k.pos.x = c.x; k.pos.z = c.z;
+    simStep(STEP);
+    expect(c.fallen).toBeGreaterThan(0);
+    expect(k.stun).toBeGreaterThan(0);
+    expect(drain().map(e => resolveFor(e, k)).filter(Boolean).length).toBeGreaterThan(0);
   });
 });
 

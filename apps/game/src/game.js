@@ -19,7 +19,7 @@ import './game.css';
 
 import { updateEngine } from './engine/audio.js';
 import { loadCustom } from './engine/custom.js';
-import { CHARACTERS, ITEMS } from './engine/data.js';
+import { ITEMS } from './engine/data.js';
 import { drain, resolveFor } from './engine/events.js';
 import { setInputSource } from './engine/input.js';
 import { getState, onTransition } from './engine/machine.js';
@@ -92,7 +92,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyM') actions.toggleMute(false);
   if (e.code === 'Enter' && G.state === 'title') $('b-play').click();
   if (e.code === 'Enter' && G.state === 'results') $('b-again').click();
-  if (G.state === 'select' && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) actions.selectChar((G.charIdx + (e.code === 'ArrowRight' ? 1 : CHARACTERS.length - 1)) % CHARACTERS.length);
+  if (G.state === 'select' && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) actions.stepChar(e.code === 'ArrowRight' ? 1 : -1);
   if (G.state === 'select' && e.code === 'Enter') $('b-next1').click();
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
@@ -143,7 +143,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
   const state = getState();
-  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby') { if (state === 'select' || state === 'tracks' || hasPreview()) renderPreview(dt); return; }
+  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account') { if (state === 'select' || state === 'tracks' || hasPreview()) renderPreview(dt); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
 
   const payload = isNetRace() ? netStep(dt) : stepRace(dt);

@@ -29,7 +29,7 @@ describe('a room', () => {
 
   it('refuses a seventh player and a taken candidate', () => {
     const r = new Room('ABCD');
-    for (let i = 0; i < MAX_PLAYERS; i++) r.join('p' + i, 'P' + i);
+    for (let i = 0; i < MAX_PLAYERS; i++) r.join('p' + i, 'P' + i, { userId: 'u' + i, level: 13 });
     expect(r.join('x', 'X')).toMatch(/complète/);
     expect(r.set('p1', { charId: r.player('p0').charId })).toMatch(/déjà pris/);
     expect(r.set('p1', { team: 'vert' })).toMatch(/inconnue/);
@@ -63,6 +63,21 @@ describe('a room', () => {
     expect(grid.slice(4).map(s => s.playerId)).toEqual(['a', 'b']);
     expect(new Set(grid.map(s => s.charId)).size).toBe(6);
     expect(grid.filter(s => s.isAI).every(s => s.team === null)).toBe(true);
+  });
+
+  it('gives guests the four starters only, and accounts what their level unlocked', () => {
+    const r = new Room('ABCD');
+    for (let i = 0; i < 4; i++) expect(typeof r.join('g' + i, 'G' + i)).toBe('object');
+    expect(r.join('g5', 'G5')).toMatch(/Plus aucun candidat/);
+    expect(new Set(r.players.map(p => p.charId))).toEqual(new Set(['victor', 'gege', 'maurice', 'capucine']));
+    const a = r.join('a', 'A', { userId: 'ua', level: 3 });
+    expect(a.charId).toBe('lucie');
+    expect(r.set('a', { charId: 'patrick' })).toBeNull();
+    expect(r.set('a', { charId: 'bernadette' })).toMatch(/débloqué/);
+    r.setLevel('a', 4);
+    expect(r.set('a', { charId: 'bernadette' })).toBeNull();
+    expect(r.view().players.at(-1)).toMatchObject({ guest: false, level: 4 });
+    expect(r.view().players[0].guest).toBe(true);
   });
 
   it('resets readiness after a race', () => {

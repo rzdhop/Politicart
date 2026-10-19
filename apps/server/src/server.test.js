@@ -42,11 +42,26 @@ beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), 'kr-static-'));
   writeFileSync(join(dir, 'index.html'), '<!doctype html><title>kr</title>');
   writeFileSync(join(dir, 'app.js'), 'console.log(1)');
-  srv = await startServer({ port: 0, host: '127.0.0.1', staticDir: dir, runRace: fakeRace });
+  srv = await startServer({ port: 0, host: '127.0.0.1', staticDir: dir, runRace: fakeRace, loginTries: 1000 });
 });
 afterAll(() => srv.close());
 
 const url = p => `http://127.0.0.1:${srv.port}${p}`;
+const post = (p, body, token) => fetch(url(p), { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(body) });
+let seq = 0;
+/** A fresh account: its name and session token. */
+async function account(prefix = 'User') {
+  const name = prefix + (++seq);
+  const r = await post('/api/register', { name, password: 'secret1' });
+  const j = await r.json(); return { name, token: j.token, profile: j.profile };
+}
+/** An open socket that said hello, as an account (token) or a guest (name). */
+async function hello(who) {
+  const c = client(srv.port); await c.open;
+  c.send({ t: 'hello', ...(typeof who === 'string' ? { name: who } : { token: who.token }) });
+  c.welcome = await c.next(m => m.t === 'welcome');
+  return c;
+}
 
 describe('http', () => {
   it('answers the probe the client uses to show the Multijoueur button', async () => {
@@ -75,18 +90,20 @@ describe('http', () => {
 });
 
 describe('lobby over WebSocket', () => {
-  it('creates a room, lets a friend join by code, and keeps both in sync', async () => {
-    const a = client(srv.port), b = client(srv.port);
-    await Promise.all([a.open, b.open]);
-    a.send({ t: 'hello', name: 'Alice' }); const wa = await a.next(m => m.t === 'welcome');
-    b.send({ t: 'hello', name: 'Bob' }); const wb = await b.next(m => m.t === 'welcome');
+  it('creates a room, lets a guest join by code, and keeps both in sync', async () => {
+    const alice = await account('Alice');
+    const a = await hello(alice), b = await hello('Bob');
+    const wa = a.welcome, wb = b.welcome;
+    expect(wa.profile.name).toBe(alice.name);
+    expect(wb.profile).toBeNull();
     a.send({ t: 'create' });
     const { room } = await a.next(isRoom(r => r.players.length === 1));
     expect(room.host).toBe(wa.id);
     expect(room.code).toMatch(/^[A-Z]{4}$/);
     b.send({ t: 'join', code: room.code.toLowerCase() });
     const both = await a.next(isRoom(r => r.players.length === 2));
-    expect(both.room.players.map(p => p.name)).toEqual(['Alice', 'Bob']);
+    expect(both.room.players.map(p => p.name)).toEqual([alice.name, 'Bob']);
+    expect(both.room.players.map(p => p.guest)).toEqual([false, true]);
     expect(both.room.players.map(p => p.team)).toEqual(['bleu', 'rouge']);
 
     b.send({ t: 'set', team: 'bleu', ready: true });
@@ -126,9 +143,7 @@ describe('lobby over WebSocket', () => {
   });
 
   it('hands the race the departure of a player and drops an empty room', async () => {
-    const a = client(srv.port), b = client(srv.port); await Promise.all([a.open, b.open]);
-    a.send({ t: 'hello', name: 'A' }); await a.next(m => m.t === 'welcome');
-    b.send({ t: 'hello', name: 'B' }); const wb = await b.next(m => m.t === 'welcome');
+    const a = await hello(await account()), b = await hello('B'); const wb = b.welcome;
     a.send({ t: 'create' }); const { room } = await a.next(isRoom(() => true));
     b.send({ t: 'join', code: room.code }); await a.next(isRoom(r => r.players.length === 2));
     b.send({ t: 'set', ready: true }); await a.next(isRoom(r => r.players[1]?.ready));
@@ -141,5 +156,120 @@ describe('lobby over WebSocket', () => {
     await new Promise(r => setTimeout(r, 100));
     expect(srv.rooms.has(room.code)).toBe(false);
     expect(race.stopped).toBe(true);
+  });
+});
+
+describe('accounts', () => {
+  it('signs up, refuses a taken name or a bad password, logs in and out', async () => {
+    const r = await post('/api/register', { name: 'Marianne', password: 'liberte' });
+    expect(r.status).toBe(200);
+    const { token, profile } = await r.json();
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
+    expect(profile).toMatchObject({ name: 'Marianne', xp: 0, level: 1, unlocked: ['victor', 'gege', 'maurice', 'capucine'] });
+    expect((await post('/api/register', { name: 'marianne', password: 'egalite' })).status).toBe(409);
+    expect((await post('/api/register', { name: 'Jo', password: 'egalite' })).status).toBe(400);
+    expect((await post('/api/register', { name: 'Fraternite', password: '123' })).status).toBe(400);
+    expect((await post('/api/login', { name: 'MARIANNE', password: 'nope' })).status).toBe(401);
+    const login = await (await post('/api/login', { name: 'MARIANNE', password: 'liberte' })).json();
+    expect(login.profile.name).toBe('Marianne');
+    const me = await fetch(url('/api/me'), { headers: { authorization: 'Bearer ' + login.token } });
+    expect((await me.json()).profile.name).toBe('Marianne');
+    await post('/api/logout', {}, login.token);
+    expect((await fetch(url('/api/me'), { headers: { authorization: 'Bearer ' + login.token } })).status).toBe(401);
+    // the first session still works
+    expect((await fetch(url('/api/me'), { headers: { authorization: 'Bearer ' + token } })).status).toBe(200);
+  });
+
+  it('answers the browser preflight for another origin', async () => {
+    const r = await fetch(url('/api/login'), { method: 'OPTIONS' });
+    expect(r.status).toBe(204);
+    expect(r.headers.get('access-control-allow-headers')).toMatch(/authorization/);
+  });
+
+  it('awards experience for a solo race, at most once a minute', async () => {
+    const u = await account();
+    const first = await (await post('/api/progress', { rank: 0, field: 6, finished: true }, u.token)).json();
+    expect(first.gained).toBe(70);
+    expect(first.profile.xp).toBe(70);
+    const again = await (await post('/api/progress', { rank: 0, field: 6, finished: true }, u.token)).json();
+    expect(again.gained).toBe(0);
+    expect((await post('/api/progress', { rank: 0 })).status).toBe(401);
+  });
+
+  it('keeps guests out of room creation and away from locked candidates', async () => {
+    const g = await hello('Invité');
+    g.send({ t: 'create' });
+    expect((await g.next(m => m.t === 'error')).msg).toMatch(/Connectez-vous/);
+    const host = await hello(await account());
+    host.send({ t: 'create' }); const { room } = await host.next(isRoom(() => true));
+    g.send({ t: 'join', code: room.code }); await g.next(isRoom(r => r.players.length === 2));
+    g.send({ t: 'set', charId: 'thierry' });
+    expect((await g.next(m => m.t === 'error')).msg).toMatch(/invité/);
+    host.send({ t: 'set', charId: 'thierry' });
+    expect((await host.next(m => m.t === 'error')).msg).toMatch(/débloqué/);
+    g.close(); host.close();
+  });
+
+  it('awards experience to the accounts in a team race', async () => {
+    const u = await account();
+    const a = await hello(u), b = await hello('Guest');
+    a.send({ t: 'create' }); const { room } = await a.next(isRoom(() => true));
+    b.send({ t: 'join', code: room.code }); await a.next(isRoom(r => r.players.length === 2));
+    b.send({ t: 'set', ready: true }); await a.next(isRoom(r => r.players[1]?.ready));
+    a.send({ t: 'start' }); await a.next(isRoom(r => r.phase === 'race'));
+    const race = races.at(-1);
+    const slotA = race.roster.findIndex(s => s.playerId === a.welcome.id), slotB = race.roster.findIndex(s => s.playerId === b.welcome.id);
+    race.io.done({
+      ranking: [{ slot: slotA, rank: 0, finished: true, team: 'bleu', isAI: false }, { slot: slotB, rank: 1, finished: true, team: 'rouge', isAI: false }],
+      teams: [{ team: 'bleu', points: 10, drivers: [slotA] }, { team: 'rouge', points: 8, drivers: [slotB] }],
+    });
+    const p = await a.next(m => m.t === 'profile');
+    expect(p.gained).toBe(70 + 20);          // winner, and the winning team
+    expect(p.profile.xp).toBe(90);
+    expect(b.seen.some(m => m.t === 'profile')).toBe(false);
+    a.close(); b.close();
+  });
+});
+
+describe('friends', () => {
+  it('requests, accepts, shows who is online and where, and invites into a room', async () => {
+    const ua = await account('Ami'), ub = await account('Amie');
+    const a = await hello(ua), b = await hello(ub);
+    a.send({ t: 'friendAdd', name: ub.name });
+    expect((await a.next(m => m.t === 'notice')).msg).toMatch(/Demande envoyée/);
+    const incoming = await b.next(m => m.t === 'friends' && m.list.some(f => f.status === 'incoming'));
+    expect(incoming.list[0]).toMatchObject({ name: ua.name, status: 'incoming', online: false });
+
+    a.send({ t: 'invite', id: b.welcome.profile.id });
+    expect((await a.next(m => m.t === 'error')).msg).toMatch(/salle/);
+
+    b.send({ t: 'friendAccept', id: incoming.list[0].id });
+    const fa = await a.next(m => m.t === 'friends' && m.list.some(f => f.status === 'friend'));
+    expect(fa.list[0]).toMatchObject({ name: ub.name, online: true, room: null });
+
+    a.send({ t: 'create' }); const { room } = await a.next(isRoom(() => true));
+    await b.next(m => m.t === 'friends' && m.list[0]?.room === room.code);
+    a.send({ t: 'invite', id: b.welcome.profile.id });
+    const inv = await b.next(m => m.t === 'invite');
+    expect(inv).toMatchObject({ from: { name: ua.name }, code: room.code });
+
+    b.close();
+    await a.next(m => m.t === 'friends' && m.list[0]?.online === false);
+    a.send({ t: 'friendRemove', id: b.welcome.profile.id });
+    await a.next(m => m.t === 'friends' && m.list.length === 0);
+    a.close();
+  });
+
+  it('turns two crossed requests into a friendship, and refuses strangers and guests', async () => {
+    const ua = await account(), ub = await account();
+    const a = await hello(ua), b = await hello(ub), g = await hello('Anonyme');
+    a.send({ t: 'friendAdd', name: ub.name }); await a.next(m => m.t === 'notice');
+    b.send({ t: 'friendAdd', name: ua.name });
+    expect((await b.next(m => m.t === 'notice')).msg).toMatch(/maintenant ami/);
+    a.send({ t: 'friendAdd', name: 'PersonneIci' });
+    expect((await a.next(m => m.t === 'error')).msg).toMatch(/Aucun compte/);
+    g.send({ t: 'friendAdd', name: ua.name });
+    expect((await g.next(m => m.t === 'error')).msg).toMatch(/Connectez-vous/);
+    a.close(); b.close(); g.close();
   });
 });

@@ -81,7 +81,7 @@ export default defineConfig({
       // reach the results without three real laps.
       command: 'npm start -w @kart-republique/server',
       url: 'http://127.0.0.1:4180/api/kr',
-      env: { PORT: '4180', HOST: '127.0.0.1', KR_MAX_RACE_S: '15' },
+      env: { PORT: '4180', HOST: '127.0.0.1', KR_MAX_RACE_S: '15', KR_DATA: ':memory:' },
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       stdout: 'ignore',

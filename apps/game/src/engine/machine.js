@@ -23,11 +23,15 @@
 // the countdown. A networked race returns to it from the countdown, the
 // race or the results, because the room outlives each race. There is no
 // pause in a networked race: the world does not stop for one player.
+//
+// `account` is the player's account screen: log in or sign up, the level and
+// the friend list. Reached from the title, it leads back there or -- when an
+// invitation is accepted -- straight into the lobby.
 
-export const STATES = Object.freeze(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby']);
+export const STATES = Object.freeze(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'account']);
 
 const NEXT = Object.freeze({
-  title: Object.freeze(['select', 'admin', 'lobby']),
+  title: Object.freeze(['select', 'admin', 'lobby', 'account']),
   select: Object.freeze(['title', 'tracks']),
   tracks: Object.freeze(['select', 'countdown']),
   admin: Object.freeze(['title']),
@@ -36,6 +40,7 @@ const NEXT = Object.freeze({
   paused: Object.freeze(['race', 'countdown', 'title']),
   results: Object.freeze(['countdown', 'title', 'lobby']),
   lobby: Object.freeze(['title', 'countdown']),
+  account: Object.freeze(['title', 'lobby']),
 });
 
 let current = 'title';

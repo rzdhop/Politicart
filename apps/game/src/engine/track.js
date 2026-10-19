@@ -14,6 +14,7 @@ import * as THREE from 'three';
 
 import { getCustom } from './custom.js';
 import { box, canvasTexture, cone, cyl, imgPlane, mat, plane, sph, tag, textPlane } from './primitives.js';
+import { buildCyclists } from './cyclists.js';
 import { CFG, G, isClear, seg } from './state.js';
 import { TEX, textures } from './textures.js';
 import { hex, pick, rand } from './util.js';
@@ -110,7 +111,8 @@ function buildFeatures(scene, track) {
       const sg = textPlane(3, 1, 'PRIORITÉ', '#fff', '#c8102e', 90); sg.position.set(a.x + a.sx * (hw + 2.5) + a.tx * 6, 2.4, a.z + a.sz * (hw + 2.5) + a.tz * 6); sg.rotation.y = Math.atan2(-a.tx, -a.tz); scene.add(sg);
       G.crossings.push({ s: a, mesh: car, t: rand(0, 20), range: 40, speed: f.speed || 14 });
     } else if (f.t === 'chicane') {
-      for (let j = 0; j < (f.n || 3); j++) { const s = G.samples[(i0 + j * 9) % N]; const lat = (j % 2 ? 1 : -1) * (hw - 4); const x = s.x + s.sx * lat, z = s.z + s.sz * lat; const yaw = Math.atan2(s.tx, s.tz); const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = yaw;
+      // two blocks per gate on the wide road, so each gate still closes two thirds of it
+      for (let j = 0; j < (f.n || 3); j++) for (const off of [4, 10]) { const s = G.samples[(i0 + j * 9) % N]; const lat = (j % 2 ? 1 : -1) * (hw - off); const x = s.x + s.sx * lat, z = s.z + s.sz * lat; const yaw = Math.atan2(s.tx, s.tz); const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = yaw;
         if (f.kind === 'hedge') { g.add(box(7, 2.6, 2.4, 0x2f6b3a, 0, 1.3, 0)); g.add(box(7.2, 0.3, 2.6, 0x3a7f45, 0, 2.7, 0)); g.add(cone(1.0, 2.2, 0x2f6b3a, 0, 3.9, 0, 12)); }
         else { for (let b = -2.6; b <= 2.6; b += 2.6) { g.add(box(2.4, 0.08, 0.08, 0x9a9a9a, b, 1.05, 0)); g.add(box(2.4, 0.08, 0.08, 0x9a9a9a, b, 0.55, 0)); g.add(cyl(0.06, 0.06, 1.1, 0x9a9a9a, b - 1.2, 0.55, 0, 5)); g.add(cyl(0.06, 0.06, 1.1, 0x9a9a9a, b + 1.2, 0.55, 0, 5)); } g.add(box(7.8, 0.5, 0.06, 0xc8102e, 0, 0.8, 0.05)); [-3, 3].forEach(b => g.add(cone(0.4, 0.9, 0xff6a00, b, 0.45, 1.6, 8))); const gd = figure(0x1f2a5e, pick(SKINS), null); gd.position.set(3.2, 0, -1.2); g.add(gd); }
         scene.add(g); G.hazards.push({ type: 'obstacle', x, z, mesh: g, life: 1e9, r: f.kind === 'hedge' ? 4.3 : 4.2, stun: 0, owner: null });
@@ -182,6 +184,41 @@ function cloudsAndSky(scene, top, horizon) {
   for (let i = 0; i < 16; i++) { const g = new THREE.Group(); const n = 3 + Math.floor(Math.random() * 3); for (let j = 0; j < n; j++) { const s = new THREE.Mesh(new THREE.SphereGeometry(rand(7, 14), 10, 8), cm); s.position.set(j * 9 - n * 4, rand(-2, 3), rand(-4, 4)); s.scale.y = 0.55; g.add(s); } g.position.set(rand(-700, 700), rand(120, 190), rand(-700, 700)); scene.add(g); G.animated.push(dt => { g.position.x += dt * 2.5; if (g.position.x > 760) g.position.x = -760; }); }
 }
 
+// ---------- Bike lane ----------
+// A green painted lane along the right-hand edge of the road, behind a dashed
+// white line, with a cycle pictogram every so often. The cyclists who use it
+// (and leave it whenever they like) live in cyclists.js.
+function bikeTex() {
+  if (!TEX.bike) {
+    TEX.bike = canvasTexture(128, 128, (c, w, h) => {
+      c.strokeStyle = '#f6f1e4'; c.lineWidth = 7; c.lineCap = 'round';
+      [[34, 84], [94, 84]].forEach(([x, y]) => { c.beginPath(); c.arc(x, y, 20, 0, 7); c.stroke(); });
+      c.beginPath(); c.moveTo(34, 84); c.lineTo(58, 52); c.lineTo(86, 52); c.lineTo(94, 84); c.moveTo(58, 52); c.lineTo(64, 84); c.lineTo(34, 84); c.moveTo(86, 52); c.lineTo(82, 38); c.lineTo(94, 38); c.moveTo(52, 44); c.lineTo(66, 44); c.stroke();
+    });
+  }
+  return TEX.bike;
+}
+function bikeLane(scene, track, strip) {
+  const { inner, outer } = CFG.bikeLane, N = G.N;
+  strip(inner, outer, 0.062, 0.062, 0, 1, 0x2a7d50, 0x2a7d50, 0.95);                    // the green lane
+  // dashed separation line: one dash every four samples
+  const pos = [], ix = [];
+  for (let i = 0; i < N; i += 4) {
+    const a = G.samples[i], b = G.samples[(i + 2) % N]; const n = pos.length / 3;
+    for (const s of [a, b]) for (const l of [inner - 0.15, inner + 0.15]) pos.push(s.x + s.sx * l, 0.066, s.z + s.sz * l);
+    ix.push(n, n + 2, n + 1, n + 1, n + 2, n + 3);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(ix); g.computeVertexNormals();
+  scene.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xf6f1e4, side: THREE.DoubleSide })));
+  // pictograms, pointing the way the lane runs
+  const mid = (inner + outer) / 2;
+  for (let i = 20; i < N; i += 70) {
+    const s = G.samples[i]; const p = new THREE.Mesh(new THREE.PlaneGeometry(3, 3), new THREE.MeshBasicMaterial({ map: bikeTex(), transparent: true }));
+    p.rotation.x = -Math.PI / 2; p.rotation.z = Math.PI / 2;
+    const h = new THREE.Group(); h.position.set(s.x + s.sx * mid, 0.07, s.z + s.sz * mid); h.rotation.y = Math.atan2(s.tx, s.tz); h.add(p); scene.add(h);
+  }
+}
+
 // ---------- Track construction ----------
 export function buildTrack(scene, track) {
   textures();
@@ -219,6 +256,7 @@ export function buildTrack(scene, track) {
     strip(hw + 0.8, hw + 6, 0.35, 0.35, 0, sg, track.pavement, track.pavement);       // pavement
     strip(hw + 0.8, hw + 0.8, 0.35, 1.25, 6, sg, track.kerb[0], 0xf6f1e4);            // barrier wall
   });
+  bikeLane(scene, track, strip);
 
   // start line + gantry
   const s0 = samples[0]; const yaw = Math.atan2(s0.tx, s0.tz);
@@ -230,14 +268,14 @@ export function buildTrack(scene, track) {
   const bm = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2 + 3.2, 3), new THREE.MeshBasicMaterial({ map: banner, side: THREE.DoubleSide })); bm.position.set(0, 8, 0); gantry.add(bm); scene.add(gantry);
 
   // ground
-  const gt = (track.gravel ? TEX.gravel : TEX.grass).clone(); gt.needsUpdate = true; gt.repeat.set(140, 140);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), new THREE.MeshStandardMaterial({ map: gt, roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+  const gt = (track.gravel ? TEX.gravel : TEX.grass).clone(); gt.needsUpdate = true; gt.repeat.set(280, 280);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(3200, 3200), new THREE.MeshStandardMaterial({ map: gt, roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
   cloudsAndSky(scene, track.sky[0], track.sky[1]);
 
-  // item boxes: rows of 3 golden urns, four unless the track lists more
+  // item boxes: rows of 4 golden urns across the wide road, four rows unless the track lists more
   G.itemBoxes = [];
   const boxGeo = new THREE.OctahedronGeometry(1.1, 0); const boxMat = new THREE.MeshStandardMaterial({ color: 0xffd34d, emissive: 0x6a4a00, transparent: true, opacity: 0.9, roughness: 0.3, metalness: 0.4 });
-  (track.boxRows || [0.18, 0.42, 0.66, 0.88]).forEach(f => { const s = samples[Math.floor(f * N)]; [-5, 0, 5].forEach(o => { const m = new THREE.Mesh(boxGeo, boxMat); m.position.set(s.x + s.sx * o, 1.4, s.z + s.sz * o); scene.add(m); G.itemBoxes.push({ x: m.position.x, z: m.position.z, mesh: m, active: true, timer: 0 }); }); });
+  (track.boxRows || [0.18, 0.42, 0.66, 0.88]).forEach(f => { const s = samples[Math.floor(f * N)]; [-9, -3, 3, 9].forEach(o => { const m = new THREE.Mesh(boxGeo, boxMat); m.position.set(s.x + s.sx * o, 1.4, s.z + s.sz * o); scene.add(m); G.itemBoxes.push({ x: m.position.x, z: m.position.z, mesh: m, active: true, timer: 0 }); }); });
 
   // shared street furniture: lamps, ad boards, crowd zones, grandstand
   for (let i = 0; i < N; i += 36) { const s = samples[i]; const sg = (i / 36) % 2 ? 1 : -1; lamp(scene, s.x + s.sx * sg * (hw + 5.2), s.z + s.sz * sg * (hw + 5.2), track.gravel ? 'plain' : 'paris'); }
@@ -248,6 +286,7 @@ export function buildTrack(scene, track) {
   [0.28, 0.5, 0.74].forEach((f, i) => crowdZone(scene, Math.floor(N * f), Math.floor(N * f) + 36, i % 2 ? 1 : -1, false));
 
   buildFeatures(scene, track);
+  buildCyclists(scene);
   // themed decor, laid out at scale 1 and then spread out to the circuit's scale
   const decor = new THREE.Group();
   if (track.id === 'elysee') buildElysee(decor, scene);

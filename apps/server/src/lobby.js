@@ -6,8 +6,12 @@
 // A-009). Each human drives a different candidate, so every kart on the grid
 // is distinguishable. The first player in is the host and picks the circuit
 // and the start; if the host leaves, the next player in line takes over.
+//
+// Each player may only drive the candidates their account has unlocked
+// (engine/progress.js); a guest -- no account -- drives the four starters.
 
 import { CHARACTERS, TRACKS } from '../../game/src/engine/data.js';
+import { unlockedIds } from '../../game/src/engine/progress.js';
 import { TEAMS } from '../../game/src/engine/teams.js';
 
 export const MAX_PLAYERS = 6;
@@ -31,7 +35,7 @@ export function newCode(taken, rnd = Math.random) {
 export class Room {
   constructor(code) {
     this.code = code;
-    this.players = [];          // { id, name, team, charId, ready }, in join order
+    this.players = [];          // { id, name, team, charId, ready, userId, level, allowed }, in join order
     this.trackIdx = 0;
     this.phase = 'lobby';       // 'lobby' | 'race'
   }
@@ -40,17 +44,29 @@ export class Room {
   get empty() { return this.players.length === 0; }
   player(id) { return this.players.find(p => p.id === id) ?? null; }
 
-  /** Add a player; returns the player, or an error string. */
-  join(id, name) {
+  /**
+   * Add a player; returns the player, or an error string. `who` names the
+   * account behind the connection ({ userId, level }); without one the
+   * player is a guest.
+   */
+  join(id, name, who = {}) {
     if (this.phase !== 'lobby') return 'La course a déjà commencé.';
     if (this.players.length >= MAX_PLAYERS) return 'Salle complète (6 joueurs).';
+    const allowed = unlockedIds(who.userId ? who.level : 0);
     const taken = new Set(this.players.map(p => p.charId));
-    const charId = CHAR_IDS.find(c => !taken.has(c));
+    const charId = allowed.find(c => !taken.has(c));
+    if (!charId) return 'Plus aucun candidat libre pour vous dans cette salle.';
     const count = t => this.players.filter(p => p.team === t).length;
     const team = count('bleu') <= count('rouge') ? 'bleu' : 'rouge';
-    const p = { id, name: cleanName(name), team, charId, ready: false };
+    const p = { id, name: cleanName(name), team, charId, ready: false, userId: who.userId ?? null, level: who.userId ? who.level : null, allowed };
     this.players.push(p);
     return p;
+  }
+
+  /** An account levelled up while in the room: it may drive its new candidates. */
+  setLevel(id, level) {
+    const p = this.player(id); if (!p || !p.userId) return;
+    p.level = level; p.allowed = unlockedIds(level);
   }
 
   leave(id) { this.players = this.players.filter(p => p.id !== id); }
@@ -62,6 +78,7 @@ export class Room {
     if (team !== undefined) { if (!TEAMS.includes(team)) return 'Équipe inconnue.'; p.team = team; }
     if (charId !== undefined) {
       if (!CHAR_IDS.includes(charId)) return 'Candidat inconnu.';
+      if (!p.allowed.includes(charId)) return p.userId ? 'Candidat pas encore débloqué.' : 'Les invité·es jouent les quatre candidats de départ.';
       if (this.players.some(o => o !== p && o.charId === charId)) return 'Ce candidat est déjà pris.';
       p.charId = charId;
     }
@@ -101,6 +118,9 @@ export class Room {
 
   /** What every client in the room is told. */
   view() {
-    return { code: this.code, host: this.host, trackIdx: this.trackIdx, phase: this.phase, players: this.players.map(p => ({ ...p })) };
+    return {
+      code: this.code, host: this.host, trackIdx: this.trackIdx, phase: this.phase,
+      players: this.players.map(({ id, name, team, charId, ready, userId, level }) => ({ id, name, team, charId, ready, userId, level, guest: !userId })),
+    };
   }
 }

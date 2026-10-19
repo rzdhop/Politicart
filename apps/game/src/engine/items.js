@@ -42,13 +42,18 @@ export function useItem(k) {
   else if (it === 'immunite') { k.invincible = 6; endStun(k); sfx('shield'); say(k, 'IMMUNITÉ PARLEMENTAIRE'); }
   else if (it === 'helico') { k.fly = 4; endStun(k); k.drift.active = false; sfx('helico'); say(k, 'HÉLICO PRÉSIDENTIEL'); }
   else if (it === 'relance') { k.relance = 3; k.relanceTimer = 0; say(k, 'PLAN DE RELANCE : 3 BOOSTS'); }
-  else if (it === 'remaniement') { let n = 0; for (const o of G.karts) if (isFoe(k, o) && o.rank < k.rank) { if (o.item) o.item = null; if (stunKart(o, 0.7)) n++; } sfx('motion'); tell(k, 'REMANIEMENT : ' + n + ' MINISTRES LIMOGÉS', 'REMANIEMENT SURPRISE !'); }
+  else if (it === 'remaniement') { const hit = []; for (const o of G.karts) if (isFoe(k, o) && o.rank < k.rank) { if (o.item) o.item = null; if (stunKart(o, 0.7)) hit.push(o); } sfx('motion'); tell(k, 'REMANIEMENT : ' + hit.length + ' MINISTRES LIMOGÉS', 'REMANIEMENT : VOUS ÊTES LIMOGÉ·E !', hit); }
   else if (it === 'dossier') { const ahead = foeAhead(k, G.karts); const target = ahead && !ahead.finished ? ahead : null; spawnProjectile('dossier', k, target); sfx('throw'); say(k, 'FUITE : MEDIAPART EST SUR LE COUP'); }
-  else if (it === 'motion') { const target = leadingFoe(k, G.karts); spawnProjectile('motion', k, target); sfx('motion'); tell(k, 'MOTION DE CENSURE !', 'MOTION DE CENSURE DÉPOSÉE !'); }
-  else if (it === 'bravm') { const ahead = G.karts.filter(o => isFoe(k, o) && !o.finished && o.rank < k.rank).sort((a, b) => b.rank - a.rank).slice(0, 2); if (ahead.length) ahead.forEach(t => spawnProjectile('bravm', k, t)); else { spawnProjectile('bravm', k, null); spawnProjectile('bravm', k, null); } sfx('motion'); tell(k, 'BRAV-M DÉPLOYÉE !', 'LA BRAV-M INTERVIENT !'); }
+  else if (it === 'motion') { const target = leadingFoe(k, G.karts); spawnProjectile('motion', k, target); sfx('motion'); tell(k, 'MOTION DE CENSURE !', 'MOTION DE CENSURE CONTRE VOUS !', [target]); }
+  else if (it === 'bravm') {
+    // always two bikes, one on each side: the two karts just ahead, or both on the only one, or straight down the road
+    const ahead = G.karts.filter(o => isFoe(k, o) && !o.finished && o.rank < k.rank).sort((a, b) => b.rank - a.rank).slice(0, 2);
+    [1, -1].forEach((side, n) => spawnProjectile('bravm', k, ahead[n] ?? ahead[0] ?? null, side));
+    sfx('motion'); tell(k, 'BRAV-M DÉPLOYÉE !', 'LA BRAV-M VOUS PREND EN CHASSE !', ahead);
+  }
   else if (it === 'lacrymo') { spawnHazard('lacrymo', k.pos.x - fx * 4, k.pos.z - fz * 4, k); k.hazardGrace = 1.2; sfx('drop'); say(k, 'NUAGE LACRYMOGÈNE LÂCHÉ'); }
-  else if (it === 'casserolade') { let n = 0; for (const o of G.karts) if (isFoe(k, o)) { const dx = o.pos.x - k.pos.x, dz = o.pos.z - k.pos.z; if (Math.hypot(dx, dz) < 20) { o.speed *= 0.5; if (stunKart(o, 0.8)) n++; } } sfx('motion'); tell(k, 'CASSEROLADE : ' + n + ' SONNÉ' + (n > 1 ? 'S' : ''), 'CASSEROLADE !'); }
-  else if (it === 'dissolution') { let n = 0; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { if (stunKart(o, 0.9)) n++; } sfx('motion'); tell(k, 'DISSOLUTION : ' + n + ' KART' + (n > 1 ? 'S' : '') + ' SONNÉ' + (n > 1 ? 'S' : ''), 'DISSOLUTION DE L’ASSEMBLÉE !'); }
+  else if (it === 'casserolade') { const hit = []; for (const o of G.karts) if (isFoe(k, o)) { const dx = o.pos.x - k.pos.x, dz = o.pos.z - k.pos.z; if (Math.hypot(dx, dz) < 20) { o.speed *= 0.5; if (stunKart(o, 0.8)) hit.push(o); } } const n = hit.length; sfx('motion'); tell(k, 'CASSEROLADE : ' + n + ' SONNÉ' + (n > 1 ? 'S' : ''), 'CASSEROLADE !', hit); }
+  else if (it === 'dissolution') { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { if (stunKart(o, 0.9)) hit.push(o); } const n = hit.length; sfx('motion'); tell(k, 'DISSOLUTION : ' + n + ' KART' + (n > 1 ? 'S' : '') + ' SONNÉ' + (n > 1 ? 'S' : ''), 'DISSOLUTION DE L’ASSEMBLÉE !', hit); }
   else if (it === 'niche') { k.invincible = 5; k.phantom = 5; k.boost = Math.max(k.boost, 0.6); k.boostPower = 1.3; endStun(k); sfx('shield'); say(k, 'NICHE FISCALE : INTOUCHABLE'); }
   else if (it === 'langue') { k.shield = 25; sfx('shield'); say(k, 'LANGUE DE BOIS : PRÊT À NE RIEN DIRE'); }
   else if (it === 'cumul') {
@@ -63,13 +68,13 @@ export function useItem(k) {
     // a jump down the road in a few short hops, so updateProgress follows it and counts a lap if it crosses the line
     for (let n = 0; n < 4; n++) { const s = G.samples[(k.idx + 9) % G.N]; k.pos.x = s.x; k.pos.z = s.z; updateProgress(k); }
     const s = G.samples[k.idx]; k.heading = Math.atan2(s.tx, s.tz); k.kx = 0; k.kz = 0; k.speed = Math.max(k.speed, 30); k.phantom = 1.2; k.hazardGrace = 1.2; endStun(k);
-    sfx('helico'); tell(k, 'PANTOUFLAGE : RECONVERTI DANS LE PRIVÉ', k.def.name.toUpperCase() + ' PART DANS LE PRIVÉ');
+    sfx('helico'); say(k, 'PANTOUFLAGE : RECONVERTI DANS LE PRIVÉ');
   }
   else if (it === 'referendum') {
     const r = Math.random();
-    if (r < 0.4) { for (const o of G.karts) if (!o.finished) { o.boost = Math.max(o.boost, 0.8); o.boostPower = Math.max(o.boostPower, 1.3); } k.boost = 1.6; k.boostPower = 1.5; sfx('boost'); tell(k, 'RÉFÉRENDUM : LE OUI L’EMPORTE, BOOST POUR TOUS', 'RÉFÉRENDUM : LE OUI L’EMPORTE !'); }
-    else if (r < 0.8) { let n = 0; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { if (stunKart(o, 0.7)) n++; } sfx('motion'); tell(k, 'RÉFÉRENDUM : LE NON L’EMPORTE, ' + n + ' SONNÉ' + (n > 1 ? 'S' : ''), 'RÉFÉRENDUM : LE NON L’EMPORTE !'); }
-    else { k.slowed = Math.max(k.slowed, 1.5); sfx('drop'); tell(k, 'RÉFÉRENDUM : 12 % DE PARTICIPATION, RÉSULTAT ANNULÉ', 'RÉFÉRENDUM BOUDÉ PAR LES ÉLECTEURS'); }
+    if (r < 0.4) { const boosted = G.karts.filter(o => !o.finished); for (const o of boosted) { o.boost = Math.max(o.boost, 0.8); o.boostPower = Math.max(o.boostPower, 1.3); } k.boost = 1.6; k.boostPower = 1.5; sfx('boost'); tell(k, 'RÉFÉRENDUM : LE OUI L’EMPORTE, BOOST POUR TOUS', 'RÉFÉRENDUM : LE OUI L’EMPORTE, BOOST !', boosted); }
+    else if (r < 0.8) { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { if (stunKart(o, 0.7)) hit.push(o); } const n = hit.length; sfx('motion'); tell(k, 'RÉFÉRENDUM : LE NON L’EMPORTE, ' + n + ' SONNÉ' + (n > 1 ? 'S' : ''), 'RÉFÉRENDUM : LE NON L’EMPORTE !', hit); }
+    else { k.slowed = Math.max(k.slowed, 1.5); sfx('drop'); say(k, 'RÉFÉRENDUM : 12 % DE PARTICIPATION, RÉSULTAT ANNULÉ'); }
   }
   hintFor(k, 'Ramassez une urne dorée pour obtenir un objet.');
 }
@@ -122,9 +127,9 @@ export function buildProjectileMesh(type) {
   else { g.add(box(1.0, 0.8, 1.0, 0xc8102e, 0, 0, 0)); g.add(box(1.1, 0.2, 1.1, 0xfff5dd, 0, 0.5, 0)); g.add(cone(0.5, 0.8, 0xf2c14e, 0, 1.0, 0, 6)); }
   return g;
 }
-export function spawnProjectile(type, owner, target) {
+export function spawnProjectile(type, owner, target, side) {
   const g = buildProjectileMesh(type);
-  const fx = Math.sin(owner.heading), fz = Math.cos(owner.heading); const sidespawn = type === 'bravm' ? (Math.random() < 0.5 ? 2 : -2) : 0;
+  const fx = Math.sin(owner.heading), fz = Math.cos(owner.heading); const sidespawn = type === 'bravm' ? (side ?? (Math.random() < 0.5 ? 1 : -1)) * 2 : 0;
   const p = { id: nextEntityId(), type, x: owner.pos.x + fx * 3 + (-fz) * sidespawn, z: owner.pos.z + fz * 3 + fx * sidespawn, y: type === 'motion' ? 1.5 : type === 'bravm' ? 0 : 1.0, dx: fx, dz: fz, owner, target, speed: type === 'motion' ? 85 : type === 'bravm' ? 74 : type === 'factcheck' ? 70 : 62, life: type === 'motion' ? 12 : type === 'bravm' ? 8 : 5, mesh: g, idx: owner.idx };
   g.position.set(p.x, p.y, p.z); G.scene.add(g); G.projectiles.push(p);
 }

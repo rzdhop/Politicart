@@ -33,3 +33,6 @@ ds-bundle/
 .design-sync/learnings/
 .design-sync/.cache/
 .design-sync/node_modules
+
+# Accounts kept by a local game server (apps/server/src/store.js)
+apps/server/data/

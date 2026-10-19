@@ -15,8 +15,9 @@ import {
 
 import { initAudio } from '../../engine/audio.js';
 import { CHARACTERS } from '../../engine/data.js';
+import { unlockLevel } from '../../engine/progress.js';
 import { setPreviewFrame } from '../../engine/preview.js';
-import { actions, type UiSnapshot } from '../store';
+import { actions, unlockedOf, type UiSnapshot } from '../store';
 import { useTouchMode } from '../TouchControls';
 import type { Character } from '../types';
 
@@ -46,20 +47,29 @@ export function SelectScreen({ ui }: { ui: UiSnapshot }) {
   useEffect(() => { setPreviewFrame(showcaseBand); return () => setPreviewFrame(null); }, []);
   const characters = CHARACTERS as unknown as Character[];
   const chosen = characters[ui.charIdx] ?? characters[0]!;
+  const unlocked = unlockedOf(ui);
   return (
     <Screen id="s-select" hidden={ui.state !== 'select'}>
       <Heading size="screen">Choisissez votre candidat·e</Heading>
       <SelectLayout>
         <Roster id="roster">
-          {characters.map((c, i) => (
-            <CharacterTile
-              key={c.id}
-              name={c.name}
-              image={ui.thumbs[c.id]}
-              selected={i === ui.charIdx}
-              onClick={() => { initAudio(); actions.selectChar(i); }}
-            />
-          ))}
+          {characters.map((c, i) => {
+            const locked = !unlocked.includes(c.id);
+            const lock = ui.account ? 'Niveau ' + unlockLevel(c.id) : 'Compte requis';
+            return (
+              <CharacterTile
+                key={c.id}
+                name={c.name}
+                image={ui.thumbs[c.id]}
+                selected={i === ui.charIdx}
+                className={locked ? 'locked' : undefined}
+                disabled={locked}
+                data-lock={locked ? '🔒 ' + lock : undefined}
+                title={locked ? (ui.account ? 'Débloqué au niveau ' + unlockLevel(c.id) : 'Créez un compte et montez de niveau pour le débloquer') : undefined}
+                onClick={() => { initAudio(); actions.selectChar(i); }}
+              />
+            );
+          })}
         </Roster>
         <Showcase id="showcase" name={chosen.name} title={chosen.title} quote={chosen.quote}>
           <StatGrid>

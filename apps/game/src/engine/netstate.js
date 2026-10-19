@@ -3,7 +3,8 @@
 //
 // The server steps the simulation and, twenty times a second, encodes it
 // with encodeSnapshot(): every kart's drawable and HUD state, the hazards and
-// projectiles by id, which ballot boxes are up, and where the crossings are.
+// projectiles by id, which ballot boxes are up, where the crossings are and
+// where the cyclists ride ([x, z, heading, y, fallen] each).
 // A client keeps the last few, blends the two around its render time with
 // lerpKart() and writes the result into its own kart objects with applyKart(),
 // then poses the meshes with updateKartVisual(). Nothing here is simulated on
@@ -47,8 +48,11 @@ export function encodeSnapshot(G, tick) {
     p: G.projectiles.map(p => ({ id: p.id, ty: p.type, x: p.x, y: p.y, z: p.z })),
     b: G.itemBoxes.map(b => (b.active ? 1 : 0)).join(''),
     c: G.crossings.map(c => c.t),
+    cy: (G.cyclists || []).map(c => [round2(c.x), round2(c.z), round2(c.h), round2(c.y), c.fallen > 0 ? 1 : 0]),
   };
 }
+
+const round2 = v => Math.round(v * 100) / 100;
 
 const wrap = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 const mix = (a, b, t) => a + (b - a) * t;

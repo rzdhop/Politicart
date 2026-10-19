@@ -19,3 +19,8 @@ services:
     envVars:
       - key: HOST
         value: 0.0.0.0
+      # Render's free disk is wiped whenever the service sleeps, so accounts
+      # need a database: paste a Postgres URL here (a free Neon or Supabase
+      # database works). Left empty, accounts vanish on every restart.
+      - key: DATABASE_URL
+        sync: false

@@ -19,7 +19,11 @@ COPY apps/game apps/game
 RUN npm run build -w @kart-republique/ui && npm run build -w @kart-republique/game
 
 FROM node:26.10.0-bookworm-slim
-ENV NODE_ENV=production PORT=8080 HOST=0.0.0.0
+# Accounts go to a JSON file under /data unless DATABASE_URL names a Postgres
+# database. Mount a volume on /data (Fly.io: see fly.toml) or they are lost
+# with the container.
+ENV NODE_ENV=production PORT=8080 HOST=0.0.0.0 KR_DATA=/data/kr-accounts.json
+RUN mkdir -p /data && chown node:node /data
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/ui/package.json packages/ui/

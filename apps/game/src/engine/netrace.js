@@ -4,13 +4,14 @@
 // grid it was sent (startField, its own slot as G.player) and from then on
 // simulates nothing: each frame it blends the two snapshots around a render
 // tick ~100 ms behind the newest one (netstate.js), writes the result into
-// its karts, poses the meshes, mirrors hazards, projectiles, ballot boxes and
-// crossings, and runs the same view half as solo play (camera, HUD payload,
+// its karts, poses the meshes, mirrors hazards, projectiles, ballot boxes,
+// crossings and cyclists, and runs the same view half as solo play (camera, HUD payload,
 // minimap). Its own controls go to the server 30 times a second; item and
 // power presses travel as running counts, so a lost or repeated message can
 // neither drop nor double a press. Messages and sounds addressed to this
 // player arrive already resolved and are replayed through the usual queue.
 import { sfx } from './audio.js';
+import { applyCyclists } from './cyclists.js';
 import { CHARACTERS } from './data.js';
 import { emit } from './events.js';
 import { readInput } from './input.js';
@@ -141,6 +142,7 @@ export function netStep(dt) {
     });
     G.itemBoxes.forEach((bx, i) => { bx.mesh.visible = b.b[i] === '1'; });
     G.crossings.forEach((c, i) => { if (b.c[i] !== undefined) { c.t = (a.c[i] ?? b.c[i]) + (b.c[i] - (a.c[i] ?? b.c[i])) * f; placeCrossing(c); } });
+    applyCyclists(a.cy, b.cy, f);
   }
   for (const bx of G.itemBoxes) { bx.mesh.rotation.y += 0.03; bx.mesh.rotation.x += 0.01; }
   for (const fn of [...G.animated]) fn(dt);
