@@ -43,7 +43,24 @@ Marked UNCONFIRMED / confirmed / invalidated.
   Each client draws every character with its own local customisations, so a
   player's renamed character or livery is seen only by that player.
 
+- **A-012 -- The player's kart style is one set of partial overrides, not
+  one per character.** UNCONFIRMED. Read from "default for all if not
+  edited": the fields a player changes apply to whichever character they
+  pick, and the rest falls back to that character's admin-set default.
+- **A-013 -- The Pages build has no Workshop and no login.** UNCONFIRMED.
+  It has no backend to authenticate against; it ships the default cast. The
+  Garage works there.
+- **A-014 -- Campaign posters are admin-only too.** UNCONFIRMED. "edit
+  character etc." is read as the whole Workshop.
+- **A-015 -- Existing per-browser `kr-custom` edits are not migrated.**
+  UNCONFIRMED. The server roster becomes the only source of cast edits.
+- **A-016 -- The packages/ui story fixtures keep the old fictional names.**
+  UNCONFIRMED. They are library examples; renaming them is a follow-up.
+
 ## Confirmed
+
+- **Admin lock is server-held, kart style is synced, pun-name list
+  approved.** Confirmed by the human 2026-10-19 (see PLAN.md).
 
 - **A-006 -- Node 26 is available to `actions/setup-node` on ubuntu-latest.**
   CONFIRMED 2026-10-15 by the first run of `.github/workflows/pages.yml` on

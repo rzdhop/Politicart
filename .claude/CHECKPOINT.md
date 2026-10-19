@@ -2,7 +2,40 @@
 
 Current state only. History lives in git.
 
-## In progress
+## In progress -- task 2026-10-19: admin account, kart personalisation, pun names
+
+- **Request (verbatim intent):** an admin account for "rida", the only one
+  allowed to edit characters etc.; player kart personalisation; rename every
+  character to a pun on a real French politician (e.g. Marine Le Pen ->
+  "Marine Le Stylo", Jean-Luc Mélenchon -> "Jean-Luc Mélèche").
+- **Phase:** PLAN, awaiting approval. The plan is in `.claude/PLAN.md` (9
+  stages). The human answered CLARIFY: server-held roster; kart options are
+  colours, wheels, spoiler/kit, number and sticker, with the character
+  default where unedited; the style is synced in multiplayer; the name list
+  is approved. EXPLORE is done.
+- **Key facts found:** no auth, sessions, persistence or env secrets exist
+  anywhere; Pages build has no backend (`/api/kr` probe 404s); workshop edits
+  are per-browser (`localStorage['kr-custom']`, `custom.js applyCustom`
+  mutates shared `CHARACTERS`); names appear only in `engine/data.js` in the
+  game (e2e uses ids like `#adm-name-victor`, never names), plus
+  packages/ui story fixtures; WS `maxPayload` 16 KB rules out livery images
+  over the wire. Character ids are kept as-is (localStorage, e2e, server
+  `CHAR_IDS` depend on them).
+- **Conflict to record:** VISION.md says "fictional, never real named
+  figures"; the human is overriding it -> DEC-015 once confirmed.
+- **Open questions:** none blocking; A-012..A-016 are the defaults chosen.
+- **Approved:** 2026-10-19 ("Plan approved, go ahead with Stage 1").
+- **Checkpoint for this task:** `76463bf` (branch `feat/multiplayer`); the
+  plan commit follows it.
+- **Tier-1 baseline at `76463bf` (2026-10-19):** typecheck clean; ui 235
+  passed + 8 skipped, game 99, server 16; `npm audit --omit=dev` 0.
+  **Pre-existing flake:** `netrace.test.js` "draws the karts between
+  snapshots..." failed once under the full parallel run, then passed alone
+  and on a full rerun. It is timing-sensitive under load, not caused by
+  this task.
+- **Current stage:** 1 (pun names). **Next action:** implement Stage 1.
+
+## Previous task -- closed
 
 - **Task:** online team multiplayer (plan in `.claude/PLAN.md`, DEC-014).
   Branch `feat/multiplayer`, cut from `main` at `e819070`. Not pushed.
