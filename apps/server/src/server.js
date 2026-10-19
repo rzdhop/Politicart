@@ -4,12 +4,15 @@
 //   GET /api/kr   -> {"kr":"server",...}  the client's "am I served by the
 //                    game server?" probe; the Multijoueur button shows only
 //                    when it answers. GitHub Pages has no such route.
+//   GET /api/roster -> the cast as the admin edited it (roster.js), public,
+//                    never cached: every client reads the same one
 //   GET /*        -> apps/game/dist, read-only, no directory escapes
 //   WS  /ws       -> the lobby protocol below; races run in a worker
 //
 //   POST /api/admin/login  {user,password} -> 204 + cookie | 401 | 429
 //   POST /api/admin/logout                 -> 204, cookie cleared
 //   GET  /api/admin/me     -> {enabled, admin, user?}
+//   PUT  /api/admin/roster {chars, ads}    -> 200 + the stored roster | 400 {error, field}
 //   The only non-GET routes. Each mutating one needs a JSON content type and
 //   a same-origin Origin (auth.js); all answer 503 while admin is disabled,
 //   except `me`, which says so.
@@ -26,8 +29,10 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 
 import { WebSocketServer } from 'ws';
 
+import { BASE, CHARACTERS } from '../../game/src/engine/data.js';
 import { createAdmin } from './auth.js';
 import { newCode, Room } from './lobby.js';
+import { applyRoster, createRosterStore } from './roster.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -38,6 +43,8 @@ const MIME = {
 export const PROTOCOL = 1;
 
 export const LOGIN_BODY_LIMIT = 4 * 1024;
+// 11 liveries at 256 KB and 8 posters at 512 KB come to about 7 MB of JSON.
+export const ROSTER_BODY_LIMIT = 8 * 1024 * 1024;
 
 /** An error that carries the HTTP status to answer with. */
 export class HttpError extends Error {
@@ -86,14 +93,17 @@ function sendJson(res, status, body, headers = {}) {
  * `send(playerId, msg)`, `broadcast(msg)` and `done(results)`.
  * `admin` is `{ user, passwordHash, trustProxy, now }` (auth.js); without a
  * hash the admin endpoints are disabled.
+ * `roster` is a loaded store (roster.js); without one the cast edits live in
+ * memory only. Its names are applied to CHARACTERS now and on every save.
  * Resolves to `{ port, close() }` once listening.
  */
-export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, admin: adminConfig = {} }) {
+export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, admin: adminConfig = {}, roster = createRosterStore() }) {
   const root = resolve(staticDir);
   const rooms = new Map();          // code -> Room
   const races = new Map();          // code -> race handle
   const conns = new Map();          // id -> { ws, id, name, code }
   const admin = createAdmin(adminConfig);
+  applyRoster(roster.get(), CHARACTERS, BASE);
 
   const DISABLED = { error: 'Administration désactivée.' };
   const DENIED = { error: 'Identifiant ou mot de passe incorrect.' };
@@ -124,7 +134,23 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, ad
     sendJson(res, 200, who ? { enabled: true, admin: true, user: who.user } : { enabled: admin.enabled, admin: false });
   }
 
-  const adminRoutes = { '/api/admin/login': ['POST', login], '/api/admin/logout': ['POST', logout], '/api/admin/me': ['GET', me] };
+  // The order matters: nothing is read from an unauthenticated client, so
+  // only the admin can make the server buffer a body of up to 8 MB.
+  async function putRoster(req, res) {
+    if (!admin.enabled) return sendJson(res, 503, DISABLED);
+    const bad = admin.checkMutation(req); if (bad) return sendJson(res, bad.status, { error: bad.error });
+    if (!admin.requireAdmin(req)) { req.resume(); return sendJson(res, 401, { error: 'Connexion administrateur requise.' }); }
+    const body = await readJson(req, ROSTER_BODY_LIMIT);
+    const saved = await roster.save(body);
+    if (!saved.ok) return sendJson(res, 400, { error: saved.error, field: saved.field });
+    applyRoster(roster.get(), CHARACTERS, BASE);      // the latest, should two saves overlap
+    sendJson(res, 200, saved.roster);
+  }
+
+  const adminRoutes = {
+    '/api/admin/login': ['POST', login], '/api/admin/logout': ['POST', logout], '/api/admin/me': ['GET', me],
+    '/api/admin/roster': ['PUT', putRoster],
+  };
 
   /** Answer an admin route; false when the path is not one, so it falls through. */
   function adminRoute(req, res, path) {
@@ -153,6 +179,14 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, ad
     if (url.pathname === '/api/kr') {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       res.end(JSON.stringify({ kr: 'server', protocol: PROTOCOL, rooms: rooms.size }));
+      return;
+    }
+    if (url.pathname === '/api/roster') {
+      if (req.method !== 'GET' && req.method !== 'HEAD') { req.resume(); sendJson(res, 405, { error: 'Méthode non autorisée.' }, { allow: 'GET, HEAD' }); return; }
+      // Serialised once per save, not per request: the roster can weigh megabytes.
+      const data = roster.json();
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'content-length': Buffer.byteLength(data) });
+      res.end(req.method === 'HEAD' ? undefined : data);
       return;
     }
     if (url.pathname.startsWith('/api/admin/') && adminRoute(req, res, url.pathname)) return;

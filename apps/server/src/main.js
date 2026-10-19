@@ -9,11 +9,14 @@
 //                           unset or malformed, admin is disabled
 //   KR_TRUST_PROXY          1 only behind Fly's proxy: client IP from Fly-Client-IP,
 //                           scheme from X-Forwarded-Proto
+//   KR_DATA_DIR             where the admin's cast edits are kept (roster.json);
+//                           default apps/server/data, /data on Fly (a volume)
 import { networkInterfaces } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { isPasswordHash } from './auth.js';
 import { runRace } from './race.js';
+import { createRosterStore } from './roster.js';
 import { startServer } from './server.js';
 
 const port = Number(process.env.PORT) || 8080;
@@ -25,7 +28,15 @@ const admin = {
   trustProxy: process.env.KR_TRUST_PROXY === '1',
 };
 
-const srv = await startServer({ port, host, staticDir, runRace, admin });
+const dataDir = process.env.KR_DATA_DIR || fileURLToPath(new URL('../data', import.meta.url));
+
+// A data dir that cannot be read still lets people race: the cast is then the
+// default one, and saving it answers 500 until the dir is fixed.
+const roster = createRosterStore({ dir: dataDir });
+try { await roster.load(); }
+catch (e) { console.error(`roster : lecture impossible dans ${dataDir} (${e.code ?? e.message}), distribution par défaut`); }
+
+const srv = await startServer({ port, host, staticDir, runRace, admin, roster });
 
 const lan = Object.values(networkInterfaces()).flat().filter(a => a && a.family === 'IPv4' && !a.internal).map(a => a.address);
 console.log(`Kart République -- serveur de course en équipe sur le port ${srv.port}`);
@@ -35,6 +46,7 @@ for (const ip of lan) console.log(`  réseau local : http://${ip}:${srv.port}/`)
 if (!admin.passwordHash) console.log('  administration : désactivée (KR_ADMIN_PASSWORD_HASH absent)');
 else if (!isPasswordHash(admin.passwordHash)) console.log('  administration : désactivée (KR_ADMIN_PASSWORD_HASH mal formé, voir .env.example)');
 else console.log('  administration : activée');
+console.log(`  données :      ${dataDir}`);
 
 const stop = () => { srv.close().then(() => process.exit(0)); };
 process.on('SIGINT', stop);

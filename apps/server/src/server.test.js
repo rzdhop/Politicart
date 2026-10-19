@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,8 +7,10 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 
+import { BASE, CHARACTERS } from '../../game/src/engine/data.js';
 import { hashPassword } from './auth.js';
-import { startServer } from './server.js';
+import { applyRoster, createRosterStore } from './roster.js';
+import { ROSTER_BODY_LIMIT, startServer } from './server.js';
 
 // A client that records every message and can wait for one matching a test.
 function client(port) {
@@ -283,6 +285,115 @@ describe('admin over HTTP', () => {
     const c = client(adm.port); await c.open;
     c.send({ t: 'hello', name: 'Admin' });
     expect((await c.next(m => m.t === 'welcome')).protocol).toBe(1);
+    c.close();
+  });
+});
+
+describe('the roster over HTTP', () => {
+  const PASSWORD = `pw-${randomBytes(9).toString('base64url')}`;
+  const jpeg = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 6, 7, 8]).toString('base64')}`;
+  let hash, data, adm, token;
+  const servers = [];
+  const boot = async (admin, dataDir = data) => {
+    const roster = createRosterStore({ dir: dataDir });
+    await roster.load();
+    const s = await startServer({ port: 0, host: '127.0.0.1', staticDir: dir, runRace: fakeRace, admin, roster });
+    servers.push(s); return s;
+  };
+  const at = (s, p) => `http://127.0.0.1:${s.port}${p}`;
+  const origin = s => `http://127.0.0.1:${s.port}`;
+  const login = async s => {
+    const r = await fetch(at(s, '/api/admin/login'), {
+      method: 'POST', headers: { 'content-type': 'application/json', origin: origin(s) }, body: JSON.stringify({ user: 'rida', password: PASSWORD }),
+    });
+    return /kr_admin=([^;]*)/.exec(r.headers.get('set-cookie') ?? '')?.[1];
+  };
+  const put = (s, body, headers = {}) => fetch(at(s, '/api/admin/roster'), {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', origin: origin(s), cookie: `kr_admin=${token}`, ...headers },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
+  const getRoster = async s => { const r = await fetch(at(s, '/api/roster')); return { status: r.status, cache: r.headers.get('cache-control'), body: await r.json() }; };
+
+  beforeAll(async () => {
+    hash = await hashPassword(PASSWORD);
+    data = mkdtempSync(join(tmpdir(), 'kr-data-'));
+    adm = await boot({ user: 'rida', passwordHash: hash });
+    token = await login(adm);
+  });
+  // Later suites must see the default cast again, whatever these tests renamed.
+  afterAll(async () => { await Promise.all(servers.map(s => s.close())); applyRoster(undefined, CHARACTERS, BASE); });
+
+  it('serves the roster to anyone, never cached', async () => {
+    expect(await getRoster(srv)).toEqual({ status: 200, cache: 'no-store', body: { chars: {}, ads: [] } });
+    expect((await fetch(url('/api/roster'), { method: 'HEAD' })).status).toBe(200);
+    const r = await fetch(url('/api/roster'), { method: 'PUT', body: '{}' });
+    expect(r.status).toBe(405);
+    expect(r.headers.get('allow')).toBe('GET, HEAD');
+  });
+
+  it('refuses a PUT without a session: 401', async () => {
+    const r = await put(adm, { chars: {} }, { cookie: '' });
+    expect(r.status).toBe(401);
+    expect((await r.json()).error).toBeTruthy();
+    expect((await put(adm, {}, { cookie: `kr_admin=${'A'.repeat(43)}` })).status).toBe(401);
+  });
+
+  it('checks Origin and content type before the session: 403 and 415', async () => {
+    expect((await put(adm, {}, { origin: 'http://evil.test' })).status).toBe(403);
+    expect((await put(adm, {}, { origin: 'http://evil.test', cookie: '' })).status).toBe(403);
+    expect((await put(adm, '{}', { 'content-type': 'text/plain' })).status).toBe(415);
+    expect((await put(adm, '{}', { 'content-type': 'text/plain', cookie: '' })).status).toBe(415);
+  });
+
+  it('answers 503 while admin is disabled, and 405 for another method', async () => {
+    expect((await put(srv, {})).status).toBe(503);
+    const r = await fetch(at(adm, '/api/admin/roster'));
+    expect(r.status).toBe(405);
+    expect(r.headers.get('allow')).toBe('PUT');
+  });
+
+  it('refuses a body over 8 MB with 413, and bad JSON with 400', async () => {
+    expect((await put(adm, JSON.stringify({ pad: 'x'.repeat(ROSTER_BODY_LIMIT) }))).status).toBe(413);
+    expect((await put(adm, '{oops')).status).toBe(400);
+  });
+
+  it('refuses an invalid roster with 400, naming the field, and keeps the old one', async () => {
+    const r = await put(adm, { chars: { victor: { suit: 'bleu' } } });
+    expect(r.status).toBe(400);
+    expect(await r.json()).toMatchObject({ field: 'chars.victor.suit', error: expect.stringContaining('chars.victor.suit') });
+    const svg = await put(adm, { chars: { lulu: { livery: `data:image/svg+xml;base64,${Buffer.from('<svg/>').toString('base64')}` } } });
+    expect(svg.status).toBe(400);
+    expect((await svg.json()).field).toBe('chars.lulu.livery');
+    expect((await getRoster(adm)).body).toEqual({ chars: {}, ads: [] });
+  });
+
+  it('stores a valid roster, serves it, and keeps it across a restart', async () => {
+    const edit = { chars: { victor: { name: ' Manu ', suit: '#AA0000', livery: jpeg, style: { wheels: 'gold' } } }, ads: [jpeg] };
+    const stored = { chars: { victor: { name: 'Manu', suit: '#aa0000', livery: jpeg, style: { wheels: 'gold' } } }, ads: [jpeg] };
+    const r = await put(adm, edit);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('cache-control')).toBe('no-store');
+    expect(await r.json()).toEqual(stored);
+    expect((await getRoster(adm)).body).toEqual(stored);
+    expect(readdirSync(data)).toEqual(['roster.json']);
+    await adm.close();
+    adm = await boot({ user: 'rida', passwordHash: hash });
+    expect((await getRoster(adm)).body).toEqual(stored);
+    expect(CHARACTERS.find(c => c.id === 'victor').name).toBe('Manu');
+  });
+
+  it('names the AI karts in a lobby after the admin’s edits', async () => {
+    token = await login(adm);                     // the restart above ended the session
+    const chars = Object.fromEntries(CHARACTERS.map(c => [c.id, { name: `Clone ${c.id}` }]));
+    expect((await put(adm, { chars })).status).toBe(200);
+    const c = client(adm.port); await c.open;
+    c.send({ t: 'hello', name: 'Solo' }); await c.next(m => m.t === 'welcome');
+    c.send({ t: 'create' }); await c.next(isRoom(() => true));
+    c.send({ t: 'start' }); await c.next(isRoom(room => room.phase === 'race'));
+    const ai = races.at(-1).roster.filter(s => s.isAI);
+    expect(ai).toHaveLength(5);
+    for (const s of ai) expect(s.name).toBe(`Clone ${s.charId}`);
     c.close();
   });
 });

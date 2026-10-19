@@ -3,6 +3,7 @@
 #   fly launch --no-deploy --copy-config   # pick your own app name and region
 #   fly deploy
 #   fly scale count 1                      # rooms live in memory: run exactly one machine
+#   fly volumes create kr_data --size 1    # once, in primary_region: the admin's cast edits
 #
 # The app name below is a placeholder; `fly launch` replaces it with yours.
 app = "kart-republique"
@@ -15,6 +16,13 @@ primary_region = "cdg"
   PORT = "8080"
   HOST = "0.0.0.0"
   KR_TRUST_PROXY = "1"
+  KR_DATA_DIR = "/data"
+
+# roster.json lives here and survives restarts and deploys. A volume belongs
+# to one machine, which is one more reason to run exactly one.
+[mounts]
+  source = "kr_data"
+  destination = "/data"
 
 [http_service]
   internal_port = 8080

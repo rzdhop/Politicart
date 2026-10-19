@@ -34,14 +34,15 @@ Current state only. History lives in git.
   and on a full rerun. It is timing-sensitive under load, not caused by
   this task.
 - **Stage 1 done** (pun names): Tier 1 green (game 103), e2e 29/29.
-- **Stages 1-5 committed** (pun names; kart style model; mesh renders a
-  style; player Garage + library ChoiceGroup, DEC-016; server admin auth,
-  DEC-017). Tier 1 green (ui 241, game 150, server 45), audit 0, e2e 33/33
-  at Stage 5.
-- **Current stage:** 6 (server roster store). **Next action:** brief a
-  Sonnet agent (data-mutation path, so escalate to Opus if it reports
-  ambiguity) with Stage 6 from PLAN.md; reuse `readJson`, `HttpError` and
-  `admin.requireAdmin` from Stage 5.
+- **Stages 1-6 committed** (pun names; kart style model; mesh renders a
+  style; Garage + ChoiceGroup, DEC-016; admin auth, DEC-017; server roster
+  store). Tier 1 green (ui 241, game 150, server 74), audit 0, e2e 33/33 at
+  Stage 6.
+- **Current stage:** 7 (client admin flow: login screen, Workshop behind
+  login, roster from `/api/roster`, kart default fields; R-06 moves to the
+  server build). **Next action:** scope and brief Stage 7; it changes R-06 on
+  purpose, and playwright.config needs a test-only admin hash plus a temp
+  KR_DATA_DIR.
 - **Follow-ups owed:** a `/design-sync` re-sync to upload ChoiceGroup; a
   `KR_ALLOWED_HOSTS` check against DNS rebinding (DEC-017).
 

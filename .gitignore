@@ -19,6 +19,9 @@ Thumbs.db
 .idea/
 .vscode/
 
+# The game server's data (the admin's cast edits)
+apps/server/data/
+
 # Local env
 .env
 .env.*

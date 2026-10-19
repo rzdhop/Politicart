@@ -6,7 +6,9 @@
 // each driver's latest controls, and every third tick (20 Hz) posts a
 // snapshot plus, per human slot, the messages and sounds addressed to them.
 //
-// workerData: { trackIdx, roster: [{ charId, team, isAI, name }], fast }
+// workerData: { trackIdx, roster: [{ charId, team, isAI, name }], cast, fast }
+//   cast: [{ id, name, title, quote }], the cast as the main thread has it
+//   (the admin's edits, roster.js); this thread's CHARACTERS start at the defaults.
 //   fast: step as fast as possible instead of in real time (tests only).
 // In:  { t: 'input', slot, c: {throttle,brake,left,right,drift}, item, power }
 //      { t: 'leave', slot }      the driver left; an AI takes the wheel
@@ -31,10 +33,14 @@ const SNAP_EVERY = 3;            // 60 Hz / 3 = 20 snapshots a second
 // A race nobody can finish still ends. KR_MAX_RACE_S shortens it (the end-to-end suite does).
 const MAX_RACE_TIME = Number(process.env.KR_MAX_RACE_S) || 8 * 60;
 
-const { trackIdx, roster, fast } = workerData;
+const { trackIdx, roster, cast = [], fast } = workerData;
 const IDLE = Object.freeze({ throttle: false, brake: false, left: false, right: false, drift: false });
 
 // ---- set the race up
+for (const c of cast) {
+  const def = CHARACTERS.find(d => d.id === c.id);
+  if (def) Object.assign(def, { name: c.name, title: c.title, quote: c.quote });
+}
 resetMachine('tracks');
 G.trackIdx = trackIdx;
 startField(roster.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team })));
