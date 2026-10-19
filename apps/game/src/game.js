@@ -36,7 +36,7 @@ import { actions } from './ui/store.ts';
 
 'use strict';
 /* =====================================================================================
-   KART RÉPUBLIQUE v2 — satirical kart racer with a fictional French political cast.
+   KART RÉPUBLIQUE v2 — satirical kart racer with a pun-name parody French political cast.
    Single-file Three.js game: spline tracks, kart physics with drift/mini-turbo,
    political items + one special power per candidate, AI opponents with rubber-banding,
    procedural textures, shadow mapping, WebAudio sound.

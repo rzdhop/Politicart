@@ -272,3 +272,25 @@ interpolated ~100 ms behind. Transport is `ws@8.22.0` with JSON. Teams are a
 Solo keeps its variable dt and feel. Every new engine call must stay
 DOM-free or guarded, or the server stops booting. The local kart lags by
 about half a round trip plus 100 ms until prediction is added.
+
+## DEC-015 -- The cast parodies real politicians through pun names
+
+**Context.** VISION recorded "fictional, never real named figures" as a
+product constraint. On 2026-10-19 the human asked for every candidate to be
+renamed to a pun on a real French politician (Marine Le Pen -> "Marine Le
+Stylo", Jean-Luc Mélenchon -> "Jean-Luc Mélèche"), which overrides that
+constraint.
+
+**Decision.** Each archetype takes the pun name of the politician it best
+fits; the human approved the list (PLAN.md). Only display names change, plus
+two titles whose gender or role no longer fit (lulu, bernadette). Character
+ids stay as they were. The title screen and README say "parody" instead of
+"fictional": names are one pun away from real people, while powers, lines
+and scandals are invented.
+
+**Consequence.** The humour now targets recognisable figures, so the
+satire notice matters more than before and must stay visible on the title
+screen. Ids no longer resemble names (`victor` is Emmanuel Macaron), which
+is the price of not breaking saved data, the e2e selectors and the server's
+`CHAR_IDS`. The packages/ui story fixtures keep the old fictional names
+(A-016).

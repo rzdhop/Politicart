@@ -33,7 +33,9 @@ Current state only. History lives in git.
   snapshots..." failed once under the full parallel run, then passed alone
   and on a full rerun. It is timing-sensitive under load, not caused by
   this task.
-- **Current stage:** 1 (pun names). **Next action:** implement Stage 1.
+- **Stage 1 done** (pun names): Tier 1 green (game 103), e2e 29/29.
+- **Current stage:** 2 (kart style model). **Next action:** implement
+  `engine/kartstyle.js` and its tests.
 
 ## Previous task -- closed
 

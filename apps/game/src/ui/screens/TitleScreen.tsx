@@ -50,7 +50,7 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
           <div><KeyCap>Échap</KeyCap> pause · <KeyCap>M</KeyCap> son</div>
         </ControlsGrid>
         <Disclaimer>
-          Toute ressemblance avec des personnalités existantes serait purement électorale. Personnages, partis et scandales sont fictifs. Trois tours, cinq adversaires, aucune cohabitation.
+          Parodie : les candidat·es sont des caricatures, à un jeu de mots près, de personnalités politiques bien réelles. Pouvoirs, répliques et scandales sont inventés. Trois tours, cinq adversaires, aucune cohabitation.
         </Disclaimer>
       </Panel>
     </Screen>

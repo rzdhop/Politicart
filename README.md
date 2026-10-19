@@ -1,6 +1,6 @@
 # Kart République
 
-*Grand Prix de l'Hémicycle* — a satirical 3D kart racer in the browser, starring a cast of fictional French politicians.
+*Grand Prix de l'Hémicycle* — a satirical 3D kart racer in the browser, starring a cast of French politicians under pun names.
 
 Keyboard only. Three laps, five AI opponents, no cohabitation.
 
@@ -72,13 +72,13 @@ The game reads physical key codes, so the same keys work on AZERTY and QWERTY ke
 
 ## Content
 
-- **11 fictional candidates**, each with stats (speed, acceleration, handling, weight) and a signature satirical power: Grand débat, Grève générale, Rond-point surprise, Zone à faibles émissions, Amendement de dernière minute, Mégaphone, Éléments de langage, Vol d'audience, Mise en examen, Épandage, Temps de parole.
+- **11 candidates** parodying real French politicians under pun names (Emmanuel Macaron, Marine Le Stylo, Jean-Luc Mélèche, José Bovin...), each with stats (speed, acceleration, handling, weight) and a signature satirical power: Grand débat, Grève générale, Rond-point surprise, Zone à faibles émissions, Amendement de dernière minute, Mégaphone, Éléments de langage, Vol d'audience, Mise en examen, Épandage, Temps de parole.
 - **14 items** from golden ballot boxes, weighted by race position: 49.3 Turbo, Grève surprise, Dossier Mediapart, Motion de censure, Immunité parlementaire, Sondage truqué, Hélico présidentiel, Remaniement, Plan de relance, BRAV-M, Nuage lacrymogène, Casserolade, Dissolution, Niche fiscale.
 - **3 circuits**: L'Élysée (Faubourg Saint-Honoré), Palais Bourbon (quais de Seine), Versailles (jardins du Congrès) — with ramps and tricks, pits, dash panels, chicanes and crossing traffic.
 - **Workshop (admin)**: rename candidates, change colours, upload kart liveries and campaign posters. Settings are stored in the browser's `localStorage`.
 - Graphics toggle (detailed with shadows / light low-poly), synthesized sound and music via WebAudio.
 
-All characters, parties and scandals are fictional. Any resemblance to existing figures is purely electoral.
+The candidates are caricatures of real politicians, one pun away from their names. Their powers, lines and scandals are invented satire.
 
 ## Repository layout
 
