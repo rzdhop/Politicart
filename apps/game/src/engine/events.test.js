@@ -71,25 +71,29 @@ describe('routing by kart', () => {
     expect(resolveFor(e, other)).toBeNull();
   });
 
-  it('tell() gives the actor one text and everyone else another', () => {
-    tell(player, 'MOTION DE CENSURE !', 'MOTION DE CENSURE DÉPOSÉE !');
+  it('tell() gives the actor one text and only the affected drivers another', () => {
+    const bystander = { isAI: false };
+    tell(player, 'MOTION DE CENSURE !', 'MOTION DE CENSURE DÉPOSÉE !', [other]);
     const events = drain();
     expect(events.map(e => resolveFor(e, player)).filter(Boolean)).toEqual(['MOTION DE CENSURE !']);
     expect(events.map(e => resolveFor(e, other)).filter(Boolean)).toEqual(['MOTION DE CENSURE DÉPOSÉE !']);
+    expect(events.map(e => resolveFor(e, bystander)).filter(Boolean)).toEqual([]);
   });
 
-  it('tell() from an AI kart reaches every human with the others text', () => {
+  it('tell() without victims tells nobody but the actor', () => {
     tell(bot, 'never shown', 'CASSEROLADE !');
+    expect(drain()).toHaveLength(0);
+    tell(player, 'PANTOUFLAGE', 'X PART DANS LE PRIVÉ');
     const events = drain();
     expect(events).toHaveLength(1);
-    expect(resolveFor(events[0], player)).toBe('CASSEROLADE !');
+    expect(resolveFor(events[0], other)).toBeNull();
   });
 
   it('resolves text that depends on the reader', () => {
-    tell(bot, 'x', o => (o === player ? 'VOUS ÊTES MIS·E EN EXAMEN !' : 'MISE EN EXAMEN SUR LE CIRCUIT'));
-    const [e] = drain();
+    tell(bot, 'x', o => (o === player ? 'VOUS ÊTES MIS·E EN EXAMEN !' : 'MISE EN EXAMEN SUR LE CIRCUIT'), [player, other]);
+    const [e, f] = drain();
     expect(resolveFor(e, player)).toBe('VOUS ÊTES MIS·E EN EXAMEN !');
-    expect(resolveFor(e, other)).toBe('MISE EN EXAMEN SUR LE CIRCUIT');
+    expect(resolveFor(f, other)).toBe('MISE EN EXAMEN SUR LE CIRCUIT');
   });
 
   it('hintFor() is a hint for one driver; unrouted events reach everyone', () => {

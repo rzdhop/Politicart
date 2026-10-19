@@ -49,9 +49,12 @@ export function pending() {
 // player. These emitters carry the kart instead of deciding locally:
 //
 //   say(k, text)            only k's driver sees it (dropped for AI karts)
-//   tell(k, mine, others)   k's driver sees `mine`, every other driver sees
-//                           `others` -- a string, or a function of the
-//                           receiving kart, for text that depends on who reads
+//   tell(k, mine, others, to)
+//                           k's driver sees `mine`; the drivers of the karts
+//                           in `to` -- the ones the move actually hit --
+//                           see `others`, a string or a function of the
+//                           receiving kart. Nobody else sees anything: a
+//                           driver only reads what concerns them.
 //   hintFor(k, text)        the persistent hint, for k's driver only
 //
 // The consumer resolves them with resolveFor(event, kart): in solo play that
@@ -64,10 +67,17 @@ export function say(k, text) {
   queue.push({ type: 'toast', text, to: k });
 }
 
-/** k's driver reads `mine`; every other driver reads `others`. */
-export function tell(k, mine, others) {
+/**
+ * k's driver reads `mine`; the drivers of the karts in `to` (those the move
+ * affected) read `others`. Without `to`, only k's driver is told.
+ */
+export function tell(k, mine, others, to) {
   say(k, mine);
-  queue.push({ type: 'toast', text: others, except: k });
+  if (!others || !to) return;
+  for (const o of to) {
+    if (!o || o === k || o.isAI) continue;
+    queue.push({ type: 'toast', text: others, to: o });
+  }
 }
 
 /** Persistent hint for kart k's driver only. */

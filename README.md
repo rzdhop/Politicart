@@ -36,7 +36,7 @@ The server prints its addresses. Everyone on the same network opens `http://<tha
 | `PORT` | `8080` | Port to listen on. |
 | `HOST` | `0.0.0.0` | Interface to bind. `0.0.0.0` lets the local network in. |
 | `KR_STATIC` | `apps/game/dist` | The built game to serve. |
-| `KR_MAX_RACE_S` | `480` | A race ends after this many seconds even if nobody finishes. |
+| `KR_MAX_RACE_S` | `720` | A race ends after this many seconds even if nobody finishes. |
 
 The game build reads one variable: `VITE_KR_SERVER`, the origin of a game server on another host (e.g. `https://kr.onrender.com`). Unset, the game looks for the server at its own origin.
 

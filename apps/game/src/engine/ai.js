@@ -24,7 +24,7 @@ export function aiInput(k, dt, lateral) {
   const curve = Math.abs(wrapAngle(Math.atan2(far.x - k.pos.x, far.z - k.pos.z) - k.heading));
   let throttle = 1; if (curve > 1.05 && Math.abs(k.speed) > 26 * k.stats.speed) throttle = 0;
   const drift = curve > 1.15 && Math.abs(k.speed) > 28 && Math.abs(lateral) < hw - 3;
-  k.laneTimer -= dt; if (k.laneTimer <= 0) { k.lane = rand(-3.5, 3.5); k.laneTimer = rand(3, 8); }
+  k.laneTimer -= dt; if (k.laneTimer <= 0) { k.lane = rand(-8, 7); k.laneTimer = rand(3, 8); }
   for (const h of G.hazards) { const dx = h.x - k.pos.x, dz = h.z - k.pos.z; const ahead = dx * Math.sin(k.heading) + dz * Math.cos(k.heading); const side = dx * (-Math.cos(k.heading)) + dz * Math.sin(k.heading); if (ahead > 0 && ahead < 30 && Math.abs(side) < (h.r || 2) + 1.5) k.lane = side > 0 ? -4 : 4; }
   if (k.item && k.itemRolling <= 0) { k.itemTimer -= dt; if (k.itemTimer <= 0) useItem(k); }
   if (k.powerCd <= 0 && G.state === 'race' && Math.random() < dt * 0.25 && (k.def.power.id !== 'rattrapage' || k.rank >= 3)) usePower(k);

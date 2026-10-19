@@ -18,6 +18,7 @@ import * as THREE from 'three';
 
 import { sfx } from './audio.js';
 import { CHARACTERS, TRACKS } from './data.js';
+import { updateCyclists } from './cyclists.js';
 import { say, setHint } from './events.js';
 import { pickupItems, stunKart, updateProjectiles } from './items.js';
 import { buildKart } from './kart.js';
@@ -41,7 +42,7 @@ function makeKart(def, isAI) {
     y: 0, vy: 0, air: false, trick: false, rampPrev: null, slip: 0, confused: 0, pitGrace: 0, padGrace: 0, steer: 0, phantom: 0,
     kx: 0, kz: 0, bump: 0, bumpCd: 0, bumpPower: 1, bumpSide: 1, shield: 0, rabot: 0, capped: 0,
     idx: 0, lap: 0, progress: 0, rank: 0, finished: false, finishTime: 0,
-    team: null, lane: isAI ? rand(-3.5, 3.5) : 0, laneTimer: rand(2, 6), aiSpeedMul: 1, skill: rand(-0.03, 0.03), hazardGrace: 0, lapStart: 0, bestLap: Infinity, maxLap: 0,
+    team: null, lane: isAI ? rand(-6, 6) : 0, laneTimer: rand(2, 6), aiSpeedMul: 1, skill: rand(-0.03, 0.03), hazardGrace: 0, lapStart: 0, bestLap: Infinity, maxLap: 0,
   };
 }
 
@@ -78,7 +79,7 @@ export function startField(slots) {
   G.player = G.karts[local] ?? G.karts.find(k => !k.isAI) ?? G.karts[G.karts.length - 1];
   G.entitySeq = 0;
   G.karts.forEach((k, i) => {
-    const s = G.samples[6 + i * 4]; const lane = (i % 2 === 0 ? 1 : -1) * 3.5;
+    const s = G.samples[6 + i * 4]; const lane = (i % 2 === 0 ? 1 : -1) * 4.5;
     k.pos.x = s.x + s.sx * lane; k.pos.z = s.z + s.sz * lane; k.heading = Math.atan2(s.tx, s.tz); k.idx = 6 + i * 4;
     k.mesh.position.set(k.pos.x, 0, k.pos.z); k.mesh.rotation.y = k.heading; scene.add(k.mesh);
   });
@@ -156,7 +157,7 @@ export function animateCrowd() {
 
 /**
  * The simulation half of a frame: the countdown, the physics contract, the
- * animated props, the crossings and the crowd. No camera, no payload, no
+ * animated props, the crossings, the cyclists and the crowd. No camera, no payload, no
  * minimap. This is what the game server steps headless (DEC-014); stepRace
  * wraps it with the view half for the browser.
  */
@@ -172,6 +173,7 @@ export function simStep(dt) {
   for (const f of [...G.animated]) f(dt);
   for (const c of G.crossings) { c.t += dt; placeCrossing(c);
     for (const k of G.karts) { if (k.hazardGrace > 0 || k.fly > 0 || k.y > 1.2) continue; const d = (k.pos.x - c.mesh.position.x) ** 2 + (k.pos.z - c.mesh.position.z) ** 2; if (d < 10) { k.hazardGrace = 1.5; k.speed *= 0.3; if (stunKart(k, 1.3)) say(k, 'RENVERSÉ PAR LE CORTÈGE !'); } } }
+  updateCyclists(dt);
   animateCrowd();
 }
 
