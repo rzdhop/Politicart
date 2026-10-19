@@ -10,8 +10,14 @@
 // item code animate every frame: wheels, sparks, the invincibility ring, the
 // driver and the helicopter rotor. Those names are a contract with the update
 // code that still lives in game.js.
+//
+// The kart's look comes from a full kart style (kartstyle.js): body and accent
+// colours, wheels, spoiler, side pods, race number and sticker. Every variant
+// keeps its wheels (four, three on the cargo bike) in the same order, front
+// pair first, because physics steers wheels 0 and 1.
 import * as THREE from 'three';
 
+import { defaultStyle } from './kartstyle.js';
 import { box, canvasTexture, cone, cyl, imgPlane, mat, sph, tag, torus } from './primitives.js';
 import { SHADOWS, seg } from './state.js';
 
@@ -75,20 +81,76 @@ function buildDriver(def) {
   return g;
 }
 
+// ---------- Kart style parts ----------
+const colour = h => parseInt(h.slice(1), 16);
+
+/** Tyre and hub colours, hub size and roughness, tyre radius and width per wheel style. */
+const WHEEL_LOOK = {
+  classic: { tyre: 0x222222, hub: 0xbbbbbb, hubR: 0.2, hubRough: 0.4, r: 0.45, w: 0.4 },
+  chrome: { tyre: 0x1a1a1a, hub: 0xeef2f6, hubR: 0.32, hubRough: 0.12, r: 0.45, w: 0.4 },
+  offroad: { tyre: 0x2b2620, hub: 0x6b5a3a, hubR: 0.22, hubRough: 0.8, r: 0.52, w: 0.55 },
+  gold: { tyre: 0x222222, hub: 0xd4af37, hubR: 0.3, hubRough: 0.25, r: 0.45, w: 0.4 },
+};
+
+const disc = (cc, x, y, r, fill) => { cc.fillStyle = fill; cc.beginPath(); cc.arc(x, y, r, 0, Math.PI * 2); cc.fill(); };
+
+/** The sticker decals, drawn on a transparent square canvas. */
+const STICKER_DRAW = {
+  tricolore: (cc, w, h) => { ['#1f3a93', '#f6f1e4', '#c8102e'].forEach((f, i) => { cc.fillStyle = f; cc.fillRect(i * w / 3, h * 0.2, w / 3, h * 0.6); }); },
+  rosette: (cc, w, h) => { ['#1f3a93', '#f6f1e4', '#c8102e'].forEach((f, i) => disc(cc, w / 2, h / 2, w * (0.46 - i * 0.14), f)); },
+  etoile: (cc, w, h) => {
+    disc(cc, w / 2, h / 2, w * 0.46, '#1f3a93');
+    cc.fillStyle = '#f2c14e'; cc.beginPath();
+    for (let i = 0; i < 10; i++) { const r = (i % 2 ? 0.16 : 0.38) * w, t = -Math.PI / 2 + i * Math.PI / 5; cc.lineTo(w / 2 + r * Math.cos(t), h / 2 + r * Math.sin(t)); }
+    cc.closePath(); cc.fill();
+  },
+  marianne: (cc, w, h) => {
+    disc(cc, w / 2, h / 2, w * 0.46, '#f6f1e4');
+    cc.fillStyle = '#c8102e'; cc.beginPath(); cc.moveTo(w * 0.28, h * 0.5); cc.quadraticCurveTo(w * 0.42, h * 0.12, w * 0.72, h * 0.3); cc.lineTo(w * 0.62, h * 0.5); cc.closePath(); cc.fill();
+    cc.fillStyle = '#1f3a93'; cc.font = 'bold ' + Math.round(h * 0.26) + 'px sans-serif'; cc.textAlign = 'center'; cc.fillText('RF', w / 2, h * 0.78);
+  },
+};
+
+/** A flat sticker decal lying on a surface at height y, or null for 'none'. */
+function stickerPlane(sticker, size, x, y, z) {
+  const draw = STICKER_DRAW[sticker]; if (!draw) return null;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshBasicMaterial({ map: canvasTexture(128, 128, draw), transparent: true }));
+  m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.name = 'sticker'; return m;
+}
+
+/** The rear plate: the 'F' band, the candidate's first name and, if set, the race number. */
+function plateTexture(def, number) {
+  return canvasTexture(256, 64, (cc, w, h) => {
+    cc.fillStyle = '#f6f1e4'; cc.fillRect(0, 0, w, h); cc.fillStyle = '#1f3a93'; cc.fillRect(0, 0, 26, h); cc.fillStyle = '#fff'; cc.font = 'bold 14px sans-serif'; cc.fillText('F', 8, 38);
+    const name = def.name.split(' ')[0].toUpperCase().slice(0, 8);
+    cc.fillStyle = '#111'; cc.textAlign = 'center';
+    if (number === null) { cc.font = 'bold 34px sans-serif'; cc.fillText(name, w / 2 + 12, 44); return; }
+    cc.font = 'bold 26px sans-serif'; cc.fillText(name, 26 + (w - 26 - 70) / 2, 42);
+    cc.fillRect(w - 66, 6, 60, h - 12); cc.fillStyle = '#f2c14e'; cc.font = 'bold 36px sans-serif'; cc.fillText(String(number), w - 36, 46);
+  });
+}
+
 // ---------- Kart ----------
-export function buildKart(def) {
-  const k = new THREE.Group(); const c = def.kart; const S = seg();
+/**
+ * Build one kart. `style` is a full kart style; it defaults to the
+ * character's own default, so a caller that does not care gets the kart
+ * every player sees for that character.
+ */
+export function buildKart(def, style = defaultStyle(def)) {
+  const k = new THREE.Group(); const c = colour(style.body), a = colour(style.accent); const S = seg();
   const wheels = [];
-  const plateTex = canvasTexture(256, 64, (cc, w, h) => { cc.fillStyle = '#f6f1e4'; cc.fillRect(0, 0, w, h); cc.fillStyle = '#1f3a93'; cc.fillRect(0, 0, 26, h); cc.fillStyle = '#fff'; cc.font = 'bold 14px sans-serif'; cc.fillText('F', 8, 38); cc.fillStyle = '#111'; cc.font = 'bold 34px sans-serif'; cc.textAlign = 'center'; cc.fillText(def.name.split(' ')[0].toUpperCase().slice(0, 8), w / 2 + 12, 44); });
-  const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.28), new THREE.MeshBasicMaterial({ map: plateTex }));
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.28), new THREE.MeshBasicMaterial({ map: plateTexture(def, style.number) }));
+  plate.name = 'plate';
+  const addSticker = (size, x, y, z) => { const st = stickerPlane(style.sticker, size, x, y, z); if (st) k.add(st); };
   if (def.tractor) {
     k.add(box(1.6, 1.0, 2.6, c, 0, 0.9, 0.2)); k.add(box(1.3, 0.9, 1.4, c, 0, 1.6, 0.9)); k.add(box(1.5, 0.12, 1.5, 0x222222, 0, 2.1, 0.9));
-    k.add(cyl(0.12, 0.12, 1.2, 0x333333, 0.5, 2.4, 1.4, 8)); k.add(box(1.7, 0.3, 0.4, 0x333333, 0, 0.4, 2.0));
+    k.add(cyl(0.12, 0.12, 1.2, a, 0.5, 2.4, 1.4, 8)); k.add(box(1.7, 0.3, 0.4, a, 0, 0.4, 2.0));
     k.add(box(1.0, 0.55, 0.4, 0x222222, 0, 1.3, -0.95)); k.add(box(1.0, 0.1, 0.9, 0x222222, 0, 1.05, -0.4));
     [-0.5, 0.5].forEach(x => { const hl = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), new THREE.MeshBasicMaterial({ color: 0xfff1b0 })); hl.position.set(x, 1.5, 1.62); k.add(hl); });
     k.add(box(1.9, 0.3, 0.5, 0x8b5a2b, 0, 0.6, -1.6)); for (let i = 0; i < 5; i++) k.add(cyl(0.05, 0.05, 0.5, 0xe0c060, -0.8 + i * 0.4, 0.95, -1.6, 4));
     plate.position.set(0, 0.95, -1.86); plate.rotation.y = Math.PI; k.add(plate);
     if (def.livery) { const hood = imgPlane(1.1, 1.0, def.livery); hood.rotation.x = -Math.PI / 2; hood.position.set(0, 2.17, 0.9); k.add(hood); }
+    addSticker(0.6, 0, 2.18, 0.9);
     const big = new THREE.CylinderGeometry(0.75, 0.75, 0.6, S); big.rotateZ(Math.PI / 2); const small = new THREE.CylinderGeometry(0.42, 0.42, 0.4, S); small.rotateZ(Math.PI / 2);
     [[-1.0, 1.2, small], [1.0, 1.2, small], [-1.05, -0.9, big], [1.05, -0.9, big]].forEach(p => { const w = tag(new THREE.Mesh(p[2], mat(0x222222, 0.95))); w.position.set(p[0], p[2] === big ? 0.75 : 0.42, p[1]); w.rotation.order = 'YXZ'; k.add(w); wheels.push(w); if (p[2] === big) { const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.62, 10), mat(0xc8102e)); rim.rotation.z = Math.PI / 2; w.add(rim); } });
   } else if (def.cargo) {
@@ -98,24 +160,35 @@ export function buildKart(def) {
     k.add(box(0.9, 0.5, 0.4, 0x222222, 0, 0.9, -1.0)); k.add(cyl(0.05, 0.05, 1.3, 0x444444, 0, 0.9, 0.3, 6));
     plate.position.set(0, 0.7, 2.01); k.add(plate);
     if (def.livery) { const lp = imgPlane(1.3, 1.2, def.livery); lp.rotation.x = -Math.PI / 2; lp.position.set(0, 1.38, 1.3); k.add(lp); }
+    addSticker(0.6, 0.2, 1.39, 1.5);
     const wg = new THREE.CylinderGeometry(0.45, 0.45, 0.18, S); wg.rotateZ(Math.PI / 2);
     [[-0.95, 1.0], [0.95, 1.0], [0, -1.4]].forEach(p => { const w = tag(new THREE.Mesh(wg, mat(0x222222))); w.position.set(p[0], 0.45, p[1]); w.rotation.order = 'YXZ'; k.add(w); wheels.push(w); });
   } else {
     k.add(box(1.6, 0.5, 2.8, c, 0, 0.5, 0)); k.add(box(1.2, 0.35, 0.9, c, 0, 0.5, 1.7));
-    [-0.9, 0.9].forEach(x => k.add(box(0.25, 0.35, 1.6, c, x, 0.5, 0.2)));         // side pods
-    k.add(box(1.9, 0.25, 0.3, 0x333333, 0, 0.3, 2.05)); k.add(box(1.9, 0.25, 0.3, 0x333333, 0, 0.3, -1.45));
+    if (style.pods) [-0.9, 0.9].forEach(x => k.add(box(0.25, 0.35, 1.6, c, x, 0.5, 0.2)));         // side pods
+    k.add(box(1.9, 0.25, 0.3, a, 0, 0.3, 2.05)); k.add(box(1.9, 0.25, 0.3, a, 0, 0.3, -1.45));
     [-0.4, 0.4].forEach(x => { const hl = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), new THREE.MeshBasicMaterial({ color: 0xfff1b0 })); hl.position.set(x, 0.55, 2.16); k.add(hl); }); // headlights
     k.add(box(1.0, 0.55, 0.4, 0x222222, 0, 1.0, -0.95)); k.add(box(1.0, 0.1, 0.9, 0x222222, 0, 0.78, -0.4));
-    k.add(box(1.9, 0.08, 0.5, c, 0, 1.25, -1.5)); [-0.6, 0.6].forEach(x => k.add(box(0.1, 0.5, 0.1, 0x333333, x, 1.0, -1.5)));
+    if (style.spoiler === 'standard') { k.add(box(1.9, 0.08, 0.5, c, 0, 1.25, -1.5)); [-0.6, 0.6].forEach(x => k.add(box(0.1, 0.5, 0.1, a, x, 1.0, -1.5))); }
+    if (style.spoiler === 'wing') {
+      k.add(box(2.3, 0.1, 0.7, c, 0, 1.6, -1.6)); [-0.5, 0.5].forEach(x => k.add(box(0.1, 0.9, 0.12, a, x, 1.15, -1.6)));
+      [-1.15, 1.15].forEach(x => k.add(box(0.06, 0.45, 0.8, a, x, 1.55, -1.6)));                        // end plates
+    }
     const bar = torus(0.5, 0.05, 0x888888, 0, 1.25, -0.9); bar.rotation.y = Math.PI / 2; k.add(bar);                 // roll bar
     [-0.35, 0.35].forEach(x => { const e = cyl(0.1, 0.1, 0.5, 0x888888, x, 0.45, -1.7, 8); e.rotation.x = Math.PI / 2; k.add(e); });
     plate.position.set(0, 0.62, -1.61); plate.rotation.y = Math.PI; k.add(plate);
-    if (def.livery) { const hood = imgPlane(1.1, 0.8, def.livery); hood.rotation.x = -Math.PI / 2; hood.position.set(0, 0.69, 1.7); k.add(hood); const sp = imgPlane(1.8, 0.45, def.livery); sp.rotation.x = -Math.PI / 2; sp.position.set(0, 1.3, -1.5); k.add(sp); }
-    const wg = new THREE.CylinderGeometry(0.45, 0.45, 0.4, S); wg.rotateZ(Math.PI / 2);
-    const hub = new THREE.CylinderGeometry(0.2, 0.2, 0.42, 8); hub.rotateZ(Math.PI / 2);
+    if (def.livery) {
+      const hood = imgPlane(1.1, 0.8, def.livery); hood.rotation.x = -Math.PI / 2; hood.position.set(0, 0.69, 1.7); k.add(hood);
+      if (style.spoiler === 'standard') { const sp = imgPlane(1.8, 0.45, def.livery); sp.rotation.x = -Math.PI / 2; sp.position.set(0, 1.3, -1.5); k.add(sp); }
+      if (style.spoiler === 'wing') { const sp = imgPlane(2.2, 0.65, def.livery); sp.rotation.x = -Math.PI / 2; sp.position.set(0, 1.66, -1.6); k.add(sp); }
+    }
+    addSticker(0.55, 0, 0.7, 1.7);                                                 // over the livery, like a real decal
+    const wl = WHEEL_LOOK[style.wheels];
+    const wg = new THREE.CylinderGeometry(wl.r, wl.r, wl.w, S); wg.rotateZ(Math.PI / 2);
+    const hub = new THREE.CylinderGeometry(wl.hubR, wl.hubR, wl.w + 0.02, 8); hub.rotateZ(Math.PI / 2);
     [[-0.95, 1.0], [0.95, 1.0], [-0.95, -1.0], [0.95, -1.0]].forEach(p => {
-      const w = tag(new THREE.Mesh(wg, mat(0x222222, 0.95))); w.position.set(p[0], 0.45, p[1]); w.rotation.order = 'YXZ';
-      w.add(new THREE.Mesh(hub, mat(0xbbbbbb, 0.4))); k.add(w); wheels.push(w);
+      const w = tag(new THREE.Mesh(wg, mat(wl.tyre, 0.95))); w.position.set(p[0] + Math.sign(p[0]) * (wl.w - 0.4) / 2, wl.r, p[1]); w.rotation.order = 'YXZ';
+      w.add(new THREE.Mesh(hub, mat(wl.hub, wl.hubRough))); k.add(w); wheels.push(w);
     });
   }
   const driver = buildDriver(def); driver.position.set(0, def.tractor ? 1.05 : 0.75, -0.35); driver.scale.setScalar(0.85); k.add(driver);

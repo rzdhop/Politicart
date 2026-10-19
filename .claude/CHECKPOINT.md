@@ -34,10 +34,12 @@ Current state only. History lives in git.
   and on a full rerun. It is timing-sensitive under load, not caused by
   this task.
 - **Stage 1 done** (pun names): Tier 1 green (game 103), e2e 29/29.
-- **Stage 2 committed** (kart style model): Tier 1 green (game 118). E2E
-  deferred to Stage 3 -- awaiting the human's acknowledgement.
-- **Current stage:** 3 (kart mesh renders a style). **Next action:** scope
-  `kart.js`, `race.js` and `preview.js` callers, then implement.
+- **Stages 1-3 committed** (pun names; kart style model; mesh renders a
+  style). Tier 1 green (game 143), e2e 29/29 at Stage 3. The E2E deferral
+  for Stage 2 was acknowledged by the human.
+- **Current stage:** 4 (player Garage). **Next action:** scope the machine,
+  store, App and SelectScreen, then implement. Owed: a visual check of the
+  wheel, spoiler and sticker variants in the Garage preview.
 
 ## Previous task -- closed
 
