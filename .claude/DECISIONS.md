@@ -350,3 +350,22 @@ at runtime. A Fly restart logs the admin out, which is accepted. Known gaps:
   (follow-up).
 - **Spoofable IPs.** `KR_TRUST_PROXY=1` outside Fly would let clients spoof
   their IP. The global cap still holds.
+
+## DEC-018 -- Screens use safe centring, so a tall screen scrolls from its top
+
+**Context.** `.screen` is a fixed, scrollable flex column with
+`justify-content:center`. When a screen is taller than the window, centring
+pushes its top above the scroll origin, where no scrollbar reaches. The Garage
+(stage 4) hit this at 640 px. In stage 7 the Workshop grew the kart-default
+fields, and its first card (Emmanuel Macaron) became unreachable: an e2e spec
+timed out with "element is outside of the viewport". A real admin would have
+been stuck the same way.
+
+**Decision.** Fix it once in the design system: `.screen {
+justify-content: safe center }` in `packages/ui/src/styles/foundation.css`.
+The Garage drops its local override and keeps only its non-shrinking layout.
+
+**Consequence.** Every screen looks the same when it fits and starts at the
+top when it does not. `safe` needs a recent engine (Chromium 115+, Firefox,
+Safari 17.6). Older browsers ignore the declaration and keep the previous
+`center`, so they degrade to exactly the old behaviour.

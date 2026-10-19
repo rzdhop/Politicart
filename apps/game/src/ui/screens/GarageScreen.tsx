@@ -18,44 +18,24 @@ import {
 
 import { CHARACTERS } from '../../engine/data.js';
 import { myStyle } from '../../engine/garage.js';
+import { chips, parseRaceNumber, PODS, SPOILERS, STICKERS, WHEELS } from '../kartChoices';
 import { actions, type UiSnapshot } from '../store';
-import type { Character } from '../types';
-
-/** A full kart style, as kartstyle.js defines it. */
-interface KartStyle {
-  body: string;
-  accent: string;
-  wheels: string;
-  spoiler: string;
-  pods: boolean;
-  number: number | null;
-  sticker: string;
-}
-
-const WHEELS = [['classic', 'Classiques'], ['chrome', 'Chromées'], ['offroad', 'Tout-terrain'], ['gold', 'Dorées']] as const;
-const SPOILERS = [['none', 'Aucun'], ['standard', 'Standard'], ['wing', 'Grand aileron']] as const;
-const STICKERS = [['none', 'Aucun'], ['tricolore', 'Tricolore'], ['rosette', 'Cocarde'], ['etoile', 'Étoile'], ['marianne', 'Marianne']] as const;
-const PODS = [['on', 'Oui'], ['off', 'Non']] as const;
-
-/** ChoiceGroup options from [value, label] pairs, each chip's id being the prefix plus its value. */
-const chips = <V extends string>(idPrefix: string, pairs: readonly (readonly [V, string])[]) =>
-  pairs.map(([value, label]) => ({ value, label, id: idPrefix + value }));
+import type { Character, KartStyle } from '../types';
 
 /** One column: the workshop's input styling, without its card grid. */
 const ONE_COLUMN = { gridTemplateColumns: '1fr', width: '100%' } as const;
 /**
  * The form is taller than the roster, so on a short window the screen must
  * scroll rather than squeeze the layout under the button row: the layout keeps
- * its height, and `safe center` falls back to the top when it overflows.
+ * its height (the screen's safe centring then starts it at the top).
  */
-const SCREEN = { justifyContent: 'safe center' } as const;
 const LAYOUT = { flex: '0 0 auto' } as const;
+
 const PANEL = { textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 12 } as const;
 
 function onNumber(e: ChangeEvent<HTMLInputElement>) {
-  const raw = e.currentTarget.value.trim();
-  if (raw === '') actions.setGarage('number', null);
-  else if (/^\d{1,2}$/.test(raw)) actions.setGarage('number', Number(raw));
+  const n = parseRaceNumber(e.currentTarget.value);
+  if (n !== undefined) actions.setGarage('number', n);
 }
 
 /**
@@ -68,7 +48,7 @@ export function GarageScreen({ ui }: { ui: UiSnapshot }) {
   const chosen = characters[ui.charIdx] ?? characters[0]!;
   const style = myStyle(chosen) as KartStyle;
   return (
-    <Screen id="s-garage" hidden={ui.state !== 'garage'} style={SCREEN}>
+    <Screen id="s-garage" hidden={ui.state !== 'garage'}>
       <Heading size="screen">Garage</Heading>
       <SelectLayout style={LAYOUT}>
         <Panel style={PANEL} key={ui.garageVersion}>

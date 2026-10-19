@@ -23,7 +23,8 @@
   letter-spacing:.06em;
 }
 
-.admin input[type=text] {
+.admin input[type=text],
+.admin input[type=password] {
   font:inherit;
   font-size:14px;
   color:var(--fg);

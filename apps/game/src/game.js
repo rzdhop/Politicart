@@ -107,11 +107,13 @@ onTransition((to, from) => {
 });
 
 // ---------- Screens: mount ----------
-// The workshop's saved edits are applied before anything renders, as before.
+// The default cast renders first (and the old per-browser workshop edits are
+// dropped); the server's roster, when there is a server, replaces it below.
 loadCustom();
 loadGarage();
 mountUi($('ui'));
-// Served by the game server (not GitHub Pages)? Then team races are on offer.
+// Served by the game server (not GitHub Pages)? Then team races are on offer,
+// the cast is the one the admin set, and the admin can log in.
 actions.detectServer();
 
 // ---------- Main loop ----------
@@ -122,7 +124,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
   const state = getState();
-  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'garage') { if (state === 'select' || state === 'tracks' || state === 'garage' || hasPreview()) renderPreview(dt); return; }
+  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin' || state === 'login' || state === 'lobby' || state === 'garage') { if (state === 'select' || state === 'tracks' || state === 'garage' || hasPreview()) renderPreview(dt); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
 
   const payload = isNetRace() ? netStep(dt) : stepRace(dt);

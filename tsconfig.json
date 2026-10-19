@@ -12,6 +12,10 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
+    // playwright.config.ts imports the server's auth.js (the one definition of
+    // the admin hash format); its types are inferred, not checked.
+    "allowJs": true,
+    "checkJs": false,
     "types": ["node"]
   },
   "include": ["e2e/**/*.ts", "playwright.config.ts"]

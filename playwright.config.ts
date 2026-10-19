@@ -1,4 +1,22 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { defineConfig, devices } from '@playwright/test';
+
+import { hashPasswordSync } from './apps/server/src/auth.js';
+import { ADMIN_PASSWORD, ADMIN_USER } from './e2e/fixtures/admin';
+
+/**
+ * The game server's admin, for e2e/admin.spec.ts: the test-only password's
+ * hash, computed here at load (never stored in the repo), and an empty data
+ * dir for this run, so the roster the specs save starts at the default cast
+ * and never touches apps/server/data. Playwright loads this file again in
+ * each worker; the env carries the first values over, so the server and every
+ * worker agree on one data dir.
+ */
+process.env.KR_E2E_ADMIN_HASH ||= hashPasswordSync(ADMIN_PASSWORD);
+process.env.KR_E2E_DATA_DIR ||= mkdtempSync(join(tmpdir(), 'kr-e2e-'));
 
 /**
  * End-to-end suite for Kart République.
@@ -77,11 +95,22 @@ export default defineConfig({
     },
     {
       // The game server serves the same build plus the team-race WebSocket
-      // (e2e/multiplayer.spec.ts). Races are capped at 15 s here so a spec can
-      // reach the results without three real laps.
+      // (e2e/multiplayer.spec.ts) and the admin's workshop (e2e/admin.spec.ts).
+      // Races are capped at 15 s here so a spec can reach the results without
+      // three real laps. The admin is the test-only account above.
       command: 'npm start -w @kart-republique/server',
       url: 'http://127.0.0.1:4180/api/kr',
-      env: { PORT: '4180', HOST: '127.0.0.1', KR_MAX_RACE_S: '15' },
+      env: {
+        PORT: '4180',
+        HOST: '127.0.0.1',
+        KR_MAX_RACE_S: '15',
+        KR_ADMIN_USER: ADMIN_USER,
+        KR_ADMIN_PASSWORD_HASH: process.env.KR_E2E_ADMIN_HASH,
+        KR_DATA_DIR: process.env.KR_E2E_DATA_DIR,
+      },
+      // Locally a server already running on 4180 is reused as is. One started
+      // without the env above (say `npm run serve`) has no test admin and keeps
+      // its own data dir, so the admin specs fail against it: stop it first.
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       stdout: 'ignore',

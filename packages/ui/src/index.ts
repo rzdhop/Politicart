@@ -139,6 +139,10 @@ export {
   LiveryThumb,
   type LiveryThumbProps,
 } from './components/workshop/LiveryThumb';
+export {
+  PasswordInput,
+  type PasswordInputProps,
+} from './components/workshop/PasswordInput';
 export { TextInput, type TextInputProps } from './components/workshop/TextInput';
 
 // Misc.

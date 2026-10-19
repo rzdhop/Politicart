@@ -6,7 +6,7 @@
 // Sessions live in memory on purpose: Fly stops the machine when idle, and a
 // restart only means the admin logs in again.
 
-import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
 const scryptAsync = promisify(scrypt);
@@ -39,15 +39,28 @@ export function parseHash(stored) {
 export const isPasswordHash = stored => parseHash(stored) !== null;
 
 // NFC so a password with accents verifies whatever keyboard typed it.
-const derive = (password, { N, r, p, salt }, len) =>
-  scryptAsync(password.normalize('NFC'), salt, len, { N, r, p, maxmem: 256 * N * r + 1024 * 1024 });
+const scryptOptions = ({ N, r, p }) => ({ N, r, p, maxmem: 256 * N * r + 1024 * 1024 });
+const derive = (password, h, len) => scryptAsync(password.normalize('NFC'), h.salt, len, scryptOptions(h));
+
+/** The one definition of the stored format, which `parseHash` reads back. */
+const formatHash = ({ N, r, p }, salt, key) => `scrypt$N=${N},r=${r},p=${p}$${salt.toString('base64')}$${key.toString('base64')}`;
 
 /** Hash a password into the self-describing format `parseHash` reads. */
 export async function hashPassword(password) {
   if (typeof password !== 'string') throw new TypeError('password must be a string');
   const salt = randomBytes(SALT_BYTES);
-  const key = await derive(password, { ...SCRYPT, salt }, KEY_BYTES);
-  return `scrypt$N=${SCRYPT.N},r=${SCRYPT.r},p=${SCRYPT.p}$${salt.toString('base64')}$${key.toString('base64')}`;
+  return formatHash(SCRYPT, salt, await derive(password, { ...SCRYPT, salt }, KEY_BYTES));
+}
+
+/**
+ * The same, synchronously, for config files that cannot await (the e2e
+ * suite's Playwright config hashes its test-only password at load). Blocks the
+ * thread for one scrypt: never call it while serving requests.
+ */
+export function hashPasswordSync(password) {
+  if (typeof password !== 'string') throw new TypeError('password must be a string');
+  const salt = randomBytes(SALT_BYTES);
+  return formatHash(SCRYPT, salt, scryptSync(password.normalize('NFC'), salt, KEY_BYTES, scryptOptions(SCRYPT)));
 }
 
 /** True when `password` matches `stored`. Never throws: a bad hash is a no. */
@@ -203,9 +216,7 @@ export function createAdmin({ user = 'rida', passwordHash = '', trustProxy = fal
   const limiter = createRateLimiter({ now });
   // A wrong user still costs one scrypt with the same parameters, so the
   // response time does not reveal which half of the pair was wrong.
-  const dummy = parsed
-    ? `scrypt$N=${parsed.N},r=${parsed.r},p=${parsed.p}$${randomBytes(SALT_BYTES).toString('base64')}$${randomBytes(parsed.key.length).toString('base64')}`
-    : '';
+  const dummy = parsed ? formatHash(parsed, randomBytes(SALT_BYTES), randomBytes(parsed.key.length)) : '';
   const tokenOf = req => parseCookies(req.headers.cookie)[COOKIE];
 
   return {

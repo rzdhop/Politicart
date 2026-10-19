@@ -10,7 +10,9 @@
   display:flex;
   flex-direction:column;
   align-items:center;
-  justify-content:center;
+  /* safe: when a screen is taller than the window it starts at the top and
+     scrolls, instead of overflowing upward where no scrollbar reaches. */
+  justify-content:safe center;
   padding-block:24px;
   padding-left:max(16px,env(safe-area-inset-left,0px));
   padding-right:max(16px,env(safe-area-inset-right,0px));

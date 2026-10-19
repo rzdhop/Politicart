@@ -23,14 +23,30 @@ export interface Character {
   power: { name: string; desc: string; cd?: number };
 }
 
+/** A character as data.js first defines it, before the admin's roster (data.js BASE). */
 export interface BaseCharacter {
   name: string;
+  title: string;
+  quote: string;
+  suit: number;
+  kart: number;
 }
 
 export interface Track {
   name: string;
   desc: string;
   points: [number, number][];
+}
+
+/** A full kart style, as kartstyle.js defines it. */
+export interface KartStyle {
+  body: string;
+  accent: string;
+  wheels: string;
+  spoiler: string;
+  pods: boolean;
+  number: number | null;
+  sticker: string;
 }
 
 /** One character's edits in the workshop, keyed as the inputs' data-k attributes. */
@@ -41,6 +57,8 @@ export interface CustomCharacter {
   suit?: string;
   kart?: string;
   livery?: string;
+  /** The character's kart defaults: only the fields the admin set (never the body, which is `kart`). */
+  style?: Partial<KartStyle>;
 }
 
 export interface CustomData {

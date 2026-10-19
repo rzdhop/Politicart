@@ -13,7 +13,7 @@
 // getter over this module (see state.js). Assigning to it throws.
 //
 // The transition table is the game's real flow, nothing more: title to the
-// roster or the workshop, roster to the circuits, circuits into a countdown,
+// roster, the workshop or its login, roster to the circuits, circuits into a countdown,
 // countdown into the race, race to the results, pause from either phase of
 // the race and back, and quit or menu back to the title. A move not listed
 // here is a bug, so transition() throws rather than silently desyncing.
@@ -26,20 +26,26 @@
 //
 // `garage` is where the player styles their own kart, reached from and
 // returning to the roster, so the turntable stays on screen throughout.
+//
+// `login` is the admin's sign-in on the game server. It is left for the
+// title, or straight for the workshop on success; the workshop comes back to
+// it when the session has expired mid-edit, so the draft survives the new
+// login.
 
-export const STATES = Object.freeze(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'garage']);
+export const STATES = Object.freeze(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'garage', 'login']);
 
 const NEXT = Object.freeze({
-  title: Object.freeze(['select', 'admin', 'lobby']),
+  title: Object.freeze(['select', 'admin', 'lobby', 'login']),
   select: Object.freeze(['title', 'tracks', 'garage']),
   tracks: Object.freeze(['select', 'countdown']),
-  admin: Object.freeze(['title']),
+  admin: Object.freeze(['title', 'login']),
   countdown: Object.freeze(['race', 'paused', 'lobby']),
   race: Object.freeze(['paused', 'results', 'lobby']),
   paused: Object.freeze(['race', 'countdown', 'title']),
   results: Object.freeze(['countdown', 'title', 'lobby']),
   lobby: Object.freeze(['title', 'countdown']),
   garage: Object.freeze(['select']),
+  login: Object.freeze(['title', 'admin']),
 });
 
 let current = 'title';

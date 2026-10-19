@@ -9,6 +9,7 @@ import { ColorsRow } from './ColorsRow';
 import { Field } from './Field';
 import { FileInput } from './FileInput';
 import { LiveryThumb } from './LiveryThumb';
+import { PasswordInput } from './PasswordInput';
 import { TextInput } from './TextInput';
 
 describe('AdminGrid and AdminCard', () => {
@@ -64,6 +65,28 @@ describe('inputs', () => {
   it('TextInput is fixed to type=text, which is what the style is bound to', () => {
     const { container } = render(<TextInput />);
     expect(container.querySelector('input')?.getAttribute('type')).toBe('text');
+  });
+
+  it('PasswordInput is fixed to type=password, which masks it and is what the style is bound to', () => {
+    // A consumer's type must not leak through: type=text would show the password.
+    const props = { type: 'text' } as unknown as Parameters<typeof PasswordInput>[0];
+    const { container } = render(<PasswordInput {...props} />);
+    expect(container.querySelector('input')?.getAttribute('type')).toBe('password');
+  });
+
+  it('PasswordInput passes its props through and is found by its label', () => {
+    render(
+      <AdminGrid>
+        <Field label="Mot de passe">
+          <PasswordInput id="pw" autoComplete="current-password" className="wide" />
+        </Field>
+      </AdminGrid>,
+    );
+    const input = screen.getByLabelText('Mot de passe');
+    expect(input.id).toBe('pw');
+    expect(input.getAttribute('autocomplete')).toBe('current-password');
+    expect(input.className).toBe('wide');
+    expect(input.closest('.admin')).not.toBeNull();
   });
 
   it('ColorSwatch is a native colour input', () => {

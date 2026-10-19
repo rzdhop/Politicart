@@ -34,15 +34,13 @@ Current state only. History lives in git.
   and on a full rerun. It is timing-sensitive under load, not caused by
   this task.
 - **Stage 1 done** (pun names): Tier 1 green (game 103), e2e 29/29.
-- **Stages 1-6 committed** (pun names; kart style model; mesh renders a
-  style; Garage + ChoiceGroup, DEC-016; admin auth, DEC-017; server roster
-  store). Tier 1 green (ui 241, game 150, server 74), audit 0, e2e 33/33 at
-  Stage 6.
-- **Current stage:** 7 (client admin flow: login screen, Workshop behind
-  login, roster from `/api/roster`, kart default fields; R-06 moves to the
-  server build). **Next action:** scope and brief Stage 7; it changes R-06 on
-  purpose, and playwright.config needs a test-only admin hash plus a temp
-  KR_DATA_DIR.
+- **Stages 1-7 committed** (pun names; kart style model; mesh renders a
+  style; Garage + ChoiceGroup, DEC-016; admin auth, DEC-017; server roster;
+  client admin flow + PasswordInput + safe centring, DEC-018). Tier 1 green
+  (ui 245, game 181, server 75), audit 0, e2e 38/38 at Stage 7.
+- **Current stage:** 8 (kart style in team races: lobby `set` carries the
+  style, the race message carries it, netrace clones a def per slot).
+  **Next action:** brief Stage 8.
 - **Follow-ups owed:** a `/design-sync` re-sync to upload ChoiceGroup; a
   `KR_ALLOWED_HOSTS` check against DNS rebinding (DEC-017).
 
@@ -113,7 +111,8 @@ The game at `index.html` must keep working. No item here may break.
 | R-03 | Pause / resume / quit to menu | `e2e/game.spec.ts` R-03 (3 specs) | COVERED |
 | R-04 | Mute toggle (button and `M` key) | `e2e/game.spec.ts` R-04 (2 specs) | COVERED |
 | R-05 | Graphics toggle: detailed with shadows vs light low-poly | `e2e/game.spec.ts` R-05 (2 specs) | COVERED |
-| R-06 | Workshop: rename, colours, kart livery, campaign posters; localStorage persistence; reset | `e2e/game.spec.ts` R-06 (3 specs) | COVERED |
+| R-06 | Workshop (admin only, game server): rename, colours, kart defaults, livery, posters; saved on the server for every player; reset | `e2e/admin.spec.ts` R-06 workshop (3 specs) | COVERED (redefined 2026-10-19) |
+| R-18 | Admin access: only the logged-in admin sees the Workshop; visitors get a login; the static build has neither; logout; admin kart defaults reach players' Garage | `e2e/admin.spec.ts` R-06 admin access (5 specs) + server auth/roster tests | COVERED 2026-10-19 |
 | R-07 | Keyboard controls as documented in the README controls table | `e2e/game.spec.ts` R-07 (3 specs) | COVERED |
 | R-08 | Minimap canvas rendering | `e2e/game.spec.ts` R-08 (1 spec) | COVERED |
 | R-09 | Window resize without layout or renderer breakage | `e2e/game.spec.ts` R-09 (2 specs) | COVERED |

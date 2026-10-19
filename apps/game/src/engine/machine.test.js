@@ -9,7 +9,10 @@ beforeEach(() => { resetMachine('title'); });
 const FLOWS = [
   ['title', 'select', 'tracks', 'countdown', 'race', 'results', 'title'],          // a full race, then back to the menu
   ['title', 'select', 'tracks', 'countdown', 'race', 'results', 'countdown'],      // "rejouer" from the results
-  ['title', 'admin', 'title'],                                                      // the workshop
+  ['title', 'admin', 'title'],                                                      // the workshop, already logged in
+  ['title', 'login', 'admin', 'title'],                                             // log in, then the workshop
+  ['title', 'login', 'title'],                                                      // back from the login
+  ['title', 'admin', 'login', 'admin', 'title'],                                    // the session expired on save: log in again
   ['title', 'select', 'title'],                                                     // back from the roster
   ['title', 'select', 'tracks', 'select'],                                          // back from the circuits
   ['title', 'select', 'tracks', 'countdown', 'paused', 'countdown', 'race'],        // pause during the countdown
@@ -25,8 +28,8 @@ describe('game state machine', () => {
     expect(getState()).toBe('title');
   });
 
-  it('lists exactly the nine states the game has', () => {
-    expect([...STATES]).toEqual(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'garage']);
+  it('lists exactly the eleven states the game has', () => {
+    expect([...STATES]).toEqual(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'garage', 'login']);
   });
 
   it.each(FLOWS)('accepts the flow %s -> %s -> %s ...', (...flow) => {
@@ -39,7 +42,7 @@ describe('game state machine', () => {
   });
 
   it('refuses moves the game has no path for, and stays put', () => {
-    for (const [from, to] of [['title', 'race'], ['title', 'results'], ['select', 'countdown'], ['race', 'title'], ['race', 'select'], ['admin', 'select'], ['results', 'race'], ['countdown', 'results'], ['lobby', 'race'], ['lobby', 'select'], ['lobby', 'paused'], ['select', 'lobby']]) {
+    for (const [from, to] of [['title', 'race'], ['title', 'results'], ['select', 'countdown'], ['race', 'title'], ['race', 'select'], ['admin', 'select'], ['results', 'race'], ['countdown', 'results'], ['lobby', 'race'], ['lobby', 'select'], ['lobby', 'paused'], ['select', 'lobby'], ['login', 'select'], ['login', 'race'], ['select', 'login'], ['lobby', 'login']]) {
       resetMachine(from);
       expect(canTransition(to)).toBe(false);
       expect(() => transition(to)).toThrow(/Illegal game state transition: /);

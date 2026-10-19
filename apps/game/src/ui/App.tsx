@@ -3,6 +3,7 @@ import { NoteBanner } from '@kart-republique/ui';
 import { AdminScreen } from './screens/AdminScreen';
 import { GarageScreen } from './screens/GarageScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
+import { LoginScreen } from './screens/LoginScreen';
 import { PauseScreen } from './screens/PauseScreen';
 import { ResultsScreen } from './screens/ResultsScreen';
 import { SelectScreen } from './screens/SelectScreen';
@@ -12,7 +13,7 @@ import { Hud } from './Hud';
 import { useUi } from './store';
 
 /**
- * The six screens and the note banner, in the order the single-file game
+ * The screens and the note banner, in the order the single-file game
  * laid them out. Every screen is always mounted and hides itself when the
  * machine is elsewhere, exactly as the original sections did with `hidden`,
  * so the E2E suite's visibility checks mean the same thing they always did.
@@ -24,7 +25,10 @@ export function App() {
   return (
     <>
       <TitleScreen ui={ui} />
-      <AdminScreen ui={ui} />
+      {/* The admin's screens exist only on the game server: the login for anyone
+          the server lets try, the workshop only inside an admin session. */}
+      {ui.netAvailable && ui.adminEnabled && <LoginScreen ui={ui} />}
+      {ui.admin && <AdminScreen ui={ui} />}
       <SelectScreen ui={ui} />
       <GarageScreen ui={ui} />
       <TracksScreen ui={ui} />

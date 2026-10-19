@@ -279,59 +279,8 @@ test.describe('R-05 graphics toggle', () => {
   });
 });
 
-test.describe('R-06 workshop', () => {
-  test('renames a candidate, persists it, and resets', async ({ page }) => {
-    await page.locator('#b-admin').click();
-    await expect(page.locator('#s-admin')).toBeVisible();
-    // One card per candidate.
-    await expect(page.locator('#admin-chars .card')).toHaveCount(11);
-
-    const field = page.locator('#adm-name-victor');
-    const original = await field.inputValue();
-    expect(original).not.toBe('');
-
-    await field.fill('Jean-Michel Test');
-    await page.locator('#b-admin-save').click();
-
-    // Saving returns to the title screen and confirms on the button.
-    await expect(page.locator('#s-title')).toBeVisible();
-    await expect(page.locator('#b-admin')).toContainText('enregistré');
-
-    // It reached localStorage...
-    const stored = await page.evaluate(() => localStorage.getItem('kr-custom'));
-    expect(stored, 'nothing was written to localStorage').toContain('Jean-Michel Test');
-
-    // ...and survives a reload, which is the point of the workshop.
-    await page.reload();
-    await page.locator('#b-play').click();
-    await expect(page.locator('#roster')).toContainText('Jean-Michel Test');
-
-    // Reset puts the original cast back and clears storage.
-    await page.locator('#b-back1').click();
-    await page.locator('#b-admin').click();
-    await page.locator('#b-admin-reset').click();
-    await expect(page.locator('#adm-name-victor')).toHaveValue(original);
-    expect(await page.evaluate(() => localStorage.getItem('kr-custom'))).toBeNull();
-  });
-
-  test('changes a colour without losing the rest of the form', async ({ page }) => {
-    await page.locator('#b-admin').click();
-    await page.locator('#adm-kart-victor').fill('#ff0000');
-    await page.locator('#adm-title-victor').fill('Le testeur');
-    await page.locator('#b-admin-save').click();
-    await page.locator('#b-admin').click();
-    await expect(page.locator('#adm-kart-victor')).toHaveValue('#ff0000');
-    await expect(page.locator('#adm-title-victor')).toHaveValue('Le testeur');
-    // Leave no state behind for the next spec.
-    await page.locator('#b-admin-reset').click();
-  });
-
-  test('shows the campaign-poster control with its empty state', async ({ page }) => {
-    await page.locator('#b-admin').click();
-    await expect(page.locator('#ad-files')).toBeVisible();
-    await expect(page.locator('#ad-preview')).toContainText('Aucune affiche');
-  });
-});
+// R-06 (the workshop) runs on the game server since the cast moved there:
+// see e2e/admin.spec.ts.
 
 test.describe('R-07 keyboard controls', () => {
   test.beforeEach(async ({ page }) => {

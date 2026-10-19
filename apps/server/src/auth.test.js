@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
-  checkMutation, clientIp, createAdmin, createRateLimiter, createSessions, hashPassword,
+  checkMutation, clientIp, createAdmin, createRateLimiter, createSessions, hashPassword, hashPasswordSync,
   isPasswordHash, parseCookies, requestScheme, safeEqual, sessionCookie, verifyPassword,
 } from './auth.js';
 
@@ -21,6 +21,16 @@ describe('password hash', () => {
     expect(await verifyPassword(PASSWORD, HASH)).toBe(true);
     // Salted: the same password never hashes the same twice.
     expect(await hashPassword(PASSWORD)).not.toBe(HASH);
+  });
+
+  it('hashes synchronously into the same format, which verifies', async () => {
+    const sync = hashPasswordSync(PASSWORD);
+    expect(sync).toMatch(/^scrypt\$N=16384,r=8,p=1\$[A-Za-z0-9+/]+={0,2}\$[A-Za-z0-9+/]+={0,2}$/);
+    expect(isPasswordHash(sync)).toBe(true);
+    expect(await verifyPassword(PASSWORD, sync)).toBe(true);
+    expect(await verifyPassword(PASSWORD.normalize('NFD'), sync)).toBe(true);
+    expect(await verifyPassword(`${PASSWORD}x`, sync)).toBe(false);
+    expect(() => hashPasswordSync(undefined)).toThrow(TypeError);
   });
 
   it('accepts the same accented password whatever its Unicode form', async () => {

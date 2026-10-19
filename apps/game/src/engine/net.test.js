@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { connect, disconnect, getNet, joinRoom, onNet, onRace, onSnap, probeServer, sendInput, serverUrl, setTransport } from './net.js';
+import {
+  adminLogin, adminLogout, connect, disconnect, fetchAdmin, fetchRoster, getNet, joinRoom, onNet, onRace, onSnap, probeServer, saveRoster, sendInput, serverUrl, setTransport,
+} from './net.js';
 
 // A stand-in WebSocket: records what is sent and lets the test play the server.
 class FakeSocket {
@@ -69,5 +71,76 @@ describe('net client', () => {
     s.close();
     expect(getNet()).toMatchObject({ status: 'closed', room: null });
     expect(getNet().error).toMatch(/perdue/);
+  });
+});
+
+/** A fetch that answers every call with `status` and `body`, and records the calls. */
+function fakeFetch(status, body) {
+  const calls = [];
+  const fn = async (url, init) => {
+    calls.push({ url, init });
+    return { ok: status >= 200 && status < 300, status, json: async () => { if (body === undefined) throw new Error('no body'); return body; } };
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+describe('admin and roster calls', () => {
+  it('fetch the roster, and say null when the server cannot', async () => {
+    const roster = { chars: { victor: { name: 'X' } }, ads: [] };
+    expect(await fetchRoster(fakeFetch(200, roster))).toEqual(roster);
+    expect(await fetchRoster(fakeFetch(500, { error: 'x' }))).toBeNull();
+    expect(await fetchRoster(async () => { throw new Error('offline'); })).toBeNull();
+    expect(await fetchRoster(undefined)).toBeNull();
+  });
+
+  it('read the admin session, defaulting to no admin on anything unexpected', async () => {
+    expect(await fetchAdmin(fakeFetch(200, { enabled: true, admin: true, user: 'rida' }))).toEqual({ enabled: true, admin: true, user: 'rida' });
+    expect(await fetchAdmin(fakeFetch(200, { enabled: true, admin: false }))).toEqual({ enabled: true, admin: false });
+    expect(await fetchAdmin(fakeFetch(200, { kr: 'server' }))).toEqual({ enabled: false, admin: false });
+    expect(await fetchAdmin(fakeFetch(404, undefined))).toEqual({ enabled: false, admin: false });
+    expect(await fetchAdmin(async () => { throw new Error('offline'); })).toEqual({ enabled: false, admin: false });
+  });
+
+  it('log in with a same-origin JSON POST, the password only in the body', async () => {
+    const f = fakeFetch(204, undefined);
+    expect(await adminLogin('rida', 's3cret', f)).toEqual({ ok: true });
+    const [{ url, init }] = f.calls;
+    expect(url).toBe('./api/admin/login');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers['content-type']).toBe('application/json');
+    expect(JSON.parse(init.body)).toEqual({ user: 'rida', password: 's3cret' });
+    expect(url).not.toContain('s3cret');
+  });
+
+  it('report a refused login in the server words, or a French fallback', async () => {
+    expect(await adminLogin('rida', 'x', fakeFetch(401, { error: 'Identifiant ou mot de passe incorrect.' })))
+      .toEqual({ ok: false, status: 401, error: 'Identifiant ou mot de passe incorrect.' });
+    expect(await adminLogin('rida', 'x', fakeFetch(429, { error: 'Trop de tentatives. Réessayez dans une minute.' })))
+      .toMatchObject({ ok: false, status: 429, error: 'Trop de tentatives. Réessayez dans une minute.' });
+    expect(await adminLogin('rida', 'x', fakeFetch(503, undefined))).toMatchObject({ ok: false, status: 503, error: 'Administration désactivée.' });
+    expect(await adminLogin('rida', 'x', async () => { throw new Error('offline'); })).toMatchObject({ ok: false, status: 0, error: 'Serveur injoignable.' });
+  });
+
+  it('log out with a JSON POST', async () => {
+    const f = fakeFetch(204, undefined);
+    expect(await adminLogout(f)).toBe(true);
+    expect(f.calls[0].url).toBe('./api/admin/logout');
+    expect(f.calls[0].init.headers['content-type']).toBe('application/json');
+    expect(await adminLogout(fakeFetch(503, { error: 'x' }))).toBe(false);
+  });
+
+  it('save the roster with a JSON PUT and hand back what the server stored, or the field it refused', async () => {
+    const stored = { chars: { victor: { name: 'Y' } }, ads: [] };
+    const f = fakeFetch(200, stored);
+    expect(await saveRoster({ chars: { victor: { name: ' Y ' } }, ads: [] }, f)).toEqual({ ok: true, roster: stored });
+    expect(f.calls[0].url).toBe('./api/admin/roster');
+    expect(f.calls[0].init.method).toBe('PUT');
+    expect(JSON.parse(f.calls[0].init.body)).toEqual({ chars: { victor: { name: ' Y ' } }, ads: [] });
+    expect(await saveRoster({}, fakeFetch(400, { error: 'chars.victor.name : 28 caractères au plus.', field: 'chars.victor.name' })))
+      .toEqual({ ok: false, status: 400, error: 'chars.victor.name : 28 caractères au plus.', field: 'chars.victor.name' });
+    expect(await saveRoster({}, fakeFetch(413, undefined))).toMatchObject({ ok: false, status: 413 });
+    expect(await saveRoster({}, fakeFetch(401, { error: 'Connexion administrateur requise.' }))).toMatchObject({ ok: false, status: 401 });
   });
 });

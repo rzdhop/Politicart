@@ -18,10 +18,14 @@ const COLUMN = { display: 'flex', flexDirection: 'column', gap: 14, alignItems: 
 const ADMIN_LABEL = {
   idle: 'Atelier (admin)',
   saved: 'Atelier (admin) · enregistré',
-  full: 'Atelier (admin) · non sauvegardé (stockage plein)',
 } as const;
 
-/** The title screen: brand, the four buttons, the controls legend, the disclaimer. */
+/**
+ * The title screen: brand, the buttons, the controls legend, the disclaimer.
+ * On the game server only: Multijoueur, and the admin's buttons -- the login
+ * ("Administration") for a visitor when the server has an admin account, the
+ * workshop and the logout once logged in. The static build shows none of them.
+ */
 export function TitleScreen({ ui }: { ui: UiSnapshot }) {
   return (
     <Screen id="s-title" hidden={ui.state !== 'title'}>
@@ -38,7 +42,9 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
           <Button id="b-mute" variant="ghost" onClick={() => actions.toggleMute(true)}>
             {'Son : ' + (ui.muted ? 'coupé' : 'activé')}
           </Button>
-          <Button id="b-admin" variant="ghost" onClick={actions.openAdmin}>{ADMIN_LABEL[ui.adminStatus]}</Button>
+          {ui.netAvailable && ui.adminEnabled && !ui.admin && <Button id="b-login" variant="ghost" onClick={actions.openLogin}>Administration</Button>}
+          {ui.admin && <Button id="b-admin" variant="ghost" onClick={actions.openAdmin}>{ADMIN_LABEL[ui.adminStatus]}</Button>}
+          {ui.admin && <Button id="b-logout" variant="ghost" onClick={() => { void actions.logout(); }}>Déconnexion</Button>}
         </Row>
         <ControlsGrid>
           <div><KeyCap>↑</KeyCap> / <KeyCap>Z</KeyCap> accélérer</div>
