@@ -41,8 +41,7 @@ Current state only. History lives in git.
 - **Current stage:** 9 (close-out: VISION, ASSUMPTIONS A-011..A-016,
   CHECKPOINT rewrite, README admin setup, PLAN marked done).
 - **Follow-ups owed:** a `/design-sync` re-sync to upload ChoiceGroup and
-  PasswordInput; a `KR_ALLOWED_HOSTS` check against DNS rebinding (DEC-017);
-  de-flake netrace.test.js (seed the simulated race, ~1 in 4 failures).
+  PasswordInput; a `KR_ALLOWED_HOSTS` check against DNS rebinding (DEC-017).
 
 ## Previous task -- closed
 

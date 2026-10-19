@@ -1,6 +1,6 @@
 // The networked client, end to end in node: a real headless race is recorded
 // as the server would send it, then replayed into the client.
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { CHARACTERS } from './data.js';
 import { drain } from './events.js';
@@ -17,16 +17,34 @@ const ROSTER = ['victor', 'gege', 'maurice', 'capucine', 'hubert', 'lulu'].map((
 const SNAPS = [];
 let barricadeId = null;
 
+// A fixed-seed Math.random (mulberry32) for the recording. The AI picks lanes
+// and powers at random; unseeded, a kart now and then drove into the barricade
+// before snapshot 354 and the hazard assertion failed about one run in 25.
+function seeded(seed) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 beforeAll(() => {
   // "Server": race 6 s at 60 Hz, a snapshot every third tick, a barricade dropped at 5 s.
+  const random = vi.spyOn(Math, 'random').mockImplementation(seeded(1));
   resetMachine('tracks'); G.trackIdx = 0;
   startField(ROSTER.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team })));
   for (let tick = 1; tick <= 360; tick++) {
-    if (tick === 300) { const k = G.karts[4]; k.item = 'greve'; k.itemRolling = 0; useItem(k); barricadeId = G.hazards.at(-1).id; }
+    if (tick === 300) {
+      const k = G.karts[4]; k.item = 'greve'; k.itemRolling = 0; useItem(k);
+      // parked well off the road, so no kart can drive into it before snapshot 354, whatever the AI does
+      const h = G.hazards.at(-1); h.x += 500; h.z += 500; barricadeId = h.id;
+    }
     simStep(1 / 60);
     if (tick % 3 === 0) SNAPS.push(JSON.parse(JSON.stringify(encodeSnapshot(G, tick))));
   }
   drain();
+  random.mockRestore();
 });
 afterEach(() => { abortNetRace(); disconnect(); });
 
