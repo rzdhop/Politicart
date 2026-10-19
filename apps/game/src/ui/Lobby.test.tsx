@@ -74,7 +74,8 @@ describe('the lobby', () => {
     fireEvent.change(container.querySelector('#lobby-name')!, { target: { value: 'Alice' } });
     fireEvent.click(container.querySelector('#b-mp-create')!);
     expect(sock.sent.at(-2)).toEqual({ t: 'hello', name: 'Alice' });
-    expect(sock.sent.at(-1)).toEqual({ t: 'create' });
+    // The player's Garage edits ride along (none here), so others draw their kart as styled.
+    expect(sock.sent.at(-1)).toEqual({ t: 'create', style: {} });
 
     act(() => sock.serve({ t: 'room', room: ROOM() }));
     expect(container.querySelector('#lobby-room')?.textContent).toContain('ABCD');

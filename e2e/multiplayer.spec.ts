@@ -73,4 +73,37 @@ test.describe('Multijoueur', () => {
     await expect(guest.locator('#s-lobby')).toBeVisible();
     await expect(guest.locator('#lobby-players tr')).toHaveCount(2);
   });
+
+  test("each player's Garage edits reach the other player's screen", async ({ browser }) => {
+    test.setTimeout(90_000);
+    // Alice styled her kart in the Garage (kept in her browser); Bob did not.
+    const host = await player(browser, 'Alice');
+    await host.evaluate(() => localStorage.setItem('kr-kart', JSON.stringify({ wheels: 'gold', number: 7, body: '#00ff00' })));
+    await host.reload();
+    await host.locator('#b-multi').click();
+    await expect(host.locator('#lobby-status')).toHaveText('Connecté au serveur');
+    await host.locator('#lobby-name').fill('Alice');
+    const guest = await player(browser, 'Bob');
+
+    await host.locator('#b-mp-create').click();
+    const code = ((await host.locator('#lobby-room').textContent()) ?? '').match(/Salle ([A-Z]{4})/)?.[1];
+    await guest.locator('#lobby-code').fill(code!);
+    await guest.locator('#b-mp-join').click();
+    for (const p of [host, guest]) await expect(p.locator('#lobby-players tr')).toHaveCount(2);
+    await guest.locator('#b-mp-ready').click();
+    await host.locator('#b-mp-start').click();
+    for (const p of [host, guest]) await expect(p.locator('#hud')).toBeVisible();
+
+    // Humans take the last two slots, in join order: Alice 4, Bob 5.
+    type Slot = { charId: string; style: Record<string, unknown> };
+    const onGuest = (await guest.evaluate(() => (window as unknown as { __kr: { karts(): unknown } }).__kr.karts())) as Slot[];
+    const onHost = (await host.evaluate(() => (window as unknown as { __kr: { karts(): unknown } }).__kr.karts())) as Slot[];
+    expect(onGuest).toHaveLength(6);
+    expect(onGuest[4]!.style).toMatchObject({ wheels: 'gold', number: 7, body: '#00ff00' });
+    expect(onHost[4]!.style).toEqual(onGuest[4]!.style);
+    // Bob made no edits: his kart is his candidate's default, the same on both screens.
+    expect(onGuest[5]!.style).toMatchObject({ wheels: 'classic', number: null });
+    expect(onHost[5]!.style).toEqual(onGuest[5]!.style);
+    await host.evaluate(() => localStorage.removeItem('kr-kart'));
+  });
 });

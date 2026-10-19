@@ -13,6 +13,7 @@
 import { sfx } from './audio.js';
 import { CHARACTERS } from './data.js';
 import { emit } from './events.js';
+import { playerStyle } from './kartstyle.js';
 import { readInput } from './input.js';
 import { buildHazard, buildProjectileMesh } from './items.js';
 import { getState, transition } from './machine.js';
@@ -56,10 +57,18 @@ function clearEntities() {
   hazards = new Map(); projectiles = new Map();
 }
 
-/** Start the race the server announced: same circuit, same grid, our slot followed. */
+/**
+ * Start the race the server announced: same circuit, same grid, our slot
+ * followed. A human slot carries that player's Garage edits, laid over the
+ * candidate's default, so every client draws every kart as its driver styled
+ * it; an AI slot gets the candidate's default (startField's fallback).
+ */
 export function beginNetRace(m) {
   G.trackIdx = m.trackIdx;
-  const slots = m.roster.map((s, i) => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team, local: i === m.you }));
+  const slots = m.roster.map((s, i) => {
+    const def = CHARACTERS.find(c => c.id === s.charId);
+    return { def, isAI: s.isAI, team: s.team, local: i === m.you, ...(s.style ? { style: playerStyle(def, s.style) } : {}) };
+  });
   active = true; buffer = []; newest = { tk: 0, at: now() }; presses = { item: 0, power: 0 }; lastSent = 0; lastKey = '';
   lastResults = null; hazards = new Map(); projectiles = new Map();
   G.netSlot = m.you; G.netRoster = m.roster;

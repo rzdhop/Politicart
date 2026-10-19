@@ -141,4 +141,7 @@ requestAnimationFrame(frame);
 // unreachable: there is no race time cap, so a race ends only when the player
 // completes three laps. The engine's own endRace() is the seam for that. See
 // DEC-009 and the note in e2e/game.spec.ts.
-window.__kr = { endRace };
+// karts() is read-only: which candidate and kart style each grid slot is drawn
+// with, so the team-race spec can check that another player's Garage edits
+// reached this screen (nothing in the DOM shows a kart's style).
+window.__kr = { endRace, karts: () => (G.karts || []).map(k => ({ charId: k.def.id, style: { ...k.style } })) };

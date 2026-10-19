@@ -34,15 +34,15 @@ Current state only. History lives in git.
   and on a full rerun. It is timing-sensitive under load, not caused by
   this task.
 - **Stage 1 done** (pun names): Tier 1 green (game 103), e2e 29/29.
-- **Stages 1-7 committed** (pun names; kart style model; mesh renders a
+- **Stages 1-8 committed** (pun names; kart style model; mesh renders a
   style; Garage + ChoiceGroup, DEC-016; admin auth, DEC-017; server roster;
-  client admin flow + PasswordInput + safe centring, DEC-018). Tier 1 green
-  (ui 245, game 181, server 75), audit 0, e2e 38/38 at Stage 7.
-- **Current stage:** 8 (kart style in team races: lobby `set` carries the
-  style, the race message carries it, netrace clones a def per slot).
-  **Next action:** brief Stage 8.
-- **Follow-ups owed:** a `/design-sync` re-sync to upload ChoiceGroup; a
-  `KR_ALLOWED_HOSTS` check against DNS rebinding (DEC-017).
+  client admin flow + PasswordInput + safe centring, DEC-018; style synced in
+  team races). Tier 1 green (ui 245, game 183, server 76), audit 0, e2e 39/39.
+- **Current stage:** 9 (close-out: VISION, ASSUMPTIONS A-011..A-016,
+  CHECKPOINT rewrite, README admin setup, PLAN marked done).
+- **Follow-ups owed:** a `/design-sync` re-sync to upload ChoiceGroup and
+  PasswordInput; a `KR_ALLOWED_HOSTS` check against DNS rebinding (DEC-017);
+  de-flake netrace.test.js (seed the simulated race, ~1 in 4 failures).
 
 ## Previous task -- closed
 
@@ -121,7 +121,7 @@ The game at `index.html` must keep working. No item here may break.
 | R-12 | 14 items with rank-weighted odds from golden ballot boxes | none | UNVERIFIED (manual) |
 | R-13 | 3 circuits with ramps, tricks, pits, dash panels, chicanes, crossings | none | UNVERIFIED (manual) |
 | R-14 | Synthesized WebAudio sound and music | none | UNVERIFIED (manual) |
-| R-16 | Team race: two players join one room by code, race on opposite teams, see team points; the static (Pages) build offers no Multijoueur | `e2e/multiplayer.spec.ts` (2 specs) + `apps/server/src/*.test.js` | COVERED 2026-10-15 |
+| R-16 | Team race: two players join one room by code, race on opposite teams, see team points, and see each other's Garage styles; the static (Pages) build offers no Multijoueur | `e2e/multiplayer.spec.ts` (3 specs) + `apps/server/src/*.test.js` | COVERED 2026-10-15 |
 | R-17 | Garage: style your own kart (colours, wheels, spoiler, pods, number, sticker); kept in the browser; reset; races with it | `e2e/garage.spec.ts` (4 specs) + `engine/garage.test.js`, `engine/kart.test.js` | COVERED 2026-10-19 |
 | R-15 | Playable from GitHub Pages at the documented URL | Pages workflow run 38699287498 + HTTP check of the published index and bundle | VERIFIED 2026-10-15 |
 

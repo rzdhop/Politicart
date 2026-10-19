@@ -6,8 +6,13 @@
 // A-009). Each human drives a different candidate, so every kart on the grid
 // is distinguishable. The first player in is the host and picks the circuit
 // and the start; if the host leaves, the next player in line takes over.
+//
+// Each player also carries their kart style: the Garage edits they made, a
+// partial style (kartstyle.js), cleaned here because it comes from the
+// client. Everyone in the room draws that player's kart with it.
 
 import { CHARACTERS, TRACKS } from '../../game/src/engine/data.js';
+import { cleanStyle } from '../../game/src/engine/kartstyle.js';
 import { TEAMS } from '../../game/src/engine/teams.js';
 
 export const MAX_PLAYERS = 6;
@@ -31,7 +36,7 @@ export function newCode(taken, rnd = Math.random) {
 export class Room {
   constructor(code) {
     this.code = code;
-    this.players = [];          // { id, name, team, charId, ready }, in join order
+    this.players = [];          // { id, name, team, charId, ready, style }, in join order
     this.trackIdx = 0;
     this.phase = 'lobby';       // 'lobby' | 'race'
   }
@@ -40,23 +45,23 @@ export class Room {
   get empty() { return this.players.length === 0; }
   player(id) { return this.players.find(p => p.id === id) ?? null; }
 
-  /** Add a player; returns the player, or an error string. */
-  join(id, name) {
+  /** Add a player, with their kart style; returns the player, or an error string. */
+  join(id, name, style) {
     if (this.phase !== 'lobby') return 'La course a déjà commencé.';
     if (this.players.length >= MAX_PLAYERS) return 'Salle complète (6 joueurs).';
     const taken = new Set(this.players.map(p => p.charId));
     const charId = CHAR_IDS.find(c => !taken.has(c));
     const count = t => this.players.filter(p => p.team === t).length;
     const team = count('bleu') <= count('rouge') ? 'bleu' : 'rouge';
-    const p = { id, name: cleanName(name), team, charId, ready: false };
+    const p = { id, name: cleanName(name), team, charId, ready: false, style: cleanStyle(style) };
     this.players.push(p);
     return p;
   }
 
   leave(id) { this.players = this.players.filter(p => p.id !== id); }
 
-  /** Change a player's team, candidate or readiness. Returns an error string or null. */
-  set(id, { team, charId, ready } = {}) {
+  /** Change a player's team, candidate, readiness or kart style. Returns an error string or null. */
+  set(id, { team, charId, ready, style } = {}) {
     const p = this.player(id); if (!p) return 'Joueur inconnu.';
     if (this.phase !== 'lobby') return 'La course a déjà commencé.';
     if (team !== undefined) { if (!TEAMS.includes(team)) return 'Équipe inconnue.'; p.team = team; }
@@ -66,6 +71,7 @@ export class Room {
       p.charId = charId;
     }
     if (ready !== undefined) p.ready = !!ready;
+    if (style !== undefined) p.style = cleanStyle(style);
     return null;
   }
 
@@ -89,7 +95,7 @@ export class Room {
    * picked, up to six. Each slot says who drives it.
    */
   roster(rnd = Math.random) {
-    const humans = this.players.map(p => ({ playerId: p.id, name: p.name, charId: p.charId, team: p.team, isAI: false }));
+    const humans = this.players.map(p => ({ playerId: p.id, name: p.name, charId: p.charId, team: p.team, isAI: false, style: p.style }));
     const free = CHAR_IDS.filter(c => !humans.some(h => h.charId === c));
     for (let i = free.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [free[i], free[j]] = [free[j], free[i]]; }
     const ai = free.slice(0, Math.max(0, MAX_PLAYERS - humans.length)).map(charId => ({ playerId: null, name: CHARACTERS.find(c => c.id === charId).name, charId, team: null, isAI: true }));
@@ -101,6 +107,6 @@ export class Room {
 
   /** What every client in the room is told. */
   view() {
-    return { code: this.code, host: this.host, trackIdx: this.trackIdx, phase: this.phase, players: this.players.map(p => ({ ...p })) };
+    return { code: this.code, host: this.host, trackIdx: this.trackIdx, phase: this.phase, players: this.players.map(p => ({ ...p, style: { ...p.style } })) };
   }
 }

@@ -17,8 +17,8 @@
 //   a same-origin Origin (auth.js); all answer 503 while admin is disabled,
 //   except `me`, which says so.
 //
-// Client -> server: hello {name} | create | join {code} | set {team,charId,
-// ready} | track {trackIdx} | start | leave | input {...} (during a race).
+// Client -> server: hello {name} | create {style} | join {code, style} |
+// set {team,charId,ready,style} | track {trackIdx} | start | leave | input {...} (during a race).
 // Server -> client: welcome {id} | room {room} | error {msg} | race {...} |
 // snap {...} | results {...}. Every message is one JSON object with a `t`.
 
@@ -223,7 +223,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, ad
   }
 
   function enter(c, room) {
-    const r = room.join(c.id, c.name);
+    const r = room.join(c.id, c.name, c.style);
     if (typeof r === 'string') return fail(c.id, r);
     c.code = room.code; showRoom(room);
   }
@@ -243,9 +243,9 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, ad
 
   const handlers = {
     hello: (c, m) => { c.name = typeof m.name === 'string' ? m.name : c.name; send(c.id, { t: 'welcome', id: c.id, protocol: PROTOCOL }); },
-    create: c => { leaveRoom(c); const room = new Room(newCode(new Set(rooms.keys()))); rooms.set(room.code, room); enter(c, room); },
-    join: (c, m) => { const room = rooms.get(String(m.code ?? '').toUpperCase().trim()); if (!room) return fail(c.id, 'Aucune salle avec ce code.'); if (c.code !== room.code) { leaveRoom(c); enter(c, room); } },
-    set: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = room.set(c.id, { team: m.team, charId: m.charId, ready: m.ready }); if (e) fail(c.id, e); showRoom(room); },
+    create: (c, m) => { c.style = m.style; leaveRoom(c); const room = new Room(newCode(new Set(rooms.keys()))); rooms.set(room.code, room); enter(c, room); },
+    join: (c, m) => { const room = rooms.get(String(m.code ?? '').toUpperCase().trim()); if (!room) return fail(c.id, 'Aucune salle avec ce code.'); c.style = m.style; if (c.code !== room.code) { leaveRoom(c); enter(c, room); } },
+    set: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = room.set(c.id, { team: m.team, charId: m.charId, ready: m.ready, style: m.style }); if (e) fail(c.id, e); showRoom(room); },
     track: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = room.setTrack(c.id, m.trackIdx); if (e) fail(c.id, e); showRoom(room); },
     start: c => { const room = rooms.get(c.code); if (room) start(c, room); },
     leave: c => leaveRoom(c),

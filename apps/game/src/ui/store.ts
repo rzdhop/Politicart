@@ -14,7 +14,7 @@ import { useSyncExternalStore } from 'react';
 
 import { initAudio, isMuted, toggleMute as toggleAudioMute } from '../engine/audio.js';
 import { beginDraft, clearDraft, getDraft, setRoster } from '../engine/custom.js';
-import { resetGarage, setGarage } from '../engine/garage.js';
+import { getGarage, resetGarage, setGarage } from '../engine/garage.js';
 import { getState, onTransition, transition } from '../engine/machine.js';
 import * as net from '../engine/net.js';
 import { onNetResults } from '../engine/netrace.js';
@@ -313,8 +313,8 @@ export const actions = {
     net.connect(socketUrl(), snapshot.netName);
   },
   setNetName(name: string) { saveName(name); set({ netName: name }); },
-  createRoom() { net.connect(socketUrl(), snapshot.netName); net.createRoom(); },
-  joinRoom(code: string) { net.connect(socketUrl(), snapshot.netName); net.joinRoom(code); },
+  createRoom() { net.connect(socketUrl(), snapshot.netName); net.createRoom(getGarage()); },
+  joinRoom(code: string) { net.connect(socketUrl(), snapshot.netName); net.joinRoom(code, getGarage()); },
   setTeam(team: TeamId) { net.setMine({ team }); },
   setChar(charId: string) { net.setMine({ charId }); },
   setReady(ready: boolean) { net.setMine({ ready }); },

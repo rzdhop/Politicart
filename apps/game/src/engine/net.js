@@ -177,8 +177,9 @@ export function disconnect() {
   publish({ status: 'idle', room: null, error: null });
 }
 
-export const createRoom = () => send({ t: 'create' });
-export const joinRoom = code => send({ t: 'join', code });
+// `style` is the player's Garage edits: everyone in the room draws their kart with it.
+export const createRoom = style => send({ t: 'create', style });
+export const joinRoom = (code, style) => send({ t: 'join', code, style });
 export const setMine = patch => send({ t: 'set', ...patch });
 export const pickTrack = trackIdx => send({ t: 'track', trackIdx });
 export const startNetRace = () => send({ t: 'start' });
