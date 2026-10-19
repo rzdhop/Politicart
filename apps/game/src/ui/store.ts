@@ -14,6 +14,7 @@ import { useSyncExternalStore } from 'react';
 
 import { initAudio, isMuted, toggleMute as toggleAudioMute } from '../engine/audio.js';
 import { applyCustom, resetCustom, saveCustom } from '../engine/custom.js';
+import { resetGarage, setGarage } from '../engine/garage.js';
 import { getState, onTransition, transition } from '../engine/machine.js';
 import * as net from '../engine/net.js';
 import { onNetResults } from '../engine/netrace.js';
@@ -21,7 +22,7 @@ import { hasPreview, makeThumbs, setPreview } from '../engine/preview.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
 
-export type GameState = 'title' | 'select' | 'tracks' | 'admin' | 'countdown' | 'race' | 'paused' | 'results' | 'lobby';
+export type GameState = 'title' | 'select' | 'tracks' | 'admin' | 'countdown' | 'race' | 'paused' | 'results' | 'lobby' | 'garage';
 export type TeamId = 'bleu' | 'rouge';
 
 /** One player in a team-race room, as the game server describes it. */
@@ -46,6 +47,8 @@ export interface UiSnapshot {
   formVersion: number;
   /** Bumped whenever the campaign posters change. */
   adsVersion: number;
+  /** Bumped whenever the player's Garage edits change, so the form re-reads them. */
+  garageVersion: number;
   /** The "play on a computer" note: shown until the first race starts, then never again. */
   noteHidden: boolean;
   /** Whether the page was served by the game server, so team races are possible. */
@@ -76,6 +79,7 @@ let snapshot: UiSnapshot = {
   adminStatus: 'idle',
   formVersion: 0,
   adsVersion: 0,
+  garageVersion: 0,
   noteHidden: false,
   netAvailable: false,
   net: net.getNet() as NetView,
@@ -169,6 +173,20 @@ export const actions = {
   },
   toTitle() { transition('title'); },
   toSelect() { transition('select'); },
+
+  // ---- Garage: the player's own kart ----
+  openGarage() { transition('garage'); setPreview(G.charIdx); },
+  /** Change one field of the player's kart; an invalid value is ignored. */
+  setGarage(key: string, value: unknown) {
+    if (!setGarage(key, value)) return;
+    setPreview(G.charIdx);
+    set({ garageVersion: snapshot.garageVersion + 1 });
+  },
+  resetGarage() {
+    resetGarage();
+    setPreview(G.charIdx);
+    set({ garageVersion: snapshot.garageVersion + 1 });
+  },
   toTracks() { transition('tracks'); },
   start() {
     initAudio();

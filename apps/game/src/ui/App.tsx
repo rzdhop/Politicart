@@ -1,6 +1,7 @@
 import { NoteBanner } from '@kart-republique/ui';
 
 import { AdminScreen } from './screens/AdminScreen';
+import { GarageScreen } from './screens/GarageScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { PauseScreen } from './screens/PauseScreen';
 import { ResultsScreen } from './screens/ResultsScreen';
@@ -25,6 +26,7 @@ export function App() {
       <TitleScreen ui={ui} />
       <AdminScreen ui={ui} />
       <SelectScreen ui={ui} />
+      <GarageScreen ui={ui} />
       <TracksScreen ui={ui} />
       <Hud />
       <PauseScreen ui={ui} />

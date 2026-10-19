@@ -30,7 +30,8 @@ import { hud } from './Hud';
 const CONTRACT_IDS = [
   's-title', 'b-play', 'b-poly', 'b-mute', 'b-admin',
   's-admin', 'admin-chars', 'ad-files', 'ad-preview', 'b-admin-reset', 'b-admin-save',
-  's-select', 'roster', 'showcase', 'b-back1', 'b-next1',
+  's-select', 'roster', 'showcase', 'b-back1', 'b-garage', 'b-next1',
+  's-garage', 'g-body', 'g-accent', 'g-number', 'g-wheels-gold', 'g-spoiler-wing', 'g-pods-off', 'g-sticker-rosette', 'b-garage-reset', 'b-garage-back',
   's-tracks', 'trackcards', 'b-back2', 'b-start',
   's-pause', 'b-resume', 'b-quit',
   's-results', 'r-title', 'r-sub', 'r-body', 'b-again', 'b-menu',
@@ -43,7 +44,7 @@ beforeEach(() => {
   // we only ever reset to 'title' without clearing by going through transitions.
   while (getState() !== 'title') {
     const s = getState();
-    transition(s === 'select' || s === 'admin' || s === 'paused' || s === 'results' || s === 'lobby' ? 'title' : s === 'tracks' ? 'select' : 'paused');
+    transition(s === 'select' || s === 'admin' || s === 'paused' || s === 'results' || s === 'lobby' ? 'title' : s === 'tracks' || s === 'garage' ? 'select' : 'paused');
   }
 });
 afterEach(() => { cleanup(); });
@@ -130,6 +131,27 @@ describe('the React screens', () => {
     fireEvent.click(container.querySelector('#b-admin-save')!);
     expect(getState()).toBe('title');
     expect(container.querySelector('#b-admin')?.textContent).toContain('enregistré');
+  });
+
+  it('open the Garage from the roster, apply a choice at once, reset it, and come back', () => {
+    localStorage.clear();
+    const { container } = render(<App />);
+    fireEvent.click(container.querySelector('#b-play')!);
+    const chosen = container.querySelector('#showcase .big')?.textContent;
+    fireEvent.click(container.querySelector('#b-garage')!);
+    expect(getState()).toBe('garage');
+    expect((container.querySelector('#s-garage') as HTMLElement).hidden).toBe(false);
+    expect(container.querySelector('#g-showcase .big')?.textContent).toBe(chosen);
+    expect(container.querySelector('#g-wheels-classic')?.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(container.querySelector('#g-wheels-gold')!);
+    expect(container.querySelector('#g-wheels-gold')?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('#g-wheels-classic')?.getAttribute('aria-pressed')).toBe('false');
+    expect(JSON.parse(localStorage.getItem('kr-kart')!)).toEqual({ wheels: 'gold' });
+    fireEvent.click(container.querySelector('#b-garage-reset')!);
+    expect(container.querySelector('#g-wheels-classic')?.getAttribute('aria-pressed')).toBe('true');
+    expect(localStorage.getItem('kr-kart')).toBeNull();
+    fireEvent.click(container.querySelector('#b-garage-back')!);
+    expect(getState()).toBe('select');
   });
 });
 

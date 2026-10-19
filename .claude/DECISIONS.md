@@ -294,3 +294,24 @@ screen. Ids no longer resemble names (`victor` is Emmanuel Macaron), which
 is the price of not breaking saved data, the e2e selectors and the server's
 `CHAR_IDS`. The packages/ui story fixtures keep the old fictional names
 (A-016).
+
+## DEC-016 -- Pick-one settings are a library component, ChoiceGroup
+
+**Context.** The Garage (stage 4) needs several "pick one of a few named
+values" settings: wheels, spoiler, side pods, sticker. The first cut drew
+the picked option as a primary Button and the others as ghost. That broke
+the library's own rule (one primary per Row), and because the two variants
+differ in size, the row reflowed on every pick. The human was asked whether
+the pattern belongs in the design system and chose to add it there.
+
+**Decision.** `ChoiceGroup` joins `packages/ui` (Controls): a labelled
+`role=group` of `.chip` buttons with `aria-pressed`. The picked chip fills
+gold, and every state has the same size. It ships with a story, four unit
+tests and CSS in `controls.css`. The game composes the Garage from it plus
+existing parts; it adds no game CSS.
+
+**Consequence.** The pattern is reusable: the admin Workshop's kart
+defaults (stage 7) will use it too, and the next `/design-sync` re-sync
+uploads it to Claude Design. That re-sync is not run automatically. Option
+values are strings, so a yes/no setting maps to `'on'`/`'off'` at the call
+site.

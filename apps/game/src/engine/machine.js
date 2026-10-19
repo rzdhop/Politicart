@@ -23,12 +23,15 @@
 // the countdown. A networked race returns to it from the countdown, the
 // race or the results, because the room outlives each race. There is no
 // pause in a networked race: the world does not stop for one player.
+//
+// `garage` is where the player styles their own kart, reached from and
+// returning to the roster, so the turntable stays on screen throughout.
 
-export const STATES = Object.freeze(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby']);
+export const STATES = Object.freeze(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'garage']);
 
 const NEXT = Object.freeze({
   title: Object.freeze(['select', 'admin', 'lobby']),
-  select: Object.freeze(['title', 'tracks']),
+  select: Object.freeze(['title', 'tracks', 'garage']),
   tracks: Object.freeze(['select', 'countdown']),
   admin: Object.freeze(['title']),
   countdown: Object.freeze(['race', 'paused', 'lobby']),
@@ -36,6 +39,7 @@ const NEXT = Object.freeze({
   paused: Object.freeze(['race', 'countdown', 'title']),
   results: Object.freeze(['countdown', 'title', 'lobby']),
   lobby: Object.freeze(['title', 'countdown']),
+  garage: Object.freeze(['select']),
 });
 
 let current = 'title';

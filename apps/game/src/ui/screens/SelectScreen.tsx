@@ -56,6 +56,7 @@ export function SelectScreen({ ui }: { ui: UiSnapshot }) {
       </SelectLayout>
       <Row>
         <Button id="b-back1" variant="ghost" onClick={actions.toTitle}>Retour</Button>
+        <Button id="b-garage" variant="ghost" onClick={actions.openGarage}>Garage</Button>
         <Button id="b-next1" onClick={actions.toTracks}>Choisir le circuit →</Button>
       </Row>
     </Screen>

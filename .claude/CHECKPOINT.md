@@ -34,12 +34,13 @@ Current state only. History lives in git.
   and on a full rerun. It is timing-sensitive under load, not caused by
   this task.
 - **Stage 1 done** (pun names): Tier 1 green (game 103), e2e 29/29.
-- **Stages 1-3 committed** (pun names; kart style model; mesh renders a
-  style). Tier 1 green (game 143), e2e 29/29 at Stage 3. The E2E deferral
-  for Stage 2 was acknowledged by the human.
-- **Current stage:** 4 (player Garage). **Next action:** scope the machine,
-  store, App and SelectScreen, then implement. Owed: a visual check of the
-  wheel, spoiler and sticker variants in the Garage preview.
+- **Stages 1-4 committed** (pun names; kart style model; mesh renders a
+  style; player Garage + library ChoiceGroup, DEC-016). Tier 1 green (ui 241,
+  game 150, server 16), e2e 33/33 at Stage 4.
+- **Current stage:** 5 (server admin authentication, the riskiest stage;
+  runs on an Opus agent). **Next action:** spawn the Opus agent with the
+  stage 5 brief from PLAN.md.
+- **Follow-up owed:** a `/design-sync` re-sync to upload ChoiceGroup.
 
 ## Previous task -- closed
 
@@ -118,6 +119,7 @@ The game at `index.html` must keep working. No item here may break.
 | R-13 | 3 circuits with ramps, tricks, pits, dash panels, chicanes, crossings | none | UNVERIFIED (manual) |
 | R-14 | Synthesized WebAudio sound and music | none | UNVERIFIED (manual) |
 | R-16 | Team race: two players join one room by code, race on opposite teams, see team points; the static (Pages) build offers no Multijoueur | `e2e/multiplayer.spec.ts` (2 specs) + `apps/server/src/*.test.js` | COVERED 2026-10-15 |
+| R-17 | Garage: style your own kart (colours, wheels, spoiler, pods, number, sticker); kept in the browser; reset; races with it | `e2e/garage.spec.ts` (4 specs) + `engine/garage.test.js`, `engine/kart.test.js` | COVERED 2026-10-19 |
 | R-15 | Playable from GitHub Pages at the documented URL | Pages workflow run 38699287498 + HTTP check of the published index and bundle | VERIFIED 2026-10-15 |
 
 **Stage 7 maps the contract to specs** in `e2e/game.spec.ts`, whose describe

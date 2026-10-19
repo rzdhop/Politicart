@@ -33,6 +33,11 @@ export { Tricolore, type TricoloreProps } from './components/brand/Tricolore';
 // Controls.
 export { Button, type ButtonProps, type ButtonVariant } from './components/controls/Button';
 export {
+  ChoiceGroup,
+  type ChoiceGroupProps,
+  type ChoiceOption,
+} from './components/controls/ChoiceGroup';
+export {
   ControlsGrid,
   type ControlsGridProps,
 } from './components/controls/ControlsGrid';

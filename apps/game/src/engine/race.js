@@ -21,6 +21,7 @@ import { CHARACTERS, TRACKS } from './data.js';
 import { say, setHint } from './events.js';
 import { pickupItems, stunKart, updateProjectiles } from './items.js';
 import { buildKart } from './kart.js';
+import { myStyle } from './garage.js';
 import { defaultStyle } from './kartstyle.js';
 import { transition } from './machine.js';
 import { buildMinimapBase, drawMinimap } from './minimap.js';
@@ -53,7 +54,7 @@ function makeKart(def, isAI, style) {
  */
 export function startRace() {
   const others = CHARACTERS.filter((c, i) => i !== G.charIdx).sort(() => Math.random() - 0.5).slice(0, CFG.numAI);
-  startField([...others.map(def => ({ def, isAI: true })), { def: CHARACTERS[G.charIdx], isAI: false, local: true }]);
+  startField([...others.map(def => ({ def, isAI: true })), { def: CHARACTERS[G.charIdx], isAI: false, local: true, style: myStyle(CHARACTERS[G.charIdx]) }]);
 }
 
 /**

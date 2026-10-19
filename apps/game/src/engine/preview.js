@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 
 import { CHARACTERS } from './data.js';
+import { myStyle } from './garage.js';
 import { buildKart } from './kart.js';
 import { setCast } from './primitives.js';
 import { disposeScene } from './race.js';
@@ -29,11 +30,11 @@ function ensurePreviewScene() {
   G.previewScene = s; G.previewHolder = new THREE.Group(); s.add(G.previewHolder);
 }
 
-/** Put character `i`'s kart on the turntable, replacing whatever was there. */
+/** Put character `i`'s kart, as the player styled it, on the turntable, replacing whatever was there. */
 export function setPreview(i) {
   ensurePreviewScene();
   while (G.previewHolder.children.length) { const c = G.previewHolder.children[0]; G.previewHolder.remove(c); disposeScene(c); }
-  setCast(true); G.previewKart = buildKart(CHARACTERS[i]); G.previewHolder.add(G.previewKart);
+  setCast(true); G.previewKart = buildKart(CHARACTERS[i], myStyle(CHARACTERS[i])); G.previewHolder.add(G.previewKart);
 }
 
 /** Whether a turntable exists yet (the title screen renders it only if so). */
@@ -43,7 +44,7 @@ export const hasPreview = () => !!G.previewScene;
 export function renderPreview(dt) {
   if (!G.previewKart) setPreview(G.charIdx);
   G.previewKart.rotation.y += dt * 0.7;
-  const wide = window.innerWidth > 760 && G.state === 'select'; const sx = wide ? -2.9 : 0, sy = wide ? 0 : 0.6;
+  const wide = window.innerWidth > 760 && (G.state === 'select' || G.state === 'garage'); const sx = wide ? -2.9 : 0, sy = wide ? 0 : 0.6;
   camera.position.set(sx, 3.6, 10.5); camera.lookAt(sx, 1.4 + sy, 0); camera.fov = 38; camera.updateProjectionMatrix(); getRenderer().render(G.previewScene, camera);
 }
 
