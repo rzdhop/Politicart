@@ -39,12 +39,9 @@ Marked UNCONFIRMED / confirmed / invalidated.
   and belongs to no team, so items and powers treat it as a foe of everyone.
 - **A-010 -- Two teams, Bleu and Rouge.** UNCONFIRMED. Named for the
   palette's Marianne blue and republican red. Teams may be uneven.
-- **A-011 -- Remote players' workshop edits are not shown.** UNCONFIRMED.
-  Each client draws every character with its own local customisations, so a
-  player's renamed character or livery is seen only by that player.
 
 - **A-012 -- The player's kart style is one set of partial overrides, not
-  one per character.** UNCONFIRMED. Read from "default for all if not
+  one per character.** UNCONFIRMED (implemented that way, stages 4 and 8). Read from "default for all if not
   edited": the fields a player changes apply to whichever character they
   pick, and the rest falls back to that character's admin-set default.
 - **A-013 -- The Pages build has no Workshop and no login.** UNCONFIRMED.
@@ -79,4 +76,7 @@ Marked UNCONFIRMED / confirmed / invalidated.
 
 ## Invalidated
 
-_(none yet)_
+- **A-011 -- Remote players' workshop edits are not shown.** INVALIDATED
+  2026-10-19. The cast now comes from the server's roster, the same for
+  everyone (stages 6-7), and each player's kart style is synced in team races
+  (stage 8).

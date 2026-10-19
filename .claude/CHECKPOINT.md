@@ -2,47 +2,39 @@
 
 Current state only. History lives in git.
 
-## In progress -- task 2026-10-19: admin account, kart personalisation, pun names
+## Latest task -- closed 2026-10-19: admin account, kart personalisation, pun names
 
-- **Request (verbatim intent):** an admin account for "rida", the only one
-  allowed to edit characters etc.; player kart personalisation; rename every
-  character to a pun on a real French politician (e.g. Marine Le Pen ->
-  "Marine Le Stylo", Jean-Luc Mélenchon -> "Jean-Luc Mélèche").
-- **Phase:** PLAN, awaiting approval. The plan is in `.claude/PLAN.md` (9
-  stages). The human answered CLARIFY: server-held roster; kart options are
-  colours, wheels, spoiler/kit, number and sticker, with the character
-  default where unedited; the style is synced in multiplayer; the name list
-  is approved. EXPLORE is done.
-- **Key facts found:** no auth, sessions, persistence or env secrets exist
-  anywhere; Pages build has no backend (`/api/kr` probe 404s); workshop edits
-  are per-browser (`localStorage['kr-custom']`, `custom.js applyCustom`
-  mutates shared `CHARACTERS`); names appear only in `engine/data.js` in the
-  game (e2e uses ids like `#adm-name-victor`, never names), plus
-  packages/ui story fixtures; WS `maxPayload` 16 KB rules out livery images
-  over the wire. Character ids are kept as-is (localStorage, e2e, server
-  `CHAR_IDS` depend on them).
-- **Conflict to record:** VISION.md says "fictional, never real named
-  figures"; the human is overriding it -> DEC-015 once confirmed.
-- **Open questions:** none blocking; A-012..A-016 are the defaults chosen.
-- **Approved:** 2026-10-19 ("Plan approved, go ahead with Stage 1").
-- **Checkpoint for this task:** `76463bf` (branch `feat/multiplayer`); the
-  plan commit follows it.
-- **Tier-1 baseline at `76463bf` (2026-10-19):** typecheck clean; ui 235
-  passed + 8 skipped, game 99, server 16; `npm audit --omit=dev` 0.
-  **Pre-existing flake:** `netrace.test.js` "draws the karts between
-  snapshots..." failed once under the full parallel run, then passed alone
-  and on a full rerun. It is timing-sensitive under load, not caused by
-  this task.
-- **Stage 1 done** (pun names): Tier 1 green (game 103), e2e 29/29.
-- **Stages 1-8 committed** (pun names; kart style model; mesh renders a
-  style; Garage + ChoiceGroup, DEC-016; admin auth, DEC-017; server roster;
-  client admin flow + PasswordInput + safe centring, DEC-018; style synced in
-  team races). Tier 1 green (ui 245, game 183, server 76), audit 0, e2e 39/39.
-- **Current stage:** 9 (close-out: VISION, ASSUMPTIONS A-011..A-016,
-  CHECKPOINT rewrite, README admin setup, PLAN marked done).
-- **Follow-ups owed:** a `/design-sync` re-sync to upload ChoiceGroup and
-  PasswordInput; a `KR_ALLOWED_HOSTS` check against DNS rebinding (DEC-017);
-  de-flake netrace.test.js (seed the simulated race, ~1 in 4 failures).
+- **Request:** an admin account for "rida", the only one allowed to edit
+  the cast; player kart personalisation; every character renamed to a pun on
+  a real French politician. Plan in `.claude/PLAN.md` (9 stages, complete).
+- **Branch:** `feat/multiplayer`, not pushed. It holds this task on top of
+  the multiplayer task. Task checkpoint `76463bf`; the plan commit is
+  `f89cb51`, and stages 1-8 follow it, then this close-out.
+- **State:** DOCUMENT done. Tier 1 green (ui 245 + 8 skipped, game 183,
+  server 76), `npm audit --omit=dev` 0, e2e 39/39.
+- **Decisions:** DEC-015 (pun-name parody), DEC-016 (ChoiceGroup), DEC-017
+  (admin auth), DEC-018 (safe centring).
+- **Next action (human):**
+  - choose the admin password and generate its hash
+    (`npm run -s admin-hash -w @kart-republique/server`), then put it in
+    `.env` locally;
+  - on Fly, run `fly volumes create kr_data` and `fly secrets set
+    KR_ADMIN_PASSWORD_HASH=...`;
+  - decide whether to push and merge `feat/multiplayer`.
+- **Owed by hand:** log in as the real admin and save one edit on a LAN
+  server; check the Garage karts by eye in a full solo race; the R-10..R-14
+  checks below.
+- **Follow-ups owed:**
+  - a `/design-sync` re-sync to upload ChoiceGroup and PasswordInput
+    (DEC-016);
+  - a `KR_ALLOWED_HOSTS` check against DNS rebinding (DEC-017);
+  - the packages/ui story fixtures still carry the old fictional names
+    (A-016);
+  - de-flaking `netrace.test.js` is running in its own session (branch to
+    be merged when it lands).
+- **Pre-existing flake:** `netrace.test.js` "draws the karts between
+  snapshots..." fails about 1 run in 4 at HEAD (unseeded randomness in the
+  simulated race); see the action log.
 
 ## Previous task -- closed
 

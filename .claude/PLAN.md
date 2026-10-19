@@ -1,6 +1,6 @@
 # Plan -- admin account, kart personalisation, pun names
 
-Drafted 2026-10-19, **awaiting approval**. The previous plan (team
+Drafted 2026-10-19, approved the same day, **complete** (stages 1-9). The previous plan (team
 multiplayer, stages 1-10) is complete and lives in git history at `06bc141`.
 
 ## Goal

@@ -29,7 +29,7 @@ npm ci
 npm run serve        # builds the design system and the game, then starts the server on port 8080
 ```
 
-The server prints its addresses. Everyone on the same network opens `http://<that address>:8080/` and clicks **Multijoueur**. One player creates a room and reads out its four-letter code; the others join with it, pick a team and a candidate, and click ready. The host picks the circuit and starts.
+The server prints its addresses. Everyone on the same network opens `http://<that address>:8080/` and clicks **Multijoueur**. One player creates a room and reads out its four-letter code; the others join with it, pick a team and a candidate, and click ready. The host picks the circuit and starts. Each player's kart appears to everyone as that player styled it in the Garage.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -37,6 +37,22 @@ The server prints its addresses. Everyone on the same network opens `http://<tha
 | `HOST` | `0.0.0.0` | Interface to bind. `0.0.0.0` lets the local network in. |
 | `KR_STATIC` | `apps/game/dist` | The built game to serve. |
 | `KR_MAX_RACE_S` | `480` | A race ends after this many seconds even if nobody finishes. |
+| `KR_ADMIN_USER` | `rida` | The one admin account's name. |
+| `KR_ADMIN_PASSWORD_HASH` | (unset) | The scrypt hash of the admin password (see below). Unset or malformed: the Workshop is disabled. |
+| `KR_DATA_DIR` | `apps/server/data` | Where the admin's cast edits are kept (`roster.json`). Git-ignored. |
+| `KR_TRUST_PROXY` | (unset) | `1` only behind Fly.io's proxy: the client address and scheme come from its headers. |
+
+`npm run serve` and `npm start -w @kart-republique/server` read these from a `.env` file at the repo root when there is one; copy `.env.example` to start.
+
+### The admin account
+
+The Workshop belongs to one admin account. Its password is never stored, only an scrypt hash of it, held in an environment variable. To set it up:
+
+```sh
+npm run -s admin-hash -w @kart-republique/server     # asks for the password twice (12 characters or more), prints the hash
+```
+
+Put the printed hash in `.env` as `KR_ADMIN_PASSWORD_HASH='scrypt$N=...'` (single quotes: the hash contains `$`), then restart the server. Its startup lines say whether administration is enabled. On the title screen, **Administration** opens the login; once logged in, **Atelier** opens the Workshop and **Déconnexion** ends the session. A session lasts 12 hours, or until the server restarts. Failed logins are limited to 5 a minute per address.
 
 The server runs each race at 60 steps a second in its own worker thread and sends every player 20 snapshots a second. Each browser draws the race about 100 ms behind the server and sends its controls back 30 times a second. On a local network the delay is not noticeable. Over the internet, a player's own kart reacts with roughly half a round trip of extra lag.
 
@@ -49,9 +65,13 @@ docker build -t kart-republique .
 docker run --rm -p 8080:8080 kart-republique     # the same server, in a container
 
 fly launch --no-deploy --copy-config             # choose your own app name and region
+fly volumes create kr_data --size 1              # once, in the app's region: keeps the admin's cast edits
+fly secrets set KR_ADMIN_PASSWORD_HASH='scrypt$N=...'   # the hash from `npm run -s admin-hash`, in single quotes
 fly deploy
 fly scale count 1                                # rooms live in memory: exactly one machine
 ```
+
+`fly.toml` mounts the volume at `/data` and sets `KR_DATA_DIR` and `KR_TRUST_PROXY` for you. Without the volume the image still runs, but cast edits are lost when the machine restarts.
 
 Any host that runs a container and passes WebSockets through works the same way (Render, Railway, a VPS behind Caddy). Two cautions. Rooms are kept in memory, so run a single instance. A free tier that sleeps when idle drops every open race when it does.
 
