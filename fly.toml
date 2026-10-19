@@ -4,6 +4,10 @@
 #   fly deploy
 #   fly scale count 1                      # rooms live in memory: run exactly one machine
 #
+# Accounts are kept in /data/kr-accounts.json, on the volume mounted below:
+#   fly volumes create kr_data --size 1     # once, in the app's region
+# (or set a DATABASE_URL secret to keep them in Postgres instead).
+#
 # The app name below is a placeholder; `fly launch` replaces it with yours.
 app = "kart-republique"
 primary_region = "cdg"
@@ -14,6 +18,10 @@ primary_region = "cdg"
 [env]
   PORT = "8080"
   HOST = "0.0.0.0"
+
+[mounts]
+  source = "kr_data"
+  destination = "/data"
 
 [http_service]
   internal_port = 8080

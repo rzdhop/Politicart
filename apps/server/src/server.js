@@ -5,13 +5,24 @@
 //                    up?" probe; the Multijoueur button shows only when it
 //                    answers. Open to every origin (CORS), so a static build
 //                    elsewhere (GitHub Pages) can probe a remote server.
+//   /api/register, /api/login, /api/logout, /api/me, /api/progress
+//                 -> accounts (accounts.js), open to every origin
 //   GET /*        -> apps/game/dist, read-only, no directory escapes
 //   WS  /ws       -> the lobby protocol below; races run in a worker
 //
-// Client -> server: hello {name} | create | join {code} | set {team,charId,
-// ready} | track {trackIdx} | start | leave | input {...} (during a race).
-// Server -> client: welcome {id} | room {room} | error {msg} | race {...} |
-// snap {...} | results {...}. Every message is one JSON object with a `t`.
+// Client -> server: hello {name, token?} | create | join {code} | set {team,
+// charId, ready} | track {trackIdx} | start | leave | input {...} (during a
+// race) | friends | friendAdd {name} | friendAccept {id} | friendRemove {id}
+// | invite {id}.
+// Server -> client: welcome {id, profile} | room {room} | error {msg} |
+// notice {msg} | race {...} | snap {...} | results {...} | profile {profile,
+// gained} | friends {list} | invite {from: {id, name}, code}. Every message is
+// one JSON object with a `t`.
+//
+// A connection that says hello with a valid session token is that account:
+// its friends see it online, it can create rooms, invite friends into them,
+// and earns experience from team races. Without a token it is a guest, who
+// may only join a room (by code or by invitation) with the starters.
 
 import { randomUUID } from 'node:crypto';
 import { createReadStream, statSync } from 'node:fs';
@@ -20,7 +31,10 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 
 import { WebSocketServer } from 'ws';
 
+import { levelFromXp, profileOf, xpForRace } from '../../game/src/engine/progress.js';
+import { accountApi } from './accounts.js';
 import { newCode, Room } from './lobby.js';
+import { openFileStore } from './store.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -33,23 +47,29 @@ export const PROTOCOL = 1;
 /**
  * Start a game server. `runRace(room, roster, io)` starts a race and returns
  * `{ input(playerId, msg), leave(playerId), stop() }`; io carries
- * `send(playerId, msg)`, `broadcast(msg)` and `done(results)`.
+ * `send(playerId, msg)`, `broadcast(msg)` and `done(results)`. `store` keeps
+ * the accounts (store.js); without one they live in memory. `loginTries`
+ * caps sign-ups and failed logins per address and minute (tests raise it).
  * Resolves to `{ port, close() }` once listening.
  */
-export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace }) {
+export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, store = openFileStore(null), loginTries }) {
   const root = resolve(staticDir);
   const rooms = new Map();          // code -> Room
   const races = new Map();          // code -> race handle
-  const conns = new Map();          // id -> { ws, id, name, code }
+  const conns = new Map();          // id -> { ws, id, name, code, user }
+  const online = new Map();         // user id -> Set of connections
 
-  const http = createServer((req, res) => {
+  const api = accountApi(store, { onProfile: user => updateProfile(user, 0), tries: loginTries });
+
+  const http = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
     if (url.pathname === '/api/kr') {
       // Readable from any origin: the GitHub Pages build probes a remote server.
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' });
-      res.end(JSON.stringify({ kr: 'server', protocol: PROTOCOL, rooms: rooms.size }));
+      res.end(JSON.stringify({ kr: 'server', protocol: PROTOCOL, rooms: rooms.size, accounts: store.kind }));
       return;
     }
+    if (url.pathname.startsWith('/api/') && await api(req, res, url.pathname)) return;
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405).end(); return; }
     let rel; try { rel = decodeURIComponent(url.pathname); } catch { res.writeHead(400).end(); return; }
     if (rel.endsWith('/')) rel += 'index.html';
@@ -72,9 +92,51 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace }) 
   const toRoom = (room, msg) => { for (const p of room.players) send(p.id, msg); };
   const showRoom = room => toRoom(room, { t: 'room', room: room.view() });
   const fail = (id, msg) => send(id, { t: 'error', msg });
+  const notice = (id, msg) => send(id, { t: 'notice', msg });
+  const toUser = (userId, msg) => { for (const c of online.get(userId) ?? []) send(c.id, msg); };
 
+  // ---- presence and friends
+  /** Where a user is, as their friends see it: the room code of one of their connections, if any. */
+  const whereIs = userId => { for (const c of online.get(userId) ?? []) if (c.code) return c.code; return null; };
+
+  /** Send `userId` their friend list: friends, requests both ways, who is online and in which room. */
+  async function pushFriends(userId) {
+    if (!online.has(userId)) return;
+    const links = await store.links(userId);
+    const list = links.map(l => ({ id: l.id, name: l.name, level: levelFromXp(l.xp).level, status: l.status, online: l.status === 'friend' && online.has(l.id), room: l.status === 'friend' ? whereIs(l.id) : null }));
+    toUser(userId, { t: 'friends', list });
+  }
+  /** Refresh the lists of everyone linked to `userId` (they came online, went offline, changed room). */
+  async function pushToFriendsOf(userId) {
+    for (const l of await store.links(userId)) if (online.has(l.id)) await pushFriends(l.id);
+  }
+
+  /** Tie connection c to an account (or to none: a guest). */
+  async function setUser(c, user) {
+    const before = c.user?.id ?? null;
+    if (before && before !== user?.id) { const set = online.get(before); set?.delete(c); if (set && !set.size) online.delete(before); await pushToFriendsOf(before); }
+    c.user = user;
+    if (user) {
+      c.name = user.name;
+      if (!online.has(user.id)) online.set(user.id, new Set());
+      online.get(user.id).add(c);
+      if (before !== user.id) { await pushFriends(user.id); await pushToFriendsOf(user.id); }
+    }
+  }
+
+  /** An account's experience changed: tell its connections, and let it drive what it unlocked. */
+  function updateProfile(user, gained) {
+    const profile = profileOf(user);
+    for (const c of online.get(user.id) ?? []) {
+      c.user = user; send(c.id, { t: 'profile', profile, gained });
+      const room = c.code && rooms.get(c.code); if (room) { room.setLevel(c.id, profile.level); showRoom(room); }
+    }
+  }
+
+  // ---- rooms
   function leaveRoom(c) {
     const room = c.code && rooms.get(c.code); c.code = null;
+    if (c.user) pushToFriendsOf(c.user.id).catch(console.error);
     if (!room) return;
     room.leave(c.id);
     races.get(room.code)?.leave(c.id);
@@ -83,9 +145,22 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace }) 
   }
 
   function enter(c, room) {
-    const r = room.join(c.id, c.name);
+    const r = room.join(c.id, c.name, c.user ? { userId: c.user.id, level: levelFromXp(c.user.xp).level } : {});
     if (typeof r === 'string') return fail(c.id, r);
     c.code = room.code; showRoom(room);
+    if (c.user) pushToFriendsOf(c.user.id).catch(console.error);
+  }
+
+  /** Award each account in the race its experience, once the results are out. */
+  async function award(roster, results) {
+    const first = results.teams?.[0];
+    for (const r of results.ranking ?? []) {
+      const playerId = roster[r.slot]?.playerId; const c = playerId && conns.get(playerId);
+      if (!c || !c.user || r.isAI) continue;
+      const gained = xpForRace({ rank: r.rank, field: results.ranking.length, finished: r.finished, teamWon: !!first && first.points > 0 && first.team === r.team });
+      const after = await store.addXp(c.user.id, gained);
+      if (after) updateProfile(after, gained);
+    }
   }
 
   function start(c, room) {
@@ -94,7 +169,10 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace }) 
     const roster = room.roster();
     const io = {
       send, broadcast: msg => toRoom(room, msg),
-      done: results => { races.delete(room.code); room.endRace(); toRoom(room, { t: 'results', ...results }); showRoom(room); },
+      done: results => {
+        races.delete(room.code); room.endRace(); toRoom(room, { t: 'results', ...results }); showRoom(room);
+        if (!results.error) award(roster, results).catch(e => console.error('experience not awarded:', e));
+      },
     };
     try { races.set(room.code, runRace(room, roster, io)); }
     catch (e) { room.endRace(); fail(c.id, 'Impossible de lancer la course.'); console.error(e); }
@@ -102,26 +180,64 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace }) 
   }
 
   const handlers = {
-    hello: (c, m) => { c.name = typeof m.name === 'string' ? m.name : c.name; send(c.id, { t: 'welcome', id: c.id, protocol: PROTOCOL }); },
-    create: c => { leaveRoom(c); const room = new Room(newCode(new Set(rooms.keys()))); rooms.set(room.code, room); enter(c, room); },
+    hello: async (c, m) => {
+      const user = typeof m.token === 'string' && m.token ? await store.sessionUser(m.token) : null;
+      if (!user) c.name = typeof m.name === 'string' ? m.name : c.name;
+      await setUser(c, user);
+      send(c.id, { t: 'welcome', id: c.id, protocol: PROTOCOL, profile: user ? profileOf(user) : null });
+    },
+    create: c => {
+      if (!c.user) return fail(c.id, 'Connectez-vous pour créer une salle. Les invité·es peuvent en rejoindre une.');
+      leaveRoom(c); const room = new Room(newCode(new Set(rooms.keys()))); rooms.set(room.code, room); enter(c, room);
+    },
     join: (c, m) => { const room = rooms.get(String(m.code ?? '').toUpperCase().trim()); if (!room) return fail(c.id, 'Aucune salle avec ce code.'); if (c.code !== room.code) { leaveRoom(c); enter(c, room); } },
     set: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = room.set(c.id, { team: m.team, charId: m.charId, ready: m.ready }); if (e) fail(c.id, e); showRoom(room); },
     track: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = room.setTrack(c.id, m.trackIdx); if (e) fail(c.id, e); showRoom(room); },
     start: c => { const room = rooms.get(c.code); if (room) start(c, room); },
     leave: c => leaveRoom(c),
     input: (c, m) => { races.get(c.code)?.input(c.id, m); },
+
+    // ---- friends (accounts only)
+    friends: async c => { if (c.user) await pushFriends(c.user.id); },
+    friendAdd: async (c, m) => {
+      if (!c.user) return fail(c.id, 'Connectez-vous pour ajouter des ami·es.');
+      const other = typeof m.name === 'string' ? await store.userByName(m.name.trim()) : null;
+      if (!other) return fail(c.id, 'Aucun compte à ce nom.');
+      if (other.id === c.user.id) return fail(c.id, 'Vous êtes déjà votre meilleur·e ami·e.');
+      const r = await store.requestFriend(c.user.id, other.id);
+      notice(c.id, r === 'accepted' ? 'Vous êtes maintenant ami·es avec ' + other.name + ' !' : r === 'already' ? other.name + ' est déjà dans votre liste.' : 'Demande envoyée à ' + other.name + '.');
+      await pushFriends(c.user.id); await pushFriends(other.id);
+    },
+    friendAccept: async (c, m) => {
+      if (!c.user || typeof m.id !== 'string') return;
+      if (await store.acceptFriend(c.user.id, m.id)) { await pushFriends(c.user.id); await pushFriends(m.id); }
+    },
+    friendRemove: async (c, m) => {
+      if (!c.user || typeof m.id !== 'string') return;
+      await store.removeFriend(c.user.id, m.id); await pushFriends(c.user.id); await pushFriends(m.id);
+    },
+    invite: async (c, m) => {
+      if (!c.user) return fail(c.id, 'Connectez-vous pour inviter des ami·es.');
+      const room = c.code && rooms.get(c.code); if (!room) return fail(c.id, 'Créez ou rejoignez d’abord une salle.');
+      const link = (await store.links(c.user.id)).find(l => l.id === m.id && l.status === 'friend');
+      if (!link) return fail(c.id, 'Vous ne pouvez inviter que vos ami·es.');
+      if (!online.has(link.id)) return fail(c.id, link.name + ' n’est pas en ligne.');
+      toUser(link.id, { t: 'invite', from: { id: c.user.id, name: c.user.name }, code: room.code });
+      notice(c.id, 'Invitation envoyée à ' + link.name + '.');
+    },
   };
 
   wss.on('connection', ws => {
-    const c = { ws, id: randomUUID(), name: '', code: null, alive: true };
+    const c = { ws, id: randomUUID(), name: '', code: null, alive: true, user: null, queue: Promise.resolve() };
     conns.set(c.id, c);
     ws.on('pong', () => { c.alive = true; });
     ws.on('message', raw => {
       let m; try { m = JSON.parse(String(raw)); } catch { return; }
       const h = m && typeof m.t === 'string' && Object.hasOwn(handlers, m.t) ? handlers[m.t] : null;
-      if (h) h(c, m);
+      // One message at a time per connection: hello may wait on the store, and what follows it must see its outcome.
+      if (h) c.queue = c.queue.then(() => h(c, m)).catch(e => console.error('message ' + m.t + ' failed:', e));
     });
-    ws.on('close', () => { leaveRoom(c); conns.delete(c.id); });
+    ws.on('close', () => { leaveRoom(c); conns.delete(c.id); c.queue = c.queue.then(() => setUser(c, null)).catch(console.error); });
   });
 
   // Hosts behind proxies drop idle sockets; a ping every 15 s also reaps dead clients.

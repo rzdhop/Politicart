@@ -17,3 +17,4 @@ blob-report
 **/*.stories.*
 .env
 .env.*
+apps/server/data

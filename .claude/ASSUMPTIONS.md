@@ -43,6 +43,21 @@ Marked UNCONFIRMED / confirmed / invalidated.
   Each client draws every character with its own local customisations, so a
   player's renamed character or livery is seen only by that player.
 
+- **A-012 -- Experience curve.** UNCONFIRMED. A race pays 70 (win) down to
+  20 (last), 10 unfinished, +20 for a team win; level 2 costs 120 XP and
+  each level 40 more. About three races to level 2, about ninety to unlock
+  the whole cast at level 13. Tunable in `engine/progress.js` alone.
+- **A-013 -- Unlock order.** UNCONFIRMED. Starters Victor, Gégé, Maurice,
+  Capucine (the first four of the cast); then Lucie, Patrick, Bernadette,
+  Kevin, Odile, Lulu, Hubert, Gaspard, Jean-Mi, Martine, Aymeric, Thierry --
+  roughly simplest powers first, Thierry (who copies others) last.
+- **A-014 -- "Only one BRAV-M is sent instead of one" meant two bikes.**
+  UNCONFIRMED. Read against the item's own description ("Deux motos"):
+  with a single kart ahead only one bike used to leave. Now always two.
+- **A-015 -- Tracks x2, road x1.67.** UNCONFIRMED. "x2 length" taken as the
+  circuits drawn at scale 3 (was 1.5); "x1.5 or x2 width" as 30 m (was 18),
+  of which the right-hand 3.6 m is the bike lane.
+
 ## Confirmed
 
 - **A-006 -- Node 26 is available to `actions/setup-node` on ubuntu-latest.**

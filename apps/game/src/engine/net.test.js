@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { connect, disconnect, getNet, joinRoom, onNet, onRace, onSnap, probeServer, sendInput, serverUrl, setTransport } from './net.js';
+import { addFriend, clearInvite, connect, disconnect, getNet, inviteFriend, joinRoom, onNet, onProfile, onRace, onSnap, probeServer, sendInput, serverUrl, setTransport } from './net.js';
 
 // A stand-in WebSocket: records what is sent and lets the test play the server.
 class FakeSocket {
@@ -84,5 +84,38 @@ describe('net client', () => {
     s.close();
     expect(getNet()).toMatchObject({ status: 'closed', room: null });
     expect(getNet().error).toMatch(/perdue/);
+  });
+});
+
+describe('the social side of the connection', () => {
+  it('says hello with the session token, and again when it changes', () => {
+    connect('ws://x/ws', 'Guest', 'tok1'); const sock = FakeSocket.last; sock.open();
+    expect(sock.sent[0]).toEqual({ t: 'hello', name: 'Guest', token: 'tok1' });
+    connect('ws://x/ws', 'Guest', null);
+    expect(sock.sent.at(-1)).toEqual({ t: 'hello', name: 'Guest' });
+  });
+
+  it('hands profiles to the store and asks for the friends of an account', () => {
+    const got = []; onProfile((p, g) => got.push([p?.name ?? null, g]));
+    connect('ws://x/ws', 'A', 'tok'); const sock = FakeSocket.last; sock.open();
+    sock.serve({ t: 'welcome', id: 'c1', profile: { name: 'Alice', level: 1 } });
+    expect(sock.sent.at(-1)).toEqual({ t: 'friends' });
+    sock.serve({ t: 'profile', profile: { name: 'Alice', level: 2 }, gained: 70 });
+    expect(got).toEqual([['Alice', 0], ['Alice', 70]]);
+  });
+
+  it('keeps the friend list, invitations and notices in the view', () => {
+    connect('ws://x/ws', 'A', 'tok'); const sock = FakeSocket.last; sock.open();
+    sock.serve({ t: 'friends', list: [{ id: 'u2', name: 'Bob', status: 'friend', online: true }] });
+    expect(getNet().friends.map(f => f.name)).toEqual(['Bob']);
+    sock.serve({ t: 'invite', from: { id: 'u2', name: 'Bob' }, code: 'ABCD' });
+    expect(getNet().invite).toEqual({ from: { id: 'u2', name: 'Bob' }, code: 'ABCD' });
+    clearInvite(); expect(getNet().invite).toBeNull();
+    sock.serve({ t: 'notice', msg: 'Demande envoyée.' });
+    expect(getNet()).toMatchObject({ notice: 'Demande envoyée.', error: null });
+    addFriend('Chloé'); inviteFriend('u2');
+    expect(sock.sent.slice(-2)).toEqual([{ t: 'friendAdd', name: 'Chloé' }, { t: 'invite', id: 'u2' }]);
+    sock.close();
+    expect(getNet().friends).toEqual([]);
   });
 });
