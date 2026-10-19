@@ -315,3 +315,38 @@ defaults (stage 7) will use it too, and the next `/design-sync` re-sync
 uploads it to Claude Design. That re-sync is not run automatically. Option
 values are strings, so a yes/no setting maps to `'on'`/`'off'` at the call
 site.
+
+## DEC-017 -- One admin account: an scrypt hash in the env and in-memory sessions
+
+**Context.** The human asked for an admin account for "rida", the only
+person allowed to edit the cast. They chose a server-held roster over a
+browser password (PLAN.md). The server had no auth, no sessions, no secrets
+and accepted only GET/HEAD.
+
+**Decision.** `apps/server/src/auth.js`, with node:crypto only.
+- **Credentials.** `KR_ADMIN_USER` (default `rida`) and
+  `KR_ADMIN_PASSWORD_HASH`, a self-describing
+  `scrypt$N=16384,r=8,p=1$salt$key` string made by
+  `npm run -s admin-hash -w @kart-republique/server`. The password is read
+  from stdin, never from argv.
+- **Disabled without a hash.** A missing or malformed hash disables admin
+  (503).
+- **Sessions.** 32-byte tokens in an `HttpOnly; SameSite=Strict` cookie
+  (`Secure` under HTTPS), 12 h TTL, held in memory.
+- **CSRF.** Mutating requests need a JSON content type and a same-origin
+  `Origin`.
+- **Rate limit.** Failed logins are limited to 5/min per IP and 30/min
+  globally, reserved before the slow scrypt.
+- **Timing.** A wrong user still costs one scrypt.
+- **Behind Fly.** `KR_TRUST_PROXY=1` (fly.toml) believes `Fly-Client-IP` and
+  `X-Forwarded-Proto`.
+- **Local secret.** `npm start` loads the repo-root `.env` with
+  `--env-file-if-exists`, so `engines.node` rises to >=22.9.
+
+**Consequence.** No secret or hash lives in the repo; tests generate theirs
+at runtime. A Fly restart logs the admin out, which is accepted. Known gaps:
+- **DNS rebinding.** It could satisfy the Origin check on login only. The
+  rate limit bounds it; a `KR_ALLOWED_HOSTS` list would close it
+  (follow-up).
+- **Spoofable IPs.** `KR_TRUST_PROXY=1` outside Fly would let clients spoof
+  their IP. The global cap still holds.

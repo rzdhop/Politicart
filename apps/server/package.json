@@ -7,8 +7,9 @@
   "type": "module",
   "main": "src/main.js",
   "scripts": {
-    "start": "node src/main.js",
-    "test": "vitest run"
+    "start": "node --env-file-if-exists=../../.env src/main.js",
+    "test": "vitest run",
+    "admin-hash": "node scripts/admin-hash.mjs"
   },
   "dependencies": {
     "three": "0.128.0",

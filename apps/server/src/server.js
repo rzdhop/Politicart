@@ -7,6 +7,13 @@
 //   GET /*        -> apps/game/dist, read-only, no directory escapes
 //   WS  /ws       -> the lobby protocol below; races run in a worker
 //
+//   POST /api/admin/login  {user,password} -> 204 + cookie | 401 | 429
+//   POST /api/admin/logout                 -> 204, cookie cleared
+//   GET  /api/admin/me     -> {enabled, admin, user?}
+//   The only non-GET routes. Each mutating one needs a JSON content type and
+//   a same-origin Origin (auth.js); all answer 503 while admin is disabled,
+//   except `me`, which says so.
+//
 // Client -> server: hello {name} | create | join {code} | set {team,charId,
 // ready} | track {trackIdx} | start | leave | input {...} (during a race).
 // Server -> client: welcome {id} | room {room} | error {msg} | race {...} |
@@ -19,6 +26,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 
 import { WebSocketServer } from 'ws';
 
+import { createAdmin } from './auth.js';
 import { newCode, Room } from './lobby.js';
 
 const MIME = {
@@ -29,17 +37,116 @@ const MIME = {
 
 export const PROTOCOL = 1;
 
+export const LOGIN_BODY_LIMIT = 4 * 1024;
+
+/** An error that carries the HTTP status to answer with. */
+export class HttpError extends Error {
+  constructor(status, message) { super(message); this.status = status; }
+}
+
+/**
+ * Read a JSON object body of at most `limitBytes`. Rejects with HttpError 413
+ * as soon as the declared or received size passes the limit, without waiting
+ * for the rest (later chunks are discarded, never buffered), and with 400 on
+ * invalid JSON or a non-object. Stage 6 reuses it with a larger cap.
+ */
+export function readJson(req, limitBytes) {
+  return new Promise((ok, ko) => {
+    if (Number(req.headers['content-length']) > limitBytes) { req.resume(); ko(new HttpError(413, 'Requête trop volumineuse.')); return; }
+    const chunks = []; let size = 0; let settled = false;
+    const settle = (fn, v) => { if (!settled) { settled = true; fn(v); } };
+    req.on('data', chunk => {
+      if (settled) return;
+      size += chunk.length;
+      if (size > limitBytes) { chunks.length = 0; settle(ko, new HttpError(413, 'Requête trop volumineuse.')); return; }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      let v; try { v = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { settle(ko, new HttpError(400, 'JSON invalide.')); return; }
+      if (!v || typeof v !== 'object' || Array.isArray(v)) { settle(ko, new HttpError(400, 'Objet JSON attendu.')); return; }
+      settle(ok, v);
+    });
+    req.on('error', () => settle(ko, new HttpError(400, 'Requête interrompue.')));
+  });
+}
+
+/** A JSON answer that no cache may keep. A 204 or a HEAD goes out without a body. */
+function sendJson(res, status, body, headers = {}) {
+  const data = body === undefined ? '' : JSON.stringify(body);
+  res.writeHead(status, {
+    'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
+    ...(data ? { 'content-type': 'application/json' } : {}), ...headers,
+  });
+  res.end(data);
+}
+
 /**
  * Start a game server. `runRace(room, roster, io)` starts a race and returns
  * `{ input(playerId, msg), leave(playerId), stop() }`; io carries
  * `send(playerId, msg)`, `broadcast(msg)` and `done(results)`.
+ * `admin` is `{ user, passwordHash, trustProxy, now }` (auth.js); without a
+ * hash the admin endpoints are disabled.
  * Resolves to `{ port, close() }` once listening.
  */
-export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace }) {
+export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, admin: adminConfig = {} }) {
   const root = resolve(staticDir);
   const rooms = new Map();          // code -> Room
   const races = new Map();          // code -> race handle
   const conns = new Map();          // id -> { ws, id, name, code }
+  const admin = createAdmin(adminConfig);
+
+  const DISABLED = { error: 'Administration désactivée.' };
+  const DENIED = { error: 'Identifiant ou mot de passe incorrect.' };
+
+  async function login(req, res) {
+    if (!admin.enabled) return sendJson(res, 503, DISABLED);
+    const bad = admin.checkMutation(req); if (bad) return sendJson(res, bad.status, { error: bad.error });
+    const body = await readJson(req, LOGIN_BODY_LIMIT);
+    const slot = admin.limiter.take(admin.clientIp(req));
+    if (!slot.ok) return sendJson(res, 429, { error: 'Trop de tentatives. Réessayez dans une minute.' }, { 'retry-after': String(slot.retryAfterS) });
+    if (!await admin.verify(body.user, body.password)) return sendJson(res, 401, DENIED);
+    slot.success();
+    admin.sessions.destroy(admin.tokenOf(req));
+    const token = admin.sessions.create(body.user);
+    sendJson(res, 204, undefined, { 'set-cookie': admin.cookie(req, token) });
+  }
+
+  function logout(req, res) {
+    if (!admin.enabled) return sendJson(res, 503, DISABLED);
+    const bad = admin.checkMutation(req); if (bad) return sendJson(res, bad.status, { error: bad.error });
+    req.resume();
+    admin.sessions.destroy(admin.tokenOf(req));
+    sendJson(res, 204, undefined, { 'set-cookie': admin.clearCookie(req) });
+  }
+
+  function me(req, res) {
+    const who = admin.requireAdmin(req);
+    sendJson(res, 200, who ? { enabled: true, admin: true, user: who.user } : { enabled: admin.enabled, admin: false });
+  }
+
+  const adminRoutes = { '/api/admin/login': ['POST', login], '/api/admin/logout': ['POST', logout], '/api/admin/me': ['GET', me] };
+
+  /** Answer an admin route; false when the path is not one, so it falls through. */
+  function adminRoute(req, res, path) {
+    const route = Object.hasOwn(adminRoutes, path) ? adminRoutes[path] : null;
+    if (!route) return false;
+    const [method, handler] = route;
+    if (req.method !== method && !(method === 'GET' && req.method === 'HEAD')) {
+      req.resume();
+      sendJson(res, 405, { error: 'Méthode non autorisée.' }, { allow: method === 'GET' ? 'GET, HEAD' : method });
+      return true;
+    }
+    Promise.resolve().then(() => handler(req, res)).catch(e => {
+      if (res.headersSent) { res.destroy(); return; }
+      // Past a 413 the rest of the body is read and dropped, never buffered,
+      // so the client finishes its upload and actually sees the answer
+      // (closing early makes it a connection reset instead).
+      if (e instanceof HttpError) { sendJson(res, e.status, { error: e.message }); return; }
+      console.error(e);
+      sendJson(res, 500, { error: 'Erreur interne.' });
+    });
+    return true;
+  }
 
   const http = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
@@ -48,6 +155,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace }) 
       res.end(JSON.stringify({ kr: 'server', protocol: PROTOCOL, rooms: rooms.size }));
       return;
     }
+    if (url.pathname.startsWith('/api/admin/') && adminRoute(req, res, url.pathname)) return;
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405).end(); return; }
     let rel; try { rel = decodeURIComponent(url.pathname); } catch { res.writeHead(400).end(); return; }
     if (rel.endsWith('/')) rel += 'index.html';

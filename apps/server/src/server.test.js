@@ -1,10 +1,13 @@
+import { randomBytes } from 'node:crypto';
 import { mkdtempSync, writeFileSync } from 'node:fs';
+import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 
+import { hashPassword } from './auth.js';
 import { startServer } from './server.js';
 
 // A client that records every message and can wait for one matching a test.
@@ -136,5 +139,150 @@ describe('lobby over WebSocket', () => {
     await new Promise(r => setTimeout(r, 100));
     expect(srv.rooms.has(room.code)).toBe(false);
     expect(race.stopped).toBe(true);
+  });
+});
+
+describe('admin over HTTP', () => {
+  // Generated per run: no password or real hash ever lands in the repo.
+  const PASSWORD = `pw-${randomBytes(9).toString('base64url')}`;
+  let hash, adm, clock = 0;
+  const servers = [];
+  const boot = async (admin = {}) => {
+    const s = await startServer({ port: 0, host: '127.0.0.1', staticDir: dir, runRace: fakeRace, admin });
+    servers.push(s); return s;
+  };
+  beforeAll(async () => {
+    hash = await hashPassword(PASSWORD);
+    adm = await boot({ user: 'rida', passwordHash: hash, now: () => clock });
+  });
+  afterAll(() => Promise.all(servers.map(s => s.close())));
+
+  const at = (s, p) => `http://127.0.0.1:${s.port}${p}`;
+  const origin = s => `http://127.0.0.1:${s.port}`;
+  const post = (s, p, body, headers = {}) => fetch(at(s, p), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: origin(s), ...headers },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
+  const login = (s, user = 'rida', password = PASSWORD, headers) => post(s, '/api/admin/login', { user, password }, headers);
+  const tokenOf = r => /kr_admin=([^;]*)/.exec(r.headers.get('set-cookie') ?? '')?.[1];
+  const me = async (s, token) => (await fetch(at(s, '/api/admin/me'), { headers: token ? { cookie: `kr_admin=${token}` } : {} })).json();
+
+  it('logs in: 204 and an HttpOnly, SameSite=Strict session cookie', async () => {
+    const r = await login(adm);
+    expect(r.status).toBe(204);
+    expect(r.headers.get('cache-control')).toBe('no-store');
+    const cookie = r.headers.get('set-cookie');
+    expect(cookie).toMatch(/^kr_admin=[A-Za-z0-9_-]{43}; /);
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('SameSite=Strict');
+    expect(cookie).toContain('Path=/');
+    expect(cookie).toContain('Max-Age=43200');
+    expect(cookie).not.toContain('Secure');            // plain http, no proxy trusted
+    expect(await me(adm, tokenOf(r))).toEqual({ enabled: true, admin: true, user: 'rida' });
+    expect(await me(adm)).toEqual({ enabled: true, admin: false });
+    expect(await me(adm, 'A'.repeat(43))).toEqual({ enabled: true, admin: false });
+  });
+
+  it('answers a wrong password and a wrong user identically', async () => {
+    const a = await login(adm, 'rida', 'wrong-password-123');
+    const b = await login(adm, 'someone', PASSWORD);
+    const c = await post(adm, '/api/admin/login', { user: 1, password: null });
+    expect([a.status, b.status, c.status]).toEqual([401, 401, 401]);
+    const bodies = await Promise.all([a.text(), b.text(), c.text()]);
+    expect(new Set(bodies).size).toBe(1);
+    expect(JSON.parse(bodies[0]).error).toBeTruthy();
+    expect(a.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('logs out: 204, the cookie cleared and the token dead', async () => {
+    const token = tokenOf(await login(adm));
+    const r = await post(adm, '/api/admin/logout', {}, { cookie: `kr_admin=${token}` });
+    expect(r.status).toBe(204);
+    expect(r.headers.get('set-cookie')).toMatch(/^kr_admin=; .*Max-Age=0/);
+    expect(await me(adm, token)).toEqual({ enabled: true, admin: false });
+  });
+
+  it('expires a session after 12 hours', async () => {
+    const token = tokenOf(await login(adm));
+    clock += 12 * 3600 * 1000 - 1;
+    expect((await me(adm, token)).admin).toBe(true);
+    clock += 1;
+    expect((await me(adm, token)).admin).toBe(false);
+  });
+
+  it('refuses a cross-site or missing Origin with 403', async () => {
+    expect((await login(adm, 'rida', PASSWORD, { origin: 'http://evil.test' })).status).toBe(403);
+    expect((await login(adm, 'rida', PASSWORD, { origin: 'https://127.0.0.1' })).status).toBe(403);
+    expect((await login(adm, 'rida', PASSWORD, { origin: 'null' })).status).toBe(403);
+    // A raw request can leave the Origin out.
+    const status = await new Promise((ok, ko) => {
+      const body = JSON.stringify({ user: 'rida', password: PASSWORD });
+      const req = request({ host: '127.0.0.1', port: adm.port, path: '/api/admin/login', method: 'POST', headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } }, res => { res.resume(); ok(res.statusCode); });
+      req.on('error', ko); req.end(body);
+    });
+    expect(status).toBe(403);
+    expect((await post(adm, '/api/admin/logout', {}, { origin: 'http://evil.test' })).status).toBe(403);
+  });
+
+  it('refuses a non-JSON content type with 415', async () => {
+    const r = await post(adm, '/api/admin/login', JSON.stringify({ user: 'rida', password: PASSWORD }), { 'content-type': 'text/plain' });
+    expect(r.status).toBe(415);
+    expect((await post(adm, '/api/admin/login', 'user=rida', { 'content-type': 'application/x-www-form-urlencoded' })).status).toBe(415);
+    expect((await post(adm, '/api/admin/logout', '{}', { 'content-type': 'text/plain' })).status).toBe(415);
+  });
+
+  it('refuses an oversized body with 413 and bad JSON with 400', async () => {
+    const big = await login(adm, 'rida', 'x'.repeat(5000));
+    expect(big.status).toBe(413);
+    expect(big.headers.get('cache-control')).toBe('no-store');
+    // Chunked, so no Content-Length to refuse up front: the streaming cap answers.
+    const chunk = new TextEncoder().encode(`{"password":"${'x'.repeat(16 * 1024)}`);
+    const stream = new ReadableStream({ start(c) { for (let i = 0; i < 8; i++) c.enqueue(chunk); c.close(); } });
+    expect((await fetch(at(adm, '/api/admin/login'), { method: 'POST', headers: { 'content-type': 'application/json', origin: origin(adm) }, body: stream, duplex: 'half' })).status).toBe(413);
+    expect((await post(adm, '/api/admin/login', '{not json')).status).toBe(400);
+    expect((await post(adm, '/api/admin/login', '[1,2]')).status).toBe(400);
+    expect((await post(adm, '/api/admin/login', 'null')).status).toBe(400);
+  });
+
+  it('answers 405 for the wrong method on an admin route', async () => {
+    expect((await fetch(at(adm, '/api/admin/login'))).status).toBe(405);
+    expect((await post(adm, '/api/admin/me', {})).status).toBe(405);
+  });
+
+  it('rate-limits: 429 after 5 failures, even with the right password', async () => {
+    const s = await boot({ user: 'rida', passwordHash: hash });
+    for (let i = 0; i < 5; i++) expect((await login(s, 'rida', `wrong-${i}-password`)).status).toBe(401);
+    const r = await login(s);
+    expect(r.status).toBe(429);
+    expect(Number(r.headers.get('retry-after'))).toBeGreaterThan(0);
+    expect(r.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('is disabled without a hash: 503, and me says enabled:false', async () => {
+    const s = await boot({ user: 'rida', passwordHash: '' });
+    const r = await login(s);
+    expect(r.status).toBe(503);
+    expect(r.headers.get('cache-control')).toBe('no-store');
+    expect((await post(s, '/api/admin/logout', {})).status).toBe(503);
+    expect(await me(s)).toEqual({ enabled: false, admin: false });
+    // The shared server above was started with no admin option at all.
+    expect(await (await fetch(url('/api/admin/me'))).json()).toEqual({ enabled: false, admin: false });
+  });
+
+  it('keeps every other route as it was', async () => {
+    for (const s of [adm, srv]) {
+      expect((await fetch(at(s, '/'), { method: 'POST', body: '{}', headers: { 'content-type': 'application/json', origin: origin(s) } })).status).toBe(405);
+      expect((await fetch(at(s, '/app.js'), { method: 'PUT', body: 'x' })).status).toBe(405);
+      expect((await fetch(at(s, '/api/admin/other'), { method: 'POST', body: '{}' })).status).toBe(405);
+      expect((await fetch(at(s, '/api/kr'), { method: 'POST' })).status).toBe(200);
+      expect(await (await fetch(at(s, '/api/kr'))).json()).toMatchObject({ kr: 'server', protocol: 1 });
+      expect((await fetch(at(s, '/app.js'))).headers.get('content-type')).toMatch(/javascript/);
+      expect((await fetch(at(s, '/api/admin/login'), { method: 'HEAD' })).status).toBe(405);
+    }
+    const c = client(adm.port); await c.open;
+    c.send({ t: 'hello', name: 'Admin' });
+    expect((await c.next(m => m.t === 'welcome')).protocol).toBe(1);
+    c.close();
   });
 });

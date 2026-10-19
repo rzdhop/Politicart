@@ -34,13 +34,16 @@ Current state only. History lives in git.
   and on a full rerun. It is timing-sensitive under load, not caused by
   this task.
 - **Stage 1 done** (pun names): Tier 1 green (game 103), e2e 29/29.
-- **Stages 1-4 committed** (pun names; kart style model; mesh renders a
-  style; player Garage + library ChoiceGroup, DEC-016). Tier 1 green (ui 241,
-  game 150, server 16), e2e 33/33 at Stage 4.
-- **Current stage:** 5 (server admin authentication, the riskiest stage;
-  runs on an Opus agent). **Next action:** spawn the Opus agent with the
-  stage 5 brief from PLAN.md.
-- **Follow-up owed:** a `/design-sync` re-sync to upload ChoiceGroup.
+- **Stages 1-5 committed** (pun names; kart style model; mesh renders a
+  style; player Garage + library ChoiceGroup, DEC-016; server admin auth,
+  DEC-017). Tier 1 green (ui 241, game 150, server 45), audit 0, e2e 33/33
+  at Stage 5.
+- **Current stage:** 6 (server roster store). **Next action:** brief a
+  Sonnet agent (data-mutation path, so escalate to Opus if it reports
+  ambiguity) with Stage 6 from PLAN.md; reuse `readJson`, `HttpError` and
+  `admin.requireAdmin` from Stage 5.
+- **Follow-ups owed:** a `/design-sync` re-sync to upload ChoiceGroup; a
+  `KR_ALLOWED_HOSTS` check against DNS rebinding (DEC-017).
 
 ## Previous task -- closed
 
