@@ -166,10 +166,10 @@ describe('the roster for a guest', () => {
     act(() => actions.play());
     const tiles = [...container.querySelectorAll('#roster button')] as HTMLButtonElement[];
     expect(tiles).toHaveLength(16);
-    expect(tiles.filter(t => !t.disabled).map(t => t.textContent)).toEqual(['Victor Lemarchand', 'Gégé Marteau', 'Maurice Ronpoint', 'Capucine Verdier']);
+    expect(tiles.filter(t => !t.disabled).map(t => t.textContent)).toEqual(['Emmanuel Macaron', 'Philippe Martini', 'Jean Lassalle-des-Fêtes', 'Sandrine Ruisseau']);
     expect(tiles.find(t => t.disabled)?.dataset.lock).toBe('🔒 Compte requis');
     act(() => actions.selectChar(15));
-    expect(container.querySelector('#roster button[aria-pressed="true"]')?.textContent).toBe('Victor Lemarchand');
+    expect(container.querySelector('#roster button[aria-pressed="true"]')?.textContent).toBe('Emmanuel Macaron');
     act(() => actions.toTitle());
   });
 });

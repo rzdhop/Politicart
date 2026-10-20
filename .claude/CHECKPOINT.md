@@ -20,10 +20,12 @@ Current state only. History lives in git.
   R-02 "fills the drift gauge while drifting" failed 2 of 4 runs ("drift
   gauge stayed empty"), with no change of mine applied. When a stage's run
   fails on that spec alone, it is rerun before being judged.
-- **Current stage:** 1 (pun names for all 16). **Next action:** implement.
-- **Owed by the human at the end:** open and merge the PR (there is no
-  `gh` here); in Render, set `KR_ADMIN_PASSWORD_HASH` and, when ready,
-  `DATABASE_URL`.
+- **Stage 1 committed** (pun names, DEC-022): Tier 1 green (game 142),
+  e2e 37/37.
+- **Current stage:** 2 (kart style model and mesh). **Next action:** port
+  `kartstyle.js`, then the style rendering on top of main's `kart.js`.
+- **Rule learned:** never run E2E while another session runs Playwright
+  (shared ports 4173/4180).
 
 ## Previous task (on main's history)
 

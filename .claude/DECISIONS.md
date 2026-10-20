@@ -447,3 +447,28 @@ stage, exactly as before.
 skipped. The instruction is durable for this task; a later task asks again
 unless the human extends it.
 
+
+## DEC-022 -- The cast parodies real politicians through pun names
+
+**Context.** VISION described the cast as "fictional, never real named
+figures". The human asked for every candidate to be renamed with a pun on a
+real French politician (Marine Le Pen -> "Marine Le Stylo", Jean-Luc
+Mélenchon -> "Jean-Luc Mélèche"), which overrides that. The first eleven
+were approved on 2026-10-19 (on `feat/multiplayer`, recorded there as
+DEC-015). Main's five newer candidates were approved on 2026-10-20.
+
+**Decision.** All sixteen display names are pun names, matched to the
+politician whose archetype each candidate already plays: Emmanuel Macaron,
+Philippe Martini, Jean Lassalle-des-Fêtes, Sandrine Ruisseau, Gérard
+L'Archiduc, Jean-Luc Mélèche, Marine Le Stylo, Jordan Mortadella, Eva
+Joly-Jumper, José Bovin, Nathalie Artichaut, Bruno Le Maigre, Éric
+Zemmoule, Gérald Darmalin, Michel Bananier and Manuel Valse. Three titles
+change to fit them: lulu, bernadette and martine. Ids never change. The
+title screen and README now say "parody" instead of "fictional": the names
+are one pun from real people, while powers, lines and scandals stay
+invented.
+
+**Consequence.** The parody notice must stay on the title screen. Ids no
+longer resemble names (`victor` is Emmanuel Macaron), which is what keeps
+saved data, the e2e selectors, the server's `CHAR_IDS` and the unlock order
+intact. The packages/ui story fixtures keep the old names (A-019).

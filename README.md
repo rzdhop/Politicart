@@ -1,6 +1,6 @@
 # Kart République
 
-*Grand Prix de l'Hémicycle* — a satirical 3D kart racer in the browser, starring a cast of fictional French politicians.
+*Grand Prix de l'Hémicycle* — a satirical 3D kart racer in the browser, starring a cast of French politicians under pun names.
 
 Keyboard on a computer, touch on a phone or tablet, held either way. Three laps, five AI opponents, no cohabitation.
 
@@ -120,7 +120,7 @@ Both orientations work: in portrait the camera widens and pulls back. Phones sta
 
 ## Content
 
-- **16 fictional candidates**, each with stats (speed, acceleration, handling, weight) and a signature satirical power: Grand débat, Grève générale, Rond-point surprise, Zone à faibles émissions, Amendement de dernière minute, Mégaphone, Éléments de langage, Vol d'audience, Mise en examen, Épandage, Temps de parole, Coup de rabot (Gaspard Tableur, le technocrate de Bercy), Fake news (Jean-Mi Vérité, le populiste de plateau télé), Contrôle d'identité (Martine Fichet, la ministre de l'Intérieur), Directive européenne (Aymeric de Bruxelles, le lobbyiste européen), Ralliement (Thierry Volte-Face, le transfuge, who copies the power of the kart ahead).
+- **16 candidates** parodying real French politicians under pun names (Emmanuel Macaron, Marine Le Stylo, Jean-Luc Mélèche, José Bovin...), each with stats (speed, acceleration, handling, weight) and a signature satirical power: Grand débat, Grève générale, Rond-point surprise, Zone à faibles émissions, Amendement de dernière minute, Mégaphone, Éléments de langage, Vol d'audience, Mise en examen, Épandage, Temps de parole, Coup de rabot (Bruno Le Maigre, le technocrate de Bercy), Fake news (Éric Zemmoule, le populiste de plateau télé), Contrôle d'identité (Gérald Darmalin, le ministre de l'Intérieur), Directive européenne (Michel Bananier, le lobbyiste européen), Ralliement (Manuel Valse, le transfuge, who copies the power of the kart ahead).
 - **19 items** from golden ballot boxes, weighted by race position: 49.3 Turbo, Grève surprise, Dossier Mediapart, Motion de censure, Immunité parlementaire, Sondage truqué, Hélico présidentiel, Remaniement, Plan de relance, BRAV-M, Nuage lacrymogène, Casserolade, Dissolution, Niche fiscale, Langue de bois (absorbs the next hit), Cumul des mandats (two items at once), Fact-checking (goes through immunity), Pantouflage (a jump down the road), Référendum (yes, no or abstention, at random).
 - **3 circuits**: L'Élysée (Faubourg Saint-Honoré), Palais Bourbon (quais de Seine), Versailles (jardins du Congrès) — with ramps and tricks, pits, dash panels, chicanes and crossing traffic. Each is drawn at 3 times its original size (`scale` in `data.js`, about 3 km a lap), with its decor spread out to match. The road is 30 m wide.
 - **Bike lane**: a green cycle lane runs along the right-hand edge of every circuit. Its cyclists ride where they like: they swerve into the karts' lanes, cut across the road, hop onto the pavement, stop dead or ride the wrong way. Hitting one knocks the rider over and shakes your kart.
@@ -129,7 +129,7 @@ Both orientations work: in portrait the camera widens and pulls back. Phones sta
 - **Workshop (admin)**: rename candidates, change colours, upload kart liveries and campaign posters. Settings are stored in the browser's `localStorage`.
 - Graphics toggle (detailed with shadows / light low-poly), synthesized sound and music via WebAudio.
 
-All characters, parties and scandals are fictional. Any resemblance to existing figures is purely electoral.
+The candidates are caricatures of real politicians, one pun away from their names. Their powers, lines and scandals are invented satire.
 
 ## Repository layout
 
