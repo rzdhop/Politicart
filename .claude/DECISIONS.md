@@ -497,3 +497,38 @@ invented.
 longer resemble names (`victor` is Emmanuel Macaron), which is what keeps
 saved data, the e2e selectors, the server's `CHAR_IDS` and the unlock order
 intact. The packages/ui story fixtures keep the old names (A-019).
+
+## DEC-024 -- Pick-one settings are a library component, ChoiceGroup
+
+**Context.** The Garage needs several "pick one of a few named values"
+settings: wheels, spoiler, side pods and sticker. Drawing the picked option
+as a primary Button broke the library's own rule (one primary per Row), and
+because the Button variants differ in size, the row reflowed on every pick.
+The human chose to add the pattern to the design system (2026-10-19, on
+`feat/multiplayer`).
+
+**Decision.** `ChoiceGroup` belongs to `packages/ui` (Controls): a labelled
+`role=group` of `.chip` buttons with `aria-pressed`. The picked chip fills
+gold, and every state keeps the same size. It ships with a story, unit tests
+and CSS in `controls.css`. The Garage, and the Workshop's kart defaults in
+stage 6, are built from it.
+
+**Consequence.** The next `/design-sync` re-sync uploads it to Claude Design;
+that is not run automatically. That branch's other library change, safe
+centring on `.screen`, is not ported: main's `game.css` already solves the
+same overflow with auto margins.
+
+## DEC-025 -- Run every remaining stage, then push and merge, without stopping between stages
+
+**Context.** On 2026-10-20, during stage 3, the human said: "go with all
+stages, only stop when finished" and then "Push it and merge it".
+
+**Decision.** Stages 3-9 run back to back with no go-ahead between them.
+When they are done, `feat/cast-admin-garage` is pushed and merged into
+`main`, and the push to main triggers the GitHub Pages and Render deploys.
+The working agreement still holds inside each stage: Tier 1 and E2E must
+be green; two fix attempts are allowed, then roll back and stop to report.
+
+**Consequence.** No per-stage checkpoints with the human. The human is
+asked again only for something they alone can do (Render secrets), or if a
+stage cannot be made green.

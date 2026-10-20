@@ -27,12 +27,15 @@
 // `account` is the player's account screen: log in or sign up, the level and
 // the friend list. Reached from the title, it leads back there or -- when an
 // invitation is accepted -- straight into the lobby.
+//
+// `garage` is where the player styles their own kart, reached from and
+// returning to the roster, so the turntable stays on screen throughout.
 
-export const STATES = Object.freeze(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'account']);
+export const STATES = Object.freeze(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'account', 'garage']);
 
 const NEXT = Object.freeze({
   title: Object.freeze(['select', 'admin', 'lobby', 'account']),
-  select: Object.freeze(['title', 'tracks']),
+  select: Object.freeze(['title', 'tracks', 'garage']),
   tracks: Object.freeze(['select', 'countdown']),
   admin: Object.freeze(['title']),
   countdown: Object.freeze(['race', 'paused', 'lobby']),
@@ -41,6 +44,7 @@ const NEXT = Object.freeze({
   results: Object.freeze(['countdown', 'title', 'lobby']),
   lobby: Object.freeze(['title', 'countdown']),
   account: Object.freeze(['title', 'lobby']),
+  garage: Object.freeze(['select']),
 });
 
 let current = 'title';

@@ -33,6 +33,17 @@ export interface Track {
   points: [number, number][];
 }
 
+/** A full kart style, as engine/kartstyle.js defines it. */
+export interface KartStyle {
+  body: string;
+  accent: string;
+  wheels: string;
+  spoiler: string;
+  pods: boolean;
+  number: number | null;
+  sticker: string;
+}
+
 /** One character's edits in the workshop, keyed as the inputs' data-k attributes. */
 export interface CustomCharacter {
   name?: string;

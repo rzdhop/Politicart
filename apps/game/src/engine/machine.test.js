@@ -28,7 +28,7 @@ describe('game state machine', () => {
   });
 
   it('lists exactly the nine states the game has', () => {
-    expect([...STATES]).toEqual(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'account']);
+    expect([...STATES]).toEqual(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'account', 'garage']);
   });
 
   it.each(FLOWS)('accepts the flow %s -> %s -> %s ...', (...flow) => {

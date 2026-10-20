@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Button } from './Button';
+import { ChoiceGroup } from './ChoiceGroup';
 import { ControlsGrid } from './ControlsGrid';
 import { KeyCap } from './KeyCap';
 
@@ -70,5 +71,40 @@ describe('ControlsGrid and KeyCap', () => {
       </ControlsGrid>,
     );
     expect(container.querySelector('.controls b')?.textContent).toBe('↑');
+  });
+});
+
+describe('ChoiceGroup', () => {
+  const OPTIONS = [
+    { value: 'classic', label: 'Classiques', id: 'w-classic' },
+    { value: 'gold', label: 'Dorées', id: 'w-gold' },
+  ] as const;
+
+  it('is a labelled group of chip buttons, the picked one pressed', () => {
+    render(<ChoiceGroup label="Roues" options={OPTIONS} value="gold" onChange={() => {}} />);
+    const group = screen.getByRole('group', { name: 'Roues' });
+    expect(group.className).toBe('choice-group');
+    expect(group.querySelector('.choice-label')?.textContent).toBe('Roues');
+    const chips = screen.getAllByRole('button');
+    expect(chips.map(c => c.className)).toEqual(['chip', 'chip']);
+    expect(chips.map(c => c.getAttribute('aria-pressed'))).toEqual(['false', 'true']);
+    expect(chips.map(c => c.getAttribute('type'))).toEqual(['button', 'button']);
+  });
+
+  it('puts the option ids on the chips', () => {
+    render(<ChoiceGroup label="Roues" options={OPTIONS} value="classic" onChange={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Dorées' }).id).toBe('w-gold');
+  });
+
+  it('reports the picked value', () => {
+    const onChange = vi.fn();
+    render(<ChoiceGroup label="Roues" options={OPTIONS} value="classic" onChange={onChange} />);
+    screen.getByRole('button', { name: 'Dorées' }).click();
+    expect(onChange).toHaveBeenCalledWith('gold');
+  });
+
+  it('merges a consumer class onto the group', () => {
+    render(<ChoiceGroup label="Roues" options={OPTIONS} value="classic" onChange={() => {}} className="wide" />);
+    expect(screen.getByRole('group').className).toBe('choice-group wide');
   });
 });

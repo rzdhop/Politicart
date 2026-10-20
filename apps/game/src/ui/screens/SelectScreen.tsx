@@ -32,11 +32,13 @@ const fraction = (stat: number) => (stat - 0.6) / 0.6;
 
 /** The roster of candidates and the showcase of the chosen one. */
 /**
- * Where the turntable kart goes on a small screen: the showcase's free band
- * above the candidate's name (engine/preview.js draws it there).
+ * Where the turntable kart goes on a small screen: the free band of the
+ * visible screen's showcase, above the candidate's name (engine/preview.js
+ * draws it there). The roster and the Garage share the turntable, and both
+ * screens stay mounted, so this one frame function serves whichever is shown.
  */
 function showcaseBand() {
-  const sc = document.getElementById('showcase'); const big = sc?.querySelector('.big');
+  const sc = document.querySelector('section.screen:not([hidden]) .showcase'); const big = sc?.querySelector('.big');
   if (!sc || !big) return null;
   const a = sc.getBoundingClientRect(), b = big.getBoundingClientRect();
   return { x: a.left, y: a.top, w: a.width, h: b.top - a.top - 6 };
@@ -82,6 +84,7 @@ export function SelectScreen({ ui }: { ui: UiSnapshot }) {
       </SelectLayout>
       <Row>
         <Button id="b-back1" variant="ghost" onClick={actions.toTitle}>Retour</Button>
+        <Button id="b-garage" variant="ghost" onClick={actions.openGarage}>Garage</Button>
         <Button id="b-next1" onClick={actions.toTracks}>Choisir le circuit →</Button>
       </Row>
     </Screen>

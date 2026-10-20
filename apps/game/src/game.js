@@ -21,6 +21,7 @@ import { updateEngine } from './engine/audio.js';
 import { loadCustom } from './engine/custom.js';
 import { ITEMS } from './engine/data.js';
 import { drain, resolveFor } from './engine/events.js';
+import { loadGarage } from './engine/garage.js';
 import { setInputSource } from './engine/input.js';
 import { getState, onTransition } from './engine/machine.js';
 import { isNetRace, netStep } from './engine/netrace.js';
@@ -131,6 +132,7 @@ onTransition((to, from) => {
 // ---------- Screens: mount ----------
 // The workshop's saved edits are applied before anything renders, as before.
 loadCustom();
+loadGarage();
 mountUi($('ui'));
 // Served by the game server (not GitHub Pages)? Then team races are on offer.
 actions.detectServer();
@@ -143,7 +145,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
   const state = getState();
-  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account') { if (state === 'select' || state === 'tracks' || hasPreview()) renderPreview(dt); return; }
+  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'garage') { if (state === 'select' || state === 'tracks' || state === 'garage' || hasPreview()) renderPreview(dt); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
 
   const payload = isNetRace() ? netStep(dt) : stepRace(dt);
