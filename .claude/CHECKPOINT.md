@@ -2,7 +2,30 @@
 
 Current state only. History lives in git.
 
-## In progress
+## In progress -- task 2026-10-20: cast admin, Garage and pun names onto main
+
+- **Request:** the work from `feat/multiplayer` (admin account "rida",
+  kart personalisation, pun names) should be pushed, merged and deployed.
+  It is being reworked onto main (DEC-020); plan in `.claude/PLAN.md`,
+  stages 0-9.
+- **Branch:** `feat/cast-admin-garage`, cut from `origin/main` at
+  `2b14388`, with no upstream (a push will set its own). Reference
+  implementation: `feat/multiplayer` at `4ee4673` (not merged).
+- **Standing instruction:** the E2E suite runs after every stage, without
+  asking (DEC-021).
+- **Checkpoint:** `origin/main` `2b14388`. The stage 0 commit records it.
+- **Tier-1 baseline at `2b14388` (2026-10-20):** typecheck clean; ui 235 +
+  8 skipped, game 138, server 30; `npm audit --omit=dev` 0.
+- **E2E baseline:** 36/37. **Pre-existing flake on main:** `e2e/game.spec.ts`
+  R-02 "fills the drift gauge while drifting" failed 2 of 4 runs ("drift
+  gauge stayed empty"), with no change of mine applied. When a stage's run
+  fails on that spec alone, it is rerun before being judged.
+- **Current stage:** 1 (pun names for all 16). **Next action:** implement.
+- **Owed by the human at the end:** open and merge the PR (there is no
+  `gh` here); in Render, set `KR_ADMIN_PASSWORD_HASH` and, when ready,
+  `DATABASE_URL`.
+
+## Previous task (on main's history)
 
 - **Task:** online team multiplayer (plan in `.claude/PLAN.md`, DEC-014).
   Branch `feat/multiplayer`, cut from `main` at `e819070`. Not pushed.

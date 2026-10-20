@@ -408,3 +408,42 @@ SQLite (a native module in the container, and no help on Render).
 plays as a guest. A logged-in player keeps a socket open from the title
 screen so friends see them online and invitations arrive in any menu.
 Experience from a solo race is trusted, in line with "not serious for now".
+
+## DEC-020 -- The cast admin, the Garage and the pun names reach main by porting, stage by stage
+
+**Context.** That work was built on `feat/multiplayer` (10 commits, tip
+`4ee4673`) while `main` moved on by 11 commits. Those include player
+accounts (Bearer tokens, CORS `*`, a JSON or Postgres store, DEC-019), five
+new candidates, phone controls and a Render deploy. A test merge gave 20
+conflicting files. The branch's cookie-based admin could not work from the
+Pages origin. Its file-only roster would also be wiped by Render's free
+disk.
+
+**Decision.** The human chose to rework the work onto main. A fresh branch,
+`feat/cast-admin-garage`, is cut from `origin/main` (`2b14388`), and each
+feature is ported in its own tested stage (PLAN.md). The admin becomes a
+role on main's accounts: `rida` is a reserved name, seeded at boot from
+`KR_ADMIN_PASSWORD_HASH`, and logs in through the normal Compte screen. The
+cast roster is stored in main's store. The Workshop works wherever the admin
+is logged in, Pages included.
+
+**Consequence.** `feat/multiplayer` stays as the reference implementation and
+is not merged. Its cookie admin (that branch's DEC-017), the separate login
+screen and PasswordInput are dropped. The other decisions from that branch
+are re-recorded under new ids as their stages land. Its action-log lines
+were ported verbatim, so their DEC numbers refer to that branch.
+
+## DEC-021 -- The E2E suite runs after every stage without asking
+
+**Context.** The working agreement (Tier 2) says to ask the human before
+each E2E run. On 2026-10-20, approving the integration plan, the human said:
+"Run the E2E suite after every stage without asking me each time".
+
+**Decision.** For this task, every stage runs the full Playwright suite once
+Tier 1 is green, with no question asked. A failing E2E still blocks the
+stage, exactly as before.
+
+**Consequence.** Stages close faster, and the regression net is never
+skipped. The instruction is durable for this task; a later task asks again
+unless the human extends it.
+

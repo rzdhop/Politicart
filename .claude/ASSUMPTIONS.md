@@ -58,6 +58,20 @@ Marked UNCONFIRMED / confirmed / invalidated.
   circuits drawn at scale 3 (was 1.5); "x1.5 or x2 width" as 30 m (was 18),
   of which the right-hand 3.6 m is the bike lane.
 
+- **A-016 -- The player's kart style is one set of partial overrides, not
+  one per character.** UNCONFIRMED. Read from "default for all if not
+  edited": the fields a player changes apply to whichever candidate they
+  pick, and the rest falls back to that candidate's admin-set default.
+  (Was A-012 on `feat/multiplayer`.)
+- **A-017 -- Campaign posters are admin-only too.** UNCONFIRMED. "edit
+  character etc." is read as the whole Workshop. (Was A-014.)
+- **A-018 -- Old per-browser `kr-custom` edits are not migrated.**
+  UNCONFIRMED. The server roster becomes the only source of cast edits.
+  (Was A-015.)
+- **A-019 -- The packages/ui story fixtures keep the old fictional names.**
+  UNCONFIRMED. They are library examples; renaming them is a follow-up.
+  (Was A-016.)
+
 ## Confirmed
 
 - **A-006 -- Node 26 is available to `actions/setup-node` on ubuntu-latest.**
