@@ -23,12 +23,14 @@ Current state only. History lives in git.
 - **Stage 1 committed** (pun names, DEC-023): Tier 1 green (game 142),
   e2e 37/37.
 - **Stage 2 committed** (kart style): Tier 1 green (game 188), e2e 36/37.
-- **Main's own E2E failure:** `multiplayer.spec.ts` "an account hosts..."
-  fails 3/3 on untouched `origin/main` (the 0.9 s "PARTEZ !" window vs
-  slow polling). The drift-gauge session is fixing it on
-  `Feature/busy-shtern-23be86`. Until then, E2E runs count 36/37 as green
-  when that spec is the only failure, and no E2E runs while that session
-  works.
+- **Synced with main `3f4d040`** (merge `3ec001c`): main now carries both
+  flake fixes (drift-gauge spec; team races wait for every driver to load,
+  main's DEC-020). This branch's decisions were renumbered to DEC-021..023.
+  On the merged branch Tier 1 is green (ui 235, game 188, server 32) and e2e
+  is 37/37.
+- **Rare flake (main's):** headless.test.js "knocks over a cyclist..."
+  failed once in a full parallel run, then passed 6/6 alone (here and on a
+  clean main) and 3/3 in full runs.
 - **Current stage:** 3 (Garage, ChoiceGroup, safe centring). **Next
   action:** implement.
 - **Rule learned:** never run E2E while another session runs Playwright
