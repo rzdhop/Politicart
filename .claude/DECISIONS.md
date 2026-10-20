@@ -572,3 +572,39 @@ supersedes `feat/multiplayer`'s cookie admin.
   - guests on the WebSocket may still call themselves "rida", but never get a
     profile or the flag;
   - lookalike names from other alphabets are not refused.
+
+## DEC-027 -- The cast roster is a document in main's store, served to every client
+
+**Context.** The admin's cast edits must reach every player: on the game
+server's own page, and on the Pages build, which calls the server across
+origins. They must also survive restarts where a store exists. Main's store
+(DEC-019) is a JSON file or Postgres. On Render's free plan the disk is wiped
+when the service sleeps, so durable storage there means Postgres.
+
+**Decision.**
+- **Storage.** The store gains `getDoc`/`putDoc` for an allowlist of keys
+  (`roster`).
+  - Postgres keeps them in a `kr_docs` table (jsonb).
+  - The file backend writes each doc to its own file, `kr-docs/<key>.json`
+    next to `KR_DATA`, atomically. It does not sit inside the accounts file,
+    because that file is rewritten after every race's XP and the roster can
+    weigh megabytes.
+- **Reading.** `GET /api/roster` is public, uncached and CORS `*`.
+- **Writing.** `PUT /api/admin/roster` checks, in order:
+  - the admin's Bearer session (401 for everyone else, so the route says
+    nothing about who is admin);
+  - a JSON content type;
+  - a 10 MB body;
+  - strict validation, ported from `feat/multiplayer` and covering 16 ids
+    (400 names the field).
+
+  Saves then run one at a time, the server's `CHARACTERS` take the new names,
+  and race workers receive the cast.
+
+**Consequence.**
+- Edits persist wherever accounts persist, and on Render that means a
+  `DATABASE_URL`.
+- The body limit is 10 MB, not the planned 8: the image caps alone add up to
+  8 MB with 16 candidates.
+- No cookie means no CSRF surface. Any page may read the roster, which is
+  public anyway.

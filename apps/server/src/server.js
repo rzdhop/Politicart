@@ -7,6 +7,8 @@
 //                    elsewhere (GitHub Pages) can probe a remote server.
 //   /api/register, /api/login, /api/logout, /api/me, /api/progress
 //                 -> accounts (accounts.js), open to every origin
+//   GET /api/roster, PUT /api/admin/roster
+//                 -> the admin's cast (roster.js): public read, admin write
 //   GET /*        -> apps/game/dist, read-only, no directory escapes
 //   WS  /ws       -> the lobby protocol below; races run in a worker
 //
@@ -34,6 +36,7 @@ import { WebSocketServer } from 'ws';
 import { levelFromXp, xpForRace } from '../../game/src/engine/progress.js';
 import { accountApi } from './accounts.js';
 import { newCode, Room } from './lobby.js';
+import { rosterApi } from './roster.js';
 import { openFileStore } from './store.js';
 
 const MIME = {
@@ -52,6 +55,9 @@ export const PROTOCOL = 1;
  * caps sign-ups and failed logins per address and minute (tests raise it).
  * `admin` is `{ user, hash }` (admin.js): run ensureAdmin() on the store
  * first; that name is reserved even without a hash.
+ * Before listening it loads the admin's cast from the store and applies it to
+ * CHARACTERS (roster.js), so lobbies and races name the AI as edited; an
+ * invalid stored cast is logged and the default one used.
  * Resolves to `{ port, close() }` once listening.
  */
 export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, store = openFileStore(null), loginTries, admin }) {
@@ -62,6 +68,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
   const online = new Map();         // user id -> Set of connections
 
   const api = accountApi(store, { onProfile: user => updateProfile(user, 0), tries: loginTries, admin });
+  const cast = rosterApi(store, { requireAdmin: api.requireAdmin });
 
   const http = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
@@ -71,7 +78,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
       res.end(JSON.stringify({ kr: 'server', protocol: PROTOCOL, rooms: rooms.size, accounts: store.kind }));
       return;
     }
-    if (url.pathname.startsWith('/api/') && await api(req, res, url.pathname)) return;
+    if (url.pathname.startsWith('/api/') && (await api(req, res, url.pathname) || await cast(req, res, url.pathname))) return;
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405).end(); return; }
     let rel; try { rel = decodeURIComponent(url.pathname); } catch { res.writeHead(400).end(); return; }
     if (rel.endsWith('/')) rel += 'index.html';
@@ -246,12 +253,12 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
   const beat = setInterval(() => { for (const c of conns.values()) { if (!c.alive) { c.ws.terminate(); continue; } c.alive = false; c.ws.ping(); } }, 15_000);
   beat.unref();
 
-  return new Promise((ok, ko) => {
+  return cast.load().then(() => new Promise((ok, ko) => {
     http.once('error', ko);
     http.listen(port, host, () => ok({
       port: http.address().port,
       rooms,
       close: () => new Promise(done => { clearInterval(beat); for (const r of races.values()) r.stop(); for (const c of conns.values()) c.ws.terminate(); wss.close(); http.close(() => done()); }),
     }));
-  });
+  }));
 }

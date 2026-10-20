@@ -8,6 +8,9 @@
 // to its lobby through io.done().
 import { Worker } from 'node:worker_threads';
 
+import { CHARACTERS } from '../../game/src/engine/data.js';
+import { castOf } from './roster.js';
+
 const WORKER = new URL('./race-worker.js', import.meta.url);
 
 export function runRace(room, roster, io, { fast = false, hold } = {}) {
@@ -17,7 +20,9 @@ export function runRace(room, roster, io, { fast = false, hold } = {}) {
 
   for (const [playerId, slot] of slotOf) io.send(playerId, { t: 'race', trackIdx: room.trackIdx, roster: grid, you: slot });
 
-  const worker = new Worker(WORKER, { workerData: { trackIdx: room.trackIdx, roster: grid, fast, hold } });
+  // The worker has its own copy of CHARACTERS, still at the defaults: hand it
+  // the admin's names, which the powers quote in their messages.
+  const worker = new Worker(WORKER, { workerData: { trackIdx: room.trackIdx, roster: grid, cast: castOf(CHARACTERS), fast, hold } });
   let over = false;
   worker.on('message', m => {
     if (m.t === 'snap') {

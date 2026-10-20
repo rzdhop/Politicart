@@ -35,9 +35,9 @@ Current state only. History lives in git.
 - **Standing instruction (DEC-025):** run stages 4-9 without stopping, then
   push and merge into main.
 - **Stage 4 committed** (seeded admin, DEC-026): server 52, e2e 41/41.
-- **Current stage:** 5 (cast roster in main's store, Opus). **Next
-  action:** brief the agent; reuse `requireAdmin` and port `validateRoster`
-  from `0d53d50`.
+- **Stage 5 committed** (roster in store, DEC-027): server 98, e2e 41/41.
+- **Current stage:** 6 (client: cast from the server, Workshop for the
+  admin only, Opus). **Next action:** brief the agent.
 
 ## Previous task (on main's history)
 

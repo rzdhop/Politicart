@@ -5,7 +5,9 @@
 //   KR_STATIC  the built game to serve (default ../../game/dist)
 //   DATABASE_URL  keep accounts in this Postgres database (store.js)
 //   KR_DATA    otherwise, keep them in this JSON file (default ../data/kr-accounts.json);
-//              ':memory:' keeps them in memory only (the end-to-end suite)
+//              ':memory:' keeps them in memory only (the end-to-end suite).
+//              The admin's cast goes next to it, in kr-docs/roster.json;
+//              startServer loads and applies it before listening.
 //   KR_ADMIN_USER           the administrator's account name (default rida),
 //                           reserved: nobody else can sign up under it
 //   KR_ADMIN_PASSWORD_HASH  its password hash (admin.js); unset or malformed,

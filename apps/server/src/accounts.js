@@ -195,7 +195,7 @@ export function accountApi(store, { onProfile = () => {}, tries: maxTries = LOGI
 
   async function handle(req, res, path) {
     if (req.method === 'OPTIONS' && path.startsWith('/api/')) {
-      res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-max-age': '86400' });
+      res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, PUT, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-max-age': '86400' });
       res.end(); return true;
     }
     const route = routes[req.method + ' ' + path]; if (!route) return false;
