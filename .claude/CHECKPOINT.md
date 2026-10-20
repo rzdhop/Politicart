@@ -22,8 +22,15 @@ Current state only. History lives in git.
   fails on that spec alone, it is rerun before being judged.
 - **Stage 1 committed** (pun names, DEC-022): Tier 1 green (game 142),
   e2e 37/37.
-- **Current stage:** 2 (kart style model and mesh). **Next action:** port
-  `kartstyle.js`, then the style rendering on top of main's `kart.js`.
+- **Stage 2 committed** (kart style): Tier 1 green (game 188), e2e 36/37.
+- **Main's own E2E failure:** `multiplayer.spec.ts` "an account hosts..."
+  fails 3/3 on untouched `origin/main` (the 0.9 s "PARTEZ !" window vs
+  slow polling). The drift-gauge session is fixing it on
+  `Feature/busy-shtern-23be86`. Until then, E2E runs count 36/37 as green
+  when that spec is the only failure, and no E2E runs while that session
+  works.
+- **Current stage:** 3 (Garage, ChoiceGroup, safe centring). **Next
+  action:** implement.
 - **Rule learned:** never run E2E while another session runs Playwright
   (shared ports 4173/4180).
 
