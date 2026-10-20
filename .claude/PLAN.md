@@ -1,237 +1,232 @@
-# Plan -- admin account, kart personalisation, pun names
+# Plan -- bring the cast admin, the Garage and the pun names onto main
 
-Drafted 2026-10-19, approved the same day, **complete** (stages 1-9). The previous plan (team
-multiplayer, stages 1-10) is complete and lives in git history at `06bc141`.
+Drafted 2026-10-20, **awaiting approval**. The previous plan (admin account,
+kart personalisation, pun names; 9 stages on `feat/multiplayer`) is complete
+and lives in git history at `4ee4673`. That branch stays as the reference
+implementation; this plan ports it onto `main`, where it has to fit main's
+own account system.
 
 ## Goal
 
-1. Rename the 11 characters to puns on real French politicians.
-2. One admin account, "rida", is the only one allowed to edit the cast
-   (names, titles, quotes, colours, liveries, per-character kart defaults)
-   and the campaign posters. Edits are held by the game server and seen by
-   every player.
-3. Players personalise their kart: body and accent colours, wheels, spoiler
-   or body kit, race number, sticker. Anything a player has not changed
-   falls back to the character's default, which the admin sets. In team
-   races, every client sees each player's kart as that player styled it.
+Ship to `main`, and from there to GitHub Pages and Render:
 
-Fixed by the human on 2026-10-19:
+- the pun-name cast: 16 candidates, including main's 5 new ones;
+- the player's Garage (their own kart style), synced in team races;
+- the cast Workshop, which only the admin `rida` can use, saved on the server
+  for every player.
 
-- Admin enforcement is server-side: a server-held roster (not a browser
-  password).
-- The kart options are colours, wheels, spoiler/body kit, and number plus
-  sticker. Character defaults apply where the player made no edit.
-- The kart style is synced in multiplayer.
-- The pun-name list below.
-- Character ids stay unchanged: `victor`, `gege`, ... are keys in storage,
-  the e2e suite and the server's `CHAR_IDS`.
+Fixed by the human on 2026-10-19 and 2026-10-20:
 
-| id | Name | Title (changed only where noted) |
+- **Rework onto main**, not a mechanical merge.
+- **Admin:**
+  - `rida` is a **reserved account**: no one can register that name.
+  - The server seeds the account at boot from `KR_ADMIN_PASSWORD_HASH`.
+  - Rida logs in through main's normal **Compte** screen, and the profile
+    then carries `admin: true`.
+  - The separate cookie login from `feat/multiplayer` is dropped.
+- **The Workshop works anywhere the admin is logged in**, including the
+  Pages build, which talks to the Render server with Bearer tokens.
+- **Render** is live with **no database yet**, so accounts and the cast
+  reset when the free service sleeps. The admin is reseeded at every boot.
+  The cast only persists once a `DATABASE_URL` is set.
+- **Names for main's 5 new candidates:**
+
+| id | Name | Title |
 |---|---|---|
-| victor | Emmanuel Macaron | Le jeune président |
-| gege | Philippe Martini | Le syndicaliste |
-| maurice | Jean Lassalle-des-Fêtes | Le maire de province |
-| capucine | Sandrine Ruisseau | L'écologiste à vélo-cargo |
-| hubert | Gérard L'Archiduc | Le sénateur éternel |
-| lulu | Jean-Luc Mélèche | **Le tribun de la rue** |
-| bernadette | Marine Le Stylo | **La reine du recadrage** |
-| kevin | Jordan Mortadella | L'influenceur politique |
-| odile | Eva Joly-Jumper | La juge anticorruption |
-| patrick | José Bovin | L'agriculteur en colère |
-| lucie | Nathalie Artichaut | La candidate à 1 % |
+| gaspard | Bruno Le Maigre | Le technocrate de Bercy |
+| jeanmi | Éric Zemmoule | Le populiste de plateau télé |
+| martine | Gérald Darmalin | **Le ministre de l'Intérieur** |
+| aymeric | Michel Bananier | Le lobbyiste européen |
+| thierry | Manuel Valse | Le transfuge |
 
-## Architecture
+## Approach
 
-- **Admin credential.** The server reads `KR_ADMIN_USER` (default `rida`)
-  and `KR_ADMIN_PASSWORD_HASH`, a `scrypt$<salt>$<hash>` string made by a
-  new `npm run admin-hash -w @kart-republique/server` script. These are env
-  vars, set with `fly secrets set` on Fly and in an untracked `.env` locally.
-  No password or hash is ever committed. If no hash is set, admin is
-  disabled and the server says so on startup.
-- **Session.** `POST /api/admin/login` checks the password with scrypt and
-  `timingSafeEqual`. On success it issues a random 32-byte token in an
-  `HttpOnly; SameSite=Strict; Path=/` cookie (`Secure` under HTTPS). The
-  token is held in memory with a 12 h TTL, so a restart means logging in
-  again. Login is limited to 5 failures per minute per IP. Every mutating
-  request requires `Content-Type: application/json` and an `Origin` that
-  matches the host (CSRF). `POST /api/admin/logout` and
-  `GET /api/admin/me` complete the API.
-- **Roster store.** `KR_DATA_DIR/roster.json` (default
-  `apps/server/data/`, gitignored; a Fly volume at `/data` in production)
-  has the shape `{chars: {<id>: {name, title, quote, suit, kart, livery,
-  style}}, ads: []}`. Writes are atomic (temp file plus rename).
-  `GET /api/roster` is public. `PUT /api/admin/roster` requires a session,
-  validates every field (lengths, `#rrggbb`, image data URLs under a size
-  cap, style enums), and has a 4 MB body cap. The server also applies the
-  roster to its own `CHARACTERS`, so AI names in races match.
-- **Kart style** (`engine/kartstyle.js`, DOM-free, shared by client and
-  server): `{body, accent, wheels: classic|chrome|offroad|gold, spoiler:
-  none|standard|wing, pods: bool, number: 0-99|null, sticker:
-  none|tricolore|rosette|etoile|marianne}`. It provides
-  `defaultStyle(char)`, `mergeStyle(base, partial)` and
-  `cleanStyle(input)` (strict validation, drops unknown keys).
-  `buildKart(def, style)` renders it on a per-kart basis and never mutates
-  shared `CHARACTERS`. Wheels and spoiler apply to the standard kart.
-  Colours, number and sticker also apply to the tractor and cargo bodies.
-- **Player Garage.** A new `#s-garage` screen reached from character
-  select (`#b-garage`). Partial overrides are stored in
-  `localStorage['kr-kart']`, with a reset. It works on Pages too.
-- **Static (Pages) build.** It ships the default cast with no Workshop and
-  no login. The Garage still works.
+- **A fresh branch, `feat/cast-admin-garage`, cut from `origin/main`
+  (`2b14388`).** Each feature is ported in its own stage, reusing code from
+  `feat/multiplayer` (`git show feat/multiplayer:<path>`) and adapting it to
+  main's code. That way every stage is one committable, testable,
+  revertible change.
+- **Agent tiers:** stages 4-6 (auth, data mutation, client auth) run on
+  Opus agents; the others run on Sonnet or inline.
+- **Per stage:** Tier 1 green, then E2E, then commit, then a log line.
 
 ## Stages
 
-Each stage: Tier 1 green -> ask about Tier 2 (E2E) -> commit -> log line.
+### Stage 0: Checkpoint on main
+- **Goal:** cut the branch and record the starting point.
+  - Create the branch from `origin/main`.
+  - Port the artifacts. My DEC-015..018 become **DEC-020..023**, because
+    main already uses 015..019. My A-012..016 become **A-016..020**. The
+    regression rows R-17/R-18 do not collide.
+  - Append my action-log lines.
+  - Record the Tier-1 baseline on main, and run E2E once.
+- **Files:** `.claude/*` only.
+- **Risk:** none.
+- **Rollback:** delete the branch.
 
-### Stage 1: Rename the cast and replace the "fictional" notice with a parody notice
-- **Files:** `apps/game/src/engine/data.js`, `ui/screens/TitleScreen.tsx`
-  (disclaimer), `README.md`, `game.js` header comment, `engine/data.test.js`
-  (new: ids unchanged, names as listed).
-- **Risk:** low. Names are not used as selectors anywhere.
-- **Verify:** Tier 1; E2E R-01 (select screen renders the roster).
-- **Rollback:** `git revert` of the stage commit.
+### Stage 1: Pun names for all 16 candidates and the parody notice
+- **Files:** `engine/data.js` (16 names; titles for lulu, bernadette and
+  martine), `engine/data.test.js` (16 ids), the TitleScreen disclaimer,
+  `README.md`, the `game.js` header.
+- **Risk:** low.
+- **Verify:** Tier 1, then E2E R-01.
+- **Rollback:** revert.
 - **Contract at risk:** R-01, R-11.
 
-### Stage 2: Kart style model, shared and DOM-free
-- **Files:** `apps/game/src/engine/kartstyle.js` and `kartstyle.test.js`
-  (new); `data.js` gains no field, because defaults are derived.
-- **Risk:** low. Nothing uses it yet.
-- **Verify:** Tier 1 (validation edge cases: bad hex, out-of-range number,
-  prototype keys, unknown enum).
+### Stage 2: Kart style model and mesh
+- **Files:**
+  - `engine/kartstyle.js` and its test.
+  - `engine/kart.js`: style rendering on top of main's mesh, which adds
+    `bumpSparks` and `shield` to `userData`.
+  - `race.js`: slots take a style.
+  - `payload.js`: the minimap colour follows the style.
+  - `kart.test.js`: the `userData` contract now includes the new keys; also
+    check that the big wing clears the shield at radius 2.3.
+- **Risk:** medium (the physics `userData` contract; DOM-free per DEC-014).
+- **Verify:** Tier 1, then E2E R-01, R-02, R-05.
 - **Rollback:** revert.
-- **Contract at risk:** none.
+- **Contract at risk:** R-02, R-05, R-10.
 
-### Stage 3: The kart mesh renders a style
-- **Files:** `engine/kart.js` (accent material, four wheel variants, three
-  spoiler variants, side pods, number on the plate, sticker canvas on the
-  hood), `engine/race.js` (`makeKart` passes the player's merged style; AI
-  karts use the default), `engine/preview.js` (the select turntable shows
-  the style), and a new headless unit test `kart.test.js`.
-- **Risk:** medium. `userData.{wheels, sparks, ring, driver, rotor, blades}`
-  is a contract with `physics.updateKartVisual`; every variant must keep
-  four wheels in the same order. This must stay DOM-free (DEC-014).
-- **Verify:** Tier 1; E2E R-01, R-02, R-05; a manual look at all
-  variants.
+### Stage 3: Garage, ChoiceGroup and safe centring
+- **Files:**
+  - `engine/garage.js` and its test.
+  - `GarageScreen.tsx` and `kartChoices.ts`.
+  - `machine.js`: the `garage` state, alongside main's `account`.
+  - `preview.js`: main's phone `renderPreview` path; `showcaseBand` reads
+    `#g-showcase`.
+  - Game CSS: phone rules for `#s-garage`, matching main's `#s-select`
+    rules.
+  - The SelectScreen button.
+  - `packages/ui`: ChoiceGroup and the `.screen` safe-centring fix
+    (DEC-021, DEC-023).
+  - `App.test.tsx` and `e2e/garage.spec.ts`. Main has 16 candidates, and
+    the Garage on a locked candidate is not reachable.
+- **Risk:** medium (machine; phone layout).
+- **Verify:** Tier 1; full E2E; screenshots on desktop and in phone
+  portrait.
 - **Rollback:** revert.
-- **Contract at risk:** R-01, R-02, R-05, R-10.
+- **Contract at risk:** R-01, R-03, R-17.
 
-### Stage 4: Player Garage screen
-- **Files:** `ui/screens/GarageScreen.tsx` (new), `engine/machine.js`
-  (`select <-> garage`), `ui/App.tsx`, `ui/store`, `SelectScreen.tsx`
-  (`#b-garage`), `engine/garage.js` (new: localStorage `kr-kart`, wrapped
-  like `custom.js`), `App.test.tsx` (new ids), and `e2e/garage.spec.ts`
-  (new: edit, persist across reload, reset, falls back to defaults).
-- **Risk:** medium. This adds a new state to the machine (DEC-011).
-- **Verify:** Tier 1; full E2E.
-- **Rollback:** revert.
-- **Contract at risk:** R-01, R-03.
+### Stage 4: Reserved, seeded admin on main's accounts -- **riskiest stage**
+- **Server:**
+  - `KR_ADMIN_USER` (default `rida`) and `KR_ADMIN_PASSWORD_HASH`, in
+    main's `scrypt$salt$hex` format.
+  - `/api/register` refuses that name (case- and accent-blind via
+    `nameKey`).
+  - At boot, `ensureAdmin` creates the account, or resets its password
+    hash to the env value, so the env is always the truth.
+  - `profileOf` gains `admin` for that account only.
+  - `requireAdmin(req)` sits on top of the Bearer session.
+  - Without a hash: the name stays reserved and nobody is admin.
+- **Script:** `npm run -s admin-hash -w @kart-republique/server` emits
+  main's format.
+- **Files:** `apps/server/src/accounts.js`, `store.js` (a `setHash` method
+  on both backends), `main.js`, `scripts/admin-hash.mjs`,
+  `engine/progress.js` (`profileOf`), `.env.example`, and tests.
+- **Risk:** high: authentication on a public server. This stage runs on an
+  Opus agent.
+- **Verify:** Tier 1; `npm audit`.
+- **Rollback:** revert. Nothing depends on it yet.
+- **Contract at risk:** R-16; main's account specs.
 
-### Stage 5: Server admin authentication -- **riskiest stage**
-- **Files:** `apps/server/src/auth.js` (new: scrypt verify, sessions, rate
-  limit, cookie parse/serialise), `server.js` (POST/PUT routing, JSON body
-  reader with cap, origin check, `/api/admin/login|logout|me`),
-  `apps/server/scripts/admin-hash.mjs` (new), `apps/server/package.json`
-  (script), `.env.example` (new), `apps/server/src/auth.test.js`, and
-  `server.test.js` additions (wrong password, rate limit, bad origin,
-  expired token, missing hash disables admin).
-- **Risk:** high. Security-sensitive, and it opens non-GET methods on a
-  server that only allowed GET/HEAD. Runs on an Opus agent.
-- **Verify:** Tier 1; existing server tests; `npm audit`. No new
-  dependency (node:crypto only).
-- **Rollback:** revert. This stage has no client dependency yet.
-- **Contract at risk:** R-16 (the server must keep serving the game and
-  WS).
-
-### Stage 6: Server roster store
-- **Files:** `apps/server/src/roster.js` (new: load, validate, atomic
-  save, apply to `CHARACTERS`), `server.js` (`GET /api/roster`,
-  `PUT /api/admin/roster`), `main.js` (`KR_DATA_DIR`), `.gitignore`
-  (`apps/server/data/`), `fly.toml` (`[mounts]` volume at `/data`,
-  `KR_DATA_DIR=/data`), `Dockerfile` (data dir owned by `node`), and
-  `roster.test.js`.
-- **Risk:** medium. It is a data mutation path (validation must reject
-  oversized or malformed input).
+### Stage 5: Cast roster in main's store
+- **Store:** `getDoc` / `putDoc` on the file backend (a top-level `docs`
+  key) and on Postgres (`create table if not exists kr_docs`).
+- **Roster:** port `validateRoster` from `feat/multiplayer`, covering 16
+  ids, strict validation, and image magic bytes.
+- **Endpoints:**
+  - `GET /api/roster` is public, with CORS `*`.
+  - `PUT /api/admin/roster` requires a Bearer admin session, accepts a body
+    of up to 8 MB, and is added to the preflight methods.
+- **Apply the cast to the server's `CHARACTERS`** and pass it to the race
+  worker.
+- **Files:** `apps/server/src/roster.js` and its test, `accounts.js` or
+  `server.js` routing, `store.js` and its test, `race.js`,
+  `race-worker.js`.
+- **Risk:** high: a data-mutation path. Runs on an Opus agent.
 - **Verify:** Tier 1.
 - **Rollback:** revert.
 - **Contract at risk:** R-16.
 
-### Stage 7: Client admin flow; Workshop moves behind login
-- **Files:** `engine/custom.js` (the source becomes `/api/roster`, not
-  localStorage; adds per-character kart defaults), `engine/net.js` (roster
-  fetch, login, logout, me), `ui/screens/LoginScreen.tsx` (new, `#s-login`,
-  `#adm-user`, `#adm-pass`, `#b-login-go`), `TitleScreen.tsx` (`#b-login`
-  only when the server is detected; `#b-admin` only when logged in as
-  admin), `AdminScreen.tsx` (adds kart default fields and saves via PUT),
-  `machine.js` (`title <-> login`), `App.test.tsx`,
-  `e2e/game.spec.ts` R-06, `e2e/admin.spec.ts` (new),
-  `playwright.config.ts` (server env: a test-only hash and a temp data
-  dir).
-- **Risk:** high. It changes the behaviour of contract item R-06 on
-  purpose: the Workshop is no longer reachable on the static build. The
-  R-06 specs move to the server build and log in first. This is a
-  requested behaviour change, not a loosened test.
-- **Verify:** Tier 1; full E2E; manual login on the LAN.
-- **Rollback:** revert. Stages 5 and 6 stay valid without it.
-- **Contract at risk:** R-01, R-06 (redefined), R-16.
+### Stage 6: Client: the cast from the server, and the Workshop for the admin only
+- **Cast:** `custom.js` loads the roster from `<base>/api/roster`, using
+  main's `remoteServer` base, so Pages works too. The legacy `kr-custom` key
+  is deleted.
+- **Workshop:** gated on `ui.account.profile.admin`, with the kart-default
+  fields. Saving sends a PUT with the Bearer token; the response names the
+  bad field on a 400, and a 401 sends the admin back to Compte.
+- **Title:** main's `#b-admin` is shown only to the admin.
+- **Files:** `engine/custom.js` and its test; `engine/account.js` (`roster`
+  and `saveRoster` calls); `store.ts`; `TitleScreen.tsx`;
+  `AdminScreen.tsx`; `App.test.tsx`; `e2e/admin.spec.ts`;
+  `playwright.config.ts` (a test-only admin hash computed at load, and
+  `KR_DATA=:memory:`).
+- **R-06 is redefined:** the Workshop moves behind the admin login. This is
+  a requested behaviour change, not a loosened test.
+- **Risk:** high. Runs on an Opus agent.
+- **Verify:** Tier 1; full E2E; screenshots.
+- **Rollback:** revert.
+- **Contract at risk:** R-01, R-06, R-16, R-18.
 
-### Stage 8: Kart style in team races
-- **Files:** `apps/server/src/lobby.js` (`set` accepts `style`, cleaned by
-  `cleanStyle`), `server.js` (`set` handler), `race.js` (grid carries the
-  style), `engine/netrace.js` (a per-slot cloned `def` plus style),
-  `ui/screens/LobbyScreen.tsx` (sends the player's style), `lobby.test.js`,
-  `netrace.test.js`, and `e2e/multiplayer.spec.ts` (the second browser
-  sees the first player's kart number and colour through `window.__kr`).
-- **Risk:** medium. It changes the protocol, adding a field, which is
-  backward compatible.
+### Stage 7: Kart style in team races
+- **Server:**
+  - `lobby.js`: `join(id, name, who, style)`. `view()` shows main's fields
+    plus a cleaned style, and never leaks `allowed`.
+  - `create`, `join` and `set` carry the style. `create` keeps main's
+    account guard.
+- **Client:** `netrace.js` renders each slot with its style. A read-only
+  `__kr.karts()` hook lets the suite inspect it.
+- **Tests:** `lobby.test.js`, `net.test.js`, `netrace.test.js`,
+  `Lobby.test.tsx`, and `e2e/multiplayer.spec.ts` (with an account-hosted
+  room).
+- **Risk:** medium.
 - **Verify:** Tier 1; full E2E.
 - **Rollback:** revert.
 - **Contract at risk:** R-16.
 
-### Stage 9: Close-out
-Update VISION, DECISIONS (DEC-015 real-figure parody, DEC-016 server-held
-roster and admin auth), ASSUMPTIONS (A-011 invalidated), CHECKPOINT
-(regression contract: R-06 redefined, R-17 Garage, R-18 admin), the action
-log, and the README (admin setup: hash script, `fly secrets set`,
-`fly volumes create`). Run `npm audit`.
+### Stage 8: Deploy config and docs
+- **`render.yaml`:** add `KR_ADMIN_USER` and `KR_ADMIN_PASSWORD_HASH`
+  (`sync: false`).
+- **`Dockerfile` / `fly.toml`:** check them against main.
+- **README:** admin setup; the Render steps, including a free Postgres
+  (Neon) for `DATABASE_URL`; the Garage.
+- **Artifacts:** VISION, ASSUMPTIONS, CHECKPOINT (R-06 redefined; R-17,
+  R-18).
+- **Risk:** low.
+
+### Stage 9: Push, pull request, merge, deploy
+- **Push** `feat/cast-admin-garage`. I'll ask first; this machine has no
+  `gh` CLI.
+- **You** open the PR and merge it on GitHub. I give you the link and the
+  description.
+- **The merge deploys:** Pages from Actions, Render from `autoDeploy`.
+- **You, in the Render dashboard:** set `KR_ADMIN_PASSWORD_HASH` (and
+  `DATABASE_URL` when ready).
+- **I verify the live site:** `/api/kr`, `/api/roster`, the Pages bundle.
+- **Clean up:** drop the `feat/multiplayer` de-flake branch.
 
 ## Rejected alternatives
 
-- **A browser-only password.** It can be bypassed in DevTools, and edits
-  stay in one browser. The human chose the server-held roster.
-- **Admin edits committed to git** (Pages would get them too). Every edit
-  would need a redeploy, and the server would need a GitHub token.
-- **A database** (SQLite or Postgres). It is overkill for one small JSON
-  document and adds a native dependency to the container.
-- **GitHub OAuth for rida.** It removes password handling, but it adds a
-  third-party app registration, callback URLs and a provider dependency for
-  one user. It could replace the password later without touching stages
-  6-8.
-- **Renaming the character ids.** That would break saved data, the e2e
-  selectors and the server's `CHAR_IDS` for no visible gain.
+- **Merge main into `feat/multiplayer`:** 20 conflicting files resolved in
+  one untestable merge commit. The cookie admin would sit beside main's
+  accounts, and its file-only roster is wiped on Render's free disk.
+- **Rebase the 10 commits onto main:** every commit conflicts, and the
+  intermediate commits would never have been tested.
+- **A normal account that the env names as admin:** whoever registers
+  `rida` first on a fresh database becomes admin. The human chose a reserved
+  name instead.
+- **Keep the separate cookie login:** two login systems, and a
+  `SameSite=Strict` cookie that cannot work from the Pages origin.
 
-## Check against DECISIONS.md
+## Check against DECISIONS.md (main's, 001-019)
 
-- **DEC-009** (ids are a contract): all existing ids are kept; only new ids
-  are added.
-- **DEC-011** (one state machine): `garage` and `login` are added through
-  the transition table.
-- **DEC-014** (engine DOM-free): `kartstyle.js` is pure, and the mesh
-  changes use the existing headless-guarded texture helpers.
-- **A-011** (remote workshop edits not shown) is superseded: the roster is
-  now global and styles are synced.
-- **VISION's "fictional, never real figures"** is overridden by the human.
-  This is recorded as DEC-015.
-
-## Out of scope (follow-ups)
-
-- The `packages/ui` story fixtures and design-sync previews keep the old
-  fictional names. They are library examples, and changing them churns
-  the library tests and the Claude Design sync.
-- Local-kart prediction, and a Pages build that reads the server's roster
-  (CORS, plus a hard dependency on the Fly URL).
-
-## Needs a human hand (not automatable by me)
-
-- Choose the admin password and generate its hash with the script.
-- On Fly: run `fly volumes create kr_data --region cdg --size 1` and
-  `fly secrets set KR_ADMIN_PASSWORD_HASH=...`.
+- DEC-009 (ids are a contract): kept; only new ids are added.
+- DEC-011 (one machine): `garage` joins `account` through the table.
+- DEC-014 (engine DOM-free): kept.
+- DEC-015 (Pages names a remote server): the roster and the admin reuse
+  its base URL.
+- DEC-019 (accounts live in a JSON file or Postgres): the roster is stored
+  there too, as a document.
+- Supersedes my branch's DEC-017 (cookie admin). Its replacement is
+  recorded as a new decision.
+- Otherwise checked: no conflicts.

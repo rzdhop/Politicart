@@ -2,6 +2,33 @@
 
 Current state only. History lives in git.
 
+## In progress -- task 2026-10-19 (b): integrate onto main, then push, merge and deploy
+
+- **Request:** the human asked for the work to be pushed, merged and
+  deployed. Nothing is pushed yet; `feat/multiplayer` is 10 commits ahead of
+  `origin/feat/multiplayer`.
+- **Finding:** `origin/main` (tip `2b14388`) has 11 commits not on this
+  branch (merge base `76463bf`): mobile touch, longer circuits, and PR #5,
+  which adds player accounts (Bearer tokens, CORS open for Pages), a store
+  (Postgres via DATABASE_URL, or a JSON file), unlockable candidates and a
+  Render free-plan deploy (`render.yaml`, autoDeploy). 34 files changed on
+  both sides.
+- **Decision (human):** "Rework onto main". Rebuild the admin as a role on
+  main's accounts ('rida'), keep the cast roster in main's store so it
+  survives Render, then test, push, PR, merge; main's auto-deploy publishes.
+- **Phase:** PLAN, awaiting approval (`.claude/PLAN.md`, stages 0-9).
+  EXPLORE is done: 20 conflicting files; main has 16 candidates, Bearer
+  accounts with CORS `*`, and DEC-015..019 / A-012..015 already taken.
+  CLARIFY answers: names for the 5 new candidates approved; the admin is a
+  reserved account seeded from env; the Workshop works from Pages too;
+  Render is live without a database.
+- **Tooling:** no `gh` and no `fly` CLI on this machine; `git push` is
+  untested here.
+- **De-flake branch** `Feature/vigilant-mendel-913389` is redundant (main
+  already has the seed fix): drop it once the integration lands.
+- **Next action:** on approval, Stage 0 (cut `feat/cast-admin-garage` from
+  `origin/main`, port the artifacts, take the baseline).
+
 ## Latest task -- closed 2026-10-19: admin account, kart personalisation, pun names
 
 - **Request:** an admin account for "rida", the only one allowed to edit
