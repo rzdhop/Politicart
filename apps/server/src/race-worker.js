@@ -6,8 +6,9 @@
 // each driver's latest controls, and every third tick (20 Hz) posts a
 // snapshot plus, per human slot, the messages and sounds addressed to them.
 //
-// workerData: { trackIdx, roster: [{ charId, team, isAI, name }], fast }
+// workerData: { trackIdx, roster: [{ charId, team, isAI, name }], fast, hold }
 //   fast: step as fast as possible instead of in real time (tests only).
+//   hold: how long the clock may wait for the drivers to load, in ms (default 10 s).
 // In:  { t: 'input', slot, c: {throttle,brake,left,right,drift}, item, power }
 //      { t: 'leave', slot }      the driver left; an AI takes the wheel
 //      { t: 'stop' }
@@ -31,7 +32,7 @@ const SNAP_EVERY = 3;            // 60 Hz / 3 = 20 snapshots a second
 // A race nobody can finish still ends. KR_MAX_RACE_S shortens it (the end-to-end suite does).
 const MAX_RACE_TIME = Number(process.env.KR_MAX_RACE_S) || 12 * 60;
 
-const { trackIdx, roster, fast } = workerData;
+const { trackIdx, roster, fast, hold = 10_000 } = workerData;
 const IDLE = Object.freeze({ throttle: false, brake: false, left: false, right: false, drift: false });
 
 // ---- set the race up
@@ -46,6 +47,12 @@ roster.forEach((s, slot) => {
   humans.set(slot, h);
   G.karts[slot].ctrl = () => h.c;
 });
+// A client builds the whole circuit before its first frame, and a slow one
+// takes longer than the countdown: it would come back to a race already
+// started. So the clock waits for every driver's first controls, which a
+// client sends only once its first frame is drawn (netrace.js) -- for `hold`
+// at most, so a driver who never loads cannot stall the room (DEC-020).
+const loading = new Set(fast ? [] : humans.keys());
 const slotOf = new Map(G.karts.map((k, i) => [k, i]));
 let raceFx = [];
 setSfxSink((name, k) => { if (!k) { raceFx.push(name); return; } const h = humans.get(slotOf.get(k)); if (h) h.fx.push(name); });
@@ -54,13 +61,14 @@ const bool = v => v === true;
 parentPort.on('message', m => {
   if (m.t === 'input') {
     const h = humans.get(m.slot); if (!h) return;
+    loading.delete(m.slot);
     const c = m.c ?? {};
     h.c = { throttle: bool(c.throttle), brake: bool(c.brake), left: bool(c.left), right: bool(c.right), drift: bool(c.drift) };
     if (Number.isInteger(m.item) && m.item > h.item) h.item = m.item;
     if (Number.isInteger(m.power) && m.power > h.power) h.power = m.power;
   } else if (m.t === 'leave') {
     const k = G.karts[m.slot]; if (!k || !humans.has(m.slot)) return;
-    humans.delete(m.slot); k.ctrl = null; k.isAI = true; k.itemTimer = 1;
+    humans.delete(m.slot); loading.delete(m.slot); k.ctrl = null; k.isAI = true; k.itemTimer = 1;
   } else if (m.t === 'stop') {
     running = false; process.exit(0);
   }
@@ -110,8 +118,11 @@ if (fast) {
   burst();
 } else {
   let last = performance.now(), acc = 0;
+  const holdUntil = last + hold;
   const timer = setInterval(() => {
-    const now = performance.now(); acc += Math.min(0.25, (now - last) / 1000); last = now;
+    const now = performance.now();
+    if (loading.size && now < holdUntil) { last = now; return; }   // still loading: the clock stands still
+    acc += Math.min(0.25, (now - last) / 1000); last = now;
     while (acc >= STEP && running) { acc -= STEP; if (!step()) { clearInterval(timer); return; } }
   }, 4);
 }

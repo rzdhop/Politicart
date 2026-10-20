@@ -94,6 +94,8 @@ describe('a networked race on the client', () => {
       clientInLobby(); beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5 });
       pressItem(); pressItem();
       netStep(1 / 60);
+      expect(sent.filter(m => m.t === 'input')).toEqual([]);   // nothing until the first frame has been drawn
+      netStep(1 / 60);
       const inputs = sent.filter(m => m.t === 'input');
       expect(inputs.at(-1)).toMatchObject({ item: 2, power: 0, c: { throttle: false } });
     });

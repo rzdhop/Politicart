@@ -32,6 +32,7 @@ let buffer = [];
 let newest = { tk: 0, at: 0 };
 let presses = { item: 0, power: 0 };
 let lastSent = 0, lastKey = '';
+let drawn = false;               // has a frame of this race been drawn yet?
 let hazards = new Map(), projectiles = new Map();
 let resultsListener = null;
 let lastResults = null;
@@ -61,7 +62,7 @@ function clearEntities() {
 export function beginNetRace(m) {
   G.trackIdx = m.trackIdx;
   const slots = m.roster.map((s, i) => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team, local: i === m.you }));
-  active = true; buffer = []; newest = { tk: 0, at: now() }; presses = { item: 0, power: 0 }; lastSent = 0; lastKey = '';
+  active = true; buffer = []; newest = { tk: 0, at: now() }; presses = { item: 0, power: 0 }; lastSent = 0; lastKey = ''; drawn = false;
   lastResults = null; hazards = new Map(); projectiles = new Map();
   G.netSlot = m.you; G.netRoster = m.roster;
   startField(slots);          // ends with the transition into 'countdown'
@@ -121,7 +122,10 @@ function sendControls() {
  * stepRace. Before the first snapshot it only holds the grid in place.
  */
 export function netStep(dt) {
-  sendControls();
+  // The server's clock waits for our first controls (DEC-020), so they wait
+  // for our first frame to be drawn: that draw compiles the scene's shaders,
+  // which can take seconds, and it comes after this step.
+  if (drawn) sendControls(); else drawn = true;
   const renderTick = newest.tk + (now() - newest.at) * 60 / 1000 - DELAY_TICKS;
   const br = bracket(buffer, renderTick);
   if (br) {

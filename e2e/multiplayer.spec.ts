@@ -68,11 +68,18 @@ test.describe('Multijoueur', () => {
     await host.locator('#b-mp-track-1').click();
     await host.locator('#b-mp-start').click();
 
-    // Both screens go to the same race: the HUD, then the green light.
-    for (const p of [host, guest]) {
-      await expect(p.locator('#hud')).toBeVisible();
-      await expect(p.locator('#h-center')).toHaveText('PARTEZ !', { timeout: 10_000 });
-    }
+    // Both screens go to the same race: the HUD, then the green light. The
+    // light shows for 0.9 s of race time only, so both screens are watched at
+    // once and every 50 ms: checked one after the other, with the default
+    // polling that backs off to a second, it slipped between two looks.
+    await Promise.all(
+      [host, guest].map(async (p) => {
+        await expect(p.locator('#hud')).toBeVisible();
+        await expect
+          .poll(() => p.locator('#h-center').textContent(), { intervals: [50], timeout: 10_000 })
+          .toBe('PARTEZ !');
+      }),
+    );
 
     // The host accelerates; the guest's controls stay idle. Speeds come from the server.
     await host.keyboard.down('ArrowUp');
