@@ -14,6 +14,8 @@
 //   createUser({ name, hash })     -> user, or null if the name is taken
 //   user(id) / userByName(name)    -> user or null (names compare case-blind)
 //   addXp(id, xp)                  -> the updated user
+//   setHash(id, hash)              -> the updated user, or null; also closes
+//                                     every session of that user
 //   createSession(userId)          -> a new random token
 //   sessionUser(token)             -> user or null (sessions last 60 days)
 //   dropSession(token)
@@ -70,6 +72,11 @@ export function openFileStore(file) {
     async user(id) { const u = data.users[id]; return u ? { ...u } : null; },
     async userByName(name) { const u = byKey(nameKey(name)); return u ? { ...u } : null; },
     async addXp(id, xp) { const u = data.users[id]; if (!u) return null; u.xp += Math.max(0, Math.floor(xp)); save(); return { ...u }; },
+    async setHash(id, hash) {
+      const u = data.users[id]; if (!u) return null;
+      for (const [t, sess] of Object.entries(data.sessions)) if (sess.userId === id) delete data.sessions[t];
+      u.hash = hash; save(); return { ...u };
+    },
     async createSession(userId) { const t = newToken(); data.sessions[t] = { userId, at: Date.now() }; save(); return t; },
     async sessionUser(token) {
       const s = typeof token === 'string' ? data.sessions[token] : null;
@@ -138,6 +145,12 @@ export async function openPgStore(databaseUrl, { Pool } = {}) {
     user: id => one('select * from kr_users where id = $1', [id]),
     userByName: name => one('select * from kr_users where name_key = $1', [nameKey(name)]),
     addXp: (id, xp) => one('update kr_users set xp = xp + $2 where id = $1 returning *', [id, Math.max(0, Math.floor(xp))]),
+    async setHash(id, hash) {
+      // Sessions first: if the update then fails, the next boot retries both,
+      // and no session opened under the old password survives a reset.
+      await q('delete from kr_sessions where user_id = $1', [id]);
+      return one('update kr_users set hash = $2 where id = $1 returning *', [id, hash]);
+    },
     async createSession(userId) { const t = newToken(); await q('insert into kr_sessions (token, user_id, created) values ($1, $2, $3)', [t, userId, Date.now()]); return t; },
     async sessionUser(token) {
       if (typeof token !== 'string') return null;

@@ -31,7 +31,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 
 import { WebSocketServer } from 'ws';
 
-import { levelFromXp, profileOf, xpForRace } from '../../game/src/engine/progress.js';
+import { levelFromXp, xpForRace } from '../../game/src/engine/progress.js';
 import { accountApi } from './accounts.js';
 import { newCode, Room } from './lobby.js';
 import { openFileStore } from './store.js';
@@ -50,16 +50,18 @@ export const PROTOCOL = 1;
  * `send(playerId, msg)`, `broadcast(msg)` and `done(results)`. `store` keeps
  * the accounts (store.js); without one they live in memory. `loginTries`
  * caps sign-ups and failed logins per address and minute (tests raise it).
+ * `admin` is `{ user, hash }` (admin.js): run ensureAdmin() on the store
+ * first; that name is reserved even without a hash.
  * Resolves to `{ port, close() }` once listening.
  */
-export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, store = openFileStore(null), loginTries }) {
+export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, store = openFileStore(null), loginTries, admin }) {
   const root = resolve(staticDir);
   const rooms = new Map();          // code -> Room
   const races = new Map();          // code -> race handle
   const conns = new Map();          // id -> { ws, id, name, code, user }
   const online = new Map();         // user id -> Set of connections
 
-  const api = accountApi(store, { onProfile: user => updateProfile(user, 0), tries: loginTries });
+  const api = accountApi(store, { onProfile: user => updateProfile(user, 0), tries: loginTries, admin });
 
   const http = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
@@ -126,7 +128,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
 
   /** An account's experience changed: tell its connections, and let it drive what it unlocked. */
   function updateProfile(user, gained) {
-    const profile = profileOf(user);
+    const profile = api.profile(user);
     for (const c of online.get(user.id) ?? []) {
       c.user = user; send(c.id, { t: 'profile', profile, gained });
       const room = c.code && rooms.get(c.code); if (room) { room.setLevel(c.id, profile.level); showRoom(room); }
@@ -184,7 +186,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
       const user = typeof m.token === 'string' && m.token ? await store.sessionUser(m.token) : null;
       if (!user) c.name = typeof m.name === 'string' ? m.name : c.name;
       await setUser(c, user);
-      send(c.id, { t: 'welcome', id: c.id, protocol: PROTOCOL, profile: user ? profileOf(user) : null });
+      send(c.id, { t: 'welcome', id: c.id, protocol: PROTOCOL, profile: user ? api.profile(user) : null });
     },
     create: c => {
       if (!c.user) return fail(c.id, 'Connectez-vous pour créer une salle. Les invité·es peuvent en rejoindre une.');

@@ -51,8 +51,13 @@ export function xpForRace({ rank, field = 6, finished = true, teamWon = false })
   return place + (teamWon ? 20 : 0);
 }
 
-/** The public view of an account: name, experience, level and unlocks. */
-export function profileOf(user) {
+/**
+ * The public view of an account: name, experience, level and unlocks, plus
+ * `admin: true` when the server says it is the administrator (the key is
+ * absent for everyone else).
+ */
+export function profileOf(user, { admin = false } = {}) {
   const { level, xpInto, xpNext } = levelFromXp(user.xp);
-  return { id: user.id, name: user.name, xp: user.xp, level, xpInto, xpNext, unlocked: unlockedIds(level) };
+  const view = { id: user.id, name: user.name, xp: user.xp, level, xpInto, xpNext, unlocked: unlockedIds(level) };
+  return admin === true ? { ...view, admin: true } : view;
 }

@@ -6,9 +6,17 @@
 //   DATABASE_URL  keep accounts in this Postgres database (store.js)
 //   KR_DATA    otherwise, keep them in this JSON file (default ../data/kr-accounts.json);
 //              ':memory:' keeps them in memory only (the end-to-end suite)
+//   KR_ADMIN_USER           the administrator's account name (default rida),
+//                           reserved: nobody else can sign up under it
+//   KR_ADMIN_PASSWORD_HASH  its password hash (admin.js); unset or malformed,
+//                           nobody is admin
+//
+// `npm start` also reads the repository's .env file when there is one
+// (.env.example lists the keys); variables already set win over it.
 import { networkInterfaces } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
+import { adminConfig, ensureAdmin } from './admin.js';
 import { runRace } from './race.js';
 import { startServer } from './server.js';
 import { openStore } from './store.js';
@@ -21,7 +29,11 @@ const store = await openStore({
   databaseUrl: process.env.DATABASE_URL || '',
   file: process.env.KR_DATA === ':memory:' ? null : process.env.KR_DATA || fileURLToPath(new URL('../data/kr-accounts.json', import.meta.url)),
 });
-const srv = await startServer({ port, host, staticDir, runRace, store });
+// Never log the hash itself: only whether admin is on, and why not.
+const admin = adminConfig({ user: process.env.KR_ADMIN_USER, hash: process.env.KR_ADMIN_PASSWORD_HASH });
+console.log(admin.enabled ? `admin: enabled for the account "${admin.user}"` : `admin: disabled (${admin.reason}); the name "${admin.user}" stays reserved`);
+await ensureAdmin(store, admin);
+const srv = await startServer({ port, host, staticDir, runRace, store, admin });
 
 const lan = Object.values(networkInterfaces()).flat().filter(a => a && a.family === 'IPv4' && !a.internal).map(a => a.address);
 console.log(`Kart République -- serveur de course en équipe sur le port ${srv.port}`);

@@ -66,6 +66,59 @@ describe.each(backends)('%s store', (_kind, open) => {
     expect((await store.links(a.id)).map(l => l.name)).toEqual(['FC']);
     expect(await store.links(b.id)).toEqual([]);
   });
+
+  it('replaces a password hash and closes only that user’s sessions', async () => {
+    const a = await store.createUser({ name: 'HashA', hash: 'old' }), b = await store.createUser({ name: 'HashB', hash: 'other' });
+    const ta1 = await store.createSession(a.id), ta2 = await store.createSession(a.id), tb = await store.createSession(b.id);
+    expect(await store.setHash(a.id, 'new')).toMatchObject({ id: a.id, name: 'HashA', hash: 'new' });
+    expect((await store.userByName('hasha')).hash).toBe('new');
+    expect(await store.sessionUser(ta1)).toBeNull();
+    expect(await store.sessionUser(ta2)).toBeNull();
+    expect((await store.sessionUser(tb)).hash).toBe('other');
+    expect(await store.setHash('nobody', 'x')).toBeNull();
+  });
+});
+
+describe('setHash on the memory store', () => {
+  it('replaces the hash and closes the sessions', async () => {
+    const store = openFileStore(null);
+    expect(store.kind).toBe('memory');
+    const u = await store.createUser({ name: 'Mem', hash: 'old' }); const t = await store.createSession(u.id);
+    expect((await store.setHash(u.id, 'new')).hash).toBe('new');
+    expect((await store.user(u.id)).hash).toBe('new');
+    expect(await store.sessionUser(t)).toBeNull();
+    expect(await store.setHash('nobody', 'x')).toBeNull();
+  });
+});
+
+describe('setHash on Postgres (a fake Pool)', () => {
+  /** Records every query; answers the update with `rows`. */
+  function fakePool(rows) {
+    const calls = [];
+    class Pool {
+      async query(text, values) { calls.push([text, values]); return /^update kr_users set hash/.test(text) ? { rows, rowCount: rows.length } : { rows: [], rowCount: 0 }; }
+      async end() {}
+    }
+    return { Pool, calls };
+  }
+
+  it('closes the sessions first, then updates the hash, and maps the row', async () => {
+    const { Pool, calls } = fakePool([{ id: 'u1', name: 'Pg', hash: 'new', xp: '12', created: '5' }]);
+    const store = await openPgStore('postgres://fake', { Pool });
+    calls.length = 0;                                  // drop the schema query
+    expect(await store.setHash('u1', 'new')).toEqual({ id: 'u1', name: 'Pg', hash: 'new', xp: 12, created: 5 });
+    expect(calls).toHaveLength(2);
+    expect(calls[0][0]).toMatch(/^delete from kr_sessions where user_id = \$1$/);
+    expect(calls[0][1]).toEqual(['u1']);
+    expect(calls[1][0]).toMatch(/^update kr_users set hash = \$2 where id = \$1 returning \*$/);
+    expect(calls[1][1]).toEqual(['u1', 'new']);
+  });
+
+  it('answers null for an unknown user', async () => {
+    const { Pool } = fakePool([]);
+    const store = await openPgStore('postgres://fake', { Pool });
+    expect(await store.setHash('nobody', 'x')).toBeNull();
+  });
 });
 
 describe('the file store on disk', () => {

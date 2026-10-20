@@ -34,8 +34,10 @@ Current state only. History lives in git.
 - **Stage 3 committed** (Garage, ChoiceGroup, DEC-024): e2e 44/44.
 - **Standing instruction (DEC-025):** run stages 4-9 without stopping, then
   push and merge into main.
-- **Current stage:** 4 (reserved, seeded admin on main's accounts, Opus).
-  **Next action:** brief the agent.
+- **Stage 4 committed** (seeded admin, DEC-026): server 52, e2e 41/41.
+- **Current stage:** 5 (cast roster in main's store, Opus). **Next
+  action:** brief the agent; reuse `requireAdmin` and port `validateRoster`
+  from `0d53d50`.
 
 ## Previous task (on main's history)
 

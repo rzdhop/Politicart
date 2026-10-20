@@ -532,3 +532,43 @@ be green; two fix attempts are allowed, then roll back and stop to report.
 **Consequence.** No per-stage checkpoints with the human. The human is
 asked again only for something they alone can do (Render secrets), or if a
 stage cannot be made green.
+
+## DEC-026 -- The admin is a reserved account on main's accounts, seeded from the environment
+
+**Context.** The human wants one admin, "rida", who alone edits the cast.
+Main has player accounts (Bearer tokens, CORS `*`, a JSON or Postgres
+store, DEC-019) and no notion of roles. The human chose a reserved,
+env-seeded account over "whoever registers rida first" (2026-10-20). This
+supersedes `feat/multiplayer`'s cookie admin.
+
+**Decision.** `apps/server/src/admin.js`:
+- **Configuration.** `KR_ADMIN_USER` (default `rida`) and
+  `KR_ADMIN_PASSWORD_HASH` in main's own format
+  (`scrypt$<32 hex>$<128 hex>`), produced by
+  `npm run -s admin-hash -w @kart-republique/server` from a password read on
+  stdin.
+- **Reserved name.** The name is reserved from sign-up, whether or not a hash
+  is set. The check is accent-, case- and width-blind.
+- **Seeding.** At boot `ensureAdmin` creates the account, or resets its hash
+  with `setHash` (both backends), which also closes its sessions. The
+  environment is always the truth.
+- **Who is admin.** A user is admin only if admin is enabled, the name key
+  matches and the stored hash equals the configured one. The profile carries
+  `admin: true` only then, through one helper used by HTTP and WebSocket.
+- **Guard.** `requireAdmin(req)` guards admin routes.
+- **Login limit.** Failed logins are also limited per account (10 per 15 min,
+  checked before scrypt), because main's per-IP limiter keys on the
+  client-controlled `X-Forwarded-For`.
+
+**Consequence.**
+- The admin logs in through the normal Compte screen, from the server page or
+  the Pages build.
+- Anyone who knows the name can lock that account for 15 minutes with 10 bad
+  tries. This is accepted; a long random password keeps guessing out of
+  reach.
+- Without the hash the Workshop is simply off.
+- Known gaps, reported and not changed:
+  - main's per-IP limiter still trusts `X-Forwarded-For`;
+  - guests on the WebSocket may still call themselves "rida", but never get a
+    profile or the flag;
+  - lookalike names from other alphabets are not refused.

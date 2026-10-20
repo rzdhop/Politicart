@@ -44,7 +44,7 @@ export interface NetView {
   friends: Friend[]; invite: Invite | null; notice: string | null;
 }
 /** An account as the server describes it (engine/progress.js profileOf). */
-export interface Profile { id: string; name: string; xp: number; level: number; xpInto: number; xpNext: number; unlocked: string[] }
+export interface Profile { id: string; name: string; xp: number; level: number; xpInto: number; xpNext: number; unlocked: string[]; admin?: true }
 /** What the account API answers (engine/account.js). */
 type AuthReply = { ok: boolean; status: number; error?: string; token?: string; profile?: Profile; gained?: number };
 
