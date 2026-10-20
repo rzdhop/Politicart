@@ -199,13 +199,25 @@ test.describe('R-02 live HUD', () => {
     // Drift needs a turn held with the drift key.
     await page.keyboard.down('ArrowLeft');
     await page.keyboard.down('Space');
-    await page.waitForTimeout(1200);
+    // Watched throughout the drift rather than read once at its end. The
+    // player starts in the left lane of a straight, and a held drift swings
+    // the kart into the left wall about 0.5 s of game time in; a steep enough
+    // hit cancels the drift and empties the gauge, as it should. A single
+    // read after 1.2 s therefore sampled whatever was left after that hit,
+    // and passed or failed on the impact angle. Game time never runs ahead of
+    // the wall clock (each frame's step is capped at 50 ms), so polling every
+    // 50 ms cannot step over a drift that lasts half a second.
     // #h-drift is the fill element itself, not a wrapper.
-    const width = await page.locator('#h-drift').evaluate((el) => el.style.width);
+    await expect
+      .poll(() => page.locator('#h-drift').evaluate((el) => el.style.width), {
+        message: 'drift gauge stayed empty while drifting',
+        intervals: [50],
+        timeout: 1200,
+      })
+      .not.toBe('0%');
     await page.keyboard.up('Space');
     await page.keyboard.up('ArrowLeft');
     await page.keyboard.up('ArrowUp');
-    expect(width, 'drift gauge stayed empty while drifting').not.toBe('0%');
   });
 });
 

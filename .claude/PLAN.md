@@ -57,7 +57,7 @@ Fixed by the human on 2026-10-19 and 2026-10-20:
 - **Goal:** cut the branch and record the starting point.
   - Create the branch from `origin/main`.
   - Port the artifacts. Main already uses DEC-015..019 and A-012..015, so
-    new ids continue from there. DEC-020 (this approach) and DEC-021
+    new ids continue from there. DEC-021 (this approach) and DEC-022
     (E2E after every stage) are written now. The ported decisions take the
     next ids as their stages land: pun names (stage 1), ChoiceGroup and
     safe centring (stage 3), reserved admin (stage 4). Assumptions become
@@ -102,7 +102,7 @@ Fixed by the human on 2026-10-19 and 2026-10-20:
     rules.
   - The SelectScreen button.
   - `packages/ui`: ChoiceGroup and the `.screen` safe-centring fix
-    (DEC-021, DEC-023).
+    (new decision ids as the stage lands).
   - `App.test.tsx` and `e2e/garage.spec.ts`. Main has 16 candidates, and
     the Garage on a locked candidate is not reachable.
 - **Risk:** medium (machine; phone layout).

@@ -409,7 +409,32 @@ plays as a guest. A logged-in player keeps a socket open from the title
 screen so friends see them online and invitations arrive in any menu.
 Experience from a solo race is trusted, in line with "not serious for now".
 
-## DEC-020 -- The cast admin, the Garage and the pun names reach main by porting, stage by stage
+## DEC-020 -- A team race's clock waits for every driver to load, 10 s at most
+
+**Context.** A client builds the whole circuit before its first frame. On the
+larger circuits (DEC-016) that took 4-8 s in the end-to-end browsers, longer
+than the 3.6 s countdown, which the server ran on regardless: a slow client
+came back to a race already started and never saw the countdown or the green
+light. Players on phones or weak laptops would be left on the line the same
+way. This made `e2e/multiplayer.spec.ts` fail on main.
+
+**Decision.** The race worker does not step (and so sends no snapshot) until
+every human slot has sent its first controls. A client sends controls only
+from its second frame of the race (netrace.js): the first frame's draw is
+where the shaders compile, and it comes after the step that would send, so
+the first input means the scene is built and drawn. A driver who leaves
+stops counting. The wait is capped (`hold`, 10 s by default) so a client that never
+loads cannot stall the room. Fast mode (tests) and an all-AI grid start at
+once. Until the first snapshot, a client holds the grid in place, showing "3".
+
+Rejected: a separate "loaded" message (the first input already says it, with
+no protocol change); a longer countdown (still a guess about the slowest
+device, and a longer wait for everyone).
+
+**Consequence.** On a slow machine every driver sees the full countdown; the
+start can be up to 10 s later for the others while they wait. The spec keeps
+its default graphics.
+## DEC-021 -- The cast admin, the Garage and the pun names reach main by porting, stage by stage
 
 **Context.** That work was built on `feat/multiplayer` (10 commits, tip
 `4ee4673`) while `main` moved on by 11 commits. Those include player
@@ -433,7 +458,7 @@ screen and PasswordInput are dropped. The other decisions from that branch
 are re-recorded under new ids as their stages land. Its action-log lines
 were ported verbatim, so their DEC numbers refer to that branch.
 
-## DEC-021 -- The E2E suite runs after every stage without asking
+## DEC-022 -- The E2E suite runs after every stage without asking
 
 **Context.** The working agreement (Tier 2) says to ask the human before
 each E2E run. On 2026-10-20, approving the integration plan, the human said:
@@ -448,7 +473,7 @@ skipped. The instruction is durable for this task; a later task asks again
 unless the human extends it.
 
 
-## DEC-022 -- The cast parodies real politicians through pun names
+## DEC-023 -- The cast parodies real politicians through pun names
 
 **Context.** VISION described the cast as "fictional, never real named
 figures". The human asked for every candidate to be renamed with a pun on a

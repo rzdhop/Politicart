@@ -13,6 +13,12 @@ function harness() {
   return { room, roster: room.roster(), sent, io, finished };
 }
 
+/** Resolve once `ok()` holds, checking every 50 ms; reject after 10 s. */
+async function until(ok) {
+  for (let t = 0; t < 10_000; t += 50) { if (ok()) return; await new Promise(r => setTimeout(r, 50)); }
+  throw new Error('condition not met within 10 s');
+}
+
 describe('a race in a worker', () => {
   it('tells each player their slot, streams snapshots, and drives their kart from their input', async () => {
     const { room, roster, sent, io } = harness();
@@ -22,6 +28,7 @@ describe('a race in a worker', () => {
       expect(starts.map(([id, m]) => [id, m.you])).toEqual([['alice', 4], ['bob', 5]]);
       expect(starts[0][1].roster).toHaveLength(6);
       race.input('alice', { c: { throttle: true } });
+      race.input('bob', { c: {} });                      // idle controls, as a client sends from its first frame
       await new Promise(r => setTimeout(r, 5000));      // 3.6 s countdown, then about a second of racing
       const snaps = sent.filter(([id, m]) => id === 'alice' && m.t === 'snap').map(([, m]) => m);
       expect(snaps.length).toBeGreaterThan(60);           // ~20 Hz for 5 s
@@ -29,8 +36,30 @@ describe('a race in a worker', () => {
       expect(last.st).toBe('race');
       expect(last.k).toHaveLength(6);
       expect(last.k[4].s).toBeGreaterThan(5);           // alice accelerates
-      expect(Math.abs(last.k[5].s)).toBeLessThan(1);    // bob sent nothing
+      expect(Math.abs(last.k[5].s)).toBeLessThan(1);    // bob never touched the throttle
       expect(snaps.some(m => m.fx.includes('go'))).toBe(true);
+    } finally { race.stop(); }
+  }, 15_000);
+
+  it('holds the clock until every driver has loaded', async () => {
+    const { room, roster, sent, io } = harness();
+    const race = runRace(room, roster, io, { fast: false, hold: 60_000 });
+    const snaps = () => sent.filter(([id, m]) => id === 'alice' && m.t === 'snap');
+    try {
+      race.input('alice', { c: {} });                    // alice is up, bob is still building the circuit
+      await new Promise(r => setTimeout(r, 2500));
+      expect(snaps()).toHaveLength(0);                   // no tick, so no snapshot
+      race.input('bob', { c: {} });
+      await until(() => snaps().length > 20);            // about a second of countdown
+      expect(snaps().at(-1)[1].s.st).toBe('countdown');
+    } finally { race.stop(); }
+  }, 15_000);
+
+  it('starts anyway once the hold runs out, so a driver who never loads cannot stall the room', async () => {
+    const { room, roster, sent, io } = harness();
+    const race = runRace(room, roster, io, { fast: false, hold: 1000 });
+    try {
+      await until(() => sent.some(([, m]) => m.t === 'snap'));   // nobody ever reported
     } finally { race.stop(); }
   }, 15_000);
 

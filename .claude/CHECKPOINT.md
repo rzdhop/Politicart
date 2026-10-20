@@ -6,13 +6,13 @@ Current state only. History lives in git.
 
 - **Request:** the work from `feat/multiplayer` (admin account "rida",
   kart personalisation, pun names) should be pushed, merged and deployed.
-  It is being reworked onto main (DEC-020); plan in `.claude/PLAN.md`,
+  It is being reworked onto main (DEC-021); plan in `.claude/PLAN.md`,
   stages 0-9.
 - **Branch:** `feat/cast-admin-garage`, cut from `origin/main` at
   `2b14388`, with no upstream (a push will set its own). Reference
   implementation: `feat/multiplayer` at `4ee4673` (not merged).
 - **Standing instruction:** the E2E suite runs after every stage, without
-  asking (DEC-021).
+  asking (DEC-022).
 - **Checkpoint:** `origin/main` `2b14388`. The stage 0 commit records it.
 - **Tier-1 baseline at `2b14388` (2026-10-20):** typecheck clean; ui 235 +
   8 skipped, game 138, server 30; `npm audit --omit=dev` 0.
@@ -20,7 +20,7 @@ Current state only. History lives in git.
   R-02 "fills the drift gauge while drifting" failed 2 of 4 runs ("drift
   gauge stayed empty"), with no change of mine applied. When a stage's run
   fails on that spec alone, it is rerun before being judged.
-- **Stage 1 committed** (pun names, DEC-022): Tier 1 green (game 142),
+- **Stage 1 committed** (pun names, DEC-023): Tier 1 green (game 142),
   e2e 37/37.
 - **Stage 2 committed** (kart style): Tier 1 green (game 188), e2e 36/37.
 - **Main's own E2E failure:** `multiplayer.spec.ts` "an account hosts..."

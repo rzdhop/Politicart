@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { BASE, CHARACTERS } from './data.js';
 
-// The pun-name cast (DEC-022). Ids are keys in saved data, in the e2e
+// The pun-name cast (DEC-023). Ids are keys in saved data, in the e2e
 // selectors, in the server's CHAR_IDS and in the unlock order, so they must
 // never follow a rename.
 const CAST = [
