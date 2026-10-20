@@ -10,14 +10,14 @@ import { Worker } from 'node:worker_threads';
 
 const WORKER = new URL('./race-worker.js', import.meta.url);
 
-export function runRace(room, roster, io, { fast = false } = {}) {
+export function runRace(room, roster, io, { fast = false, hold } = {}) {
   const slotOf = new Map();
   roster.forEach((s, slot) => { if (s.playerId) slotOf.set(s.playerId, slot); });
   const grid = roster.map(({ charId, team, isAI, name }) => ({ charId, team, isAI, name }));
 
   for (const [playerId, slot] of slotOf) io.send(playerId, { t: 'race', trackIdx: room.trackIdx, roster: grid, you: slot });
 
-  const worker = new Worker(WORKER, { workerData: { trackIdx: room.trackIdx, roster: grid, fast } });
+  const worker = new Worker(WORKER, { workerData: { trackIdx: room.trackIdx, roster: grid, fast, hold } });
   let over = false;
   worker.on('message', m => {
     if (m.t === 'snap') {

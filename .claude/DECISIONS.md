@@ -408,3 +408,29 @@ SQLite (a native module in the container, and no help on Render).
 plays as a guest. A logged-in player keeps a socket open from the title
 screen so friends see them online and invitations arrive in any menu.
 Experience from a solo race is trusted, in line with "not serious for now".
+
+## DEC-020 -- A team race's clock waits for every driver to load, 10 s at most
+
+**Context.** A client builds the whole circuit before its first frame. On the
+larger circuits (DEC-016) that took 4-8 s in the end-to-end browsers, longer
+than the 3.6 s countdown, which the server ran on regardless: a slow client
+came back to a race already started and never saw the countdown or the green
+light. Players on phones or weak laptops would be left on the line the same
+way. This made `e2e/multiplayer.spec.ts` fail on main.
+
+**Decision.** The race worker does not step (and so sends no snapshot) until
+every human slot has sent its first controls. A client sends controls only
+from its second frame of the race (netrace.js): the first frame's draw is
+where the shaders compile, and it comes after the step that would send, so
+the first input means the scene is built and drawn. A driver who leaves
+stops counting. The wait is capped (`hold`, 10 s by default) so a client that never
+loads cannot stall the room. Fast mode (tests) and an all-AI grid start at
+once. Until the first snapshot, a client holds the grid in place, showing "3".
+
+Rejected: a separate "loaded" message (the first input already says it, with
+no protocol change); a longer countdown (still a guess about the slowest
+device, and a longer wait for everyone).
+
+**Consequence.** On a slow machine every driver sees the full countdown; the
+start can be up to 10 s later for the others while they wait. The spec keeps
+its default graphics.
