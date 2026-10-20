@@ -14,7 +14,8 @@ import { useSyncExternalStore } from 'react';
 
 import * as account from '../engine/account.js';
 import { initAudio, isMuted, toggleMute as toggleAudioMute } from '../engine/audio.js';
-import { applyCustom, resetCustom, saveCustom } from '../engine/custom.js';
+import { beginDraft, clearDraft, getDraft, setRoster } from '../engine/custom.js';
+import { getGarage, resetGarage, setGarage } from '../engine/garage.js';
 import { getState, onTransition, transition } from '../engine/machine.js';
 import * as net from '../engine/net.js';
 import { isNetRace, onNetResults, pressItem, pressPower } from '../engine/netrace.js';
@@ -26,7 +27,7 @@ import { STARTERS } from '../engine/progress.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
 
-export type GameState = 'title' | 'select' | 'tracks' | 'admin' | 'countdown' | 'race' | 'paused' | 'results' | 'lobby' | 'account';
+export type GameState = 'title' | 'select' | 'tracks' | 'admin' | 'countdown' | 'race' | 'paused' | 'results' | 'lobby' | 'account' | 'garage';
 export type TeamId = 'bleu' | 'rouge';
 
 /** One player in a team-race room, as the game server describes it. */
@@ -43,13 +44,15 @@ export interface NetView {
   friends: Friend[]; invite: Invite | null; notice: string | null;
 }
 /** An account as the server describes it (engine/progress.js profileOf). */
-export interface Profile { id: string; name: string; xp: number; level: number; xpInto: number; xpNext: number; unlocked: string[] }
+export interface Profile { id: string; name: string; xp: number; level: number; xpInto: number; xpNext: number; unlocked: string[]; admin?: true }
 /** What the account API answers (engine/account.js). */
 type AuthReply = { ok: boolean; status: number; error?: string; token?: string; profile?: Profile; gained?: number };
 
 /** What the last race earned, for the results screen. */
 export interface Gain { gained: number; level: number; levelUp: boolean; unlockedNow: string[] }
-export type AdminStatus = 'idle' | 'saved' | 'full';
+export type AdminStatus = 'idle' | 'saved';
+/** What the roster API answers (engine/account.js fetchRoster / saveRoster). */
+type RosterReply = { ok: boolean; status: number; error?: string; field?: string; roster?: unknown };
 
 export interface UiSnapshot {
   state: GameState;
@@ -59,12 +62,18 @@ export interface UiSnapshot {
   thumbs: Record<string, string>;
   poly: 'high' | 'low';
   muted: boolean;
-  /** What the title screen's workshop button says after a save attempt. */
+  /** What the title screen's workshop button says after a save. */
   adminStatus: AdminStatus;
+  /** The Workshop's save is on its way to the server. */
+  adminBusy: boolean;
+  /** Why the server refused the last save, shown in the Workshop. */
+  adminError: string | null;
   /** Bumped whenever the workshop form must re-read the characters (open, reset). */
   formVersion: number;
   /** Bumped whenever the campaign posters change. */
   adsVersion: number;
+  /** Bumped whenever the player's Garage edits change, so the form re-reads them. */
+  garageVersion: number;
   /** The "play on a computer" note: shown until the first race starts, then never again. */
   noteHidden: boolean;
   /** Whether the page was served by the game server, so team races are possible. */
@@ -96,6 +105,11 @@ function saveName(name: string) { try { localStorage.setItem('kr-net', JSON.stri
 function loadToken(): string | null { try { return JSON.parse(localStorage.getItem('kr-account') || '{}').token || null; } catch { return null; } }
 function saveToken(token: string | null) { try { if (token) localStorage.setItem('kr-account', JSON.stringify({ token })); else localStorage.removeItem('kr-account'); } catch { /* blocked: the session lasts for this page only */ } }
 
+/** Whether this session is the administrator's: only then is the Workshop offered (the server checks again on save). */
+export function isAdmin(ui: Pick<UiSnapshot, 'account'>): boolean {
+  return ui.account?.profile?.admin === true;
+}
+
 /** The candidate ids this player may drive: the account's unlocks, or the starters for a guest. */
 export function unlockedOf(ui: Pick<UiSnapshot, 'account'>): string[] {
   return ui.account ? ui.account.profile.unlocked : [...STARTERS];
@@ -109,8 +123,11 @@ let snapshot: UiSnapshot = {
   poly: getPoly() as 'high' | 'low',
   muted: isMuted(),
   adminStatus: 'idle',
+  adminBusy: false,
+  adminError: null,
   formVersion: 0,
   adsVersion: 0,
+  garageVersion: 0,
   noteHidden: false,
   netAvailable: false,
   net: net.getNet() as NetView,
@@ -172,8 +189,9 @@ function takeProfile(profile: Profile, gained: number) {
 // The server says who this connection is: a fresh profile, or nobody (the session expired).
 net.onProfile((profile: Profile | null, gained: number) => {
   if (!snapshot.account) return;
-  if (!profile) { saveToken(null); set({ account: null }); keepCharUnlocked(); return; }
+  if (!profile) { saveToken(null); set({ account: null }); keepCharUnlocked(); leaveWorkshopUnlessAdmin(); return; }
   takeProfile(profile, gained);
+  leaveWorkshopUnlessAdmin();
 });
 
 function reportSoloRace() {
@@ -204,6 +222,49 @@ const socketUrl = () => net.serverUrl(window.location, remoteServer);
 
 function refreshPreview() {
   if (hasPreview()) setPreview(G.charIdx);
+}
+
+/**
+ * Put the server's roster in force, then redraw what shows the cast: the
+ * roster portraits (rendered again if the roster is on screen, else on the
+ * next "Jouer"), the turntable, the Garage, and the Workshop form unless the
+ * admin is in the middle of editing it.
+ */
+function applyRoster(roster: unknown) {
+  setRoster(roster);
+  const patch: Partial<UiSnapshot> = { garageVersion: snapshot.garageVersion + 1 };
+  if (snapshot.state === 'select' || snapshot.state === 'garage') patch.thumbs = makeThumbs() as Record<string, string>;
+  if (snapshot.state !== 'admin') { patch.formVersion = snapshot.formVersion + 1; patch.adsVersion = snapshot.adsVersion + 1; }
+  refreshPreview();
+  set(patch);
+}
+
+/** Ask the game server for the cast every player gets. Unreachable or refused: the cast in force stays. */
+async function refreshRoster() {
+  const r: RosterReply = await account.fetchRoster({ base: remoteServer });
+  if (r.ok) applyRoster(r.roster);
+}
+
+/**
+ * Whether the next "Atelier" goes back to the draft the admin was saving when
+ * the session expired, rather than starting a fresh one from the cast in force.
+ */
+let resumeDraft = false;
+
+/** The Workshop is the admin's alone: once the session is not, it closes. */
+function leaveWorkshopUnlessAdmin() {
+  if (isAdmin(snapshot)) return;
+  if (getState() === 'admin') transition('title');
+  set({ adminStatus: 'idle', adminBusy: false, adminError: null });
+}
+
+/** The server no longer knows this token (a 401): forget it here too, as a logout would, without calling the server. */
+function sessionExpired() {
+  saveToken(null);
+  set({ account: null, lastGain: null, netName: '' });
+  net.disconnect();
+  keepCharUnlocked();
+  leaveWorkshopUnlessAdmin();
 }
 
 export const actions = {
@@ -247,27 +308,69 @@ export const actions = {
     toggleAudioMute();
     set({ muted: isMuted() });
   },
+  /** "Atelier": the Workshop, on a fresh draft of the cast in force. Only for the admin's session. */
   openAdmin() {
-    set({ formVersion: snapshot.formVersion + 1 });
+    if (!isAdmin(snapshot)) return;
+    if (!resumeDraft) beginDraft();
+    resumeDraft = false;
+    set({ formVersion: snapshot.formVersion + 1, adsVersion: snapshot.adsVersion + 1, adminError: null });
     transition('admin');
   },
-  saveAdmin() {
-    applyCustom();
-    const ok = saveCustom();
-    refreshPreview();
-    transition('title');
-    set({ adminStatus: ok ? 'saved' : 'full' });
+  /**
+   * Send the draft to the server with the account's token. Accepted, the
+   * roster the server stored is put in force (then read back, as every new
+   * player will get it) and the Workshop closes. Refused, the Workshop stays
+   * open with the server's reason, naming the field -- except for an expired
+   * session, which is forgotten and sends the admin to Compte, the draft
+   * kept for when they come back.
+   */
+  async saveAdmin() {
+    const acc = snapshot.account;
+    if (snapshot.adminBusy || !acc || !isAdmin(snapshot)) return;
+    set({ adminBusy: true, adminError: null });
+    const r: RosterReply = await account.saveRoster(getDraft(), acc.token, { base: remoteServer });
+    set({ adminBusy: false });
+    if (r.ok) {
+      applyRoster(r.roster);
+      if (getState() === 'admin') transition('title');
+      set({ adminStatus: 'saved' });
+      void refreshRoster();
+      return;
+    }
+    if (r.status === 401) {
+      resumeDraft = true;
+      sessionExpired();
+      if (getState() === 'title') transition('account');
+      set({ accountError: 'Session expirée : reconnectez-vous pour enregistrer l’Atelier.' });
+      return;
+    }
+    const error = r.error ?? 'Enregistrement impossible.';
+    set({ adminError: r.field && !error.includes(r.field) ? r.field + ' : ' + error : error });
   },
+  /** Back to the default cast, in the form only: nothing changes for anyone until it is saved. */
   resetAdmin() {
-    resetCustom();
-    refreshPreview();
-    set({ formVersion: snapshot.formVersion + 1, adsVersion: snapshot.adsVersion + 1 });
+    clearDraft();
+    set({ formVersion: snapshot.formVersion + 1, adsVersion: snapshot.adsVersion + 1, adminError: null });
   },
   adsChanged() {
     set({ adsVersion: snapshot.adsVersion + 1 });
   },
   toTitle() { transition('title'); },
   toSelect() { transition('select'); },
+
+  // ---- Garage: the player's own kart ----
+  openGarage() { transition('garage'); setPreview(G.charIdx); },
+  /** Change one field of the player's kart; an invalid value is ignored. */
+  setGarage(key: string, value: unknown) {
+    if (!setGarage(key, value)) return;
+    setPreview(G.charIdx);
+    set({ garageVersion: snapshot.garageVersion + 1 });
+  },
+  resetGarage() {
+    resetGarage();
+    setPreview(G.charIdx);
+    set({ garageVersion: snapshot.garageVersion + 1 });
+  },
   toTracks() { transition('tracks'); },
   start() {
     initAudio();
@@ -287,19 +390,21 @@ export const actions = {
   // ---- Team races (DEC-014) ----
   /**
    * Ask the game server (this origin, or the remote one) whether it is up;
-   * shows the Multijoueur and account buttons if so, and restores a saved
-   * session.
+   * shows the Multijoueur and account buttons if so, puts the admin's cast
+   * in force, and restores a saved session. Unreachable: the default cast.
    */
-  detectServer() {
-    net.probeServer(globalThis.fetch, remoteServer).then((ok: boolean) => {
-      set({ netAvailable: ok });
-      const token = loadToken();
-      if (!ok || !token) return;
-      account.me(token, { base: remoteServer }).then((r: AuthReply) => {
+  async detectServer() {
+    const ok: boolean = await net.probeServer(globalThis.fetch, remoteServer);
+    set({ netAvailable: ok });
+    if (!ok) return;                                             // the static build: the default cast, no accounts
+    const token = loadToken();
+    await Promise.all([
+      refreshRoster(),
+      token && account.me(token, { base: remoteServer }).then((r: AuthReply) => {
         if (r.ok && r.profile) signedIn(token, r.profile);
         else if (r.status === 401) saveToken(null);               // expired; a network failure keeps it for next time
-      });
-    });
+      }),
+    ]);
   },
   /** "Multijoueur": open the lobby and connect. */
   multiplayer() {
@@ -308,8 +413,8 @@ export const actions = {
     net.connect(socketUrl(), snapshot.netName, snapshot.account?.token ?? null);
   },
   setNetName(name: string) { saveName(name); set({ netName: name }); },
-  createRoom() { if (!snapshot.account) return; net.connect(socketUrl(), snapshot.netName, snapshot.account.token); net.createRoom(); },
-  joinRoom(code: string) { net.connect(socketUrl(), snapshot.netName, snapshot.account?.token ?? null); net.joinRoom(code); },
+  createRoom() { if (!snapshot.account) return; net.connect(socketUrl(), snapshot.netName, snapshot.account.token); net.createRoom(getGarage()); },
+  joinRoom(code: string) { net.connect(socketUrl(), snapshot.netName, snapshot.account?.token ?? null); net.joinRoom(code, getGarage()); },
   setTeam(team: TeamId) { net.setMine({ team }); },
   setChar(charId: string) { net.setMine({ charId }); },
   setReady(ready: boolean) { net.setMine({ ready }); },
@@ -341,9 +446,11 @@ export const actions = {
     const acc = snapshot.account; if (!acc) return;
     account.logout(acc.token, { base: remoteServer });
     saveToken(null);
+    resumeDraft = false;
     set({ account: null, lastGain: null, netName: '' });
     net.disconnect();
     keepCharUnlocked();
+    leaveWorkshopUnlessAdmin();
   },
   addFriend(name: string) { if (name.trim()) net.addFriend(name.trim()); },
   acceptFriend(id: string) { net.acceptFriend(id); },
@@ -359,7 +466,7 @@ export const actions = {
     if (getState() === 'title' || getState() === 'account') transition('lobby');
     if (getState() !== 'lobby') return;
     net.connect(socketUrl(), snapshot.netName, snapshot.account?.token ?? null);
-    net.joinRoom(inv.code);
+    net.joinRoom(inv.code, getGarage());
   },
   dismissInvite() { net.clearInvite(); },
 };

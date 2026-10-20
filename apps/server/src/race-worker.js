@@ -6,7 +6,9 @@
 // each driver's latest controls, and every third tick (20 Hz) posts a
 // snapshot plus, per human slot, the messages and sounds addressed to them.
 //
-// workerData: { trackIdx, roster: [{ charId, team, isAI, name }], fast, hold }
+// workerData: { trackIdx, roster: [{ charId, team, isAI, name }], cast, fast, hold }
+//   cast: [{ id, name, title, quote }], the cast as the main thread has it
+//   (the admin's edits, roster.js); this thread's CHARACTERS start at the defaults.
 //   fast: step as fast as possible instead of in real time (tests only).
 //   hold: how long the clock may wait for the drivers to load, in ms (default 10 s).
 // In:  { t: 'input', slot, c: {throttle,brake,left,right,drift}, item, power }
@@ -26,16 +28,18 @@ import { usePower } from '../../game/src/engine/powers.js';
 import { endRace, raceOver, simStep, startField } from '../../game/src/engine/race.js';
 import { G } from '../../game/src/engine/state.js';
 import { placementPoints, teamStandings } from '../../game/src/engine/teams.js';
+import { applyCast } from './roster.js';
 
 const STEP = 1 / 60;
 const SNAP_EVERY = 3;            // 60 Hz / 3 = 20 snapshots a second
 // A race nobody can finish still ends. KR_MAX_RACE_S shortens it (the end-to-end suite does).
 const MAX_RACE_TIME = Number(process.env.KR_MAX_RACE_S) || 12 * 60;
 
-const { trackIdx, roster, fast, hold = 10_000 } = workerData;
+const { trackIdx, roster, cast = [], fast, hold = 10_000 } = workerData;
 const IDLE = Object.freeze({ throttle: false, brake: false, left: false, right: false, drift: false });
 
 // ---- set the race up
+applyCast(cast, CHARACTERS);
 resetMachine('tracks');
 G.trackIdx = trackIdx;
 startField(roster.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team })));

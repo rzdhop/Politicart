@@ -434,3 +434,177 @@ device, and a longer wait for everyone).
 **Consequence.** On a slow machine every driver sees the full countdown; the
 start can be up to 10 s later for the others while they wait. The spec keeps
 its default graphics.
+## DEC-021 -- The cast admin, the Garage and the pun names reach main by porting, stage by stage
+
+**Context.** That work was built on `feat/multiplayer` (10 commits, tip
+`4ee4673`) while `main` moved on by 11 commits. Those include player
+accounts (Bearer tokens, CORS `*`, a JSON or Postgres store, DEC-019), five
+new candidates, phone controls and a Render deploy. A test merge gave 20
+conflicting files. The branch's cookie-based admin could not work from the
+Pages origin. Its file-only roster would also be wiped by Render's free
+disk.
+
+**Decision.** The human chose to rework the work onto main. A fresh branch,
+`feat/cast-admin-garage`, is cut from `origin/main` (`2b14388`), and each
+feature is ported in its own tested stage (PLAN.md). The admin becomes a
+role on main's accounts: `rida` is a reserved name, seeded at boot from
+`KR_ADMIN_PASSWORD_HASH`, and logs in through the normal Compte screen. The
+cast roster is stored in main's store. The Workshop works wherever the admin
+is logged in, Pages included.
+
+**Consequence.** `feat/multiplayer` stays as the reference implementation and
+is not merged. Its cookie admin (that branch's DEC-017), the separate login
+screen and PasswordInput are dropped. The other decisions from that branch
+are re-recorded under new ids as their stages land. Its action-log lines
+were ported verbatim, so their DEC numbers refer to that branch.
+
+## DEC-022 -- The E2E suite runs after every stage without asking
+
+**Context.** The working agreement (Tier 2) says to ask the human before
+each E2E run. On 2026-10-20, approving the integration plan, the human said:
+"Run the E2E suite after every stage without asking me each time".
+
+**Decision.** For this task, every stage runs the full Playwright suite once
+Tier 1 is green, with no question asked. A failing E2E still blocks the
+stage, exactly as before.
+
+**Consequence.** Stages close faster, and the regression net is never
+skipped. The instruction is durable for this task; a later task asks again
+unless the human extends it.
+
+
+## DEC-023 -- The cast parodies real politicians through pun names
+
+**Context.** VISION described the cast as "fictional, never real named
+figures". The human asked for every candidate to be renamed with a pun on a
+real French politician (Marine Le Pen -> "Marine Le Stylo", Jean-Luc
+Mélenchon -> "Jean-Luc Mélèche"), which overrides that. The first eleven
+were approved on 2026-10-19 (on `feat/multiplayer`, recorded there as
+DEC-015). Main's five newer candidates were approved on 2026-10-20.
+
+**Decision.** All sixteen display names are pun names, matched to the
+politician whose archetype each candidate already plays: Emmanuel Macaron,
+Philippe Martini, Jean Lassalle-des-Fêtes, Sandrine Ruisseau, Gérard
+L'Archiduc, Jean-Luc Mélèche, Marine Le Stylo, Jordan Mortadella, Eva
+Joly-Jumper, José Bovin, Nathalie Artichaut, Bruno Le Maigre, Éric
+Zemmoule, Gérald Darmalin, Michel Bananier and Manuel Valse. Three titles
+change to fit them: lulu, bernadette and martine. Ids never change. The
+title screen and README now say "parody" instead of "fictional": the names
+are one pun from real people, while powers, lines and scandals stay
+invented.
+
+**Consequence.** The parody notice must stay on the title screen. Ids no
+longer resemble names (`victor` is Emmanuel Macaron), which is what keeps
+saved data, the e2e selectors, the server's `CHAR_IDS` and the unlock order
+intact. The packages/ui story fixtures keep the old names (A-019).
+
+## DEC-024 -- Pick-one settings are a library component, ChoiceGroup
+
+**Context.** The Garage needs several "pick one of a few named values"
+settings: wheels, spoiler, side pods and sticker. Drawing the picked option
+as a primary Button broke the library's own rule (one primary per Row), and
+because the Button variants differ in size, the row reflowed on every pick.
+The human chose to add the pattern to the design system (2026-10-19, on
+`feat/multiplayer`).
+
+**Decision.** `ChoiceGroup` belongs to `packages/ui` (Controls): a labelled
+`role=group` of `.chip` buttons with `aria-pressed`. The picked chip fills
+gold, and every state keeps the same size. It ships with a story, unit tests
+and CSS in `controls.css`. The Garage, and the Workshop's kart defaults in
+stage 6, are built from it.
+
+**Consequence.** The next `/design-sync` re-sync uploads it to Claude Design;
+that is not run automatically. That branch's other library change, safe
+centring on `.screen`, is not ported: main's `game.css` already solves the
+same overflow with auto margins.
+
+## DEC-025 -- Run every remaining stage, then push and merge, without stopping between stages
+
+**Context.** On 2026-10-20, during stage 3, the human said: "go with all
+stages, only stop when finished" and then "Push it and merge it".
+
+**Decision.** Stages 3-9 run back to back with no go-ahead between them.
+When they are done, `feat/cast-admin-garage` is pushed and merged into
+`main`, and the push to main triggers the GitHub Pages and Render deploys.
+The working agreement still holds inside each stage: Tier 1 and E2E must
+be green; two fix attempts are allowed, then roll back and stop to report.
+
+**Consequence.** No per-stage checkpoints with the human. The human is
+asked again only for something they alone can do (Render secrets), or if a
+stage cannot be made green.
+
+## DEC-026 -- The admin is a reserved account on main's accounts, seeded from the environment
+
+**Context.** The human wants one admin, "rida", who alone edits the cast.
+Main has player accounts (Bearer tokens, CORS `*`, a JSON or Postgres
+store, DEC-019) and no notion of roles. The human chose a reserved,
+env-seeded account over "whoever registers rida first" (2026-10-20). This
+supersedes `feat/multiplayer`'s cookie admin.
+
+**Decision.** `apps/server/src/admin.js`:
+- **Configuration.** `KR_ADMIN_USER` (default `rida`) and
+  `KR_ADMIN_PASSWORD_HASH` in main's own format
+  (`scrypt$<32 hex>$<128 hex>`), produced by
+  `npm run -s admin-hash -w @kart-republique/server` from a password read on
+  stdin.
+- **Reserved name.** The name is reserved from sign-up, whether or not a hash
+  is set. The check is accent-, case- and width-blind.
+- **Seeding.** At boot `ensureAdmin` creates the account, or resets its hash
+  with `setHash` (both backends), which also closes its sessions. The
+  environment is always the truth.
+- **Who is admin.** A user is admin only if admin is enabled, the name key
+  matches and the stored hash equals the configured one. The profile carries
+  `admin: true` only then, through one helper used by HTTP and WebSocket.
+- **Guard.** `requireAdmin(req)` guards admin routes.
+- **Login limit.** Failed logins are also limited per account (10 per 15 min,
+  checked before scrypt), because main's per-IP limiter keys on the
+  client-controlled `X-Forwarded-For`.
+
+**Consequence.**
+- The admin logs in through the normal Compte screen, from the server page or
+  the Pages build.
+- Anyone who knows the name can lock that account for 15 minutes with 10 bad
+  tries. This is accepted; a long random password keeps guessing out of
+  reach.
+- Without the hash the Workshop is simply off.
+- Known gaps, reported and not changed:
+  - main's per-IP limiter still trusts `X-Forwarded-For`;
+  - guests on the WebSocket may still call themselves "rida", but never get a
+    profile or the flag;
+  - lookalike names from other alphabets are not refused.
+
+## DEC-027 -- The cast roster is a document in main's store, served to every client
+
+**Context.** The admin's cast edits must reach every player: on the game
+server's own page, and on the Pages build, which calls the server across
+origins. They must also survive restarts where a store exists. Main's store
+(DEC-019) is a JSON file or Postgres. On Render's free plan the disk is wiped
+when the service sleeps, so durable storage there means Postgres.
+
+**Decision.**
+- **Storage.** The store gains `getDoc`/`putDoc` for an allowlist of keys
+  (`roster`).
+  - Postgres keeps them in a `kr_docs` table (jsonb).
+  - The file backend writes each doc to its own file, `kr-docs/<key>.json`
+    next to `KR_DATA`, atomically. It does not sit inside the accounts file,
+    because that file is rewritten after every race's XP and the roster can
+    weigh megabytes.
+- **Reading.** `GET /api/roster` is public, uncached and CORS `*`.
+- **Writing.** `PUT /api/admin/roster` checks, in order:
+  - the admin's Bearer session (401 for everyone else, so the route says
+    nothing about who is admin);
+  - a JSON content type;
+  - a 10 MB body;
+  - strict validation, ported from `feat/multiplayer` and covering 16 ids
+    (400 names the field).
+
+  Saves then run one at a time, the server's `CHARACTERS` take the new names,
+  and race workers receive the cast.
+
+**Consequence.**
+- Edits persist wherever accounts persist, and on Render that means a
+  `DATABASE_URL`.
+- The body limit is 10 MB, not the planned 8: the image caps alone add up to
+  8 MB with 16 candidates.
+- No cookie means no CSRF surface. Any page may read the roster, which is
+  public anyway.

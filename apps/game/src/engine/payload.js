@@ -37,6 +37,6 @@ export function framePayload(G, CFG) {
     powerCdMax: k.def.power.cd || CFG.powerCooldown,
     powerReady: k.powerCd <= 0,
     wrongWay: G.wrongTimer >= 1.2,
-    kartPositions: G.karts.map(o => ({ x: o.pos.x, z: o.pos.z, color: o.def.kart, isPlayer: o === k })),
+    kartPositions: G.karts.map(o => ({ x: o.pos.x, z: o.pos.z, color: o.style ? parseInt(o.style.body.slice(1), 16) : o.def.kart, isPlayer: o === k })),
   };
 }

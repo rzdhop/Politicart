@@ -3,13 +3,15 @@
 ## Purpose
 
 **Politicart / Kart Republique** is *Grand Prix de l'Hemicycle* -- a satirical 3D
-kart racer that runs in the browser, starring a cast of fictional French
-politicians. It is a self-contained piece of playable satire: three laps, five AI
-opponents, eleven candidates, three circuits, no cohabitation.
+kart racer that runs in the browser, starring French politicians under pun
+names (Emmanuel Macaron, Marine Le Stylo, Jean-Luc Mélèche...). It is a
+self-contained piece of playable satire: three laps, five AI opponents,
+sixteen candidates, three circuits, no cohabitation.
 
-All characters, parties and scandals are fictional by design. That is a product
-constraint, not a disclaimer: the humour comes from archetypes, never from real
-named figures.
+The cast parodies real figures, one pun away from their names (DEC-023). That
+replaced the earlier "fictional, never real figures" constraint at the human's
+request. Powers, lines and scandals stay invented, and the title screen says
+so: the parody notice is part of the product.
 
 ## Business context
 
@@ -49,3 +51,12 @@ filling the grid, points per finishing place. One small Node server serves
 the game and runs every race on the game's own engine (DEC-014), on a LAN
 today and in a container on a host later. The published GitHub Pages game
 stays the instant single-player experience the showcase is built around.
+
+## The cast, the admin and the Garage
+
+One admin account ("rida") owns the cast on the game server: names, colours,
+liveries, posters and each candidate's default kart. Every player sees it,
+on the server's page and on the Pages build (DEC-026, DEC-027). Every player
+owns their own kart in the Garage -- colours, wheels, spoiler, number,
+sticker. It is kept in their browser and shown to the others in team races.
+

@@ -1,5 +1,16 @@
 import { defineConfig, devices } from '@playwright/test';
 
+import { hashPasswordSync } from './apps/server/src/accounts.js';
+import { ADMIN_PASSWORD, ADMIN_USER } from './e2e/fixtures/admin';
+
+/**
+ * The game server's admin, for e2e/admin.spec.ts: the hash of the test-only
+ * password, computed here at load (never stored in the repo). Playwright loads
+ * this file again in each worker; the env carries the first value over, so
+ * every process agrees on one hash.
+ */
+process.env.KR_E2E_ADMIN_HASH ||= hashPasswordSync(ADMIN_PASSWORD);
+
 /**
  * End-to-end suite for Kart République.
  *
@@ -77,11 +88,22 @@ export default defineConfig({
     },
     {
       // The game server serves the same build plus the team-race WebSocket
-      // (e2e/multiplayer.spec.ts). Races are capped at 15 s here so a spec can
-      // reach the results without three real laps.
+      // (e2e/multiplayer.spec.ts) and the admin's cast (e2e/admin.spec.ts).
+      // Races are capped at 15 s here so a spec can reach the results without
+      // three real laps. Accounts and the roster live in memory; the admin is
+      // the test-only account above. Locally a server already on 4180 is
+      // reused as is: one started without this env has no test admin, so stop
+      // it first.
       command: 'npm start -w @kart-republique/server',
       url: 'http://127.0.0.1:4180/api/kr',
-      env: { PORT: '4180', HOST: '127.0.0.1', KR_MAX_RACE_S: '15', KR_DATA: ':memory:' },
+      env: {
+        PORT: '4180',
+        HOST: '127.0.0.1',
+        KR_MAX_RACE_S: '15',
+        KR_DATA: ':memory:',
+        KR_ADMIN_USER: ADMIN_USER,
+        KR_ADMIN_PASSWORD_HASH: process.env.KR_E2E_ADMIN_HASH,
+      },
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       stdout: 'ignore',

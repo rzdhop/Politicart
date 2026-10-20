@@ -21,6 +21,7 @@ import { updateEngine } from './engine/audio.js';
 import { loadCustom } from './engine/custom.js';
 import { ITEMS } from './engine/data.js';
 import { drain, resolveFor } from './engine/events.js';
+import { loadGarage } from './engine/garage.js';
 import { setInputSource } from './engine/input.js';
 import { getState, onTransition } from './engine/machine.js';
 import { isNetRace, netStep } from './engine/netrace.js';
@@ -36,7 +37,7 @@ import { initTouch, isCoarsePointer, isTouchMode, setTouchMode, touchHeld } from
 
 'use strict';
 /* =====================================================================================
-   KART RÉPUBLIQUE v2 — satirical kart racer with a fictional French political cast.
+   KART RÉPUBLIQUE v2 — satirical kart racer with a pun-name parody French political cast.
    Single-file Three.js game: spline tracks, kart physics with drift/mini-turbo,
    political items + one special power per candidate, AI opponents with rubber-banding,
    procedural textures, shadow mapping, WebAudio sound.
@@ -131,6 +132,7 @@ onTransition((to, from) => {
 // ---------- Screens: mount ----------
 // The workshop's saved edits are applied before anything renders, as before.
 loadCustom();
+loadGarage();
 mountUi($('ui'));
 // Served by the game server (not GitHub Pages)? Then team races are on offer.
 actions.detectServer();
@@ -143,7 +145,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
   const state = getState();
-  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account') { if (state === 'select' || state === 'tracks' || hasPreview()) renderPreview(dt); return; }
+  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'garage') { if (state === 'select' || state === 'tracks' || state === 'garage' || hasPreview()) renderPreview(dt); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
 
   const payload = isNetRace() ? netStep(dt) : stepRace(dt);
@@ -160,4 +162,7 @@ requestAnimationFrame(frame);
 // unreachable: there is no race time cap, so a race ends only when the player
 // completes three laps. The engine's own endRace() is the seam for that. See
 // DEC-009 and the note in e2e/game.spec.ts.
-window.__kr = { endRace };
+// karts() is read-only: which candidate and kart style each grid slot is drawn
+// with, so the team-race spec can check that another player's Garage edits
+// reached this screen (nothing in the DOM shows a kart's style).
+window.__kr = { endRace, karts: () => (G.karts || []).map(k => ({ charId: k.def.id, style: { ...k.style } })) };

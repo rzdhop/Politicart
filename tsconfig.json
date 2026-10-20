@@ -12,6 +12,7 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
+    "allowJs": true,
     "types": ["node"]
   },
   "include": ["e2e/**/*.ts", "playwright.config.ts"]

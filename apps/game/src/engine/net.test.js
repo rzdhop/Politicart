@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { addFriend, clearInvite, connect, disconnect, getNet, inviteFriend, joinRoom, onNet, onProfile, onRace, onSnap, probeServer, sendInput, serverUrl, setTransport } from './net.js';
+import { addFriend, clearInvite, connect, createRoom, disconnect, getNet, inviteFriend, joinRoom, onNet, onProfile, onRace, onSnap, probeServer, sendInput, serverUrl, setTransport } from './net.js';
 
 // A stand-in WebSocket: records what is sent and lets the test play the server.
 class FakeSocket {
@@ -66,6 +66,12 @@ describe('net client', () => {
     expect(s.sent).toEqual([]);
     s.open(); joinRoom('ABCD'); sendInput({ throttle: true }, 1, 0);
     expect(s.sent.slice(1)).toEqual([{ t: 'join', code: 'ABCD' }, { t: 'input', c: { throttle: true }, item: 1, power: 0 }]);
+  });
+
+  it("sends the player's kart style with create and join", () => {
+    connect('ws://x/ws', 'Bob'); const s = FakeSocket.last; s.open();
+    createRoom({ number: 7 }); joinRoom('ABCD', { wheels: 'gold' });
+    expect(s.sent.slice(1)).toEqual([{ t: 'create', style: { number: 7 } }, { t: 'join', code: 'ABCD', style: { wheels: 'gold' } }]);
   });
 
   it('hands race traffic to the race handlers', () => {

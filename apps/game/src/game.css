@@ -58,9 +58,18 @@ html,body{overscroll-behavior:none;}
    packs six to a row on the left, the showcase drops its quote on the
    right, and everything shrinks to fit without a scroll. */
 @media (max-width:760px){
-  #s-select .showcase{min-height:54vh;}
+  #s-select .showcase,#s-garage .showcase{min-height:54vh;}
   /* the roster takes the height it needs and the screen scrolls, instead of squeezing it over the buttons */
   #s-select .select-layout{flex:none;}
+}
+/* The Garage on a phone held sideways: form left, turntable band right. */
+@media (max-height:520px) and (orientation:landscape){
+  #s-garage{padding-block:8px;gap:8px;}
+  #s-garage>h2{font-size:22px!important;}
+  #s-garage .select-layout{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:14px;}
+  #s-garage .showcase{order:0;min-height:0;align-items:flex-start;text-align:left;gap:4px;}
+  #s-garage .showcase .big{font-size:24px;}
+  #s-garage .btn{font-size:16px;padding:8px 16px;}
 }
 @media (max-height:520px) and (orientation:landscape){
   #s-select{padding-block:8px;gap:8px;}

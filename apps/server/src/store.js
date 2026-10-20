@@ -14,6 +14,8 @@
 //   createUser({ name, hash })     -> user, or null if the name is taken
 //   user(id) / userByName(name)    -> user or null (names compare case-blind)
 //   addXp(id, xp)                  -> the updated user
+//   setHash(id, hash)              -> the updated user, or null; also closes
+//                                     every session of that user
 //   createSession(userId)          -> a new random token
 //   sessionUser(token)             -> user or null (sessions last 60 days)
 //   dropSession(token)
@@ -22,19 +24,34 @@
 //   requestFriend(from, to)        -> 'requested' | 'accepted' | 'already'
 //   acceptFriend(me, other)        -> true if a request from `other` was accepted
 //   removeFriend(me, other)        -> drops a friendship or a request, either way
+//   getDoc(key)                    -> a stored JSON document, or null
+//   putDoc(key, value)             -> stores it, replacing the previous one;
+//                                     resolves once it is durable
 //   close()
+//
+// Documents are whole JSON values under a fixed set of keys (DOC_KEYS; any
+// other key throws), for data the server keeps besides accounts: the admin's
+// cast (roster.js). The file store keeps each in its own file next to the
+// accounts file, <dir of KR_DATA>/kr-docs/<key>.json, written atomically: the
+// cast can weigh megabytes and must not ride along every account rewrite.
+// Postgres keeps them in kr_docs.
 //
 // A user is { id, name, hash, xp, created }. Passwords arrive here already
 // hashed (accounts.js); this module never sees one.
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { open, rename, unlink } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
 const SESSION_MS = 60 * 24 * 3600 * 1000;
 
 /** The case- and accent-form-blind key two names are compared by. */
 export const nameKey = name => String(name).normalize('NFKC').toLowerCase();
 const newToken = () => randomBytes(32).toString('hex');
+
+/** The only document keys a store accepts; they become file names, so never user input. */
+export const DOC_KEYS = Object.freeze(['roster']);
+const docKey = key => { if (!DOC_KEYS.includes(key)) throw new TypeError('Unknown document key: ' + String(key)); return key; };
 
 /** Open the store the environment asks for. */
 export async function openStore({ databaseUrl, file } = {}) {
@@ -44,12 +61,13 @@ export async function openStore({ databaseUrl, file } = {}) {
 
 // ---------- JSON file (or memory) ----------
 
-export function openFileStore(file) {
+export function openFileStore(file, { log = console } = {}) {
   let data = { users: {}, sessions: {}, links: [] };
   if (file) {
     try { data = { ...data, ...JSON.parse(readFileSync(file, 'utf8')) }; }
     catch (e) { if (e.code !== 'ENOENT') throw new Error('Cannot read the accounts file ' + file + ': ' + e.message); }
   }
+  const docs = openDocFiles(file ? join(dirname(file), 'kr-docs') : null, log);
   let timer = null;
   const flush = () => {
     timer = null; if (!file) return;
@@ -70,6 +88,11 @@ export function openFileStore(file) {
     async user(id) { const u = data.users[id]; return u ? { ...u } : null; },
     async userByName(name) { const u = byKey(nameKey(name)); return u ? { ...u } : null; },
     async addXp(id, xp) { const u = data.users[id]; if (!u) return null; u.xp += Math.max(0, Math.floor(xp)); save(); return { ...u }; },
+    async setHash(id, hash) {
+      const u = data.users[id]; if (!u) return null;
+      for (const [t, sess] of Object.entries(data.sessions)) if (sess.userId === id) delete data.sessions[t];
+      u.hash = hash; save(); return { ...u };
+    },
     async createSession(userId) { const t = newToken(); data.sessions[t] = { userId, at: Date.now() }; save(); return t; },
     async sessionUser(token) {
       const s = typeof token === 'string' ? data.sessions[token] : null;
@@ -102,7 +125,61 @@ export function openFileStore(file) {
       data.links = data.links.filter(l => !((l.a === me && l.b === other) || (l.a === other && l.b === me)));
       if (data.links.length !== n) save();
     },
-    async close() { if (timer) { clearTimeout(timer); flush(); } },
+    getDoc: docs.get,
+    putDoc: docs.put,
+    async close() { if (timer) { clearTimeout(timer); flush(); } await docs.idle(); },
+  };
+}
+
+/**
+ * Documents as one file each in `dir` (or in memory without one), all read
+ * once now. Each is kept as its JSON text, so a caller never shares an object
+ * with the store. A write goes to a fresh temp file, synced, then renamed over
+ * the old one: a crash leaves the old document or the new one, never half.
+ * Writes run one at a time. A file that is not JSON is logged and ignored
+ * (the next put replaces it); temp files a crash left behind are removed.
+ */
+function openDocFiles(dir, log) {
+  const text = new Map();             // key -> JSON text
+  if (dir) {
+    let names = [];
+    try { names = readdirSync(dir); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    for (const name of names) if (name.endsWith('.tmp')) { try { unlinkSync(join(dir, name)); } catch { /* gone already */ } }
+    for (const key of DOC_KEYS) {
+      let raw;
+      try { raw = readFileSync(join(dir, key + '.json'), 'utf8'); }
+      catch (e) { if (e.code === 'ENOENT') continue; throw new Error('Cannot read the document ' + join(dir, key + '.json') + ': ' + e.message); }
+      try { JSON.parse(raw); text.set(key, raw); }
+      catch (e) { log.warn(`store: ${join(dir, key + '.json')} is not JSON (${e.message}); ignored until it is saved again`); }
+    }
+  }
+  let queue = Promise.resolve();
+
+  async function write(key, json) {
+    mkdirSync(dir, { recursive: true });
+    const target = join(dir, key + '.json');
+    const tmp = join(dir, `${key}.json.${randomBytes(6).toString('hex')}.tmp`);
+    try {
+      const fh = await open(tmp, 'wx', 0o600);
+      try { await fh.writeFile(json, 'utf8'); await fh.sync(); } finally { await fh.close(); }
+      await rename(tmp, target);
+    } catch (e) {
+      await unlink(tmp).catch(() => {});
+      throw e;
+    }
+  }
+
+  return {
+    async get(key) { const raw = text.get(docKey(key)); return raw === undefined ? null : JSON.parse(raw); },
+    put(key, value) {
+      let json;
+      try { docKey(key); json = JSON.stringify(value); } catch (e) { return Promise.reject(e); }
+      if (json === undefined) return Promise.reject(new TypeError('A document must be a JSON value'));
+      const p = queue.then(async () => { if (dir) await write(key, json); text.set(key, json); });
+      queue = p.catch(() => {});      // one failed write does not block the next
+      return p;
+    },
+    idle: () => queue,
   };
 }
 
@@ -116,7 +193,8 @@ create table if not exists kr_sessions (
   token text primary key, user_id text not null references kr_users(id) on delete cascade, created bigint not null);
 create table if not exists kr_friends (
   a text not null references kr_users(id) on delete cascade, b text not null references kr_users(id) on delete cascade,
-  status text not null, primary key (a, b));`;
+  status text not null, primary key (a, b));
+create table if not exists kr_docs (key text primary key, value jsonb not null, updated bigint not null);`;
 
 const row = r => (r ? { id: r.id, name: r.name, hash: r.hash, xp: Number(r.xp), created: Number(r.created) } : null);
 
@@ -138,6 +216,12 @@ export async function openPgStore(databaseUrl, { Pool } = {}) {
     user: id => one('select * from kr_users where id = $1', [id]),
     userByName: name => one('select * from kr_users where name_key = $1', [nameKey(name)]),
     addXp: (id, xp) => one('update kr_users set xp = xp + $2 where id = $1 returning *', [id, Math.max(0, Math.floor(xp))]),
+    async setHash(id, hash) {
+      // Sessions first: if the update then fails, the next boot retries both,
+      // and no session opened under the old password survives a reset.
+      await q('delete from kr_sessions where user_id = $1', [id]);
+      return one('update kr_users set hash = $2 where id = $1 returning *', [id, hash]);
+    },
     async createSession(userId) { const t = newToken(); await q('insert into kr_sessions (token, user_id, created) values ($1, $2, $3)', [t, userId, Date.now()]); return t; },
     async sessionUser(token) {
       if (typeof token !== 'string') return null;
@@ -162,6 +246,17 @@ export async function openPgStore(databaseUrl, { Pool } = {}) {
       return r.rowCount > 0;
     },
     async removeFriend(me, other) { await q('delete from kr_friends where (a = $1 and b = $2) or (a = $2 and b = $1)', [me, other]); },
+    async getDoc(key) {
+      const r = await q('select value from kr_docs where key = $1', [docKey(key)]);
+      return r.rows[0]?.value ?? null;
+    },
+    async putDoc(key, value) {
+      // Stringified here: pg would turn a top-level array into a Postgres array.
+      const json = JSON.stringify(value);
+      if (json === undefined) throw new TypeError('A document must be a JSON value');
+      await q('insert into kr_docs (key, value, updated) values ($1, $2::jsonb, $3) on conflict (key) do update set value = excluded.value, updated = excluded.updated',
+        [docKey(key), json, Date.now()]);
+    },
     close: () => pool.end(),
   };
 }

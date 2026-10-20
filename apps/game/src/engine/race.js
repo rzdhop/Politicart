@@ -22,6 +22,8 @@ import { updateCyclists } from './cyclists.js';
 import { say, setHint } from './events.js';
 import { pickupItems, stunKart, updateProjectiles } from './items.js';
 import { buildKart } from './kart.js';
+import { myStyle } from './garage.js';
+import { defaultStyle } from './kartstyle.js';
 import { transition } from './machine.js';
 import { buildMinimapBase, drawMinimap } from './minimap.js';
 import { framePayload } from './payload.js';
@@ -33,10 +35,11 @@ import { buildTrack } from './track.js';
 import { clamp, lerp, rand } from './util.js';
 
 // ---------- Kart entities ----------
-function makeKart(def, isAI) {
-  const mesh = buildKart(def);
+function makeKart(def, isAI, style) {
+  style = style ?? defaultStyle(def);
+  const mesh = buildKart(def, style);
   return {
-    def, stats: def.stats, isAI, mesh, pos: { x: 0, z: 0 }, heading: 0, speed: 0,
+    def, style, stats: def.stats, isAI, mesh, pos: { x: 0, z: 0 }, heading: 0, speed: 0,
     drift: { active: false, dir: 0, charge: 0 }, boost: 0, boostPower: 1.4, stun: 0, invincible: 0, slowed: 0, fly: 0, relance: 0, relanceTimer: 0,
     item: null, itemRolling: 0, pendingItem: null, itemTimer: 0, powerCd: 8 + rand(0, 6), powerUses: 0,
     y: 0, vy: 0, air: false, trick: false, rampPrev: null, slip: 0, confused: 0, pitGrace: 0, padGrace: 0, steer: 0, phantom: 0,
@@ -53,12 +56,13 @@ function makeKart(def, isAI) {
  */
 export function startRace() {
   const others = CHARACTERS.filter((c, i) => i !== G.charIdx).sort(() => Math.random() - 0.5).slice(0, CFG.numAI);
-  startField([...others.map(def => ({ def, isAI: true })), { def: CHARACTERS[G.charIdx], isAI: false, local: true }]);
+  startField([...others.map(def => ({ def, isAI: true })), { def: CHARACTERS[G.charIdx], isAI: false, local: true, style: myStyle(CHARACTERS[G.charIdx]) }]);
 }
 
 /**
  * Start a race on circuit G.trackIdx with a given grid, in grid order. Each
- * slot is `{ def, isAI, team?, local? }`; the `local` slot becomes G.player,
+ * slot is `{ def, isAI, team?, local?, style? }`, `style` being a full kart
+ * style (the character's default when absent); the `local` slot becomes G.player,
  * the kart this screen follows. Solo play passes five AI and the player
  * last; the game server and its clients pass the lobby's roster (DEC-014).
  */
@@ -74,7 +78,7 @@ export function startField(slots) {
   setCast(true); buildTrack(scene, track);
   buildMinimapBase();
 
-  G.karts = slots.map(sl => { const k = makeKart(sl.def, sl.isAI); k.team = sl.team ?? null; return k; });
+  G.karts = slots.map(sl => { const k = makeKart(sl.def, sl.isAI, sl.style); k.team = sl.team ?? null; return k; });
   const local = slots.findIndex(sl => sl.local);
   G.player = G.karts[local] ?? G.karts.find(k => !k.isAI) ?? G.karts[G.karts.length - 1];
   G.entitySeq = 0;

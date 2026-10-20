@@ -9,8 +9,13 @@
 //
 // Each player may only drive the candidates their account has unlocked
 // (engine/progress.js); a guest -- no account -- drives the four starters.
+//
+// Each player also carries their kart style: the Garage edits they made, a
+// partial style (kartstyle.js), cleaned here because it comes from the
+// client. Everyone in the room draws that player's kart with it.
 
 import { CHARACTERS, TRACKS } from '../../game/src/engine/data.js';
+import { cleanStyle } from '../../game/src/engine/kartstyle.js';
 import { unlockedIds } from '../../game/src/engine/progress.js';
 import { TEAMS } from '../../game/src/engine/teams.js';
 
@@ -35,7 +40,7 @@ export function newCode(taken, rnd = Math.random) {
 export class Room {
   constructor(code) {
     this.code = code;
-    this.players = [];          // { id, name, team, charId, ready, userId, level, allowed }, in join order
+    this.players = [];          // { id, name, team, charId, ready, userId, level, allowed, style }, in join order
     this.trackIdx = 0;
     this.phase = 'lobby';       // 'lobby' | 'race'
   }
@@ -47,9 +52,9 @@ export class Room {
   /**
    * Add a player; returns the player, or an error string. `who` names the
    * account behind the connection ({ userId, level }); without one the
-   * player is a guest.
+   * player is a guest. `style` is their kart style, cleaned here.
    */
-  join(id, name, who = {}) {
+  join(id, name, who = {}, style) {
     if (this.phase !== 'lobby') return 'La course a déjà commencé.';
     if (this.players.length >= MAX_PLAYERS) return 'Salle complète (6 joueurs).';
     const allowed = unlockedIds(who.userId ? who.level : 0);
@@ -58,7 +63,7 @@ export class Room {
     if (!charId) return 'Plus aucun candidat libre pour vous dans cette salle.';
     const count = t => this.players.filter(p => p.team === t).length;
     const team = count('bleu') <= count('rouge') ? 'bleu' : 'rouge';
-    const p = { id, name: cleanName(name), team, charId, ready: false, userId: who.userId ?? null, level: who.userId ? who.level : null, allowed };
+    const p = { id, name: cleanName(name), team, charId, ready: false, userId: who.userId ?? null, level: who.userId ? who.level : null, allowed, style: cleanStyle(style) };
     this.players.push(p);
     return p;
   }
@@ -71,8 +76,8 @@ export class Room {
 
   leave(id) { this.players = this.players.filter(p => p.id !== id); }
 
-  /** Change a player's team, candidate or readiness. Returns an error string or null. */
-  set(id, { team, charId, ready } = {}) {
+  /** Change a player's team, candidate, readiness or kart style. Returns an error string or null. */
+  set(id, { team, charId, ready, style } = {}) {
     const p = this.player(id); if (!p) return 'Joueur inconnu.';
     if (this.phase !== 'lobby') return 'La course a déjà commencé.';
     if (team !== undefined) { if (!TEAMS.includes(team)) return 'Équipe inconnue.'; p.team = team; }
@@ -83,6 +88,7 @@ export class Room {
       p.charId = charId;
     }
     if (ready !== undefined) p.ready = !!ready;
+    if (style !== undefined) p.style = cleanStyle(style);
     return null;
   }
 
@@ -106,7 +112,7 @@ export class Room {
    * picked, up to six. Each slot says who drives it.
    */
   roster(rnd = Math.random) {
-    const humans = this.players.map(p => ({ playerId: p.id, name: p.name, charId: p.charId, team: p.team, isAI: false }));
+    const humans = this.players.map(p => ({ playerId: p.id, name: p.name, charId: p.charId, team: p.team, isAI: false, style: p.style }));
     const free = CHAR_IDS.filter(c => !humans.some(h => h.charId === c));
     for (let i = free.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [free[i], free[j]] = [free[j], free[i]]; }
     const ai = free.slice(0, Math.max(0, MAX_PLAYERS - humans.length)).map(charId => ({ playerId: null, name: CHARACTERS.find(c => c.id === charId).name, charId, team: null, isAI: true }));
@@ -120,7 +126,7 @@ export class Room {
   view() {
     return {
       code: this.code, host: this.host, trackIdx: this.trackIdx, phase: this.phase,
-      players: this.players.map(({ id, name, team, charId, ready, userId, level }) => ({ id, name, team, charId, ready, userId, level, guest: !userId })),
+      players: this.players.map(({ id, name, team, charId, ready, userId, level, style }) => ({ id, name, team, charId, ready, userId, level, guest: !userId, style: { ...style } })),
     };
   }
 }

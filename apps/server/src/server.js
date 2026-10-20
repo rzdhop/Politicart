@@ -7,6 +7,8 @@
 //                    elsewhere (GitHub Pages) can probe a remote server.
 //   /api/register, /api/login, /api/logout, /api/me, /api/progress
 //                 -> accounts (accounts.js), open to every origin
+//   GET /api/roster, PUT /api/admin/roster
+//                 -> the admin's cast (roster.js): public read, admin write
 //   GET /*        -> apps/game/dist, read-only, no directory escapes
 //   WS  /ws       -> the lobby protocol below; races run in a worker
 //
@@ -23,6 +25,8 @@
 // its friends see it online, it can create rooms, invite friends into them,
 // and earns experience from team races. Without a token it is a guest, who
 // may only join a room (by code or by invitation) with the starters.
+// Every player's kart style (their Garage edits) rides on create, join and
+// set, is cleaned by the lobby, and reaches every client with the race grid.
 
 import { randomUUID } from 'node:crypto';
 import { createReadStream, statSync } from 'node:fs';
@@ -31,9 +35,10 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 
 import { WebSocketServer } from 'ws';
 
-import { levelFromXp, profileOf, xpForRace } from '../../game/src/engine/progress.js';
+import { levelFromXp, xpForRace } from '../../game/src/engine/progress.js';
 import { accountApi } from './accounts.js';
 import { newCode, Room } from './lobby.js';
+import { rosterApi } from './roster.js';
 import { openFileStore } from './store.js';
 
 const MIME = {
@@ -50,16 +55,22 @@ export const PROTOCOL = 1;
  * `send(playerId, msg)`, `broadcast(msg)` and `done(results)`. `store` keeps
  * the accounts (store.js); without one they live in memory. `loginTries`
  * caps sign-ups and failed logins per address and minute (tests raise it).
+ * `admin` is `{ user, hash }` (admin.js): run ensureAdmin() on the store
+ * first; that name is reserved even without a hash.
+ * Before listening it loads the admin's cast from the store and applies it to
+ * CHARACTERS (roster.js), so lobbies and races name the AI as edited; an
+ * invalid stored cast is logged and the default one used.
  * Resolves to `{ port, close() }` once listening.
  */
-export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, store = openFileStore(null), loginTries }) {
+export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, store = openFileStore(null), loginTries, admin }) {
   const root = resolve(staticDir);
   const rooms = new Map();          // code -> Room
   const races = new Map();          // code -> race handle
   const conns = new Map();          // id -> { ws, id, name, code, user }
   const online = new Map();         // user id -> Set of connections
 
-  const api = accountApi(store, { onProfile: user => updateProfile(user, 0), tries: loginTries });
+  const api = accountApi(store, { onProfile: user => updateProfile(user, 0), tries: loginTries, admin });
+  const cast = rosterApi(store, { requireAdmin: api.requireAdmin });
 
   const http = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
@@ -69,7 +80,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
       res.end(JSON.stringify({ kr: 'server', protocol: PROTOCOL, rooms: rooms.size, accounts: store.kind }));
       return;
     }
-    if (url.pathname.startsWith('/api/') && await api(req, res, url.pathname)) return;
+    if (url.pathname.startsWith('/api/') && (await api(req, res, url.pathname) || await cast(req, res, url.pathname))) return;
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405).end(); return; }
     let rel; try { rel = decodeURIComponent(url.pathname); } catch { res.writeHead(400).end(); return; }
     if (rel.endsWith('/')) rel += 'index.html';
@@ -126,7 +137,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
 
   /** An account's experience changed: tell its connections, and let it drive what it unlocked. */
   function updateProfile(user, gained) {
-    const profile = profileOf(user);
+    const profile = api.profile(user);
     for (const c of online.get(user.id) ?? []) {
       c.user = user; send(c.id, { t: 'profile', profile, gained });
       const room = c.code && rooms.get(c.code); if (room) { room.setLevel(c.id, profile.level); showRoom(room); }
@@ -145,7 +156,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
   }
 
   function enter(c, room) {
-    const r = room.join(c.id, c.name, c.user ? { userId: c.user.id, level: levelFromXp(c.user.xp).level } : {});
+    const r = room.join(c.id, c.name, c.user ? { userId: c.user.id, level: levelFromXp(c.user.xp).level } : {}, c.style);
     if (typeof r === 'string') return fail(c.id, r);
     c.code = room.code; showRoom(room);
     if (c.user) pushToFriendsOf(c.user.id).catch(console.error);
@@ -184,14 +195,14 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
       const user = typeof m.token === 'string' && m.token ? await store.sessionUser(m.token) : null;
       if (!user) c.name = typeof m.name === 'string' ? m.name : c.name;
       await setUser(c, user);
-      send(c.id, { t: 'welcome', id: c.id, protocol: PROTOCOL, profile: user ? profileOf(user) : null });
+      send(c.id, { t: 'welcome', id: c.id, protocol: PROTOCOL, profile: user ? api.profile(user) : null });
     },
-    create: c => {
+    create: (c, m) => {
       if (!c.user) return fail(c.id, 'Connectez-vous pour créer une salle. Les invité·es peuvent en rejoindre une.');
-      leaveRoom(c); const room = new Room(newCode(new Set(rooms.keys()))); rooms.set(room.code, room); enter(c, room);
+      c.style = m.style; leaveRoom(c); const room = new Room(newCode(new Set(rooms.keys()))); rooms.set(room.code, room); enter(c, room);
     },
-    join: (c, m) => { const room = rooms.get(String(m.code ?? '').toUpperCase().trim()); if (!room) return fail(c.id, 'Aucune salle avec ce code.'); if (c.code !== room.code) { leaveRoom(c); enter(c, room); } },
-    set: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = room.set(c.id, { team: m.team, charId: m.charId, ready: m.ready }); if (e) fail(c.id, e); showRoom(room); },
+    join: (c, m) => { const room = rooms.get(String(m.code ?? '').toUpperCase().trim()); if (!room) return fail(c.id, 'Aucune salle avec ce code.'); c.style = m.style; if (c.code !== room.code) { leaveRoom(c); enter(c, room); } },
+    set: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = room.set(c.id, { team: m.team, charId: m.charId, ready: m.ready, style: m.style }); if (e) fail(c.id, e); showRoom(room); },
     track: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = room.setTrack(c.id, m.trackIdx); if (e) fail(c.id, e); showRoom(room); },
     start: c => { const room = rooms.get(c.code); if (room) start(c, room); },
     leave: c => leaveRoom(c),
@@ -244,12 +255,12 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
   const beat = setInterval(() => { for (const c of conns.values()) { if (!c.alive) { c.ws.terminate(); continue; } c.alive = false; c.ws.ping(); } }, 15_000);
   beat.unref();
 
-  return new Promise((ok, ko) => {
+  return cast.load().then(() => new Promise((ok, ko) => {
     http.once('error', ko);
     http.listen(port, host, () => ok({
       port: http.address().port,
       rooms,
       close: () => new Promise(done => { clearInterval(beat); for (const r of races.values()) r.stop(); for (const c of conns.values()) c.ws.terminate(); wss.close(); http.close(() => done()); }),
     }));
-  });
+  }));
 }
