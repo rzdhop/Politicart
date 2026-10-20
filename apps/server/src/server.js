@@ -25,6 +25,8 @@
 // its friends see it online, it can create rooms, invite friends into them,
 // and earns experience from team races. Without a token it is a guest, who
 // may only join a room (by code or by invitation) with the starters.
+// Every player's kart style (their Garage edits) rides on create, join and
+// set, is cleaned by the lobby, and reaches every client with the race grid.
 
 import { randomUUID } from 'node:crypto';
 import { createReadStream, statSync } from 'node:fs';
@@ -154,7 +156,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
   }
 
   function enter(c, room) {
-    const r = room.join(c.id, c.name, c.user ? { userId: c.user.id, level: levelFromXp(c.user.xp).level } : {});
+    const r = room.join(c.id, c.name, c.user ? { userId: c.user.id, level: levelFromXp(c.user.xp).level } : {}, c.style);
     if (typeof r === 'string') return fail(c.id, r);
     c.code = room.code; showRoom(room);
     if (c.user) pushToFriendsOf(c.user.id).catch(console.error);
@@ -195,12 +197,12 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
       await setUser(c, user);
       send(c.id, { t: 'welcome', id: c.id, protocol: PROTOCOL, profile: user ? api.profile(user) : null });
     },
-    create: c => {
+    create: (c, m) => {
       if (!c.user) return fail(c.id, 'Connectez-vous pour créer une salle. Les invité·es peuvent en rejoindre une.');
-      leaveRoom(c); const room = new Room(newCode(new Set(rooms.keys()))); rooms.set(room.code, room); enter(c, room);
+      c.style = m.style; leaveRoom(c); const room = new Room(newCode(new Set(rooms.keys()))); rooms.set(room.code, room); enter(c, room);
     },
-    join: (c, m) => { const room = rooms.get(String(m.code ?? '').toUpperCase().trim()); if (!room) return fail(c.id, 'Aucune salle avec ce code.'); if (c.code !== room.code) { leaveRoom(c); enter(c, room); } },
-    set: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = room.set(c.id, { team: m.team, charId: m.charId, ready: m.ready }); if (e) fail(c.id, e); showRoom(room); },
+    join: (c, m) => { const room = rooms.get(String(m.code ?? '').toUpperCase().trim()); if (!room) return fail(c.id, 'Aucune salle avec ce code.'); c.style = m.style; if (c.code !== room.code) { leaveRoom(c); enter(c, room); } },
+    set: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = room.set(c.id, { team: m.team, charId: m.charId, ready: m.ready, style: m.style }); if (e) fail(c.id, e); showRoom(room); },
     track: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = room.setTrack(c.id, m.trackIdx); if (e) fail(c.id, e); showRoom(room); },
     start: c => { const room = rooms.get(c.code); if (room) start(c, room); },
     leave: c => leaveRoom(c),

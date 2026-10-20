@@ -96,7 +96,8 @@ describe('the lobby', () => {
 
     fireEvent.click(container.querySelector('#b-mp-create')!);
     expect(sock.sent.at(-2)).toEqual({ t: 'hello', name: 'Alice', token: 'tok' });
-    expect(sock.sent.at(-1)).toEqual({ t: 'create' });
+    // The player's Garage edits ride along (none here), so others draw their kart as styled.
+    expect(sock.sent.at(-1)).toEqual({ t: 'create', style: {} });
 
     act(() => sock.serve({ t: 'room', room: ROOM() }));
     expect(container.querySelector('#lobby-room')?.textContent).toContain('ABCD');
@@ -153,7 +154,8 @@ describe('invitations', () => {
     act(() => { sock.serve({ t: 'invite', from: { id: 'u2', name: 'Bob' }, code: 'WXYZ' }); });
     expect(container.querySelector('#invite-text')?.textContent).toBe('Bob vous invite dans sa salle WXYZ');
     fireEvent.click(container.querySelector('#b-invite-join')!);
-    expect(sock.sent.at(-1)).toEqual({ t: 'join', code: 'WXYZ' });
+    // The invited player's Garage edits ride along (none here), as with any join.
+    expect(sock.sent.at(-1)).toEqual({ t: 'join', code: 'WXYZ', style: {} });
     expect(container.querySelector('#invite')).toBeNull();
     expect(getState()).toBe('lobby');
   });

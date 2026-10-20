@@ -4,6 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { CHARACTERS } from './data.js';
 import { drain } from './events.js';
+import { defaultStyle, playerStyle } from './kartstyle.js';
 import { useItem } from './items.js';
 import { getState, resetMachine, transition } from './machine.js';
 import { connect, disconnect, setTransport } from './net.js';
@@ -58,6 +59,16 @@ describe('a networked race on the client', () => {
     expect(G.karts.map(k => k.def.id)).toEqual(ROSTER.map(s => s.charId));
     expect(G.player).toBe(G.karts[5]);
     expect(G.karts[4].team).toBe('bleu');
+  });
+
+  it("draws each human's kart with their Garage edits over the candidate default, and AI with the default", () => {
+    clientInLobby();
+    const roster = ROSTER.map((s, i) => (i === 4 ? { ...s, style: { wheels: 'gold', number: 7 } } : s));
+    beginNetRace({ trackIdx: 0, roster, you: 5 });
+    const def = id => CHARACTERS.find(c => c.id === id);
+    expect(G.karts[4].style).toEqual(playerStyle(def(roster[4].charId), { wheels: 'gold', number: 7 }));
+    expect(G.karts[0].style).toEqual(defaultStyle(def(roster[0].charId)));
+    expect(G.karts[5].style).toEqual(defaultStyle(def(roster[5].charId)));
   });
 
   it('draws the karts between snapshots, goes green with the server, and mirrors hazards', () => {

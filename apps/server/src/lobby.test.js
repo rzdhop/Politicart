@@ -87,4 +87,23 @@ describe('a room', () => {
     expect(r.phase).toBe('lobby');
     expect(r.player('a').ready).toBe(false);
   });
+
+  it("keeps each player's kart style cleaned, in the view and on the grid, never for AI", () => {
+    const r = new Room('ABCD');
+    r.join('a', 'A', {}, { wheels: 'gold', number: 7, body: '#ABCDEF', junk: 1, __proto__: { sticker: 'rosette' } });
+    r.join('b', 'B');
+    expect(r.player('a').style).toEqual({ wheels: 'gold', number: 7, body: '#abcdef' });
+    expect(r.player('b').style).toEqual({});
+    expect(r.set('a', { style: { spoiler: 'wing', number: 500 } })).toBeNull();
+    expect(r.player('a').style).toEqual({ spoiler: 'wing' });
+    expect(r.set('b', { style: 'nope' })).toBeNull();
+    expect(r.player('b').style).toEqual({});
+    const view = r.view();
+    expect(view.players[0].style).toEqual({ spoiler: 'wing' });
+    view.players[0].style.spoiler = 'none';
+    expect(r.player('a').style.spoiler).toBe('wing');
+    const grid = r.roster();
+    expect(grid.find(s => s.playerId === 'a').style).toEqual({ spoiler: 'wing' });
+    expect(grid.filter(s => s.isAI).every(s => s.style === undefined)).toBe(true);
+  });
 });

@@ -15,7 +15,7 @@ import { useSyncExternalStore } from 'react';
 import * as account from '../engine/account.js';
 import { initAudio, isMuted, toggleMute as toggleAudioMute } from '../engine/audio.js';
 import { beginDraft, clearDraft, getDraft, setRoster } from '../engine/custom.js';
-import { resetGarage, setGarage } from '../engine/garage.js';
+import { getGarage, resetGarage, setGarage } from '../engine/garage.js';
 import { getState, onTransition, transition } from '../engine/machine.js';
 import * as net from '../engine/net.js';
 import { isNetRace, onNetResults, pressItem, pressPower } from '../engine/netrace.js';
@@ -413,8 +413,8 @@ export const actions = {
     net.connect(socketUrl(), snapshot.netName, snapshot.account?.token ?? null);
   },
   setNetName(name: string) { saveName(name); set({ netName: name }); },
-  createRoom() { if (!snapshot.account) return; net.connect(socketUrl(), snapshot.netName, snapshot.account.token); net.createRoom(); },
-  joinRoom(code: string) { net.connect(socketUrl(), snapshot.netName, snapshot.account?.token ?? null); net.joinRoom(code); },
+  createRoom() { if (!snapshot.account) return; net.connect(socketUrl(), snapshot.netName, snapshot.account.token); net.createRoom(getGarage()); },
+  joinRoom(code: string) { net.connect(socketUrl(), snapshot.netName, snapshot.account?.token ?? null); net.joinRoom(code, getGarage()); },
   setTeam(team: TeamId) { net.setMine({ team }); },
   setChar(charId: string) { net.setMine({ charId }); },
   setReady(ready: boolean) { net.setMine({ ready }); },
@@ -466,7 +466,7 @@ export const actions = {
     if (getState() === 'title' || getState() === 'account') transition('lobby');
     if (getState() !== 'lobby') return;
     net.connect(socketUrl(), snapshot.netName, snapshot.account?.token ?? null);
-    net.joinRoom(inv.code);
+    net.joinRoom(inv.code, getGarage());
   },
   dismissInvite() { net.clearInvite(); },
 };

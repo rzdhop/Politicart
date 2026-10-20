@@ -132,4 +132,39 @@ test.describe('Multijoueur', () => {
     await expect(c.locator('#lobby-players tr')).toHaveCount(2);
     await expect(a.locator('#lobby-players tr').nth(1)).toContainText(cn);
   });
+
+  test("each player's Garage edits reach the other player's screen", async ({ browser }) => {
+    test.setTimeout(90_000);
+    // Gina (an account, so she may host) styled her kart in the Garage, kept in her browser; Bob, a guest, did not.
+    // Account names are unique per server, and another spec here already signs up Alice + RUN.
+    const host = await open(browser, 'Gina' + RUN, { account: true });
+    await host.evaluate(() => localStorage.setItem('kr-kart', JSON.stringify({ wheels: 'gold', number: 7, body: '#00ff00' })));
+    await host.reload();
+    await expect(host.locator('#b-multi')).toBeVisible();
+    await host.locator('#b-multi').click();
+    await expect(host.locator('#lobby-status')).toHaveText('Connecté au serveur');
+    const guest = await player(browser, 'Bob');
+
+    await host.locator('#b-mp-create').click();
+    const code = ((await host.locator('#lobby-room').textContent()) ?? '').match(/Salle ([A-Z]{4})/)?.[1];
+    expect(code).toBeTruthy();
+    await guest.locator('#lobby-code').fill(code!);
+    await guest.locator('#b-mp-join').click();
+    for (const p of [host, guest]) await expect(p.locator('#lobby-players tr')).toHaveCount(2);
+    await guest.locator('#b-mp-ready').click();
+    await host.locator('#b-mp-start').click();
+    for (const p of [host, guest]) await expect(p.locator('#hud')).toBeVisible();
+
+    // Humans take the last two slots, in join order: Gina 4, Bob 5.
+    type Slot = { charId: string; style: Record<string, unknown> };
+    const karts = (p: typeof host) => p.evaluate(() => (window as unknown as { __kr: { karts(): unknown } }).__kr.karts()) as Promise<Slot[]>;
+    const onGuest = await karts(guest), onHost = await karts(host);
+    expect(onGuest).toHaveLength(6);
+    expect(onGuest[4]!.style).toMatchObject({ wheels: 'gold', number: 7, body: '#00ff00' });
+    expect(onHost[4]!.style).toEqual(onGuest[4]!.style);
+    // Bob made no edits: his kart is his candidate's default, the same on both screens.
+    expect(onGuest[5]!.style).toMatchObject({ wheels: 'classic', number: null });
+    expect(onHost[5]!.style).toEqual(onGuest[5]!.style);
+    await host.evaluate(() => localStorage.removeItem('kr-kart'));
+  });
 });
