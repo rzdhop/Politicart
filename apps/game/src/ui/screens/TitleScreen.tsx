@@ -11,7 +11,7 @@ import {
   Tricolore,
 } from '@kart-republique/ui';
 
-import { actions, type UiSnapshot } from '../store';
+import { actions, isAdmin, type UiSnapshot } from '../store';
 import { useTouchMode } from '../TouchControls';
 
 const COLUMN = { display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' } as const;
@@ -19,7 +19,6 @@ const COLUMN = { display: 'flex', flexDirection: 'column', gap: 14, alignItems: 
 const ADMIN_LABEL = {
   idle: 'Atelier (admin)',
   saved: 'Atelier (admin) · enregistré',
-  full: 'Atelier (admin) · non sauvegardé (stockage plein)',
 } as const;
 
 /** Pending friend requests, as a count after the account's name. */
@@ -51,7 +50,8 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
           <Button id="b-mute" variant="ghost" onClick={() => actions.toggleMute(true)}>
             {'Son : ' + (ui.muted ? 'coupé' : 'activé')}
           </Button>
-          <Button id="b-admin" variant="ghost" onClick={actions.openAdmin}>{ADMIN_LABEL[ui.adminStatus]}</Button>
+          {/* The Workshop is the admin's: only an account the server flags as admin sees it. */}
+          {isAdmin(ui) && <Button id="b-admin" variant="ghost" onClick={actions.openAdmin}>{ADMIN_LABEL[ui.adminStatus]}</Button>}
         </Row>
         {touch ? (
           <ControlsGrid id="touch-legend">

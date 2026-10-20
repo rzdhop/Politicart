@@ -40,3 +40,35 @@ export const me = (token, { fetchImpl = globalThis.fetch, base = '' } = {}) =>
 /** Report a finished solo race: { ok, profile, gained }. */
 export const reportRace = (token, { rank, field, finished }, { fetchImpl = globalThis.fetch, base = '' } = {}) =>
   call(fetchImpl, base, 'POST', '/api/progress', { token, body: { rank, field, finished } });
+
+/** What a failed roster call says when the server gave no sentence of its own. */
+const ROSTER_FALLBACK = {
+  401: 'Session expirée : reconnectez-vous avec le compte administrateur.',
+  413: 'Distribution trop lourde pour le serveur : allégez les images.',
+};
+
+/**
+ * Split call()'s answer into `{ ok, status, roster }`, the roster being the
+ * body (the server's whole JSON document), or the failure with its `error`
+ * and, for a refused roster, the `field` the server names.
+ */
+function rosterReply(r) {
+  const { ok, status, error, field, ...body } = r;
+  if (ok && body && typeof body === 'object' && !Array.isArray(body)) return { ok: true, status, roster: body };
+  if (ok) return { ok: false, status, error: 'Réponse illisible du serveur.' };
+  const out = { ok: false, status, error: (status in ROSTER_FALLBACK && /^Erreur du serveur/.test(error)) ? ROSTER_FALLBACK[status] : error };
+  if (typeof field === 'string') out.field = field;
+  return out;
+}
+
+/** The cast the admin set, the same for every player: { ok, roster } or { ok: false, error }. Public. */
+export const fetchRoster = async ({ fetchImpl = globalThis.fetch, base = '' } = {}) =>
+  rosterReply(await call(fetchImpl, base, 'GET', '/api/roster'));
+
+/**
+ * The admin saves the cast for every player: { ok, roster } (the roster as
+ * the server stored it), or { ok: false, status, error, field? } -- 400 names
+ * the bad field, 401 means the session is no longer the admin's, 413 too large.
+ */
+export const saveRoster = async (roster, token, { fetchImpl = globalThis.fetch, base = '' } = {}) =>
+  rosterReply(await call(fetchImpl, base, 'PUT', '/api/admin/roster', { token, body: roster }));

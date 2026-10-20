@@ -126,7 +126,8 @@ Both orientations work: in portrait the camera widens and pulls back. Phones sta
 - **Bike lane**: a green cycle lane runs along the right-hand edge of every circuit. Its cyclists ride where they like: they swerve into the karts' lanes, cut across the road, hop onto the pavement, stop dead or ride the wrong way. Hitting one knocks the rider over and shakes your kart.
 - **Messages**: the banners during a race only concern you: what you did, and what was done to you. Nobody else's item is announced to the whole field.
 - **Contact**: karts bounce off each other once per contact, with a hop, sparks and a camera shake; rubbing door to door costs about 2 % of speed, ramming the kart in front about 10 %, and the lighter kart takes more of it. A spun-out kart always straightens up along the road before it drives off.
-- **Workshop (admin)**: rename candidates, change colours, upload kart liveries and campaign posters. Settings are stored in the browser's `localStorage`.
+- **Workshop (admin only)**: the administrator account (`KR_ADMIN_USER`, `rida` by default) logs in through the ordinary Compte screen and gets an **Atelier** button on the title: rename candidates, change their colours and their default kart (accents, number, wheels, spoiler, side pods, sticker), upload kart liveries and campaign posters. Saving sends the cast to the game server, so every player gets it, the GitHub Pages build included when it names a server. Nobody else sees the Workshop. Without a reachable server the game plays the default cast.
+- **Garage**: every player styles their own kart from the roster (body and accent colours, wheels, spoiler, side pods, race number, sticker). It applies to whichever candidate they pick, over that candidate's default kart, and is kept in this browser's `localStorage`.
 - Graphics toggle (detailed with shadows / light low-poly), synthesized sound and music via WebAudio.
 
 The candidates are caricatures of real politicians, one pun away from their names. Their powers, lines and scandals are invented satire.
@@ -180,4 +181,4 @@ npm run test        # Vitest: the design system, the engine and the server
 npm run test:e2e    # Playwright, Chromium, against the production build (about three minutes)
 ```
 
-The E2E suite is the regression net for the game: it drives the real build through the title, roster, circuits, a race with its HUD, pause, the workshop and the results, and asserts on the element ids the game has always had. `e2e/multiplayer.spec.ts` starts the game server too and races two browsers against each other.
+The E2E suite is the regression net for the game: it drives the real build through the title, roster, circuits, a race with its HUD, pause, the Garage and the results, and asserts on the element ids the game has always had. `e2e/multiplayer.spec.ts` starts the game server too and races two browsers against each other, and `e2e/admin.spec.ts` drives the admin's Workshop on that server with a test-only admin account whose hash the Playwright config computes at load.

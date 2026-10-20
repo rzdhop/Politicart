@@ -20,7 +20,7 @@
 // One name is reserved for the administrator (admin.js): sign-ups under it,
 // or anything that looks like it, are refused. Its profile carries
 // `admin: true`, and `requireAdmin(req)` guards admin-only routes.
-import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
+import { randomBytes, scrypt as scryptCb, scryptSync, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
 import { profileOf, xpForRace } from '../../game/src/engine/progress.js';
@@ -49,10 +49,24 @@ export function badPassword(pw) {
   return null;
 }
 
+// The one definition of the stored format: scrypt$<32 hex salt>$<128 hex key>.
+const SALT_BYTES = 16, KEY_BYTES = 64;
+const formatHash = (salt, key) => 'scrypt$' + salt.toString('hex') + '$' + key.toString('hex');
+
 export async function hashPassword(pw) {
-  const salt = randomBytes(16);
-  const key = await scrypt(pw, salt, 64);
-  return 'scrypt$' + salt.toString('hex') + '$' + key.toString('hex');
+  const salt = randomBytes(SALT_BYTES);
+  return formatHash(salt, await scrypt(pw, salt, KEY_BYTES));
+}
+
+/**
+ * hashPassword, synchronously: the same format, for a caller that cannot
+ * await (the e2e suite's Playwright config hashes its test-only admin
+ * password at load). Blocks the thread for one scrypt, so never call it
+ * while serving requests.
+ */
+export function hashPasswordSync(pw) {
+  const salt = randomBytes(SALT_BYTES);
+  return formatHash(salt, scryptSync(pw, salt, KEY_BYTES));
 }
 
 export async function checkPassword(pw, stored) {

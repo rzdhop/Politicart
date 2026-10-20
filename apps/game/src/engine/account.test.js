@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { login, me, register, reportRace } from './account.js';
+import { fetchRoster, login, me, register, reportRace, saveRoster } from './account.js';
 import { levelFromXp, STARTERS, UNLOCKS, unlockedIds, unlockLevel, xpForRace, xpToNext } from './progress.js';
 import { CHARACTERS } from './data.js';
 
@@ -55,5 +55,39 @@ describe('account API client', () => {
   it('turns failures into a sentence instead of throwing', async () => {
     expect(await login('A', 'x', { fetchImpl: fake(401, { error: 'Pseudo ou mot de passe incorrect.' }) })).toMatchObject({ ok: false, status: 401, error: 'Pseudo ou mot de passe incorrect.' });
     expect(await login('A', 'x', { fetchImpl: async () => { throw new Error('offline'); } })).toMatchObject({ ok: false, error: 'Serveur injoignable.' });
+  });
+});
+
+describe('roster API client', () => {
+  const fake = (status, body) => { const calls = []; const f = async (url, init) => { calls.push([url, init]); return { ok: status < 400, status, json: async () => { if (body === undefined) throw new Error('no body'); return body; } }; }; f.calls = calls; return f; };
+  const roster = { chars: { victor: { name: 'Jean Test' } }, ads: [] };
+
+  it('reads the public roster from the page origin or the remote server, with no token', async () => {
+    const f = fake(200, roster);
+    expect(await fetchRoster({ fetchImpl: f })).toEqual({ ok: true, status: 200, roster });
+    await fetchRoster({ fetchImpl: f, base: 'https://kr.example/' });
+    expect(f.calls.map(c => c[0])).toEqual(['./api/roster', 'https://kr.example/api/roster']);
+    expect(f.calls[0][1].method).toBe('GET');
+    expect(f.calls[0][1].headers.authorization).toBeUndefined();
+  });
+
+  it('saves with a PUT of JSON under the Bearer token and returns the roster the server stored', async () => {
+    const f = fake(200, roster);
+    expect(await saveRoster(roster, 'tok', { fetchImpl: f, base: 'https://kr.example' })).toEqual({ ok: true, status: 200, roster });
+    const [url, init] = f.calls[0];
+    expect(url).toBe('https://kr.example/api/admin/roster');
+    expect(init.method).toBe('PUT');
+    expect(init.headers).toEqual({ 'content-type': 'application/json', authorization: 'Bearer tok' });
+    expect(JSON.parse(init.body)).toEqual(roster);
+  });
+
+  it('carries the field a refused roster names, and never throws', async () => {
+    const error = 'chars.victor.name : 28 caractères au plus.';
+    expect(await saveRoster(roster, 't', { fetchImpl: fake(400, { error, field: 'chars.victor.name' }) })).toEqual({ ok: false, status: 400, error, field: 'chars.victor.name' });
+    expect(await saveRoster(roster, 't', { fetchImpl: fake(401, { error: 'Réservé à l’administrateur.' }) })).toEqual({ ok: false, status: 401, error: 'Réservé à l’administrateur.' });
+    expect(await saveRoster(roster, 't', { fetchImpl: fake(413) })).toMatchObject({ ok: false, status: 413, error: expect.stringContaining('trop lourde') });
+    expect(await saveRoster(roster, 't', { fetchImpl: async () => { throw new TypeError('offline'); } })).toEqual({ ok: false, status: 0, error: 'Serveur injoignable.' });
+    expect(await fetchRoster({ fetchImpl: fake(500) })).toMatchObject({ ok: false, status: 500 });
+    expect(await fetchRoster({ fetchImpl: null })).toMatchObject({ ok: false, error: 'Serveur injoignable.' });
   });
 });

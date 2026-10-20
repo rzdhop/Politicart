@@ -10,8 +10,8 @@ import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 
-import { accountApi, hashPassword } from './accounts.js';
-import { adminConfig, ensureAdmin, isAdminUser, isReservedName } from './admin.js';
+import { accountApi, checkPassword, hashPassword, hashPasswordSync } from './accounts.js';
+import { adminConfig, ensureAdmin, isAdminUser, isReservedName, validAdminHash } from './admin.js';
 import { startServer } from './server.js';
 import { openFileStore } from './store.js';
 
@@ -27,6 +27,15 @@ async function seeded(user = 'rida') {
 }
 
 describe('admin configuration', () => {
+  it('accepts a hash made synchronously, in the same format, which checks like any other', async () => {
+    const pw = password(), hash = hashPasswordSync(pw);
+    expect(validAdminHash(hash)).toBe(true);
+    expect(adminConfig({ hash }).enabled).toBe(true);
+    expect(await checkPassword(pw, hash)).toBe(true);
+    expect(await checkPassword(pw + 'x', hash)).toBe(false);
+    expect(hashPasswordSync(pw)).not.toBe(hash);                     // a fresh salt every time
+  });
+
   it('is enabled only by a well-formed hash, and defaults the name to rida', async () => {
     const hash = await hashPassword(password());
     expect(adminConfig({ hash })).toMatchObject({ user: 'rida', hash, enabled: true, reason: null });

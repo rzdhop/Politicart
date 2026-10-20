@@ -11,13 +11,13 @@ import { TitleScreen } from './screens/TitleScreen';
 import { TracksScreen } from './screens/TracksScreen';
 import { Hud } from './Hud';
 import { InviteBanner } from './InviteBanner';
-import { useUi } from './store';
+import { isAdmin, useUi } from './store';
 import { useTouchMode } from './TouchControls';
 
 /**
  * The screens and the note banner, in the order the single-file game laid
  * them out, then the team-race lobby, the account screen and a friend's
- * invitation. Every screen is always mounted and hides itself when the
+ * invitation. Every screen but the admin's Workshop is always mounted and hides itself when the
  * machine is elsewhere, exactly as the original sections did with `hidden`,
  * so the E2E suite's visibility checks mean the same thing they always did.
  * The HUD sits where the original markup put it, between the circuits and the
@@ -29,7 +29,8 @@ export function App() {
   return (
     <>
       <TitleScreen ui={ui} />
-      <AdminScreen ui={ui} />
+      {/* The Workshop exists only inside the admin's session; it goes with a logout or an expired token. */}
+      {isAdmin(ui) && <AdminScreen ui={ui} />}
       <SelectScreen ui={ui} />
       <GarageScreen ui={ui} />
       <TracksScreen ui={ui} />

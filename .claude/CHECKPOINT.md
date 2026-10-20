@@ -36,8 +36,10 @@ Current state only. History lives in git.
   push and merge into main.
 - **Stage 4 committed** (seeded admin, DEC-026): server 52, e2e 41/41.
 - **Stage 5 committed** (roster in store, DEC-027): server 98, e2e 41/41.
-- **Current stage:** 6 (client: cast from the server, Workshop for the
-  admin only, Opus). **Next action:** brief the agent.
+- **Stage 6 committed** (Workshop admin-only, R-06 redefined): game 215,
+  server 99, e2e 45/46 + rerun (machine stall).
+- **Current stage:** 7 (kart style in team races). **Next action:**
+  implement inline.
 
 ## Previous task (on main's history)
 
