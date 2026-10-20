@@ -2,47 +2,41 @@
 
 Current state only. History lives in git.
 
-## In progress -- task 2026-10-20: cast admin, Garage and pun names onto main
+## Latest task -- closed 2026-10-20: cast admin, Garage and pun names, on main
 
-- **Request:** the work from `feat/multiplayer` (admin account "rida",
-  kart personalisation, pun names) should be pushed, merged and deployed.
-  It is being reworked onto main (DEC-021); plan in `.claude/PLAN.md`,
-  stages 0-9.
-- **Branch:** `feat/cast-admin-garage`, cut from `origin/main` at
-  `2b14388`, with no upstream (a push will set its own). Reference
-  implementation: `feat/multiplayer` at `4ee4673` (not merged).
-- **Standing instruction:** the E2E suite runs after every stage, without
-  asking (DEC-022).
-- **Checkpoint:** `origin/main` `2b14388`. The stage 0 commit records it.
-- **Tier-1 baseline at `2b14388` (2026-10-20):** typecheck clean; ui 235 +
-  8 skipped, game 138, server 30; `npm audit --omit=dev` 0.
-- **E2E baseline:** 36/37. **Pre-existing flake on main:** `e2e/game.spec.ts`
-  R-02 "fills the drift gauge while drifting" failed 2 of 4 runs ("drift
-  gauge stayed empty"), with no change of mine applied. When a stage's run
-  fails on that spec alone, it is rerun before being judged.
-- **Stage 1 committed** (pun names, DEC-023): Tier 1 green (game 142),
-  e2e 37/37.
-- **Stage 2 committed** (kart style): Tier 1 green (game 188), e2e 36/37.
-- **Synced with main `3f4d040`** (merge `3ec001c`): main now carries both
-  flake fixes (drift-gauge spec; team races wait for every driver to load,
-  main's DEC-020). This branch's decisions were renumbered to DEC-021..023.
-  On the merged branch Tier 1 is green (ui 235, game 188, server 32) and e2e
-  is 37/37.
-- **Rare flake (main's):** headless.test.js "knocks over a cyclist..."
-  failed once in a full parallel run, then passed 6/6 alone (here and on a
-  clean main) and 3/3 in full runs.
-- **Stage 3 committed** (Garage, ChoiceGroup, DEC-024): e2e 44/44.
-- **Standing instruction (DEC-025):** run stages 4-9 without stopping, then
-  push and merge into main.
-- **Stage 4 committed** (seeded admin, DEC-026): server 52, e2e 41/41.
-- **Stage 5 committed** (roster in store, DEC-027): server 98, e2e 41/41.
-- **Stage 6 committed** (Workshop admin-only, R-06 redefined): game 215,
-  server 99, e2e 45/46 + rerun (machine stall).
-- **Stages 7-8 committed:** style in team races (multiplayer 4/4);
-  deploy config and docs.
-- **Current stage:** 9 (push, merge into main, verify the deploy).
-- **Owed by the human:** in Render, set `KR_ADMIN_PASSWORD_HASH` (and
-  `DATABASE_URL` to keep accounts and the cast across sleeps).
+- **Shipped:** `feat/cast-admin-garage` (pushed) is merged into `main` as
+  `8922810`, whose tree is identical to the tested branch tip. Pages
+  redeployed (bundle `index-A31GWlYp.js` carries the pun names), and Render
+  (`kart-republique.onrender.com`) serves the new server.
+- **Live checks 2026-10-20:**
+  - `/api/kr` answers, with `accounts: file`, so there is no database yet.
+  - `/api/roster` returns the default cast.
+  - Registering `RIDA` gets 409.
+  - The preflight allows PUT.
+  - A roster PUT without a token gets 401.
+- **Final test state:** Tier 1 green (ui 241 + 8 skipped, game 217, server
+  100); `npm audit --omit=dev` 0; e2e 47/47 (the last full run was 46/47; its
+  one failure was a spec-name collision, fixed and rerun 4/4).
+- **Decisions:** DEC-021..027 (port onto main; E2E after every stage; pun
+  names; ChoiceGroup; run every stage then push and merge; seeded admin;
+  roster in the store).
+- **Owed by the human:**
+  - In Render > Environment, set `KR_ADMIN_PASSWORD_HASH` (made with
+    `npm run -s admin-hash -w @kart-republique/server`). Until then nobody is
+    admin and the Workshop is off.
+  - Set `DATABASE_URL` (a free Neon Postgres) so accounts and the cast
+    survive the free plan's sleeps.
+- **Follow-ups:**
+  - a `/design-sync` re-sync to upload ChoiceGroup;
+  - main's per-IP login limiter trusts `X-Forwarded-For` (per-account
+    limit added; see DEC-026);
+  - the packages/ui story fixtures keep the old names (A-019);
+  - rare flake: headless "knocks over a cyclist".
+- **Local leftovers:**
+  - branches `feat/multiplayer` (the reference implementation) and
+    `Feature/vigilant-mendel-913389` (a redundant netrace de-flake), neither
+    merged;
+  - kept, not deleted.
 
 ## Previous task (on main's history)
 
