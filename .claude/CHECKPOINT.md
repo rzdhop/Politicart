@@ -38,8 +38,11 @@ Current state only. History lives in git.
 - **Stage 5 committed** (roster in store, DEC-027): server 98, e2e 41/41.
 - **Stage 6 committed** (Workshop admin-only, R-06 redefined): game 215,
   server 99, e2e 45/46 + rerun (machine stall).
-- **Current stage:** 7 (kart style in team races). **Next action:**
-  implement inline.
+- **Stages 7-8 committed:** style in team races (multiplayer 4/4);
+  deploy config and docs.
+- **Current stage:** 9 (push, merge into main, verify the deploy).
+- **Owed by the human:** in Render, set `KR_ADMIN_PASSWORD_HASH` (and
+  `DATABASE_URL` to keep accounts and the cast across sleeps).
 
 ## Previous task (on main's history)
 

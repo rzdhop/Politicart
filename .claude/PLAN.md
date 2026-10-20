@@ -1,6 +1,6 @@
 # Plan -- bring the cast admin, the Garage and the pun names onto main
 
-Drafted 2026-10-20, **approved** the same day ("Plan approved. Run the E2E suite
+Drafted 2026-10-20, **approved** the same day; stages 0-8 **done**, stage 9 (push and merge) next. Approved ("Plan approved. Run the E2E suite
 after every stage without asking me each time"). The previous plan (admin account,
 kart personalisation, pun names; 9 stages on `feat/multiplayer`) is complete
 and lives in git history at `4ee4673`. That branch stays as the reference
