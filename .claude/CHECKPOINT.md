@@ -108,16 +108,18 @@ The game at `index.html` must keep working. No item here may break.
 | R-03 | Pause / resume / quit to menu | `e2e/game.spec.ts` R-03 (3 specs) | COVERED |
 | R-04 | Mute toggle (button and `M` key) | `e2e/game.spec.ts` R-04 (2 specs) | COVERED |
 | R-05 | Graphics toggle: detailed with shadows vs light low-poly | `e2e/game.spec.ts` R-05 (2 specs) | COVERED |
-| R-06 | Workshop: rename, colours, kart livery, campaign posters; localStorage persistence; reset | `e2e/game.spec.ts` R-06 (3 specs) | COVERED |
+| R-06 | Workshop (admin only): rename, colours, kart defaults, livery, posters; saved on the server for every player; reset | `e2e/admin.spec.ts` R-06 workshop (3 specs) | COVERED (redefined 2026-10-20) |
 | R-07 | Keyboard controls as documented in the README controls table | `e2e/game.spec.ts` R-07 (3 specs) | COVERED |
 | R-08 | Minimap canvas rendering | `e2e/game.spec.ts` R-08 (1 spec) | COVERED |
 | R-09 | Window resize without layout or renderer breakage | `e2e/game.spec.ts` R-09 (2 specs) | COVERED |
 | R-10 | Three laps, five AI opponents, rubber-banding | none | UNVERIFIED (manual) |
-| R-11 | 11 characters with their stats and signature powers | none | UNVERIFIED (manual) |
+| R-11 | 16 characters (pun names) with their stats and signature powers | none | UNVERIFIED (manual) |
 | R-12 | 14 items with rank-weighted odds from golden ballot boxes | none | UNVERIFIED (manual) |
 | R-13 | 3 circuits with ramps, tricks, pits, dash panels, chicanes, crossings | none | UNVERIFIED (manual) |
 | R-14 | Synthesized WebAudio sound and music | none | UNVERIFIED (manual) |
-| R-16 | Team race: two players join one room by code, race on opposite teams, see team points; the static (Pages) build offers no Multijoueur | `e2e/multiplayer.spec.ts` (2 specs) + `apps/server/src/*.test.js` | COVERED 2026-10-15 |
+| R-16 | Team race: an account hosts, players join by code or invitation, race on opposite teams, see team points and each other's Garage styles; the static (Pages) build without a server offers no Multijoueur | `e2e/multiplayer.spec.ts` (4 specs) + `apps/server/src/*.test.js` | COVERED 2026-10-20 |
+| R-17 | Garage: style your own kart (colours, wheels, spoiler, pods, number, sticker); kept in the browser; reset; races with it | `e2e/garage.spec.ts` (4 specs) + `engine/garage.test.js`, `engine/kart.test.js` | COVERED 2026-10-20 |
+| R-18 | Admin access: only the env-seeded admin account sees the Workshop; visitors, normal accounts and the static build never do; logout hides it; admin kart defaults reach players' Garage | `e2e/admin.spec.ts` access specs + `apps/server/src/admin.test.js`, `roster.test.js` | COVERED 2026-10-20 |
 | R-15 | Playable from GitHub Pages at the documented URL | Pages workflow run 38699287498 + HTTP check of the published index and bundle | VERIFIED 2026-10-15 |
 
 **Stage 7 maps the contract to specs** in `e2e/game.spec.ts`, whose describe

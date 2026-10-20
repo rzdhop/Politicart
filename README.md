@@ -36,7 +36,7 @@ The server prints its addresses. Everyone on the same network opens `http://<tha
 When a game server answers, the title screen shows **Compte**. An account is a pseudo (3 to 16 letters, digits, `-`, `_`, `.`) and a password; the server stores only a salted scrypt hash.
 
 - **Levels.** Every race earns experience: 70 for a win down to 20 for last place, 10 for an unfinished race, plus 20 when your team wins a team race. Level 2 takes 120 XP, and each level costs 40 more than the one before.
-- **Candidates.** Victor, Gégé, Maurice and Capucine are free. Each level from 2 to 13 unlocks one more: Lucie, Patrick, Bernadette, Kevin, Odile, Lulu, Hubert, Gaspard, Jean-Mi, Martine, Aymeric, then Thierry. Locked candidates show on the roster with the level that unlocks them.
+- **Candidates.** Emmanuel Macaron, Philippe Martini, Jean Lassalle-des-Fêtes and Sandrine Ruisseau are free. Each level from 2 to 13 unlocks one more: Nathalie Artichaut, José Bovin, Marine Le Stylo, Jordan Mortadella, Eva Joly-Jumper, Jean-Luc Mélèche, Gérard L’Archiduc, Bruno Le Maigre, Éric Zemmoule, Gérald Darmalin, Michel Bananier, then Manuel Valse. Locked candidates show on the roster with the level that unlocks them.
 - **Friends.** Add someone by pseudo; they accept or refuse. The list shows who is online and in which room. From your room in the lobby, **Inviter** sends an online friend an invitation that appears over their menus; **Rejoindre** takes them straight into your room.
 - **Guests** (no account, or no server reachable, as on a plain GitHub Pages build) choose a pseudo and play the four starting candidates, without levels. In team races they can join a room by code or by invitation but cannot create one.
 
@@ -46,8 +46,10 @@ Accounts are kept in a JSON file by default, or in Postgres when `DATABASE_URL` 
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `DATABASE_URL` | unset | A Postgres connection string. The server creates its three tables (`kr_users`, `kr_sessions`, `kr_friends`) on start. Hosted databases give a URL ending in `?sslmode=require`. |
-| `KR_DATA` | `apps/server/data/kr-accounts.json` (`/data/kr-accounts.json` in the container) | The JSON file used without `DATABASE_URL`. `:memory:` keeps accounts in memory only. |
+| `DATABASE_URL` | unset | A Postgres connection string. The server creates its tables (`kr_users`, `kr_sessions`, `kr_friends`, and `kr_docs` for the admin's cast) on start. Hosted databases give a URL ending in `?sslmode=require`. |
+| `KR_DATA` | `apps/server/data/kr-accounts.json` (`/data/kr-accounts.json` in the container) | The JSON file used without `DATABASE_URL`. `:memory:` keeps accounts in memory only. The admin's cast is kept beside it, in `kr-docs/roster.json`. |
+| `KR_ADMIN_USER` | `rida` | The one admin account. Nobody can sign up under this name. |
+| `KR_ADMIN_PASSWORD_HASH` | unset | The admin's password hash (see below). Unset or malformed: nobody is admin and the Workshop is off. |
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -61,6 +63,18 @@ The game build reads one variable: `VITE_KR_SERVER`, the origin of a game server
 
 The server runs each race at 60 steps a second in its own worker thread and sends every player 20 snapshots a second. Each browser draws the race about 100 ms behind the server and sends its controls back 30 times a second. On a local network the delay is not noticeable. Over the internet, a player's own kart reacts with roughly half a round trip of extra lag.
 
+### The admin and the Workshop
+
+One account, `rida` by default, is the admin: only it sees **Atelier** on the title screen. There it renames the candidates, sets their colours, liveries and default kart (accents, wheels, spoiler, side pods, number, sticker), and uploads campaign posters. **Enregistrer** saves the cast on the game server, and every player gets it, on the server's page and on the GitHub page alike. Players still style their own kart in the **Garage**; whatever they leave alone follows the admin's default.
+
+The admin's password is never stored, only its hash, held in an environment variable. To set it up:
+
+```sh
+npm run -s admin-hash -w @kart-republique/server     # asks for the password twice (12 characters or more), prints the hash
+```
+
+Put the printed hash in `.env` at the repo root as `KR_ADMIN_PASSWORD_HASH='scrypt$...'` (single quotes: the hash contains `$`), or in your host's environment settings, and restart the server. At start the server creates the admin account, or resets its password to that hash, and logs whether administration is on. The admin then logs in through **Compte** like any player. Failed logins are limited per address and per account (10 every 15 minutes).
+
 ### Playing online (Render + GitHub Pages)
 
 The free way to play team races over the internet, with no machine of your own left running:
@@ -68,7 +82,9 @@ The free way to play team races over the internet, with no machine of your own l
 1. **Host the server on Render.** On [render.com](https://render.com), choose **New > Blueprint**, pick this repository and apply. `render.yaml` builds the `Dockerfile` on the free plan as a single instance. The game, solo and team races, is then playable at the address Render gives, `https://<name>.onrender.com/`.
 2. **Point the GitHub page at it.** In the repository's **Settings > Secrets and variables > Actions > Variables**, add `KR_SERVER_URL` = `https://<name>.onrender.com` (no trailing path), then re-run the **Deploy to GitHub Pages** workflow. `https://rzdhop.github.io/Politicart/` now shows **Multijoueur** whenever the server answers.
 
-Render's free disk is wiped whenever the service sleeps, so accounts need a database there: create a free Postgres (for example on [Neon](https://neon.tech) or Supabase) and paste its URL into the service's `DATABASE_URL` variable, which the Blueprint leaves for you to fill. Without it the server still runs, but every account vanishes at each restart.
+3. **Make yourself admin.** In the Render service's **Environment**, set `KR_ADMIN_PASSWORD_HASH` to the hash printed by `npm run -s admin-hash -w @kart-republique/server` (the Blueprint leaves it for you to fill). Render restarts the service; log in as `rida` through **Compte**.
+
+Render's free disk is wiped whenever the service sleeps, so accounts and the admin's cast need a database there: create a free Postgres (for example on [Neon](https://neon.tech) or Supabase) and paste its URL into the service's `DATABASE_URL` variable, which the Blueprint leaves for you to fill. Without it the server still runs, but every account and every cast edit vanishes at each restart (the admin account itself is recreated from its hash).
 
 The free plan sleeps after 15 minutes with nobody connected. The first visitor after that waits about a minute before the Multijoueur button appears, and a race in progress when it falls asleep is lost. Delete the variable and re-run the workflow to make the page solo again.
 
@@ -82,7 +98,8 @@ docker run --rm -p 8080:8080 kart-republique     # the same server, in a contain
 
 fly launch --no-deploy --copy-config             # choose your own app name and region
 fly deploy
-fly volumes create kr_data --size 1              # once: the accounts file lives on it (/data)
+fly volumes create kr_data --size 1              # once: the accounts file and the cast live on it (/data)
+fly secrets set KR_ADMIN_PASSWORD_HASH='scrypt$...'   # the admin's hash, in single quotes
 fly scale count 1                                # rooms live in memory: exactly one machine
 ```
 
