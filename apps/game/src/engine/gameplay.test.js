@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { CHARACTERS } from './data.js';
 import { drain } from './events.js';
 import { stunKart, updateProjectiles, useItem } from './items.js';
+import { LINES, setLineRng } from './lines.js';
 import { resetMachine, transition } from './machine.js';
 import { BUMP_TIME, DIRECTIVE_CAP, kartCollisions, updateKart } from './physics.js';
 import { GOD_COOLDOWN, usePower } from './powers.js';
@@ -96,11 +97,14 @@ describe('new items', () => {
   });
 
   it('Cumul des mandats uses two other items at once', () => {
-    const k = G.karts[0]; k.isAI = false; k.item = 'cumul'; k.itemRolling = 0; useItem(k);
-    expect(k.item).toBe(null);
-    const texts = drain().map(e => e.text).filter(Boolean);
-    expect(texts.some(t => /^CUMUL DES MANDATS : .+ \+ .+/.test(t))).toBe(true);
-    expect(texts.some(t => /CUMUL DES MANDATS.*CUMUL DES MANDATS/.test(t))).toBe(false);
+    setLineRng(() => 0);                            // variant 0 of every line, so the cumul banner has its known shape
+    try {
+      const k = G.karts[0]; k.isAI = false; k.item = 'cumul'; k.itemRolling = 0; useItem(k);
+      expect(k.item).toBe(null);
+      const texts = drain().map(e => e.text).filter(Boolean);
+      expect(texts.some(t => /^CUMUL DES MANDATS : .+ \+ .+/.test(t))).toBe(true);
+      expect(texts.some(t => /CUMUL DES MANDATS.*CUMUL DES MANDATS/.test(t))).toBe(false);
+    } finally { setLineRng(null); }
   });
 
   it('Pantouflage jumps the kart down the road, facing forward', () => {
@@ -182,6 +186,18 @@ describe('BRAV-M and who hears about it', () => {
     expect(readers(b).length).toBeGreaterThan(0);
     expect(readers(c)).toHaveLength(0);
   });
+
+  it('gives every victim the same sentence, drawn from the LINES table (DEC-038)', () => {
+    const [a, b, c] = G.karts;
+    for (const k of [a, b, c]) k.isAI = false;
+    place(a, 200, 0, 30); place(b, 205, 0, 30); place(c, 206, 1, 30); drain();
+    a.item = 'casserolade'; a.itemRolling = 0; useItem(a);
+    const events = drain().filter(e => e.type === 'toast');
+    const mine = events.filter(e => e.to === a).map(e => e.text), theirs = events.filter(e => e.to !== a).map(e => e.text);
+    expect(mine).toHaveLength(1); expect(mine[0]).toMatch(/2/);
+    expect(theirs).toHaveLength(2); expect(theirs[0]).toBe(theirs[1]);
+    expect(LINES.item.casserolade.hit).toContain(theirs[0]);
+  });
 });
 
 describe('the retuned powers (DEC-028)', () => {
@@ -210,7 +226,7 @@ describe('the retuned powers (DEC-028)', () => {
     updateProjectiles(STEP);
     expect(o.stun).toBe(0); expect(o.speed).toBeLessThan(15); expect(o.confused).toBeGreaterThan(1);
     expect(G.hazards).toContain(kittens[0]);                          // the kittens stay on the road
-    expect(drain().some(e => e.to === o && /CHATONS/.test(e.text))).toBe(true);
+    expect(drain().some(e => e.to === o && LINES.hazard.chatons.hit.includes(e.text))).toBe(true);
   });
 
   it('Fauchage volontaire mows the hazards and the karts in the swath ahead, and nothing behind', () => {
@@ -242,7 +258,7 @@ describe('what reaches a driver (DEC-029)', () => {
     expect(drain().filter(e => e.to === b)).toHaveLength(0);
     for (let n = 0; n < 60 && b.stun === 0; n++) updateProjectiles(STEP);
     expect(b.stun).toBeGreaterThan(0);
-    expect(drain().some(e => e.to === b && /RENVERSÉ/.test(e.text))).toBe(true);
+    expect(drain().some(e => e.to === b && LINES.item.motion.hit.includes(e.text))).toBe(true);
   });
 
   it('tells nothing to a driver who has finished, even for a field-wide power', () => {
