@@ -48,7 +48,7 @@ export const PlainKart: Story = {
   },
 };
 
-/** The incredible candidate, every part a drop from the Plitibox. */
+/** The incredible candidate, every part a drop from the Politibox. */
 export const Incredible: Story = {
   args: {
     name: 'Aymeric de Castelbon',

@@ -144,7 +144,7 @@ describe('ShopCard', () => {
   });
 
   it('omits the price line and the ribbon when there is nothing to show', () => {
-    const { container } = render(<ShopCard title="Plitibox" grade="rare" />);
+    const { container } = render(<ShopCard title="Politibox" grade="rare" />);
     expect(container.querySelector('.shop-price')).toBeNull();
     expect(container.querySelector('.shop-ribbon')).toBeNull();
     expect(container.querySelector('.shop-subtitle')).toBeNull();
@@ -250,7 +250,7 @@ describe('RevealStage', () => {
 
 describe('Tabs', () => {
   const TABS = [
-    { id: 'box', label: 'Plitibox', props: { id: 'shop-tab-box' } },
+    { id: 'box', label: 'Politibox', props: { id: 'shop-tab-box' } },
     { id: 'chars', label: 'Candidat·es', props: { id: 'shop-tab-chars' } },
     { id: 'parts', label: 'Pièces', props: { id: 'shop-tab-parts' } },
   ] as const;

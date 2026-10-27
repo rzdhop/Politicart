@@ -15,7 +15,7 @@ const PHASES: RevealPhase[] = ['idle', 'opening', 'burst', 'reveal'];
 function ResultCard({ grade }: { grade: Grade }) {
   return (
     <Panel style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-      <Subtitle style={{ fontSize: 14 }}>La Plitibox vous offre</Subtitle>
+      <Subtitle style={{ fontSize: 14 }}>La Politibox vous offre</Subtitle>
       <Heading>Lucie Vasseur</Heading>
       <GradeBadge grade={grade} label={GRADE_LABELS[grade]} />
       <Row>
@@ -34,7 +34,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The DOM half of the Plitibox opening: a full-screen overlay over the 3D scene. `opening` dims the scene, `burst` flashes white into the grade colour, `reveal` raises the result card the game supplies and pops its badge. No timers: the game drives `phase` from its own clock. Nothing here takes a tap except the card in `reveal`.',
+          'The DOM half of the Politibox opening: a full-screen overlay over the 3D scene. `opening` dims the scene, `burst` flashes white into the grade colour, `reveal` raises the result card the game supplies and pops its badge. No timers: the game drives `phase` from its own clock. Nothing here takes a tap except the card in `reveal`.',
       },
     },
   },
@@ -69,7 +69,7 @@ export const Burst: Story = {
  * Interactive: step through the phases with the button, which stays
  * clickable because the overlay takes no pointer events outside the card.
  */
-export const PlitiboxOpening: Story = {
+export const PolitiboxOpening: Story = {
   render: function Render(args) {
     const [phase, setPhase] = useState<RevealPhase>('idle');
     const [grade, setGrade] = useState<Grade>(args.grade);

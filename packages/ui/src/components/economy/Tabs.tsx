@@ -38,7 +38,7 @@ export interface TabsProps<V extends string> extends Omit<ComponentPropsWithRef<
  *   active={tab}
  *   onChange={setTab}
  *   tabs={[
- *     { id: 'box', label: 'Plitibox', props: { id: 'shop-tab-box' } },
+ *     { id: 'box', label: 'Politibox', props: { id: 'shop-tab-box' } },
  *     { id: 'chars', label: 'Candidat·es', props: { id: 'shop-tab-chars' } },
  *   ]}
  * />

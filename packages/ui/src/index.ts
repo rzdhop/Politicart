@@ -144,7 +144,7 @@ export { TextInput, type TextInputProps } from './components/workshop/TextInput'
 // Misc.
 export { NoteBanner, type NoteBannerProps } from './components/misc/NoteBanner';
 
-// Economy: grades, politicoins, the shop and the Plitibox reveal. The grade
+// Economy: grades, politicoins, the shop and the Politibox reveal. The grade
 // motion is fx.css, keyed on the `grade-<g>` classes these set.
 export { CoinCount, type CoinCountProps } from './components/economy/CoinCount';
 export {

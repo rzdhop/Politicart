@@ -1,5 +1,5 @@
 // The politicoins economy (economy.js) on a real server with a memory store:
-// the guards of every route, the shop, the Plitibox with an injected roll,
+// the guards of every route, the shop, the Politibox with an injected roll,
 // the per-account rate limit, friends' stats and the admin's coin grant; then
 // settleRace, ownedOf and normaliseStats on their own.
 import { randomBytes } from 'node:crypto';
@@ -39,7 +39,7 @@ function client(port) {
   };
 }
 
-// The Plitibox draws from this queue, then 0.5 (a 10-coin drop) once it is empty.
+// The Politibox draws from this queue, then 0.5 (a 10-coin drop) once it is empty.
 const rolls = [];
 const rng = () => (rolls.length ? rolls.shift() : 0.5);
 
@@ -189,7 +189,7 @@ describe('the shop', () => {
   });
 });
 
-describe('the Plitibox', () => {
+describe('the Politibox', () => {
   it('needs its price', async () => {
     const u = await account({ coins: BOX_PRICE - 1 });
     const r = await post('/api/box/open', {}, u.token);

@@ -75,7 +75,7 @@ export const PROTOCOL = 1;
  * Before listening it loads the admin's cast from the store and applies it to
  * CHARACTERS (roster.js), so lobbies and races name the AI as edited; an
  * invalid stored cast is logged and the default one used.
- * `rng` draws the Plitibox and `now` is the clock of race rewards (the daily
+ * `rng` draws the Politibox and `now` is the clock of race rewards (the daily
  * bonus); tests inject both.
  * Resolves to `{ port, close() }` once listening.
  */

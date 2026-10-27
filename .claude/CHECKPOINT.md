@@ -2,13 +2,13 @@
 
 Current state only. History lives in git.
 
-## Latest task -- 2026-10-27: politicoins, the Plitibox, grades, parts, trails, two circuits, stats
+## Latest task -- 2026-10-27: politicoins, the Politibox, grades, parts, trails, two circuits, stats
 
 - **Branch:** `feature/epic-turing-clj1rj`, cut from `main` at `1bbcd2e`.
 - **Plan:** `.claude/PLAN.md` (DEC-032..039, A-026..A-035). Stages run in
   worker agents dispatched by the session (DEC-039): wave 1 (catalogue,
   store, maps, lines, mobile), wave 2 (kart parts and trails, server
-  economy, library components), then shop and Plitibox, Garage locks and
+  economy, library components), then shop and Politibox, Garage locks and
   stats, the Garage in play, docs and push.
 - **Baseline at `1bbcd2e`:** `npm ci` (this container had no node_modules);
   Tier 1 green (ui 241 + 8 skipped, game 254, server 118), audit 0. E2E

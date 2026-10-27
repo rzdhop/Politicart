@@ -116,7 +116,7 @@ describe('economy API client', () => {
   const fake = (status, body) => { const calls = []; const f = async (url, init) => { calls.push([url, init]); return { ok: status < 400, status, json: async () => body }; }; f.calls = calls; return f; };
   const sent = f => f.calls.map(([url, init]) => [init.method, url, init.body === undefined ? undefined : JSON.parse(init.body), init.headers.authorization]);
 
-  it('buys, opens a Plitibox and reads the friends’ stats under the account’s token', async () => {
+  it('buys, opens a Politibox and reads the friends’ stats under the account’s token', async () => {
     const f = fake(200, { profile: { coins: 0 } });
     await shop.buyChar('tok', 'lucie', { fetchImpl: f, base: 'https://kr.example' });
     await shop.buyPart('tok', 'wheels', 'gold', { fetchImpl: f });

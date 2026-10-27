@@ -1,4 +1,4 @@
-// The catalogue: grades, prices, Plitibox odds and ownership of candidates,
+// The catalogue: grades, prices, Politibox odds and ownership of candidates,
 // kart part options and trails -- the politicoins economy's shared truth
 // (DEC-032).
 //
@@ -12,8 +12,8 @@
 // through; everywhere else null owns nothing beyond the commons.
 //
 // Candidates: the level makes one reachable (progress.js unlockedIds), the
-// price makes it owned, a Plitibox win skips the level (DEC-034). Trails are
-// never sold: the Plitibox is their only source. The option names and the
+// price makes it owned, a Politibox win skips the level (DEC-034). Trails are
+// never sold: the Politibox is their only source. The option names and the
 // grades are an assumption (A-026) the human may retune here, in one place.
 import { EXHAUSTS, MASTS, NOSES, SKINS, SPOILERS, STICKERS, TRAILS, UNDERGLOWS, WHEELS } from './kartstyle.js';
 import { drivableIds, STARTERS, unlockLevel } from './progress.js';
@@ -24,7 +24,7 @@ export const GRADES = Object.freeze(['common', 'rare', 'mythic', 'incredible']);
 export const GRADE_LABEL = Object.freeze({ common: 'Commun', rare: 'Rare', mythic: 'Mythique', incredible: 'Incroyable' });
 export const CHAR_PRICE = Object.freeze({ common: 300, rare: 800, mythic: 2000, incredible: 5000 });
 export const PART_PRICE = Object.freeze({ common: 0, rare: 150, mythic: 400, incredible: 1000 });
-/** What a duplicate Plitibox drop pays back, by grade. */
+/** What a duplicate Politibox drop pays back, by grade. */
 export const REFUND = Object.freeze({ common: 50, rare: 150, mythic: 400, incredible: 1000 });
 
 export const BOX_PRICE = 120;
@@ -194,7 +194,7 @@ export function coinsForRace({ rank, field = 6, finished = true, teamWon = false
   return (finished ? RACE_COINS[r] : DNF_COINS) + (teamWon ? TEAM_WIN_COINS : 0);
 }
 
-// The Plitibox pools of the second draw: every non-starter candidate, and
+// The Politibox pools of the second draw: every non-starter candidate, and
 // one flat list of every non-common part key and non-'none' trail (A-027).
 const CHAR_POOL = PAID_CHARS.map(id => ({ kind: 'char', id }));
 const PART_POOL = Object.freeze([...PAID_PARTS.map(id => ({ kind: 'part', id })), ...PAID_TRAILS.map(id => ({ kind: 'trail', id }))]);
@@ -210,7 +210,7 @@ const owns = (owned, { kind, id }) =>
   (kind === 'char' ? ownsChar(owned, id) : kind === 'trail' ? ownsTrail(owned, id) : ownsPart(owned, parsePartKey(id).category, parsePartKey(id).value));
 
 /**
- * Open a Plitibox. `rng` returns numbers in [0, 1): the first draw picks the
+ * Open a Politibox. `rng` returns numbers in [0, 1): the first draw picks the
  * kind (BOX_ODDS, the rest coins), the second picks uniformly inside the
  * pool, or walks COIN_DROPS over the coins share (so each tier lands on its
  * share of every opening). A `duplicate` is something `owned` already has,

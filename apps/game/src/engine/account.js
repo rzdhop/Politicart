@@ -55,7 +55,7 @@ export const shop = {
   buyChar: (token, id, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/shop/char', { token, body: { id } }),
   /** Buy option `value` of part `category`: { ok, profile, bought: { kind: 'part', key, price } }. */
   buyPart: (token, category, value, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/shop/part', { token, body: { category, value } }),
-  /** Open a Plitibox: { ok, profile, drop } (catalog.js rollBox). */
+  /** Open a Politibox: { ok, profile, drop } (catalog.js rollBox). */
   openBox: (token, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/box/open', { token, body: {} }),
   /** The friends' stats: { ok, friends: [{ id, name, level, stats, collection }] }. */
   friendStats: (token, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'GET', '/api/stats/friends', { token }),

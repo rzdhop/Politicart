@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Tabs } from './Tabs';
 
 const SHOP_TABS = [
-  { id: 'box', label: 'Plitibox', props: { id: 'story-tab-box' } },
+  { id: 'box', label: 'Politibox', props: { id: 'story-tab-box' } },
   { id: 'chars', label: 'Candidat·es', props: { id: 'story-tab-chars' } },
   { id: 'parts', label: 'Pièces', props: { id: 'story-tab-parts' } },
 ] as const;

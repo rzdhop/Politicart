@@ -6,7 +6,7 @@
 // start -- they are also all a guest may drive -- and every level from 2 to
 // 13 makes one more *reachable*: the level is the right to buy it with
 // politicoins (DEC-034); what is driven is the starters plus what the
-// account owns (`owned.chars`, bought or won in a Plitibox), which the
+// account owns (`owned.chars`, bought or won in a Politibox), which the
 // catalogue (catalog.js) prices and grades. A level costs a little more than
 // the one before it.
 //

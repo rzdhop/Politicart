@@ -104,7 +104,7 @@ export class Room {
   }
 
   /**
-   * An account changed while in the room (a level, a purchase, a Plitibox
+   * An account changed while in the room (a level, a purchase, a Politibox
    * win): it may drive and wear what it owns now. A god keeps every candidate.
    */
   setProfile(id, { level, owned }) {

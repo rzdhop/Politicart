@@ -729,10 +729,10 @@ who leaves turns into an ordinary AI kart. A-022 is resolved: the god joins
 the running race. The worker's safety cap (KR_MAX_RACE_S, 12 min by
 default) is for three laps and scales with the laps the admin sets.
 
-## DEC-032 -- One catalogue module is the shared truth for grades, prices, odds and the Plitibox roll
+## DEC-032 -- One catalogue module is the shared truth for grades, prices, odds and the Politibox roll
 
 **Context.** The human asked for a currency (politicoins), a lootbox (the
-Plitibox: 120 coins; 2 % candidate, 4 % part or trail, 94 % coins split
+Politibox: 120 coins; 2 % candidate, 4 % part or trail, 94 % coins split
 5/10/50/100/500), grades (common, rare, mythic, incredible) on candidates,
 kart part options and trails, with prices by grade and refunds for
 duplicates. The client renders the shop and the server charges, so both need
@@ -773,13 +773,13 @@ common option is implicit.
 ## DEC-034 -- `profile.unlocked` means drivable; `profile.reachable` is the level gate
 
 **Context.** The human chose "level gate AND price": a candidate is bought
-with coins once its level is reached, and a Plitibox win bypasses the
+with coins once its level is reached, and a Politibox win bypasses the
 level. Every consumer of `unlocked` (roster locks, the lobby's `allowed`,
 the Compte counter) wants "what can I drive".
 
 **Decision.** `profileOf` returns `unlocked = STARTERS ∪ owned.chars` and
 `reachable = unlockedIds(level)`. The shop buys only what is reachable;
-the Plitibox grants into `owned.chars` regardless. An account from before
+the Politibox grants into `owned.chars` regardless. An account from before
 the economy (`owned` null) is seeded once with the candidates its level had
 unlocked (A-029).
 
@@ -816,9 +816,9 @@ change, and is validated and ownership-filtered like any other field.
 **Consequence.** No protocol change. The admin may set a trail as a
 character default. The lobby shows the trail as a named badge (A-032).
 
-## DEC-037 -- Two machine states, `shop` and `lootbox`; the Plitibox scene owns the canvas in `lootbox`
+## DEC-037 -- Two machine states, `shop` and `lootbox`; the Politibox scene owns the canvas in `lootbox`
 
-**Context.** The shop needs a screen; the Plitibox opening is a 3D sequence
+**Context.** The shop needs a screen; the Politibox opening is a 3D sequence
 on the shared canvas like the turntable (`preview.js`).
 
 **Decision.** `title → shop`, `select → shop`, `shop → title | select |

@@ -1,4 +1,4 @@
-// The politicoins economy over HTTP: the shop, the Plitibox, friends' stats,
+// The politicoins economy over HTTP: the shop, the Politibox, friends' stats,
 // and what a race pays (DEC-032..035).
 //
 //   POST /api/shop/char   {id}               -> { profile, bought: { kind: 'char', id, price } }
@@ -52,7 +52,7 @@ function table(map, keys, keep) {
 /**
  * An account's stats, repaired field by field: every counter a whole number
  * from 0, the per-circuit best times in 5..3600 s, the per-candidate counts
- * and the Plitibox drops by kind, `lastDaily` a 'YYYY-MM-DD' (UTC) or null,
+ * and the Politibox drops by kind, `lastDaily` a 'YYYY-MM-DD' (UTC) or null,
  * `lastRaceAt` a time or null. Unknown keys are dropped. Never throws.
  */
 export function normaliseStats(s) {
@@ -154,7 +154,7 @@ const REFUSED = {
  * an account (accounts.js, async); `onProfile(user)` is told of every change
  * of balance or inventory, so the account's sockets see it at once;
  * `isAdmin(user)` names the admin, who owns everything. `rng` draws the
- * Plitibox and `now` is the clock of the rate limit, both injectable for
+ * Politibox and `now` is the clock of the rate limit, both injectable for
  * tests. Returns `handle(req, res, path)`, true for the routes above.
  */
 export function economyApi(store, { profile, onProfile = () => {}, isAdmin = () => false, rng = Math.random, now = Date.now, log = console } = {}) {

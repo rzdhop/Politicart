@@ -25,7 +25,7 @@ export interface RevealStageProps extends ComponentPropsWithRef<'div'> {
 }
 
 /**
- * The DOM half of the Plitibox opening: a full-screen overlay over the 3D
+ * The DOM half of the Politibox opening: a full-screen overlay over the 3D
  * scene.
  *
  * It never intercepts input except for the result card in `reveal`, so a
