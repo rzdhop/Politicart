@@ -3,7 +3,7 @@ import { Button, Panel } from '@kart-republique/ui';
 import { actions, type GameState, type UiSnapshot } from './store';
 
 /** The menus a friend's invitation may interrupt; never a race in progress. */
-const MENUS: GameState[] = ['title', 'select', 'tracks', 'admin', 'account', 'lobby', 'results'];
+const MENUS: GameState[] = ['title', 'select', 'tracks', 'admin', 'account', 'lobby', 'results', 'dashboard'];
 
 /**
  * A friend invites us into their room: who, which room, join or ignore.

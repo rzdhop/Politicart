@@ -16,9 +16,17 @@
 //   addXp(id, xp)                  -> the updated user
 //   setHash(id, hash)              -> the updated user, or null; also closes
 //                                     every session of that user
+//   listUsers({ limit })           -> every account, newest first, without
+//                                     hashes: { id, name, xp, created, seen, banned }
+//   setBanned(id, reason | null)   -> the updated user, or null. A reason bans
+//                                     (banned = { at, reason }) and closes every
+//                                     session of that user; null lifts the ban
+//   touchSeen(id)                  -> notes that the account was just seen
 //   createSession(userId)          -> a new random token
-//   sessionUser(token)             -> user or null (sessions last 60 days)
+//   sessionUser(token)             -> user or null (sessions last 60 days; a
+//                                     banned account has no valid session)
 //   dropSession(token)
+//   dropSessionsOf(userId)         -> closes every session of that user
 //   links(id)                      -> [{ id, name, xp, status }] with status
 //                                     'friend' | 'incoming' | 'outgoing'
 //   requestFriend(from, to)        -> 'requested' | 'accepted' | 'already'
@@ -31,13 +39,16 @@
 //
 // Documents are whole JSON values under a fixed set of keys (DOC_KEYS; any
 // other key throws), for data the server keeps besides accounts: the admin's
-// cast (roster.js). The file store keeps each in its own file next to the
+// cast (roster.js) and the race counters of the admin's dashboard
+// (dashboard.js). The file store keeps each in its own file next to the
 // accounts file, <dir of KR_DATA>/kr-docs/<key>.json, written atomically: the
 // cast can weigh megabytes and must not ride along every account rewrite.
 // Postgres keeps them in kr_docs.
 //
-// A user is { id, name, hash, xp, created }. Passwords arrive here already
-// hashed (accounts.js); this module never sees one.
+// A user is { id, name, hash, xp, created, seen, banned }: `seen` is when the
+// account last logged in or said hello (null until it does), `banned` is null
+// or { at, reason } once the admin bans it (dashboard.js). Passwords arrive
+// here already hashed (accounts.js); this module never sees one.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { open, rename, unlink } from 'node:fs/promises';
@@ -50,7 +61,7 @@ export const nameKey = name => String(name).normalize('NFKC').toLowerCase();
 const newToken = () => randomBytes(32).toString('hex');
 
 /** The only document keys a store accepts; they become file names, so never user input. */
-export const DOC_KEYS = Object.freeze(['roster']);
+export const DOC_KEYS = Object.freeze(['roster', 'stats']);
 const docKey = key => { if (!DOC_KEYS.includes(key)) throw new TypeError('Unknown document key: ' + String(key)); return key; };
 
 /** Open the store the environment asks for. */
@@ -77,30 +88,46 @@ export function openFileStore(file, { log = console } = {}) {
   const save = () => { if (file && !timer) timer = setTimeout(flush, 200); };
   const byKey = key => Object.values(data.users).find(u => nameKey(u.name) === key) ?? null;
   const link = (a, b) => data.links.find(l => l.a === a && l.b === b) ?? null;
+  // Older files have neither field; read them as "never seen, not banned".
+  const full = u => ({ ...u, seen: u.seen ?? null, banned: u.banned ?? null });
+  const closeSessions = id => { for (const [t, sess] of Object.entries(data.sessions)) if (sess.userId === id) delete data.sessions[t]; };
 
   return {
     kind: file ? 'file' : 'memory',
     async createUser({ name, hash }) {
       if (byKey(nameKey(name))) return null;
-      const u = { id: randomUUID(), name, hash, xp: 0, created: Date.now() };
+      const u = { id: randomUUID(), name, hash, xp: 0, created: Date.now(), seen: null, banned: null };
       data.users[u.id] = u; save(); return { ...u };
     },
-    async user(id) { const u = data.users[id]; return u ? { ...u } : null; },
-    async userByName(name) { const u = byKey(nameKey(name)); return u ? { ...u } : null; },
-    async addXp(id, xp) { const u = data.users[id]; if (!u) return null; u.xp += Math.max(0, Math.floor(xp)); save(); return { ...u }; },
+    async user(id) { const u = data.users[id]; return u ? full(u) : null; },
+    async userByName(name) { const u = byKey(nameKey(name)); return u ? full(u) : null; },
+    async addXp(id, xp) { const u = data.users[id]; if (!u) return null; u.xp += Math.max(0, Math.floor(xp)); save(); return full(u); },
     async setHash(id, hash) {
       const u = data.users[id]; if (!u) return null;
-      for (const [t, sess] of Object.entries(data.sessions)) if (sess.userId === id) delete data.sessions[t];
-      u.hash = hash; save(); return { ...u };
+      closeSessions(id);
+      u.hash = hash; save(); return full(u);
     },
+    async listUsers({ limit = 500 } = {}) {
+      return Object.values(data.users).reverse().sort((a, b) => b.created - a.created).slice(0, limit)   // reversed first: two accounts of the same millisecond list newest first too
+        .map(u => ({ id: u.id, name: u.name, xp: u.xp, created: u.created, seen: u.seen ?? null, banned: u.banned ?? null }));
+    },
+    async setBanned(id, reason) {
+      const u = data.users[id]; if (!u) return null;
+      if (reason == null) u.banned = null;
+      else { u.banned = { at: Date.now(), reason: String(reason) }; closeSessions(id); }
+      save(); return full(u);
+    },
+    async touchSeen(id) { const u = data.users[id]; if (!u) return null; u.seen = Date.now(); save(); return full(u); },
     async createSession(userId) { const t = newToken(); data.sessions[t] = { userId, at: Date.now() }; save(); return t; },
     async sessionUser(token) {
       const s = typeof token === 'string' ? data.sessions[token] : null;
       if (!s) return null;
       if (Date.now() - s.at > SESSION_MS) { delete data.sessions[token]; save(); return null; }
-      return this.user(s.userId);
+      const u = await this.user(s.userId);
+      return u && !u.banned ? u : null;
     },
     async dropSession(token) { if (typeof token === 'string' && data.sessions[token]) { delete data.sessions[token]; save(); } },
+    async dropSessionsOf(userId) { closeSessions(userId); save(); },
     async links(id) {
       const out = [];
       for (const l of data.links) {
@@ -194,9 +221,11 @@ create table if not exists kr_sessions (
 create table if not exists kr_friends (
   a text not null references kr_users(id) on delete cascade, b text not null references kr_users(id) on delete cascade,
   status text not null, primary key (a, b));
-create table if not exists kr_docs (key text primary key, value jsonb not null, updated bigint not null);`;
+create table if not exists kr_docs (key text primary key, value jsonb not null, updated bigint not null);
+alter table kr_users add column if not exists seen bigint;
+alter table kr_users add column if not exists banned jsonb;`;
 
-const row = r => (r ? { id: r.id, name: r.name, hash: r.hash, xp: Number(r.xp), created: Number(r.created) } : null);
+const row = r => (r ? { id: r.id, name: r.name, hash: r.hash, xp: Number(r.xp), created: Number(r.created), seen: r.seen == null ? null : Number(r.seen), banned: r.banned ?? null } : null);
 
 export async function openPgStore(databaseUrl, { Pool } = {}) {
   if (!Pool) ({ Pool } = (await import('pg')).default);
@@ -222,12 +251,23 @@ export async function openPgStore(databaseUrl, { Pool } = {}) {
       await q('delete from kr_sessions where user_id = $1', [id]);
       return one('update kr_users set hash = $2 where id = $1 returning *', [id, hash]);
     },
+    async listUsers({ limit = 500 } = {}) {
+      const r = await q('select id, name, xp, created, seen, banned from kr_users order by created desc limit $1', [limit]);
+      return r.rows.map(x => { const { hash: _hash, ...u } = row(x); return u; });
+    },
+    async setBanned(id, reason) {
+      if (reason == null) return one('update kr_users set banned = null where id = $1 returning *', [id]);
+      await q('delete from kr_sessions where user_id = $1', [id]);
+      return one('update kr_users set banned = $2::jsonb where id = $1 returning *', [id, JSON.stringify({ at: Date.now(), reason: String(reason) })]);
+    },
+    touchSeen: id => one('update kr_users set seen = $2 where id = $1 returning *', [id, Date.now()]),
     async createSession(userId) { const t = newToken(); await q('insert into kr_sessions (token, user_id, created) values ($1, $2, $3)', [t, userId, Date.now()]); return t; },
     async sessionUser(token) {
       if (typeof token !== 'string') return null;
-      return one('select u.* from kr_sessions s join kr_users u on u.id = s.user_id where s.token = $1 and s.created > $2', [token, Date.now() - SESSION_MS]);
+      return one('select u.* from kr_sessions s join kr_users u on u.id = s.user_id where s.token = $1 and s.created > $2 and u.banned is null', [token, Date.now() - SESSION_MS]);
     },
     async dropSession(token) { if (typeof token === 'string') await q('delete from kr_sessions where token = $1', [token]); },
+    async dropSessionsOf(userId) { await q('delete from kr_sessions where user_id = $1', [userId]); },
     async links(id) {
       const r = await q(`select u.id, u.name, u.xp, f.status, f.a from kr_friends f join kr_users u on u.id = case when f.a = $1 then f.b else f.a end
                          where f.a = $1 or f.b = $1`, [id]);

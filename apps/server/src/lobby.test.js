@@ -18,6 +18,55 @@ describe('names and codes', () => {
   });
 });
 
+describe('a god in a room (DEC-030)', () => {
+  it('seats the admin beyond the six, on no team, with every candidate open, once', () => {
+    const r = new Room('ABCD');
+    for (let i = 0; i < MAX_PLAYERS; i++) r.join('p' + i, 'P' + i, { userId: 'u' + i, level: 13 });
+    expect(r.join('x', 'X')).toMatch(/complète/);
+    const g = r.joinGod('god', 'Rida', { userId: 'admin', level: 1 });
+    expect(g).toMatchObject({ god: true, team: null, allowed: expect.arrayContaining(['thierry']) });
+    expect(r.players).toHaveLength(MAX_PLAYERS + 1);
+    expect(r.joinGod('god2', 'Zeus')).toMatch(/déjà/);
+    expect(r.set('god', { team: 'bleu' })).toMatch(/dieu/);
+    expect(r.set('god', { charId: 'thierry' })).toBeNull();                 // locked for a level-1 mortal, open to a god
+    expect(r.view().players.find(p => p.id === 'god')).toMatchObject({ god: true, team: null });
+    expect(r.view().players.find(p => p.id === 'p0').god).toBe(false);
+  });
+
+  it('lets the admin pick the circuit and move or recast anyone, whatever they unlocked (DEC-031)', () => {
+    const r = new Room('ABCD'); r.join('a', 'A'); r.join('b', 'B'); r.joinGod('god', 'Rida');
+    expect(r.setTrack('b', 2)).toMatch(/hôte/);
+    expect(r.forceTrack(2)).toBeNull(); expect(r.trackIdx).toBe(2);
+    expect(r.forceTrack(99)).toMatch(/inconnu/);
+    expect(r.force('a', { team: 'rouge', charId: 'thierry' })).toBeNull();               // a guest, given a level-13 candidate
+    expect(r.player('a')).toMatchObject({ team: 'rouge', charId: 'thierry' });
+    expect(r.force('b', { charId: 'thierry' })).toMatch(/déjà pris/);
+    expect(r.force('god', { team: 'bleu' })).toMatch(/dieu/);
+    expect(r.force('zz', {})).toMatch(/inconnu/);
+    r.phase = 'race';
+    expect(r.forceTrack(0)).toMatch(/commencé/); expect(r.force('a', { team: 'bleu' })).toMatch(/commencé/);
+  });
+
+  it('seats a god mid-race on a candidate the race does not already drive', () => {
+    const r = new Room('ABCD'); r.join('a', 'A'); r.phase = 'race';
+    const all = ['victor', 'gege', 'maurice', 'capucine', 'hubert', 'lulu', 'bernadette', 'kevin', 'odile', 'patrick', 'lucie', 'gaspard', 'jeanmi', 'martine', 'aymeric'];
+    expect(r.joinGod('god', 'Rida', {}, undefined, all).charId).toBe('thierry');
+  });
+
+  it('keeps the grid at six karts around the god, who is flagged in the roster and may enter mid-race', () => {
+    const r = new Room('ABCD'); r.join('a', 'A'); r.join('b', 'B');
+    r.phase = 'race';
+    expect(r.join('c', 'C')).toMatch(/commencé/);
+    expect(r.joinGod('god', 'Rida')).toMatchObject({ god: true });
+    r.phase = 'lobby';
+    const roster = r.roster(() => 0.5);
+    expect(roster).toHaveLength(MAX_PLAYERS + 1);
+    expect(roster.filter(s => s.isAI)).toHaveLength(4);
+    expect(roster.find(s => s.playerId === 'god')).toMatchObject({ god: true, team: null, isAI: false });
+    expect(roster.filter(s => s.god)).toHaveLength(1);
+  });
+});
+
 describe('a room', () => {
   it('makes the first player host and balances teams as people join', () => {
     const r = new Room('ABCD');

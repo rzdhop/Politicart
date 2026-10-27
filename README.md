@@ -38,6 +38,7 @@ When a game server answers, the title screen shows **Compte**. An account is a p
 - **Levels.** Every race earns experience: 70 for a win down to 20 for last place, 10 for an unfinished race, plus 20 when your team wins a team race. Level 2 takes 120 XP, and each level costs 40 more than the one before.
 - **Candidates.** Emmanuel Macaron, Philippe Martini, Jean Lassalle-des-Fêtes and Sandrine Ruisseau are free. Each level from 2 to 13 unlocks one more: Nathalie Artichaut, José Bovin, Marine Le Stylo, Jordan Mortadella, Eva Joly-Jumper, Jean-Luc Mélèche, Gérard L’Archiduc, Bruno Le Maigre, Éric Zemmoule, Gérald Darmalin, Michel Bananier, then Manuel Valse. Locked candidates show on the roster with the level that unlocks them.
 - **Friends.** Add someone by pseudo; they accept or refuse. The list shows who is online and in which room. From your room in the lobby, **Inviter** sends an online friend an invitation that appears over their menus; **Rejoindre** takes them straight into your room.
+- **Bans.** The admin can ban an account from the dashboard, with a reason. A banned account is disconnected at once and its logins answer "Compte banni" with the reason until the ban is lifted; its experience and friends are kept.
 - **Guests** (no account, or no server reachable, as on a plain GitHub Pages build) choose a pseudo and play the four starting candidates, without levels. In team races they can join a room by code or by invitation but cannot create one.
 
 Solo races are scored by the browser and reported to the server (at most one reward a minute); team races are scored by the server. The game is not built to resist cheating.
@@ -46,8 +47,8 @@ Accounts are kept in a JSON file by default, or in Postgres when `DATABASE_URL` 
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `DATABASE_URL` | unset | A Postgres connection string. The server creates its tables (`kr_users`, `kr_sessions`, `kr_friends`, and `kr_docs` for the admin's cast) on start. Hosted databases give a URL ending in `?sslmode=require`. |
-| `KR_DATA` | `apps/server/data/kr-accounts.json` (`/data/kr-accounts.json` in the container) | The JSON file used without `DATABASE_URL`. `:memory:` keeps accounts in memory only. The admin's cast is kept beside it, in `kr-docs/roster.json`. |
+| `DATABASE_URL` | unset | A Postgres connection string. The server creates its tables (`kr_users`, `kr_sessions`, `kr_friends`, and `kr_docs` for the admin's cast and the dashboard's race counters) on start, and adds the `seen` and `banned` columns to an older `kr_users`. Hosted databases give a URL ending in `?sslmode=require`. |
+| `KR_DATA` | `apps/server/data/kr-accounts.json` (`/data/kr-accounts.json` in the container) | The JSON file used without `DATABASE_URL`. `:memory:` keeps accounts in memory only. The admin's cast and the race counters are kept beside it, in `kr-docs/roster.json` and `kr-docs/stats.json`. |
 | `KR_ADMIN_USER` | `rida` | The one admin account. Nobody can sign up under this name. |
 | `KR_ADMIN_PASSWORD_HASH` | unset | The admin's password hash (see below). Unset or malformed: nobody is admin and the Workshop is off. |
 
@@ -66,6 +67,18 @@ The server runs each race at 60 steps a second in its own worker thread and send
 ### The admin and the Workshop
 
 One account, `rida` by default, is the admin: only it sees **Atelier** on the title screen. There it renames the candidates, sets their colours, liveries and default kart (accents, wheels, spoiler, side pods, number, sticker), and uploads campaign posters. **Enregistrer** saves the cast on the game server, and every player gets it, on the server's page and on the GitHub page alike. Players still style their own kart in the **Garage**; whatever they leave alone follows the admin's default.
+
+### The admin's dashboard and the god seat
+
+The same account gets **Tableau de bord** on the title screen: the figures (accounts, who is online, open rooms and races, team and solo races played, by circuit, the last twenty races, the ten best accounts), every account with a search box, and what is live. From there the admin **bans** an account with a reason (its sockets close at once, its sessions end, and its logins are refused until the ban is lifted), **closes the sessions** of an account without banning it, **closes a room** (ending its race) and **ejects** a connection. The page refreshes every five seconds while it is open.
+
+**Entrer en dieu** seats the admin in any open room as a god: a seventh seat beyond the six, on no team, with every candidate open, at any moment. If the room is racing, the admin's kart joins the race on the spot, a little behind the last kart still running. In the race a god kart is creative mode: its power recharges in a second, it always has an item on the way, nothing stuns, slows or catches it, and it is everyone's foe. It takes a place but scores no team points and earns no experience; the results list it "hors classement".
+
+The admin has absolute power over every game, solo or team, from inside it or from the dashboard:
+
+- **In the lobby** of any room: start it now (nobody needs to be ready, the admin need not be host), pick the circuit, move a player to the other team, give a player any candidate, exclude anyone.
+- **In a race**, through the **console divine** (the ⚡ button on the HUD, or the G key; on the dashboard, **Contrôler** on a racing room): pick one kart or all of them, then strike them (stun through any immunity, freeze 6 s, slow, boost), give any item, make a kart fire its own power or cast any power of the cast, drop any hazard in front of it, send it to the front or the back, swap it with your own kart, add or take away a lap, make it a god or a mortal, set the race to 1 to 9 laps, or end the race now. The drivers affected read what was done to them.
+- Nobody else sees the console, and the server refuses every one of these commands from any other account.
 
 The admin's password is never stored, only its hash, held in an environment variable. To set it up:
 
@@ -117,6 +130,7 @@ Any host that runs a container and passes WebSockets through works the same way 
 | F / Shift | Special power |
 | Esc | Pause (solo only: a team race cannot be paused) |
 | M | Mute |
+| G | The admin's god console (admin only) |
 
 The game reads physical key codes, so the same keys work on AZERTY and QWERTY keyboards.
 
@@ -137,13 +151,14 @@ Both orientations work: in portrait the camera widens and pulls back. Phones sta
 
 ## Content
 
-- **16 candidates** parodying real French politicians under pun names (Emmanuel Macaron, Marine Le Stylo, Jean-Luc Mélèche, José Bovin...), each with stats (speed, acceleration, handling, weight) and a signature satirical power: Grand débat, Grève générale, Rond-point surprise, Zone à faibles émissions, Amendement de dernière minute, Mégaphone, Éléments de langage, Vol d'audience, Mise en examen, Épandage, Temps de parole, Coup de rabot (Bruno Le Maigre, le technocrate de Bercy), Fake news (Éric Zemmoule, le populiste de plateau télé), Contrôle d'identité (Gérald Darmalin, le ministre de l'Intérieur), Directive européenne (Michel Bananier, le lobbyiste européen), Ralliement (Manuel Valse, le transfuge, who copies the power of the kart ahead).
+- **16 candidates** parodying real French politicians under pun names (Emmanuel Macaron, Marine Le Stylo, Jean-Luc Mélèche, José Bovin...), each with stats (speed, acceleration, handling, weight) and a signature satirical power matched to the politician's own traits: Grand débat, Grève générale, Rond-point surprise, Déconstruction (Sandrine Ruisseau, l'écoféministe, strips the nearby karts of boost, immunity, shield and item), Amendement de dernière minute, Mégaphone, Lâcher de chatons (Marine Le Stylo drops kittens nobody dares drive over: the karts behind brake hard and swerve), Vol d'audience, Mise en examen, Fauchage volontaire (José Bovin mows 60 m of road: every hazard ahead disappears and the karts caught spin out), Temps de parole, Coup de rabot (Bruno Le Maigre, le technocrate de Bercy), Fake news (Éric Zemmoule, le populiste de plateau télé), Contrôle d'identité (Gérald Darmalin, le ministre de l'Intérieur), Directive européenne (Michel Bananier, le lobbyiste européen), Ralliement (Manuel Valse, le transfuge, who copies the power of the kart ahead).
 - **19 items** from golden ballot boxes, weighted by race position: 49.3 Turbo, Grève surprise, Dossier Mediapart, Motion de censure, Immunité parlementaire, Sondage truqué, Hélico présidentiel, Remaniement, Plan de relance, BRAV-M, Nuage lacrymogène, Casserolade, Dissolution, Niche fiscale, Langue de bois (absorbs the next hit), Cumul des mandats (two items at once), Fact-checking (goes through immunity), Pantouflage (a jump down the road), Référendum (yes, no or abstention, at random).
 - **3 circuits**: L'Élysée (Faubourg Saint-Honoré), Palais Bourbon (quais de Seine), Versailles (jardins du Congrès) — with ramps and tricks, pits, dash panels, chicanes and crossing traffic. Each is drawn at 3 times its original size (`scale` in `data.js`, about 3 km a lap), with its decor spread out to match. The road is 30 m wide.
 - **Bike lane**: a green cycle lane runs along the right-hand edge of every circuit. Its cyclists ride where they like: they swerve into the karts' lanes, cut across the road, hop onto the pavement, stop dead or ride the wrong way. Hitting one knocks the rider over and shakes your kart.
-- **Messages**: the banners during a race only concern you: what you did, and what was done to you. Nobody else's item is announced to the whole field.
+- **Messages**: the banners during a race only concern you: what you did, and what was done to you, once it is done (a projectile is announced when it lands, not when it is thrown; nothing reaches a driver who has finished). Nobody else's item or power is announced to the whole field, and the same goes for sound: a mini-turbo or a power used across the circuit is silent on your side. Banners show one at a time and stay readable for a second before the next takes over; a burst keeps at most two waiting.
 - **Contact**: karts bounce off each other once per contact, with a hop, sparks and a camera shake; rubbing door to door costs about 2 % of speed, ramming the kart in front about 10 %, and the lighter kart takes more of it. A spun-out kart always straightens up along the road before it drives off.
 - **Workshop (admin only)**: the administrator account (`KR_ADMIN_USER`, `rida` by default) logs in through the ordinary Compte screen and gets an **Atelier** button on the title: rename candidates, change their colours and their default kart (accents, number, wheels, spoiler, side pods, sticker), upload kart liveries and campaign posters. Saving sends the cast to the game server, so every player gets it, the GitHub Pages build included when it names a server. Nobody else sees the Workshop. Without a reachable server the game plays the default cast.
+- **Dashboard, god seat and console (admin only)**: **Tableau de bord** shows the server's figures, lists the accounts (ban with a reason, lift a ban, close an account's sessions), the open rooms (close one, **control** it from afar, or **enter it as a god** at any moment, mid-race included) and the connections (eject one). A god races as a seventh, neutral kart in creative mode: power every second, items without end, untouchable, outside the scoring. The **console divine** (G in a race) changes any race at will. See [The admin's dashboard](#the-admins-dashboard-and-the-god-seat).
 - **Garage**: every player styles their own kart from the roster (body and accent colours, wheels, spoiler, side pods, race number, sticker). It applies to whichever candidate they pick, over that candidate's default kart, and is kept in this browser's `localStorage`.
 - Graphics toggle (detailed with shadows / light low-poly), synthesized sound and music via WebAudio.
 
@@ -156,7 +171,7 @@ An npm workspace with three packages.
 | Path | What it is |
 | --- | --- |
 | `apps/game` | The game: a Vite app. Three.js 0.128 engine, React screens. |
-| `apps/server` | The game server: static files, accounts and friends (`accounts.js`, `store.js`: a JSON file or Postgres via `pg`), rooms over WebSocket (`ws`), one worker thread per race running the game's own engine. |
+| `apps/server` | The game server: static files, accounts and friends (`accounts.js`, `store.js`: a JSON file or Postgres via `pg`), the admin's cast (`roster.js`) and dashboard (`dashboard.js`), rooms over WebSocket (`ws`), one worker thread per race running the game's own engine. |
 | `packages/ui` | `@kart-republique/ui`, the design system: the game's look as React components, with Storybook. |
 | `e2e` | The Playwright suite that drives the game through its screens and HUD. |
 | `.github/workflows/pages.yml` | Builds, checks and publishes the game to GitHub Pages on every push to `main`. |
@@ -171,12 +186,14 @@ The engine never touches the DOM; the UI never touches the simulation. They meet
 | `src/engine/kart.js`, `track.js`, `primitives.js`, `textures.js` | Procedural karts, drivers, decor and tracks; cached materials; canvas-painted textures. |
 | `src/engine/physics.js`, `ai.js`, `items.js`, `powers.js` | Kart physics (drift, jumps, pits, hazards, kart contact), AI with rubber-banding, the 19 items, the 16 powers. |
 | `src/engine/race.js` | Sets up a race, steps it one frame at a time and returns the **frame payload** the HUD shows. |
-| `src/engine/machine.js` | The **state machine**: title, select, tracks, admin, countdown, race, paused, results, lobby, account. |
+| `src/engine/machine.js` | The **state machine**: title, select, tracks, admin, countdown, race, paused, results, lobby, account, garage, dashboard. |
 | `src/engine/teams.js` | Teams: who counts as a foe, the points table, team standings. |
 | `src/engine/cyclists.js` | The bike lane's cyclists: their whims, their run-ins with karts, and placing them from snapshots. |
 | `src/engine/progress.js`, `account.js` | Levels, experience and unlocks (shared with the server); the account API client. |
 | `src/engine/net.js`, `netstate.js`, `netrace.js` | Team races on the client: the server connection, the snapshot format, and drawing a race from snapshots. |
-| `src/engine/events.js` | The **event queue** for the text the engine wants shown (toasts, hints). |
+| `src/engine/events.js` | The **event queue** for the text the engine wants shown (toasts, hints), routed to the drivers it concerns. |
+| `src/engine/banner.js` | The **banner queue**: one toast at a time, held long enough to be read. |
+| `src/engine/godcmd.js` | The admin's **god commands**: what the console divine does to a race, in solo and in the race worker alike. |
 | `src/engine/input.js` | The **input seam**: the engine reads the controls through it. |
 | `src/engine/minimap.js`, `preview.js`, `render.js`, `audio.js` | The minimap, the character showcase and thumbnails, the one renderer and camera, WebAudio. |
 | `src/ui/` | The React screens and the HUD, composed from `@kart-republique/ui`; `store.ts` is what they read. |
@@ -198,4 +215,4 @@ npm run test        # Vitest: the design system, the engine and the server
 npm run test:e2e    # Playwright, Chromium, against the production build (about three minutes)
 ```
 
-The E2E suite is the regression net for the game: it drives the real build through the title, roster, circuits, a race with its HUD, pause, the Garage and the results, and asserts on the element ids the game has always had. `e2e/multiplayer.spec.ts` starts the game server too and races two browsers against each other, and `e2e/admin.spec.ts` drives the admin's Workshop on that server with a test-only admin account whose hash the Playwright config computes at load.
+The E2E suite is the regression net for the game: it drives the real build through the title, roster, circuits, a race with its HUD, pause, the Garage and the results, and asserts on the element ids the game has always had. `e2e/multiplayer.spec.ts` starts the game server too and races two browsers against each other, `e2e/admin.spec.ts` drives the admin's Workshop on that server with a test-only admin account whose hash the Playwright config computes at load, and `e2e/dashboard.spec.ts` drives the admin's dashboard, a ban, a race with the admin seated as a god, and the admin entering a race already running and ending it from the console.

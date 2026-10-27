@@ -19,7 +19,7 @@ import * as THREE from 'three';
 import { sfx } from './audio.js';
 import { CHARACTERS, TRACKS } from './data.js';
 import { updateCyclists } from './cyclists.js';
-import { say, setHint } from './events.js';
+import { hintFor, say, setHint } from './events.js';
 import { pickupItems, stunKart, updateProjectiles } from './items.js';
 import { buildKart } from './kart.js';
 import { myStyle } from './garage.js';
@@ -45,7 +45,7 @@ function makeKart(def, isAI, style) {
     y: 0, vy: 0, air: false, trick: false, rampPrev: null, slip: 0, confused: 0, pitGrace: 0, padGrace: 0, steer: 0, phantom: 0,
     kx: 0, kz: 0, bump: 0, bumpCd: 0, bumpPower: 1, bumpSide: 1, shield: 0, rabot: 0, capped: 0,
     idx: 0, lap: 0, progress: 0, rank: 0, finished: false, finishTime: 0,
-    team: null, lane: isAI ? rand(-6, 6) : 0, laneTimer: rand(2, 6), aiSpeedMul: 1, skill: rand(-0.03, 0.03), hazardGrace: 0, lapStart: 0, bestLap: Infinity, maxLap: 0,
+    team: null, god: false, lane: isAI ? rand(-6, 6) : 0, laneTimer: rand(2, 6), aiSpeedMul: 1, skill: rand(-0.03, 0.03), hazardGrace: 0, lapStart: 0, bestLap: Infinity, maxLap: 0,
   };
 }
 
@@ -61,8 +61,9 @@ export function startRace() {
 
 /**
  * Start a race on circuit G.trackIdx with a given grid, in grid order. Each
- * slot is `{ def, isAI, team?, local?, style? }`, `style` being a full kart
- * style (the character's default when absent); the `local` slot becomes G.player,
+ * slot is `{ def, isAI, team?, local?, style?, god? }`, `style` being a full kart
+ * style (the character's default when absent), `god` the admin's creative-mode
+ * kart (DEC-030: neutral, untouchable, no cooldown); the `local` slot becomes G.player,
  * the kart this screen follows. Solo play passes five AI and the player
  * last; the game server and its clients pass the lobby's roster (DEC-014).
  */
@@ -78,7 +79,7 @@ export function startField(slots) {
   setCast(true); buildTrack(scene, track);
   buildMinimapBase();
 
-  G.karts = slots.map(sl => { const k = makeKart(sl.def, sl.isAI, sl.style); k.team = sl.team ?? null; return k; });
+  G.karts = slots.map(sl => { const k = makeKart(sl.def, sl.isAI, sl.style); k.team = sl.team ?? null; k.god = sl.god === true; return k; });
   const local = slots.findIndex(sl => sl.local);
   G.player = G.karts[local] ?? G.karts.find(k => !k.isAI) ?? G.karts[G.karts.length - 1];
   G.entitySeq = 0;
@@ -87,10 +88,32 @@ export function startField(slots) {
     k.pos.x = s.x + s.sx * lane; k.pos.z = s.z + s.sz * lane; k.heading = Math.atan2(s.tx, s.tz); k.idx = 6 + i * 4;
     k.mesh.position.set(k.pos.x, 0, k.pos.z); k.mesh.rotation.y = k.heading; scene.add(k.mesh);
   });
-  G.time = 0; G.countdown = 3.6; G.resultsAt = Infinity; G.wrongTimer = 0;
+  G.time = 0; G.countdown = 3.6; G.resultsAt = Infinity; G.wrongTimer = 0; G.laps = CFG.laps;
   const s = G.samples[0]; camera.position.set(s.x - s.tx * 14, 7, s.z - s.tz * 14); camera.fov = 65;
   setHint('Ramassez une urne dorée pour obtenir un objet.');
+  // The god's hint only: a banner here would reach the god twice in a team race, once from this client and once from the server's copy of the engine.
+  if (G.player.god) hintFor(G.player, 'Mode dieu : pouvoir sans recharge, objets à volonté, intouchable. Vous ne marquez pas de points.');
   transition('countdown');
+}
+
+/**
+ * Add a kart to the race in progress (DEC-031: the admin joins any game at
+ * any moment). `sl` is a slot as startField takes them. The kart starts a
+ * little behind the last kart still racing, on its lap, and takes the next
+ * grid slot: its index in G.karts is G.karts.length before the call.
+ */
+export function joinField(sl) {
+  const k = makeKart(sl.def, sl.isAI, sl.style); k.team = sl.team ?? null; k.god = sl.god === true;
+  const racing = G.karts.filter(o => !o.finished);
+  const last = racing.length ? racing.reduce((m, o) => (o.progress < m.progress ? o : m)) : null;
+  let idx = last ? last.idx - 8 : 6, lap = last ? last.lap : 0;
+  if (idx < 0) { idx += G.N; lap--; }
+  const s = G.samples[idx];
+  k.pos.x = s.x; k.pos.z = s.z; k.heading = Math.atan2(s.tx, s.tz); k.idx = idx; k.lap = lap; k.maxLap = Math.max(0, lap); k.progress = lap + idx / G.N;
+  k.lapStart = G.time; k.rank = G.karts.length; k.powerCd = k.god ? 0 : k.powerCd;
+  k.mesh.position.set(k.pos.x, 0, k.pos.z); k.mesh.rotation.y = k.heading; G.scene.add(k.mesh);
+  G.karts.push(k);
+  return k;
 }
 
 /** Free the geometry of a scene (or any object tree) that is being replaced. */

@@ -37,7 +37,7 @@ export function togglePoly() {
 export const G = {
   scene: null, track: null, karts: [], player: null, samples: [], N: 0, trackLength: 0,
   hazards: [], projectiles: [], itemBoxes: [], animated: [], crowd: [], ramps: [], pits: [], pads: [], crossings: [], time: 0, countdown: 0, charIdx: 0, trackIdx: 0,
-  resultsAt: Infinity, wrongTimer: 0, previewKart: null, previewScene: null, sun: null, thumbs: {}, thumbPoly: null,
+  resultsAt: Infinity, wrongTimer: 0, laps: CFG.laps, previewKart: null, previewScene: null, sun: null, thumbs: {}, thumbPoly: null,
 };
 Object.defineProperty(G, 'state', { enumerable: true, get: getState });
 export function isClear(x, z, margin) {

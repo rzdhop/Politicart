@@ -7,17 +7,22 @@
 // kart-on-kart contact.
 //
 // This code used to write to the HUD from inside the physics step. It now
-// emits through engine/events.js instead -- the toast() and setHint() it
+// emits through engine/events.js instead -- the say() and hintFor() it
 // calls are the queue's emitters, not DOM writers -- and the UI drains that
 // queue once per frame after the step. Sound stays a direct call: audio is
-// already engine-side and a one-frame delay on a bump would be audible.
+// already engine-side and a one-frame delay on a bump would be audible. Every
+// sound here is a kart's own, so it goes through sfxFor and reaches only
+// that kart's driver (DEC-029): a mini-turbo across the circuit is silent.
+//
+// A god kart (DEC-030, the admin's creative mode) shrugs every debuff off at
+// the top of its step and never runs out of items.
 //
 // **The step order inside frame() -- updateKart for every kart, then
 // kartCollisions, pickupItems, updateProjectiles, updateRanks -- is a
 // contract.** Each function assumes what the previous one left in G.
-import { sfx, sfxFor } from './audio.js';
+import { sfxFor } from './audio.js';
 import { aiInput } from './ai.js';
-import { ITEMS } from './data.js';
+import { ITEMS, rollItem } from './data.js';
 import { hintFor, say } from './events.js';
 import { readInput } from './input.js';
 import { stunKart } from './items.js';
@@ -35,8 +40,8 @@ export function updateProgress(k) {
     if (k.lap > k.maxLap) {
       k.maxLap = k.lap;
       const lapTime = G.time - k.lapStart; k.lapStart = G.time; if (lapTime < k.bestLap) k.bestLap = lapTime;
-      if (k.lap >= CFG.laps && !k.finished) { k.finished = true; k.finishTime = G.time; if (!k.isAI) onHumanFinish(k); }
-      else if (!k.isAI) { say(k, k.lap === CFG.laps - 1 ? 'DERNIER TOUR !' : 'TOUR ' + (k.lap + 1) + ' — ' + fmtTime(lapTime)); sfxFor(k, 'lap'); }
+      if (k.lap >= G.laps && !k.finished) { k.finished = true; k.finishTime = G.time; if (!k.isAI) onHumanFinish(k); }
+      else if (!k.isAI) { say(k, k.lap === G.laps - 1 ? 'DERNIER TOUR !' : 'TOUR ' + (k.lap + 1) + ' — ' + fmtTime(lapTime)); sfxFor(k, 'lap'); }
     }
   } else if (prev < N * 0.2 && best > N * 0.8) k.lap--;
   k.progress = k.lap + best / N;
@@ -52,10 +57,11 @@ export function updateRanks() {
 // ---------- A human finishes ----------
 // The arrival toast goes to that driver. The results timer is armed once
 // every human has finished -- in solo play, the moment the player does.
-function onHumanFinish(k) { if (G.karts.every(o => o.isAI || o.finished)) G.resultsAt = G.time + 5; say(k, 'ARRIVÉE ! ' + ordinal(k.rank + 1)); sfxFor(k, 'finish'); }
+function onHumanFinish(k) { if (G.karts.every(o => o.isAI || o.finished || o.god)) G.resultsAt = G.time + 5; say(k, 'ARRIVÉE ! ' + ordinal(k.rank + 1)); sfxFor(k, 'finish'); }
 
 // ---------- Kart physics ----------
 export function updateKart(k, dt) {
+  if (k.god) shrugOff(k);
   const S = k.stats; const baseMax = 42 * S.speed; let maxSpeed = baseMax;
   if (k.boost > 0) maxSpeed *= k.boostPower;
   if (k.invincible > 0) maxSpeed *= 1.2;
@@ -99,8 +105,8 @@ export function updateKart(k, dt) {
   if (k.drift.active) {
     if (!inp.drift || k.speed < baseMax * 0.25 || k.stun > 0) {
       const c = k.drift.charge;
-      if (c > 2.0) { k.boost = Math.max(k.boost, 1.1); k.boostPower = 1.45; sfx('boost'); say(k, 'SUPER MINI-TURBO'); }
-      else if (c > 1.0) { k.boost = Math.max(k.boost, 0.55); k.boostPower = 1.3; sfx('boost'); }
+      if (c > 2.0) { k.boost = Math.max(k.boost, 1.1); k.boostPower = 1.45; sfxFor(k, 'boost'); say(k, 'SUPER MINI-TURBO'); }
+      else if (c > 1.0) { k.boost = Math.max(k.boost, 0.55); k.boostPower = 1.3; sfxFor(k, 'boost'); }
       k.drift.active = false; k.drift.charge = 0;
     } else { k.drift.charge += dt; turnRate = 2.4 * S.handling * (k.drift.dir * 1.15 + k.steer * 0.55) * (0.5 + 0.5 * sf); k.speed *= Math.exp(-dt * 0.12); }
   }
@@ -131,7 +137,7 @@ export function updateKart(k, dt) {
 
   // vertical motion
   if (!k.air) k.y = groundY;
-  else { k.vy -= 32 * dt; k.y += k.vy * dt; if (k.y <= groundY) { k.y = groundY; k.air = false; if (k.trick) { k.boost = Math.max(k.boost, 0.7); k.boostPower = 1.35; sfx('boost'); } else k.speed *= 0.94; k.trick = false; } }
+  else { k.vy -= 32 * dt; k.y += k.vy * dt; if (k.y <= groundY) { k.y = groundY; k.air = false; if (k.trick) { k.boost = Math.max(k.boost, 0.7); k.boostPower = 1.35; sfxFor(k, 'boost'); } else k.speed *= 0.94; k.trick = false; } }
   // pits, dash pads
   if (!k.air && k.y <= 0.1 && k.fly <= 0) {
     if (k.pitGrace <= 0) for (const p of G.pits) { const rel = (k.idx - p.i0 + G.N) % G.N; if (rel < p.len && Math.abs(lateral) < hw) { k.pitGrace = 2;
@@ -146,7 +152,8 @@ export function updateKart(k, dt) {
   k.slowed = Math.max(0, k.slowed - dt); k.fly = Math.max(0, k.fly - dt); k.powerCd = Math.max(0, k.powerCd - dt);
   k.bump = Math.max(0, (k.bump || 0) - dt); k.bumpCd = Math.max(0, (k.bumpCd || 0) - dt);
   k.shield = Math.max(0, (k.shield || 0) - dt); k.rabot = Math.max(0, (k.rabot || 0) - dt); k.capped = Math.max(0, (k.capped || 0) - dt);
-  if (k.relance > 0) { k.relanceTimer -= dt; if (k.relanceTimer <= 0) { k.relance--; k.relanceTimer = 1.1; k.boost = 0.7; k.boostPower = 1.45; sfx('boost'); } }
+  if (k.relance > 0) { k.relanceTimer -= dt; if (k.relanceTimer <= 0) { k.relance--; k.relanceTimer = 1.1; k.boost = 0.7; k.boostPower = 1.45; sfxFor(k, 'boost'); } }
+  if (k.god && !k.item && k.itemRolling <= 0 && !k.pendingItem) { k.pendingItem = rollItem(k.rank); k.itemRolling = GOD_ITEM_DELAY; }   // creative mode: the next item is always on its way
   if (k.itemRolling > 0) { k.itemRolling -= dt; if (k.itemRolling <= 0) { k.item = k.pendingItem; k.pendingItem = null; if (!k.isAI) { sfxFor(k, 'pick'); hintFor(k, ITEMS[k.item].hint); } else k.itemTimer = rand(0.8, 4); } }
 
   k.rampSlope = onRamp ? onRamp.slope : 0;
@@ -176,6 +183,13 @@ export function updateKartVisual(k, dt, sf) {
   if (u.bumpSparks) { const on = bump > 0.35; u.bumpSparks.visible = on; if (on) { u.bumpSparks.rotation.y += dt * 25; u.bumpSparks.scale.setScalar(0.6 + (1 - bump) * 1.4); } }
   m.visible = k.phantom > 0 ? (Math.floor(G.time * 14) % 2 === 0) : true;
 }
+
+// ---------- The god kart ----------
+/** How long a god waits for its next item once it has used one, in seconds. */
+export const GOD_ITEM_DELAY = 0.6;
+
+/** A god is never slowed, confused, capped, stunned or made to slip: every debuff ends at once. */
+function shrugOff(k) { k.slowed = 0; k.confused = 0; k.slip = 0; k.rabot = 0; k.capped = 0; k.stun = 0; }
 
 // ---------- Kart-on-kart contact ----------
 /** The top speed under a "Directive européenne": 110 km/h on the speedometer, which reads speed x 3.2. */

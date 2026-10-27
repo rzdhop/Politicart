@@ -72,6 +72,27 @@ Marked UNCONFIRMED / confirmed / invalidated.
   UNCONFIRMED. They are library examples; renaming them is a follow-up.
   (Was A-016.)
 
+- **A-020 -- Thirteen powers already match their politician.** UNCONFIRMED.
+  Judged by the agent (DEC-028): only capucine, bernadette and patrick were
+  replaced. The human may want others retuned (Lassalle's roundabout and
+  Zemmour's fake news were the closest calls and were kept).
+- **A-021 -- "Only the powers that affect the user" means what landed.**
+  UNCONFIRMED. Read as DEC-029: a projectile is announced to its target when
+  it hits, not when it is thrown; a field-wide effect is announced to every
+  driver it changes, since it does change them. If the human meant distance
+  too, field-wide messages would need a range.
+- **A-022 -- A god joining mid-race waits for the next start.** INVALIDATED
+  2026-10-27: the human wants the admin to join any game at any moment. The
+  god now joins the running race at once (DEC-031).
+- **A-024 -- A god joins a running race behind the last kart.** UNCONFIRMED.
+  Fair and never on top of anyone; the console's "En tête" moves it up.
+- **A-025 -- Absolute power is the console's fourteen commands.**
+  UNCONFIRMED (DEC-031). Not included: editing a circuit's layout, the
+  physics constants or another player's controls.
+- **A-023 -- Creative mode is: no cooldown, endless items, untouchable.**
+  UNCONFIRMED. Minecraft's reading of "creative"; the god still drives and
+  cannot spawn arbitrary hazards or teleport.
+
 ## Confirmed
 
 - **A-006 -- Node 26 is available to `actions/setup-node` on ubuntu-latest.**

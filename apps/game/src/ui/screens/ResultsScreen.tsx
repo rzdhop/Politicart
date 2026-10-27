@@ -84,8 +84,8 @@ function TeamResults({ ui, results }: { ui: UiSnapshot; results: NetResults }) {
     return {
       id: r.slot,
       rank: ordinal(r.rank + 1),
-      name: r.isAI ? (c?.name ?? r.name) : r.name,
-      detail: r.isAI ? 'IA' : (c?.name ?? '') + (r.team ? ' · ' + TEAM_NAMES[r.team] : ''),
+      name: r.isAI ? (c?.name ?? r.name) : r.name + (r.god ? ' (dieu)' : ''),
+      detail: r.isAI ? 'IA' : (c?.name ?? '') + (r.team ? ' · ' + TEAM_NAMES[r.team] : r.god ? ' · hors classement' : ''),
       time: (r.time !== null ? fmtTime(r.time) : 'en course…') + (r.points ? '  +' + r.points : ''),
       highlighted: r.slot === results.you,
     };

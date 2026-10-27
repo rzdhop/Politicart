@@ -19,6 +19,7 @@ import { getGarage, resetGarage, setGarage } from '../engine/garage.js';
 import { getState, onTransition, transition } from '../engine/machine.js';
 import * as net from '../engine/net.js';
 import { isNetRace, onNetResults, pressItem, pressPower } from '../engine/netrace.js';
+import { applyGodCommand } from '../engine/godcmd.js';
 import { useItem as engineUseItem } from '../engine/items.js';
 import { usePower as engineUsePower } from '../engine/powers.js';
 import { CHARACTERS } from '../engine/data.js';
@@ -27,11 +28,11 @@ import { STARTERS } from '../engine/progress.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
 
-export type GameState = 'title' | 'select' | 'tracks' | 'admin' | 'countdown' | 'race' | 'paused' | 'results' | 'lobby' | 'account' | 'garage';
+export type GameState = 'title' | 'select' | 'tracks' | 'admin' | 'countdown' | 'race' | 'paused' | 'results' | 'lobby' | 'account' | 'garage' | 'dashboard';
 export type TeamId = 'bleu' | 'rouge';
 
-/** One player in a team-race room, as the game server describes it. */
-export interface LobbyPlayer { id: string; name: string; team: TeamId; charId: string; ready: boolean; userId?: string | null; level?: number | null; guest?: boolean }
+/** One player in a team-race room, as the game server describes it. A god (the admin, DEC-030) has no team. */
+export interface LobbyPlayer { id: string; name: string; team: TeamId | null; charId: string; ready: boolean; userId?: string | null; level?: number | null; guest?: boolean; god?: boolean }
 /** A team-race room: its code, host, circuit and players (DEC-014). */
 export interface RoomView { code: string; host: string | null; trackIdx: number; phase: 'lobby' | 'race'; players: LobbyPlayer[] }
 /** One line of the friend list: a friend, or a request either way. */
@@ -53,6 +54,25 @@ export interface Gain { gained: number; level: number; levelUp: boolean; unlocke
 export type AdminStatus = 'idle' | 'saved';
 /** What the roster API answers (engine/account.js fetchRoster / saveRoster). */
 type RosterReply = { ok: boolean; status: number; error?: string; field?: string; roster?: unknown };
+
+// ---- The admin's dashboard (DEC-030), as the server describes it (dashboard.js) ----
+export interface DashUser { id: string; name: string; xp: number; level: number; created: number; seen: number | null; banned: { at: number; reason: string } | null; online: boolean; room: string | null }
+export interface DashConn { id: string; name: string; userId: string | null; guest: boolean; admin: boolean; room: string | null }
+/** A kart of a race in progress, as the dashboard lists it (DEC-031). */
+export interface DashKart { slot: number; name: string; charId: string; isAI: boolean; god: boolean }
+export interface DashRoom extends RoomView { since: number | null; race: DashKart[] | null }
+/** A god command (engine/godcmd.js, or a lobby command run by the server): `{ cmd, target?, ... }`. */
+export type GodCmd = { cmd: string } & Record<string, unknown>;
+export interface DashRecent { at: number; code: string; trackIdx: number; humans: number; gods: number; winner: string | null; teams: { team: TeamId; points: number }[] }
+export interface DashStats {
+  accounts: { total: number; banned: number; new7d: number; online: number };
+  live: { connections: number; guests: number; rooms: number; races: number };
+  races: { races: number; finished: number; solo: number; byTrack: Record<string, number>; recent: DashRecent[] };
+  top: { id: string; name: string; xp: number; level: number }[];
+}
+/** What the dashboard screen shows: the last answers, the user search, and what is going on. */
+export interface DashboardView { stats: DashStats | null; users: DashUser[]; connections: DashConn[]; rooms: DashRoom[]; query: string; busy: boolean; error: string | null; notice: string | null; updatedAt: number | null }
+type DashReply = { ok: boolean; status: number; error?: string } & Record<string, unknown>;
 
 export interface UiSnapshot {
   state: GameState;
@@ -91,9 +111,15 @@ export interface UiSnapshot {
   accountError: string | null;
   /** What the last race earned the account, until the next race starts. */
   lastGain: Gain | null;
+  /** The admin's dashboard (DEC-030). */
+  dashboard: DashboardView;
+  /** The admin's god console is open over the race (DEC-031). */
+  godConsole: boolean;
+  /** What the last god command in a solo race said (team races answer through net.notice / net.error). */
+  godReply: string | null;
 }
 
-export interface NetRankRow { slot: number; name: string; charId: string; team: TeamId | null; isAI: boolean; rank: number; finished: boolean; time: number | null; bestLap: number | null; points: number }
+export interface NetRankRow { slot: number; name: string; charId: string; team: TeamId | null; isAI: boolean; god?: boolean; rank: number; finished: boolean; time: number | null; bestLap: number | null; points: number }
 export interface NetTeamRow { team: TeamId; name: string; points: number; drivers: number[] }
 /** What the server reports when a team race ends, and which slot was ours. */
 export interface NetResults { ranking: NetRankRow[]; teams: NetTeamRow[]; you: number; error?: boolean }
@@ -137,6 +163,9 @@ let snapshot: UiSnapshot = {
   accountBusy: false,
   accountError: null,
   lastGain: null,
+  dashboard: { stats: null, users: [], connections: [], rooms: [], query: '', busy: false, error: null, notice: null, updatedAt: null },
+  godConsole: false,
+  godReply: null,
 };
 
 const listeners = new Set<() => void>();
@@ -164,7 +193,7 @@ let soloRace = false;
 
 onTransition((to: string, from: string) => {
   const patch: Partial<UiSnapshot> = { state: to as GameState };
-  if (to === 'countdown' && from !== 'paused') { patch.noteHidden = true; patch.lastGain = null; }
+  if (to === 'countdown' && from !== 'paused') { patch.noteHidden = true; patch.lastGain = null; patch.godReply = null; }
   set(patch);
   // A solo race just ended: the account earns its experience (a team race's comes from the server).
   if (to === 'lobby') soloRace = false;
@@ -251,11 +280,33 @@ async function refreshRoster() {
  */
 let resumeDraft = false;
 
-/** The Workshop is the admin's alone: once the session is not, it closes. */
+/** The Workshop and the dashboard are the admin's alone: once the session is not, they close. */
 function leaveWorkshopUnlessAdmin() {
   if (isAdmin(snapshot)) return;
-  if (getState() === 'admin') transition('title');
+  if (getState() === 'admin' || getState() === 'dashboard') transition('title');
   set({ adminStatus: 'idle', adminBusy: false, adminError: null });
+}
+
+/** Change the dashboard's view. */
+function dash(patch: Partial<DashboardView>) { set({ dashboard: { ...snapshot.dashboard, ...patch } }); }
+
+/**
+ * One dashboard call: the admin's token, the answer, or the failure in the
+ * view. A 401 means the session is no longer the admin's: it is forgotten and
+ * the admin sent to Compte, as the Workshop does.
+ */
+async function dashCall(fn: (token: string) => Promise<DashReply>): Promise<DashReply | null> {
+  const acc = snapshot.account; if (!acc || !isAdmin(snapshot)) return null;
+  const r = await fn(acc.token);
+  if (r.ok) return r;
+  if (r.status === 401) {
+    sessionExpired();
+    if (getState() === 'title') transition('account');
+    set({ accountError: 'Session expirée : reconnectez-vous pour le tableau de bord.' });
+    return null;
+  }
+  dash({ error: r.error ?? 'Erreur du serveur.', notice: null });
+  return null;
 }
 
 /** The server no longer knows this token (a 401): forget it here too, as a logout would, without calling the server. */
@@ -357,6 +408,93 @@ export const actions = {
   },
   toTitle() { transition('title'); },
   toSelect() { transition('select'); },
+
+  // ---- The admin's dashboard (DEC-030) ----
+  /** "Tableau de bord": open it and load everything. Only for the admin's session. */
+  openDashboard() {
+    if (!isAdmin(snapshot)) return;
+    initAudio();
+    dash({ error: null, notice: null });
+    transition('dashboard');
+    void actions.refreshDashboard();
+  },
+  closeDashboard() { if (getState() === 'dashboard') transition('title'); },
+  /** Reload the statistics, the user list (for the current search) and what is live. */
+  async refreshDashboard() {
+    if (snapshot.dashboard.busy) return;
+    dash({ busy: true });
+    const q = snapshot.dashboard.query;
+    const [stats, users, live] = await Promise.all([
+      dashCall(t => account.dashboard.stats(t, { base: remoteServer })),
+      dashCall(t => account.dashboard.users(t, q, { base: remoteServer })),
+      dashCall(t => account.dashboard.live(t, { base: remoteServer })),
+    ]);
+    const patch: Partial<DashboardView> = { busy: false };
+    if (stats) { const { ok: _ok, status: _st, error: _e, ...body } = stats; patch.stats = body as unknown as DashStats; }
+    if (users) patch.users = (users.users as DashUser[]) ?? [];
+    if (live) { patch.connections = (live.connections as DashConn[]) ?? []; patch.rooms = (live.rooms as DashRoom[]) ?? []; }
+    if (stats && users && live) { patch.error = null; patch.updatedAt = Date.now(); }
+    dash(patch);
+  },
+  /** Filter the user list by a part of a name, then reload it. */
+  async searchUsers(q: string) {
+    dash({ query: q.trim() });
+    const r = await dashCall(t => account.dashboard.users(t, snapshot.dashboard.query, { base: remoteServer }));
+    if (r) dash({ users: (r.users as DashUser[]) ?? [], error: null });
+  },
+  async banUser(id: string, reason: string) {
+    const r = await dashCall(t => account.dashboard.ban(t, id, reason.trim(), { base: remoteServer }));
+    if (r) { dash({ notice: 'Compte banni.', error: null }); await actions.refreshDashboard(); }
+  },
+  async unbanUser(id: string) {
+    const r = await dashCall(t => account.dashboard.unban(t, id, { base: remoteServer }));
+    if (r) { dash({ notice: 'Bannissement levé.', error: null }); await actions.refreshDashboard(); }
+  },
+  /** Close every session of an account: it has to log in again. */
+  async logoutUser(id: string) {
+    const r = await dashCall(t => account.dashboard.logoutUser(t, id, { base: remoteServer }));
+    if (r) { dash({ notice: 'Sessions fermées.', error: null }); await actions.refreshDashboard(); }
+  },
+  async closeRoom(code: string) {
+    const r = await dashCall(t => account.dashboard.closeRoom(t, code, { base: remoteServer }));
+    if (r) { dash({ notice: 'Salle ' + code + ' fermée.', error: null }); await actions.refreshDashboard(); }
+  },
+  async kickConnection(id: string) {
+    const r = await dashCall(t => account.dashboard.kick(t, id, { base: remoteServer }));
+    if (r) { dash({ notice: 'Connexion fermée.', error: null }); await actions.refreshDashboard(); }
+  },
+  /**
+   * Any command on room `code`, from the dashboard (DEC-031): start, track,
+   * kick, team, char in the lobby; every god command in a race.
+   */
+  async roomCommand(code: string, cmd: GodCmd) {
+    const r = await dashCall(t => account.dashboard.command(t, code, cmd, { base: remoteServer }));
+    if (r) { dash({ notice: String(r.text ?? 'Fait.'), error: null }); await actions.refreshDashboard(); }
+  },
+  /**
+   * A god command from the race or the lobby on screen (DEC-031). In a team
+   * race, or in a room, the server runs it (and checks it is the admin); in
+   * a solo race the admin's own engine does, on the spot.
+   */
+  godCommand(cmd: GodCmd) {
+    if (!isAdmin(snapshot)) return;
+    const st = getState();
+    if (isNetRace() || (st === 'lobby' && snapshot.net.room)) { net.clearMessages(); set({ godReply: null }); net.godCmd(null, cmd); return; }
+    if (st !== 'race' && st !== 'countdown' && st !== 'paused') return;
+    const r = applyGodCommand(cmd, G.player) as { ok: boolean; text: string };
+    set({ godReply: r.text });
+  },
+  /** Open or close the god console over the race (the G key, or its button). */
+  toggleGodConsole() { if (isAdmin(snapshot)) set({ godConsole: !snapshot.godConsole }); },
+  /** Enter room `code` as a god: the lobby opens on it, and the server seats the admin outside the teams. */
+  godJoin(code: string) {
+    const acc = snapshot.account; if (!acc || !isAdmin(snapshot)) return;
+    initAudio();
+    if (getState() === 'dashboard' || getState() === 'title') transition('lobby');
+    if (getState() !== 'lobby') return;
+    net.connect(socketUrl(), snapshot.netName, acc.token);
+    net.godJoin(code.toUpperCase().trim(), getGarage());
+  },
 
   // ---- Garage: the player's own kart ----
   openGarage() { transition('garage'); setPreview(G.charIdx); },
@@ -463,7 +601,7 @@ export const actions = {
     const st = getState();
     if (st === 'tracks') transition('select');
     if (getState() === 'select' || getState() === 'admin' || (getState() === 'results' && !isNetRace())) transition('title');
-    if (getState() === 'title' || getState() === 'account') transition('lobby');
+    if (getState() === 'title' || getState() === 'account' || getState() === 'dashboard') transition('lobby');
     if (getState() !== 'lobby') return;
     net.connect(socketUrl(), snapshot.netName, snapshot.account?.token ?? null);
     net.joinRoom(inv.code, getGarage());

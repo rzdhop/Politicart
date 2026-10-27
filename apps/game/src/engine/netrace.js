@@ -19,9 +19,9 @@ import { readInput } from './input.js';
 import { buildHazard, buildProjectileMesh } from './items.js';
 import { getState, transition } from './machine.js';
 import { applyKart, bracket, lerpKart } from './netstate.js';
-import { onNet, onRace, onResults, onSnap, sendInput } from './net.js';
+import { onKartJoin, onNet, onRace, onResults, onSnap, sendInput } from './net.js';
 import { updateKartVisual } from './physics.js';
-import { animateCrowd, placeCrossing, startField, viewStep } from './race.js';
+import { animateCrowd, joinField, placeCrossing, startField, viewStep } from './race.js';
 import { G } from './state.js';
 
 const DELAY_TICKS = 6;           // render 100 ms (six 60 Hz ticks) behind the newest snapshot
@@ -69,7 +69,7 @@ export function beginNetRace(m) {
   G.trackIdx = m.trackIdx;
   const slots = m.roster.map((s, i) => {
     const def = CHARACTERS.find(c => c.id === s.charId);
-    return { def, isAI: s.isAI, team: s.team, local: i === m.you, ...(s.style ? { style: playerStyle(def, s.style) } : {}) };
+    return { def, isAI: s.isAI, team: s.team, god: s.god === true, local: i === m.you, ...(s.style ? { style: playerStyle(def, s.style) } : {}) };
   });
   active = true; buffer = []; newest = { tk: 0, at: now() }; presses = { item: 0, power: 0 }; lastSent = 0; lastKey = ''; drawn = false;
   lastResults = null; hazards = new Map(); projectiles = new Map();
@@ -86,6 +86,18 @@ export function receiveSnap(m) {
   newest = { tk: s.tk, at: now() };
   for (const [type, text] of m.ev ?? []) emit(type, text);
   for (const name of m.fx ?? []) sfx(name);
+}
+
+/**
+ * A kart joins the race in progress (the admin as a god, DEC-031): build it
+ * like the grid's, at the slot the server named. Snapshots carry its state
+ * from then on.
+ */
+export function receiveKartJoin(m) {
+  if (!active || m.slot !== G.karts.length) return;
+  const def = CHARACTERS.find(c => c.id === m.entry.charId); if (!def) return;
+  joinField({ def, isAI: false, team: null, god: m.entry.god === true, ...(m.entry.style ? { style: playerStyle(def, m.entry.style) } : {}) });
+  G.netRoster = [...(G.netRoster ?? []), m.entry];
 }
 
 /** The race is over: keep the scene on screen and show the results. */
@@ -139,7 +151,7 @@ export function netStep(dt) {
   const br = bracket(buffer, renderTick);
   if (br) {
     const { a, b, f } = br;
-    G.time = a.t + (b.t - a.t) * f; G.countdown = b.cd; G.resultsAt = b.ra ?? Infinity;
+    G.time = a.t + (b.t - a.t) * f; G.countdown = b.cd; G.resultsAt = b.ra ?? Infinity; if (b.lp) G.laps = b.lp;
     if (b.st === 'race' && getState() === 'countdown') transition('race');
     G.karts.forEach((k, i) => {
       const ka = a.k[i], kb = b.k[i]; if (!ka || !kb) return;
@@ -167,4 +179,8 @@ export function netStep(dt) {
 onRace(beginNetRace);
 onSnap(receiveSnap);
 onResults(finishNetRace);
-onNet(view => { if (active && view.status !== 'open') { emit('toast', 'CONNEXION PERDUE'); abortNetRace(); } });
+onKartJoin(receiveKartJoin);
+onNet(view => {
+  if (active && view.status !== 'open') { emit('toast', 'CONNEXION PERDUE'); abortNetRace(); }
+  else if (active && !view.room) abortNetRace();      // out of the room mid-race: excluded by the admin, or the room was closed
+});

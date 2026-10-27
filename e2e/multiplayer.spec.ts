@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from '@playwright/test';
+import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 
 /**
  * Team races, end to end: two real browsers against the real game server
@@ -12,8 +12,13 @@ const SERVER = 'http://127.0.0.1:4180/';
 const RUN = Date.now().toString(36).slice(-5);
 
 /** A browser on the game server, signed up as `name` (an account) or not (a guest). */
+// Every context a spec opens is closed after it: a page left racing keeps rendering and slows the specs that follow.
+const contexts: BrowserContext[] = [];
+test.afterEach(async () => { await Promise.all(contexts.splice(0).map(c => c.close())); });
+
 async function open(browser: Browser, name: string, { account = false } = {}): Promise<Page> {
-  const page = await (await browser.newContext()).newPage();
+  const context = await browser.newContext(); contexts.push(context);
+  const page = await context.newPage();
   await page.goto(SERVER);
   await expect(page.locator('#b-multi')).toBeVisible();
   if (account) {

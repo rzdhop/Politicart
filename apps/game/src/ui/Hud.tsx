@@ -25,6 +25,7 @@ import {
 } from '@kart-republique/ui';
 
 import { attachMinimap } from '../engine/minimap.js';
+import { GodPanel } from './GodConsole';
 import { useUi } from './store';
 import { TouchControls } from './TouchControls';
 
@@ -95,7 +96,7 @@ const Readouts = memo(function Readouts() {
   );
 });
 
-/** The HUD layer: visible while a race is live or paused, hidden on every menu. The touch buttons ride on it. */
+/** The HUD layer: visible while a race is live or paused, hidden on every menu. The touch buttons, and the admin's god console, ride on it. */
 export function Hud() {
   const ui = useUi();
   const live = ui.state === 'countdown' || ui.state === 'race' || ui.state === 'paused';
@@ -103,6 +104,8 @@ export function Hud() {
     <HudLayer id="hud" hidden={!live}>
       <Readouts />
       <TouchControls live={live} paused={ui.state === 'paused'} />
+      {/* The admin's absolute power over the race (DEC-031); nobody else gets it. */}
+      {live && <GodPanel ui={ui} />}
     </HudLayer>
   );
 }

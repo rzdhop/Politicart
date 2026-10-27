@@ -26,6 +26,7 @@ export function encodeKart(k) {
     da: k.drift.active, dd: k.drift.dir, dc: k.drift.charge,
     it: k.item, ir: k.itemRolling > 0, pc: k.powerCd,
     lap: k.lap, idx: k.idx, pr: k.progress, rk: k.rank, fin: k.finished, ft: k.finishTime, bl: finite(k.bestLap),
+    gd: k.god === true,
   };
 }
 
@@ -37,12 +38,13 @@ export function applyKart(k, s) {
   k.drift.active = s.da; k.drift.dir = s.dd; k.drift.charge = s.dc;
   k.item = s.it; k.itemRolling = s.ir ? 1 : 0; k.powerCd = s.pc;
   k.lap = s.lap; k.idx = s.idx; k.progress = s.pr; k.rank = s.rk; k.finished = s.fin; k.finishTime = s.ft; k.bestLap = unfinite(s.bl);
+  k.god = s.gd === true;
 }
 
 /** The whole race at one server tick. */
 export function encodeSnapshot(G, tick) {
   return {
-    tk: tick, t: G.time, st: G.state, cd: G.countdown, ra: finite(G.resultsAt),
+    tk: tick, t: G.time, st: G.state, cd: G.countdown, ra: finite(G.resultsAt), lp: G.laps,
     k: G.karts.map(encodeKart),
     h: G.hazards.map(h => ({ id: h.id, ty: h.type, x: h.x, z: h.z })),
     p: G.projectiles.map(p => ({ id: p.id, ty: p.type, x: p.x, y: p.y, z: p.z })),

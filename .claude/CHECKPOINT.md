@@ -2,7 +2,32 @@
 
 Current state only. History lives in git.
 
-## Latest task -- closed 2026-10-20: cast admin, Garage and pun names, on main
+## Latest task -- 2026-10-27: cast review, quieter HUD, admin dashboard and god seat
+
+- **Branch:** `feature/relaxed-pascal-rlbpu6`, cut from `main` at `fd118b5`.
+- **Shipped on the branch:** DEC-028 (three powers retuned: Déconstruction,
+  Lâcher de chatons, Fauchage volontaire; Darmalin's "elle", the megaphone's
+  "LULU" and Mélèche's quote fixed), DEC-029 (what a driver reads and hears
+  is what landed on them; local sounds; the banner queue), DEC-030 (the
+  admin's dashboard: stats, users with bans, live rooms and sockets; the god
+  seat over `godJoin`, creative mode in the engine).
+- **Tests:** Tier 1 green (game 254, server 118). E2E: admin, dashboard
+  (R-19, R-20), garage form and mobile specs green. In this container the
+  desktop solo-race specs and the multiplayer green-light check fail on the
+  previous commit too (software WebGL, a slowed CPU), so they were judged
+  against it, not against green.
+- **Follow-up the same day (DEC-031):** the admin's absolute power. A god
+  joins a running race at once; the console divine (G, or the dashboard's
+  Contrôler) changes any race; lobby commands force start, circuit, teams,
+  candidates and exclusions.
+- **Owed by the human:** play a race and judge the banner cadence (A-021);
+  say whether other powers should be retuned (A-020); try the console in a
+  real team race (A-024, A-025).
+- **Follow-ups:** the dashboard's user list is computed in memory from
+  `listUsers` (fine for hundreds of accounts, not for hundreds of thousands);
+  no e2e for a banned account's live socket beyond the lobby error line.
+
+## Previous task -- closed 2026-10-20: cast admin, Garage and pun names, on main
 
 - **Shipped:** `feat/cast-admin-garage` (pushed) is merged into `main` as
   `8922810`, whose tree is identical to the tested branch tip. Pages

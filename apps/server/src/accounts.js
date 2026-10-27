@@ -20,6 +20,9 @@
 // One name is reserved for the administrator (admin.js): sign-ups under it,
 // or anything that looks like it, are refused. Its profile carries
 // `admin: true`, and `requireAdmin(req)` guards admin-only routes.
+//
+// An account the admin banned (dashboard.js) cannot log in (403, with the
+// reason) and has no valid session: the store answers null for its tokens.
 import { randomBytes, scrypt as scryptCb, scryptSync, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
@@ -103,9 +106,11 @@ function readJson(req, limit = 4096) {
  *
  * `handle.profile(user)` is the one way to build a profile for the client,
  * admin flag included; `handle.requireAdmin(req)` resolves to the admin's user
- * record for a Bearer session of the admin, else null.
+ * record for a Bearer session of the admin, else null; `handle.isAdmin(user)`
+ * says whether a user record is the admin's. `onSoloRace(user, race)` is told
+ * of every solo race rewarded, for the dashboard's counters.
  */
-export function accountApi(store, { onProfile = () => {}, tries: maxTries = LOGIN_TRIES, admin, accountLock = {} } = {}) {
+export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {}, tries: maxTries = LOGIN_TRIES, admin, accountLock = {} } = {}) {
   const adminCfg = adminConfig(admin);
   /** The client's view of an account: `admin: true` for the admin only, no key otherwise. */
   const profile = user => profileOf(user, { admin: isAdminUser(adminCfg, user) });
@@ -169,6 +174,7 @@ export function accountApi(store, { onProfile = () => {}, tries: maxTries = LOGI
       if (isReservedName(adminCfg, name)) return reply(res, 409, { error: 'Ce pseudo est réservé.' });
       const user = await store.createUser({ name, hash: await hashPassword(b.password) });
       if (!user) return reply(res, 409, { error: 'Ce pseudo est déjà pris.' });
+      await store.touchSeen(user.id);
       reply(res, 200, { token: await store.createSession(user.id), profile: profile(user) });
     },
     'POST /api/login': async (req, res) => {
@@ -186,6 +192,8 @@ export function accountApi(store, { onProfile = () => {}, tries: maxTries = LOGI
         return reply(res, 401, { error: 'Pseudo ou mot de passe incorrect.' });
       }
       failures.delete(key);
+      if (user.banned) return reply(res, 403, { error: 'Compte banni' + (user.banned.reason ? ' : ' + user.banned.reason : '') + '.' });
+      await store.touchSeen(user.id);
       reply(res, 200, { token: await store.createSession(user.id), profile: profile(user) });
     },
     'POST /api/logout': async (req, res) => { await store.dropSession(bearer(req)); reply(res, 200, {}); },
@@ -200,9 +208,11 @@ export function accountApi(store, { onProfile = () => {}, tries: maxTries = LOGI
       if (now - (lastSolo.get(user.id) ?? 0) < MIN_SOLO_GAP_MS) return reply(res, 200, { profile: profile(user), gained: 0 });
       lastSolo.set(user.id, now);
       const field = Number.isInteger(b.field) && b.field > 1 && b.field <= 12 ? b.field : 6;
-      const gained = xpForRace({ rank: Number(b.rank) || 0, field, finished: b.finished === true });
+      const race = { rank: Number(b.rank) || 0, field, finished: b.finished === true };
+      const gained = xpForRace(race);
       const after = await store.addXp(user.id, gained);
       onProfile(after);
+      onSoloRace(after, race);
       reply(res, 200, { profile: profile(after), gained });
     },
   };
@@ -219,5 +229,6 @@ export function accountApi(store, { onProfile = () => {}, tries: maxTries = LOGI
   }
   handle.profile = profile;
   handle.requireAdmin = requireAdmin;
+  handle.isAdmin = user => isAdminUser(adminCfg, user);
   return handle;
 }

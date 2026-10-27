@@ -52,6 +52,7 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
           </Button>
           {/* The Workshop is the admin's: only an account the server flags as admin sees it. */}
           {isAdmin(ui) && <Button id="b-admin" variant="ghost" onClick={actions.openAdmin}>{ADMIN_LABEL[ui.adminStatus]}</Button>}
+          {isAdmin(ui) && <Button id="b-dashboard" variant="ghost" onClick={actions.openDashboard}>Tableau de bord (admin)</Button>}
         </Row>
         {touch ? (
           <ControlsGrid id="touch-legend">

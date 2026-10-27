@@ -9,7 +9,7 @@ import { useItem } from './items.js';
 import { getState, resetMachine, transition } from './machine.js';
 import { connect, disconnect, setTransport } from './net.js';
 import { encodeSnapshot } from './netstate.js';
-import { abortNetRace, beginNetRace, finishNetRace, isNetRace, netStep, onNetResults, pressItem, receiveSnap } from './netrace.js';
+import { abortNetRace, beginNetRace, finishNetRace, isNetRace, netStep, onNetResults, pressItem, receiveKartJoin, receiveSnap } from './netrace.js';
 import { simStep, startField } from './race.js';
 import { G } from './state.js';
 
@@ -59,6 +59,20 @@ describe('a networked race on the client', () => {
     expect(G.karts.map(k => k.def.id)).toEqual(ROSTER.map(s => s.charId));
     expect(G.player).toBe(G.karts[5]);
     expect(G.karts[4].team).toBe('bleu');
+  });
+
+  it('builds a kart that joins the race in progress at the slot the server names, and nothing else (DEC-031)', () => {
+    clientInLobby();
+    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5 });
+    receiveKartJoin({ slot: 9, entry: { charId: 'thierry', name: 'Rida', isAI: false, team: null, god: true } });   // not the next slot: ignored
+    expect(G.karts).toHaveLength(6);
+    receiveKartJoin({ slot: 6, entry: { charId: 'thierry', name: 'Rida', isAI: false, team: null, god: true, style: { wheels: 'gold' } } });
+    expect(G.karts).toHaveLength(7);
+    expect(G.karts[6]).toMatchObject({ god: true, team: null });
+    expect(G.karts[6].style.wheels).toBe('gold');
+    expect(G.netRoster.at(-1).name).toBe('Rida');
+    expect(G.player).toBe(G.karts[5]);
+    netStep(1 / 60);                                     // snapshots without the seventh kart do not break the frame
   });
 
   it("draws each human's kart with their Garage edits over the candidate default, and AI with the default", () => {
