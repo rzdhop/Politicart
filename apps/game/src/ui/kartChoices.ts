@@ -1,12 +1,24 @@
 // The kart options as the forms offer them: [value, French label] pairs, in
-// display order. Shared by the player's Garage and the admin's per-character
-// kart defaults in the workshop, so both name every option the same way. The
-// values are kartstyle.js's vocabulary.
+// display order. Shared by the player's Garage, the admin's per-character
+// kart defaults in the workshop and the shop, so all name every option the
+// same way. The values are kartstyle.js's vocabulary; the grades and prices
+// of each option live in engine/catalog.js.
+
+import { GRADE_LABEL } from '../engine/catalog.js';
 
 export const WHEELS = [['classic', 'Classiques'], ['chrome', 'Chromées'], ['offroad', 'Tout-terrain'], ['gold', 'Dorées']] as const;
 export const SPOILERS = [['none', 'Aucun'], ['standard', 'Standard'], ['wing', 'Grand aileron']] as const;
 export const STICKERS = [['none', 'Aucun'], ['tricolore', 'Tricolore'], ['rosette', 'Cocarde'], ['etoile', 'Étoile'], ['marianne', 'Marianne']] as const;
 export const PODS = [['on', 'Oui'], ['off', 'Non']] as const;
+export const EXHAUSTS = [['stock', 'Série'], ['double', 'Double'], ['side', 'Latéral'], ['quad', 'Quadruple'], ['turbine', 'Turbine']] as const;
+export const UNDERGLOWS = [['none', 'Aucun'], ['blue', 'Bleu'], ['red', 'Rouge'], ['gold', 'Or'], ['rainbow', 'Arc-en-ciel']] as const;
+export const MASTS = [['none', 'Aucun'], ['antenna', 'Antenne'], ['tricolore', 'Tricolore'], ['europe', 'Europe'], ['pirate', 'Pirate']] as const;
+export const NOSES = [['stock', 'Série'], ['splitter', 'Splitter'], ['wedge', 'Coin'], ['bull', 'Pare-buffle'], ['ram', 'Bélier']] as const;
+export const SKINS = [['flat', 'Uni'], ['stripes', 'Bandes'], ['carbon', 'Carbone'], ['camo', 'Camouflage'], ['flames', 'Flammes']] as const;
+export const TRAILS = [['none', 'Aucune'], ['ribbon', 'Ruban tricolore'], ['smoke', 'Fumée'], ['sparkles', 'Paillettes'], ['confetti', 'Confettis'], ['laser', 'Laser']] as const;
+
+/** The French name of each grade, as the badges and the shop print it (engine/catalog.js). */
+export const GRADE_LABELS: Readonly<Record<'common' | 'rare' | 'mythic' | 'incredible', string>> = GRADE_LABEL;
 
 /** ChoiceGroup options from [value, label] pairs, each chip's id being the prefix plus its value. */
 export const chips = <V extends string>(idPrefix: string, pairs: readonly (readonly [V, string])[]) =>

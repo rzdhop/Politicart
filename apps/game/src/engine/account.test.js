@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { fetchRoster, login, me, register, reportRace, saveRoster } from './account.js';
-import { levelFromXp, STARTERS, UNLOCKS, unlockedIds, unlockLevel, xpForRace, xpToNext } from './progress.js';
+import { drivableIds, levelFromXp, profileOf, STARTERS, UNLOCKS, unlockedIds, unlockLevel, xpForRace, xpToNext } from './progress.js';
 import { CHARACTERS } from './data.js';
 
 describe('progression', () => {
@@ -28,6 +28,52 @@ describe('progression', () => {
     expect(xpForRace({ rank: 5, field: 6 })).toBe(20);
     expect(xpForRace({ rank: 0, field: 6, finished: false })).toBe(10);
     expect(xpForRace({ rank: 1, field: 6, teamWon: true })).toBe(60 + 20);
+  });
+
+  it('drives the starters plus the owned candidates, whatever the level (DEC-034)', () => {
+    expect(drivableIds(13, null)).toEqual([...STARTERS]);
+    expect(drivableIds(13, undefined)).toEqual([...STARTERS]);
+    expect(drivableIds(1, { chars: [] })).toEqual([...STARTERS]);
+    expect(drivableIds(1, { chars: ['thierry', 'victor', 'thierry', 'nobody', 7] })).toEqual([...STARTERS, 'thierry']);
+    expect(drivableIds(1, { chars: 'thierry' })).toEqual([...STARTERS]);
+    expect(drivableIds(1, 'junk')).toEqual([...STARTERS]);
+  });
+});
+
+describe('profileOf', () => {
+  const user = { id: 'u1', name: 'Alice', xp: 130, hash: 'secret', created: 1 };
+
+  it('shows the level, what it makes reachable, and the starters as drivable when nothing is owned', () => {
+    expect(profileOf(user)).toEqual({
+      id: 'u1', name: 'Alice', xp: 130, level: 2, xpInto: 10, xpNext: 160,
+      reachable: [...STARTERS, 'lucie'], unlocked: [...STARTERS], coins: 0, owned: { chars: [], parts: [], trails: [] }, stats: {},
+    });
+    expect(profileOf({ id: 'u0', name: 'Zero', xp: 0 }).unlocked).toEqual([...STARTERS]);
+    expect(profileOf(user)).not.toHaveProperty('hash');
+    expect(profileOf(user)).not.toHaveProperty('admin');
+  });
+
+  it('drives what is owned, below its level or not, and shows the purse, inventory and stats', () => {
+    const owned = { chars: ['thierry'], parts: ['wheels:gold'], trails: ['laser'] };
+    const p = profileOf({ ...user, coins: 42.9, stats: { races: 3 } }, { owned });
+    expect(p.unlocked).toEqual([...STARTERS, 'thierry']);
+    expect(p.reachable).toEqual([...STARTERS, 'lucie']);
+    expect(p.coins).toBe(42);
+    expect(p.owned).toBe(owned);
+    expect(p.stats).toEqual({ races: 3 });
+  });
+
+  it('never shows a negative or non-numeric purse, nor stats that are not an object', () => {
+    expect(profileOf({ ...user, coins: -5 }).coins).toBe(0);
+    expect(profileOf({ ...user, coins: 'lots' }).coins).toBe(0);
+    expect(profileOf({ ...user, stats: 'none' }).stats).toEqual({});
+    expect(profileOf({ ...user, stats: null }).stats).toEqual({});
+  });
+
+  it('marks the administrator and no one else', () => {
+    expect(profileOf(user, { admin: true })).toMatchObject({ admin: true });
+    expect(profileOf(user, { admin: 'yes' })).not.toHaveProperty('admin');
+    expect(profileOf(user, { admin: false, owned: null })).not.toHaveProperty('admin');
   });
 });
 
