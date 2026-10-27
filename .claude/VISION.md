@@ -60,3 +60,15 @@ on the server's page and on the Pages build (DEC-026, DEC-027). Every player
 owns their own kart in the Garage -- colours, wheels, spoiler, number,
 sticker. It is kept in their browser and shown to the others in team races.
 
+
+## The economy: politicoins, the Boutique and the Politibox
+
+Every race pays politicoins; the Boutique sells the candidates (once their
+level is reached) and the kart parts, each with a grade -- common, rare,
+mythic, incredible -- that sets its price and its badge. The Politibox, a
+gold ballot urn opened in a 3D sequence, hands out politicoins, parts, the
+trails nobody can buy, and now and then a candidate whatever the level
+(DEC-032..037). The server owns every balance, inventory and roll, and
+never shows another player a part its owner did not earn (DEC-035). Five
+circuits now, with Montmartre and Marseille beside the three Paris ones,
+and each account keeps its stats, visible to its friends.
