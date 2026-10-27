@@ -1,4 +1,4 @@
-import type { ComponentPropsWithRef } from 'react';
+import type { ComponentPropsWithRef, ReactNode } from 'react';
 
 import { cx } from '../../cx';
 
@@ -19,6 +19,12 @@ export interface CharacterTileProps
   image?: string;
   /** Marks this tile as the current choice: gold border, ring and a slight scale-up. */
   selected?: boolean;
+  /**
+   * Something small pinned to the tile's top-right corner, over the portrait:
+   * a `GradeBadge`, a price. Top-right on purpose -- the game's own lock pill
+   * sits top-centre, and the two must not collide.
+   */
+  badge?: ReactNode;
 }
 
 /**
@@ -46,6 +52,7 @@ export function CharacterTile({
   name,
   image,
   selected = false,
+  badge,
   className,
   type = 'button',
   ...rest
@@ -58,6 +65,7 @@ export function CharacterTile({
       {...rest}
     >
       {image ? <img alt={name} src={image} /> : null}
+      {badge === undefined ? null : <span className="tile-badge">{badge}</span>}
       <div className="tname">{name}</div>
     </button>
   );

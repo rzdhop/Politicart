@@ -96,6 +96,12 @@ describe.skipIf(!built)('published package contract', () => {
       'components/workshop/LiveryThumb.d.ts',
       'components/workshop/AdPreview.d.ts',
       'components/misc/NoteBanner.d.ts',
+      'components/economy/GradeBadge.d.ts',
+      'components/economy/CoinCount.d.ts',
+      'components/economy/ShopCard.d.ts',
+      'components/economy/KartCard.d.ts',
+      'components/economy/RevealStage.d.ts',
+      'components/economy/Tabs.d.ts',
     ]) {
       expect(existsSync(join(dist, path)), `dist/${path} is missing`).toBe(true);
     }
@@ -152,9 +158,38 @@ describe.skipIf(!built)('published package contract', () => {
       'LiveryThumbProps',
       'AdPreviewProps',
       'NoteBannerProps',
+      'GradeBadgeProps',
+      'CoinCountProps',
+      'ShopCardProps',
+      'KartCardProps',
+      'RevealStageProps',
+      'TabsProps',
     ]) {
       expect(types, `${name} is not exported`).toContain(name);
     }
+  });
+
+  it('exports the grade vocabulary the economy components share', () => {
+    // Stage 6b/6c type their catalogue against these rather than re-declaring
+    // the four ids, so a drift here would surface as a game typecheck failure.
+    const types = readFileSync(join(dist, 'index.d.ts'), 'utf8');
+    for (const name of ['Grade', 'GRADES', 'RevealPhase', 'KartPart', 'KartTrail', 'Tab']) {
+      expect(types, `${name} is not exported`).toContain(name);
+    }
+  });
+
+  it('carries the grade tokens and the motion sheet', () => {
+    const css = readFileSync(join(dist, 'styles.css'), 'utf8');
+    for (const token of ['--grade-common', '--grade-rare', '--grade-mythic', '--grade-incredible', '--grade-incredible-2', '--coin']) {
+      expect(css).toContain(token);
+    }
+    for (const keyframes of ['kr-shimmer', 'kr-pulse', 'kr-rainbow', 'kr-sparkle', 'kr-flash', 'kr-rise', 'kr-pop']) {
+      expect(css, `@keyframes ${keyframes} is missing`).toMatch(new RegExp(`@keyframes ${keyframes}\\b`));
+    }
+    // fx.css must be last: its grade rules win over the component sheets by
+    // source order alone, and the reduced-motion switch-off must follow them.
+    expect(css.indexOf('.shop-card')).toBeLessThan(css.indexOf('@keyframes kr-shimmer'));
+    expect(css).toMatch(/prefers-reduced-motion:\s*reduce/);
   });
 
   it('exports an imperative handle for every live HUD readout', () => {
