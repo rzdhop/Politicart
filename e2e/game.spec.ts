@@ -226,6 +226,9 @@ test.describe('R-03 pause, resume and quit', () => {
     await startRace(page);
     await page.keyboard.press('Escape');
     await expect(page.locator('#s-pause')).toBeVisible();
+    // The pause menu shows the kart being driven (stage 7): the candidate's card with their grade.
+    await expect(page.locator('#pause-kart')).toBeVisible();
+    await expect(page.locator('#pause-kart .grade')).toHaveCount(1);
 
     // Paused means paused: the clock must not move.
     const held = await clock(page);

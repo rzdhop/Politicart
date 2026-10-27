@@ -4,7 +4,9 @@
 // same way. The values are kartstyle.js's vocabulary; the grades and prices
 // of each option live in engine/catalog.js.
 
-import { GRADE_LABEL } from '../engine/catalog.js';
+import { CHAR_GRADE, GRADE_LABEL, PART_CATEGORIES, PART_GRADE, TRAIL_GRADE } from '../engine/catalog.js';
+import { builtinStyle } from '../engine/kartstyle.js';
+import type { Character, KartStyle } from './types';
 
 export const WHEELS = [['classic', 'Classiques'], ['chrome', 'Chromées'], ['offroad', 'Tout-terrain'], ['gold', 'Dorées']] as const;
 export const SPOILERS = [['none', 'Aucun'], ['standard', 'Standard'], ['wing', 'Grand aileron']] as const;
@@ -52,8 +54,40 @@ export function partPhrase(category: string, value: string): string {
 /** The French label of a trail: 'Laser'. */
 export const trailLabel = (id: string) => labelIn(TRAILS, id);
 
+export type Grade = 'common' | 'rare' | 'mythic' | 'incredible';
+const PART_GRADES = PART_GRADE as Readonly<Record<string, Readonly<Record<string, Grade>>>>;
+const TRAIL_GRADES = TRAIL_GRADE as Readonly<Record<string, Grade>>;
+
+/** A candidate's grade (engine/catalog.js CHAR_GRADE); common for anyone the catalogue does not know. */
+export const charGrade = (id: string): Grade => (CHAR_GRADE as Readonly<Record<string, Grade>>)[id] ?? 'common';
+
+/** A part option's grade, common for anything the catalogue does not price. */
+export const partGrade = (category: string, value: string): Grade => PART_GRADES[category]?.[value] ?? 'common';
+
+/** A trail's grade. */
+export const trailGrade = (id: string): Grade => TRAIL_GRADES[id] ?? 'common';
+
+/**
+ * What the kart card lists for a kart driven by `char` in `style`: every
+ * catalogue part that is not the built-in look (nor 'none', which is a part
+ * taken off, not fitted), as `{ id, label, value, grade }` in catalogue
+ * order, and the trail (`null` for none). The body and accent colours, the
+ * number and the pods are not catalogue parts, so they are not listed.
+ */
+export function kartCardOf(char: Character, style: Partial<KartStyle>) {
+  const base = builtinStyle(char) as unknown as Record<string, unknown>;
+  const s = style as Record<string, unknown>;
+  const parts = (PART_CATEGORIES as readonly string[]).flatMap(category => {
+    const value = s[category];
+    if (typeof value !== 'string' || value === 'none' || value === base[category]) return [];
+    return [{ id: category, label: PART_CHOICES[category as PartCategory]?.label ?? category, value: optionLabel(category, value), grade: partGrade(category, value) }];
+  });
+  const trail = typeof style.trail === 'string' && style.trail !== 'none' ? { label: trailLabel(style.trail), grade: trailGrade(style.trail) } : null;
+  return { parts, trail };
+}
+
 /** The French name of each grade, as the badges and the shop print it (engine/catalog.js). */
-export const GRADE_LABELS: Readonly<Record<'common' | 'rare' | 'mythic' | 'incredible', string>> = GRADE_LABEL;
+export const GRADE_LABELS: Readonly<Record<Grade, string>> = GRADE_LABEL;
 
 /** ChoiceGroup options from [value, label] pairs, each chip's id being the prefix plus its value. */
 export const chips = <V extends string>(idPrefix: string, pairs: readonly (readonly [V, string])[]) =>

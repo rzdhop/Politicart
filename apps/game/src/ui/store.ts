@@ -29,12 +29,17 @@ import { hasPreview, makeThumbs, setPreview } from '../engine/preview.js';
 import { STARTERS } from '../engine/progress.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
+import type { KartStyle } from './types';
 
 export type GameState = 'title' | 'select' | 'tracks' | 'admin' | 'countdown' | 'race' | 'paused' | 'results' | 'lobby' | 'account' | 'garage' | 'dashboard' | 'shop' | 'lootbox';
 export type TeamId = 'bleu' | 'rouge';
 
-/** One player in a team-race room, as the game server describes it. A god (the admin, DEC-030) has no team. */
-export interface LobbyPlayer { id: string; name: string; team: TeamId | null; charId: string; ready: boolean; userId?: string | null; level?: number | null; guest?: boolean; god?: boolean }
+/**
+ * One player in a team-race room, as the game server describes it. A god (the
+ * admin, DEC-030) has no team. `style` is their Garage edits as the server
+ * kept them (cleaned, owned), so the lobby can name their trail (DEC-036).
+ */
+export interface LobbyPlayer { id: string; name: string; team: TeamId | null; charId: string; ready: boolean; userId?: string | null; level?: number | null; guest?: boolean; god?: boolean; style?: Partial<KartStyle> }
 /** A team-race room: its code, host, circuit and players (DEC-014). */
 export interface RoomView { code: string; host: string | null; trackIdx: number; phase: 'lobby' | 'race'; players: LobbyPlayer[] }
 /** One line of the friend list: a friend, or a request either way. */
@@ -64,6 +69,9 @@ type AuthReply = { ok: boolean; status: number; error?: string; token?: string; 
 
 /** What the last race earned, for the results screen: experience, politicoins (daily and level-up bonuses included), a level, candidates. */
 export interface Gain { gained: number; coins: number; daily: boolean; levelUpCoins: number; level: number; levelUp: boolean; unlockedNow: string[] }
+
+/** The kart this screen drives in the race on screen (or the last one): its candidate and the full style it was built with. */
+export interface RaceKart { charId: string; style: KartStyle }
 
 export type Grade = 'common' | 'rare' | 'mythic' | 'incredible';
 /** What a Politibox held (engine/catalog.js rollBox): politicoins, or an item, refunded when it was already owned. */
@@ -136,6 +144,8 @@ export interface UiSnapshot {
   accountError: string | null;
   /** What the last race earned the account, until the next race starts. */
   lastGain: Gain | null;
+  /** The local kart of the race on screen, for the kart card on the pause and results screens; null before the first race. */
+  raceKart: RaceKart | null;
   /** The admin's dashboard (DEC-030). */
   dashboard: DashboardView;
   /** The admin's god console is open over the race (DEC-031). */
@@ -200,6 +210,7 @@ let snapshot: UiSnapshot = {
   accountBusy: false,
   accountError: null,
   lastGain: null,
+  raceKart: null,
   dashboard: { stats: null, users: [], connections: [], rooms: [], query: '', busy: false, error: null, notice: null, updatedAt: null },
   godConsole: false,
   godReply: null,
@@ -229,9 +240,21 @@ export function useUi(): UiSnapshot {
 /** Whether the race on screen was started solo (actions.start), not by the game server. */
 let soloRace = false;
 
+/**
+ * The kart this screen follows, captured from the engine when a race starts
+ * (solo or team: either way the grid is built before the countdown), so the
+ * screens read it from the snapshot like everything else.
+ */
+function captureRaceKart(): RaceKart | null {
+  const k = G.player as unknown as { def?: { id: string }; style?: KartStyle } | null;
+  return k?.def && k.style ? { charId: k.def.id, style: k.style } : snapshot.raceKart;
+}
+
 onTransition((to: string, from: string) => {
   const patch: Partial<UiSnapshot> = { state: to as GameState };
   if (to === 'countdown' && from !== 'paused') { patch.noteHidden = true; patch.lastGain = null; patch.godReply = null; }
+  // A grid is on the track (a god entering a race mid-way joins it during the countdown, netrace.js).
+  if ((to === 'countdown' || to === 'race') && from !== 'paused') patch.raceKart = captureRaceKart();
   set(patch);
   // A solo race just ended: the account earns its experience (a team race's comes from the server).
   if (to === 'lobby') soloRace = false;

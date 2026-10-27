@@ -79,6 +79,7 @@ test.describe('R-10 phones', () => {
     await startRace(page);
     await page.locator('#t-pause').tap();
     await expect(page.locator('#s-pause')).toBeVisible();
+    await expect(page.locator('#pause-kart')).toBeVisible();      // the kart card, on a phone too
     await expect(page.locator('#touch')).toBeHidden();
     await page.locator('#b-resume').tap();
     await expect(page.locator('#touch')).toBeVisible();

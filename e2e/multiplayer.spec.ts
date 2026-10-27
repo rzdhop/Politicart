@@ -67,6 +67,12 @@ test.describe('Multijoueur', () => {
     await expect(host.locator('#lobby-players tr').nth(1)).toContainText('(invité·e)');
     await expect(host.locator('#lobby-players tr').nth(0)).toContainText('Bleu');
     await expect(host.locator('#lobby-players tr').nth(1)).toContainText('Rouge');
+    // Each row names the candidate's grade and the player's trail (DEC-036, A-032): nobody here owns one, so a dash on both screens.
+    for (const p of [host, guest]) {
+      await expect(p.locator('#lobby-players .grade[data-grade="common"]')).toHaveCount(2);     // two starters, both common
+      await expect(p.locator('[id^="lobby-trail-"]')).toHaveCount(2);
+      await expect(p.locator('[id^="lobby-trail-"]')).toHaveText(['—', '—']);
+    }
 
     await expect(host.locator('#b-mp-start')).toBeDisabled();
     await guest.locator('#b-mp-ready').click();

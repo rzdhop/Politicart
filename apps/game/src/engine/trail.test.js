@@ -34,7 +34,7 @@ describe('buildTrail', () => {
     expect(buildTrail(undefined)).toBeNull();
   });
 
-  it.each(KINDS)('%s has a pool of 24 hidden particles in one group', kind => {
+  it.each(KINDS)('%s has a pool of POOL hidden particles in one group', kind => {
     const t = buildTrail(kind);
     expect(t.group.children).toHaveLength(POOL);
     expect(live(t)).toHaveLength(0);
@@ -74,6 +74,16 @@ describe('buildTrail', () => {
     expect(born.position.distanceTo(at)).toBeLessThan(1e-6);      // a ribbon stays where it was laid
   });
 
+  it('is dense at race speed: confetti keeps the whole pool in the air and a laser beam stretches past the kart', () => {
+    // Stage 7 raised the pool and the spawn rate: at 20 a confetto lives longer than the pool takes to fill.
+    const c = buildTrail('confetti'); const k = kart(20);
+    for (let n = 0; n < 120; n++) { k.pos.x += k.speed * STEP; c.update(k, STEP); }
+    expect(live(c)).toHaveLength(POOL);
+    const l = buildTrail('laser'); const beam = kart(30);
+    for (let n = 0; n < 30; n++) { beam.pos.x += beam.speed * STEP; l.update(beam, STEP); }
+    expect(Math.max(...live(l).map(o => o.scale.z))).toBeGreaterThan(2);
+  });
+
   it('spawns faster at top speed than at a crawl', () => {
     const count = speed => { const t = buildTrail('smoke'); const k = kart(speed); for (let n = 0; n < 12; n++) t.update(k, STEP); return live(t).length; };
     expect(count(42)).toBeGreaterThan(count(5));
@@ -87,7 +97,7 @@ describe('buildTrail', () => {
     expect(p.material.transparent).toBe(true);
   });
 
-  it('keeps the same 24 objects whatever happens: nothing is added or replaced per frame', () => {
+  it('keeps the same POOL objects whatever happens: nothing is added or replaced per frame', () => {
     const t = buildTrail('confetti'); const k = kart(40); const objs = [...t.group.children];
     for (let n = 0; n < 240; n++) { k.pos.z += 0.5; t.update(k, STEP); }
     expect(t.group.children).toEqual(objs);
