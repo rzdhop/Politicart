@@ -9,6 +9,7 @@ import { getState, resetMachine } from './machine.js';
 import { simStep, startRace } from './race.js';
 import { drain, resolveFor } from './events.js';
 import { CFG, G } from './state.js';
+import { roadTexOf } from './track.js';
 
 const STEP = 1 / 60;
 
@@ -33,6 +34,19 @@ describe('headless engine', () => {
     ai.forEach((k, j) => expect(k.progress).toBeGreaterThan(start[j] + 0.1));
     expect(G.karts.map(k => k.rank).sort()).toEqual([0, 1, 2, 3, 4, 5]);
     for (const k of G.karts) { expect(Number.isFinite(k.pos.x)).toBe(true); expect(Number.isFinite(k.pos.z)).toBe(true); }
+  });
+
+  it.each(TRACKS.map((t, i) => [t.name, i]))('builds %s with its road and a bounded mesh count', (_name, i) => {
+    G.trackIdx = i;
+    startRace();
+    // The road itself: one textured ribbon of (samples + 1) * 2 vertices, added to the scene (a comment once swallowed its scene.add).
+    const road = G.scene.children.find(o => o.isMesh && o.material.map && o.geometry.attributes.uv && o.geometry.attributes.position.count === (G.N + 1) * 2);
+    expect(road).toBeTruthy();
+    expect(road.material.map).toBe(roadTexOf(TRACKS[i]));
+    // Decor budget: generous, so it never flakes, but a runaway loop would trip it.
+    let meshes = 0; G.scene.traverse(o => { if (o.isMesh) meshes++; });
+    expect(meshes).toBeGreaterThan(1500);
+    expect(meshes).toBeLessThan(9000);
   });
 });
 

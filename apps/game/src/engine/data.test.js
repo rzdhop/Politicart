@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { BASE, CHARACTERS } from './data.js';
+import { BASE, CHARACTERS, TRACKS } from './data.js';
 
 // The pun-name cast (DEC-023). Ids are keys in saved data, in the e2e
 // selectors, in the server's CHAR_IDS and in the unlock order, so they must
@@ -52,5 +52,41 @@ describe('the cast', () => {
 
   it('keeps a non-empty first word for the licence plate', () => {
     for (const c of CHARACTERS) expect(c.name.split(' ')[0].length).toBeGreaterThan(0);
+  });
+});
+
+// The circuits are referenced by index (saved stats, the lobby, the server's
+// byTrack), so the list only ever grows at the end: stage 3a appended
+// Montmartre and Marseille after the original three.
+describe('the circuits', () => {
+  it('lists five circuits with unique ids, the two new ones appended', () => {
+    expect(TRACKS.map(t => t.id)).toEqual(['elysee', 'bourbon', 'versailles', 'montmartre', 'marseille']);
+    expect(new Set(TRACKS.map(t => t.id)).size).toBe(TRACKS.length);
+  });
+
+  it('draws every loop from 13 or 14 points at scale 3', () => {
+    for (const t of TRACKS) {
+      expect(t.points.length).toBeGreaterThanOrEqual(13);
+      expect(t.points.length).toBeLessThanOrEqual(14);
+      for (const p of t.points) { expect(p).toHaveLength(2); expect(Number.isFinite(p[0]) && Number.isFinite(p[1])).toBe(true); }
+      expect(t.scale).toBe(3);
+      expect(t.kerb).toHaveLength(2); expect(t.sky).toHaveLength(2);
+      expect(typeof t.name).toBe('string'); expect(t.desc.length).toBeGreaterThan(20);
+    }
+  });
+
+  it('keeps every feature on the lap and the item rows sorted inside it', () => {
+    for (const t of TRACKS) {
+      for (const f of t.features) { expect(f.f).toBeGreaterThanOrEqual(0); expect(f.f).toBeLessThan(1); expect(['ramp', 'pit', 'pad', 'crossing', 'chicane']).toContain(f.t); }
+      expect(t.boxRows.length).toBeGreaterThanOrEqual(8);
+      expect(t.boxRows).toEqual([...t.boxRows].sort((a, b) => a - b));
+      for (const r of t.boxRows) { expect(r).toBeGreaterThan(0); expect(r).toBeLessThan(1); }
+      expect(new Set(t.boxRows).size).toBe(t.boxRows.length);
+    }
+  });
+
+  it('cobbles only the butte, gravels only the park', () => {
+    expect(TRACKS.filter(t => t.cobble).map(t => t.id)).toEqual(['montmartre']);
+    expect(TRACKS.filter(t => t.gravel).map(t => t.id)).toEqual(['versailles']);
   });
 });
