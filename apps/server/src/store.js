@@ -17,11 +17,22 @@
 //   setHash(id, hash)              -> the updated user, or null; also closes
 //                                     every session of that user
 //   listUsers({ limit })           -> every account, newest first, without
-//                                     hashes: { id, name, xp, created, seen, banned }
+//                                     hashes: { id, name, xp, created, seen, banned, coins }
 //   setBanned(id, reason | null)   -> the updated user, or null. A reason bans
 //                                     (banned = { at, reason }) and closes every
 //                                     session of that user; null lifts the ban
 //   touchSeen(id)                  -> notes that the account was just seen
+//   addCoins(id, n)                -> the updated user, or null
+//   spendCoins(id, n)              -> the updated user, or null if the balance
+//                                     is short (nothing is taken) or the id unknown
+//   buy(id, { kind, item, price }) -> the updated user, charged `price` and with
+//                                     `item` appended to owned[kind] at once; or
+//                                     'owned' (already there, no charge), 'poor'
+//                                     (balance short) or null (unknown id)
+//   grant(id, { kind, item })      -> the updated user with `item` in owned[kind]
+//                                     (no charge, idempotent), or null
+//   setOwned(id, owned | null)     -> the updated user, or null; replaces `owned`
+//   setStats(id, stats)            -> the updated user, or null; replaces `stats`
 //   createSession(userId)          -> a new random token
 //   sessionUser(token)             -> user or null (sessions last 60 days; a
 //                                     banned account has no valid session)
@@ -45,10 +56,16 @@
 // cast can weigh megabytes and must not ride along every account rewrite.
 // Postgres keeps them in kr_docs.
 //
-// A user is { id, name, hash, xp, created, seen, banned }: `seen` is when the
-// account last logged in or said hello (null until it does), `banned` is null
-// or { at, reason } once the admin bans it (dashboard.js). Passwords arrive
-// here already hashed (accounts.js); this module never sees one.
+// A user is { id, name, hash, xp, created, seen, banned, coins, owned, stats }:
+// `seen` is when the account last logged in or said hello (null until it
+// does), `banned` is null or { at, reason } once the admin bans it
+// (dashboard.js). `coins` is a whole number, never below 0. `owned` is null
+// for an account from before the economy, else { chars, parts, trails }, the
+// item ids it owns per list (OWNED_KINDS; any other list name throws).
+// `stats` is an object this module never looks into. Amounts of coins are
+// floored, and a negative one counts as 0; one that is not a number throws.
+// A purchase is one conditional update, never a read then a write (DEC-033).
+// Passwords arrive here already hashed (accounts.js); this module never sees one.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { open, rename, unlink } from 'node:fs/promises';
@@ -63,6 +80,13 @@ const newToken = () => randomBytes(32).toString('hex');
 /** The only document keys a store accepts; they become file names, so never user input. */
 export const DOC_KEYS = Object.freeze(['roster', 'stats']);
 const docKey = key => { if (!DOC_KEYS.includes(key)) throw new TypeError('Unknown document key: ' + String(key)); return key; };
+
+/** The lists of `owned`; never user input either. */
+export const OWNED_KINDS = Object.freeze(['chars', 'parts', 'trails']);
+const ownedKind = kind => { if (!OWNED_KINDS.includes(kind)) throw new TypeError('Unknown owned list: ' + String(kind)); return kind; };
+const coinsOf = n => { const v = Math.floor(n); if (!Number.isSafeInteger(v)) throw new TypeError('Not an amount of coins: ' + String(n)); return Math.max(0, v); };
+const objectOf = (v, what) => { if (!v || typeof v !== 'object' || Array.isArray(v)) throw new TypeError(what + ' must be an object'); return v; };
+const copy = v => JSON.parse(JSON.stringify(v));   // JSON semantics, as jsonb would store it
 
 /** Open the store the environment asks for. */
 export async function openStore({ databaseUrl, file } = {}) {
@@ -88,16 +112,20 @@ export function openFileStore(file, { log = console } = {}) {
   const save = () => { if (file && !timer) timer = setTimeout(flush, 200); };
   const byKey = key => Object.values(data.users).find(u => nameKey(u.name) === key) ?? null;
   const link = (a, b) => data.links.find(l => l.a === a && l.b === b) ?? null;
-  // Older files have neither field; read them as "never seen, not banned".
-  const full = u => ({ ...u, seen: u.seen ?? null, banned: u.banned ?? null });
+  // Older files lack the later fields; read them as "never seen, not banned,
+  // no coins, from before the economy, no stats". owned and stats go out as
+  // copies: a caller never shares them with the store.
+  const full = u => ({ ...u, seen: u.seen ?? null, banned: u.banned ?? null, coins: u.coins ?? 0, owned: u.owned ? copy(u.owned) : null, stats: u.stats ? copy(u.stats) : {} });
+  const owns = (u, kind, item) => !!u.owned?.[kind]?.includes(item);
+  const own = (u, kind, item) => { u.owned ??= { chars: [], parts: [], trails: [] }; (u.owned[kind] ??= []).push(item); };
   const closeSessions = id => { for (const [t, sess] of Object.entries(data.sessions)) if (sess.userId === id) delete data.sessions[t]; };
 
   return {
     kind: file ? 'file' : 'memory',
     async createUser({ name, hash }) {
       if (byKey(nameKey(name))) return null;
-      const u = { id: randomUUID(), name, hash, xp: 0, created: Date.now(), seen: null, banned: null };
-      data.users[u.id] = u; save(); return { ...u };
+      const u = { id: randomUUID(), name, hash, xp: 0, created: Date.now(), seen: null, banned: null, coins: 0, owned: null, stats: {} };
+      data.users[u.id] = u; save(); return full(u);
     },
     async user(id) { const u = data.users[id]; return u ? full(u) : null; },
     async userByName(name) { const u = byKey(nameKey(name)); return u ? full(u) : null; },
@@ -109,7 +137,7 @@ export function openFileStore(file, { log = console } = {}) {
     },
     async listUsers({ limit = 500 } = {}) {
       return Object.values(data.users).reverse().sort((a, b) => b.created - a.created).slice(0, limit)   // reversed first: two accounts of the same millisecond list newest first too
-        .map(u => ({ id: u.id, name: u.name, xp: u.xp, created: u.created, seen: u.seen ?? null, banned: u.banned ?? null }));
+        .map(u => ({ id: u.id, name: u.name, xp: u.xp, created: u.created, seen: u.seen ?? null, banned: u.banned ?? null, coins: u.coins ?? 0 }));
     },
     async setBanned(id, reason) {
       const u = data.users[id]; if (!u) return null;
@@ -118,6 +146,31 @@ export function openFileStore(file, { log = console } = {}) {
       save(); return full(u);
     },
     async touchSeen(id) { const u = data.users[id]; if (!u) return null; u.seen = Date.now(); save(); return full(u); },
+    // Each of these checks and changes the record with no await in between:
+    // two calls never interleave, as the conditional updates of Postgres.
+    async addCoins(id, n) { n = coinsOf(n); const u = data.users[id]; if (!u) return null; u.coins = (u.coins ?? 0) + n; save(); return full(u); },
+    async spendCoins(id, n) {
+      n = coinsOf(n); const u = data.users[id]; if (!u || (u.coins ?? 0) < n) return null;
+      u.coins = (u.coins ?? 0) - n; save(); return full(u);
+    },
+    async buy(id, { kind, item, price }) {
+      kind = ownedKind(kind); item = String(item); price = coinsOf(price);
+      const u = data.users[id]; if (!u) return null;
+      if (owns(u, kind, item)) return 'owned';
+      if ((u.coins ?? 0) < price) return 'poor';
+      u.coins = (u.coins ?? 0) - price; own(u, kind, item); save(); return full(u);
+    },
+    async grant(id, { kind, item }) {
+      kind = ownedKind(kind); item = String(item);
+      const u = data.users[id]; if (!u) return null;
+      if (!owns(u, kind, item)) { own(u, kind, item); save(); }
+      return full(u);
+    },
+    async setOwned(id, owned) {
+      owned = owned == null ? null : copy(objectOf(owned, 'owned'));
+      const u = data.users[id]; if (!u) return null; u.owned = owned; save(); return full(u);
+    },
+    async setStats(id, stats) { stats = copy(objectOf(stats, 'stats')); const u = data.users[id]; if (!u) return null; u.stats = stats; save(); return full(u); },
     async createSession(userId) { const t = newToken(); data.sessions[t] = { userId, at: Date.now() }; save(); return t; },
     async sessionUser(token) {
       const s = typeof token === 'string' ? data.sessions[token] : null;
@@ -223,9 +276,20 @@ create table if not exists kr_friends (
   status text not null, primary key (a, b));
 create table if not exists kr_docs (key text primary key, value jsonb not null, updated bigint not null);
 alter table kr_users add column if not exists seen bigint;
-alter table kr_users add column if not exists banned jsonb;`;
+alter table kr_users add column if not exists banned jsonb;
+alter table kr_users add column if not exists coins integer not null default 0;
+alter table kr_users add column if not exists owned jsonb;
+alter table kr_users add column if not exists stats jsonb not null default '{}'::jsonb;`;
 
-const row = r => (r ? { id: r.id, name: r.name, hash: r.hash, xp: Number(r.xp), created: Number(r.created), seen: r.seen == null ? null : Number(r.seen), banned: r.banned ?? null } : null);
+const row = r => (r ? {
+  id: r.id, name: r.name, hash: r.hash, xp: Number(r.xp), created: Number(r.created), seen: r.seen == null ? null : Number(r.seen), banned: r.banned ?? null,
+  coins: Number(r.coins) || 0, owned: r.owned ?? null, stats: r.stats && typeof r.stats === 'object' ? r.stats : {},
+} : null);
+
+// `owned` with $3 appended to its list $2 (a one-name text[]), and the guard
+// that $3 is not in that list yet: a purchase or a grant is one statement.
+const OWN = `owned = jsonb_set(coalesce(owned, '{"chars":[],"parts":[],"trails":[]}'::jsonb), $2::text[], coalesce(owned #> $2, '[]'::jsonb) || to_jsonb($3::text))`;
+const NOT_OWNED = `not (coalesce(owned #> $2, '[]'::jsonb) ? $3)`;
 
 export async function openPgStore(databaseUrl, { Pool } = {}) {
   if (!Pool) ({ Pool } = (await import('pg')).default);
@@ -252,8 +316,8 @@ export async function openPgStore(databaseUrl, { Pool } = {}) {
       return one('update kr_users set hash = $2 where id = $1 returning *', [id, hash]);
     },
     async listUsers({ limit = 500 } = {}) {
-      const r = await q('select id, name, xp, created, seen, banned from kr_users order by created desc limit $1', [limit]);
-      return r.rows.map(x => { const { hash: _hash, ...u } = row(x); return u; });
+      const r = await q('select id, name, xp, created, seen, banned, coins from kr_users order by created desc limit $1', [limit]);
+      return r.rows.map(x => { const { hash: _hash, owned: _owned, stats: _stats, ...u } = row(x); return u; });
     },
     async setBanned(id, reason) {
       if (reason == null) return one('update kr_users set banned = null where id = $1 returning *', [id]);
@@ -261,6 +325,27 @@ export async function openPgStore(databaseUrl, { Pool } = {}) {
       return one('update kr_users set banned = $2::jsonb where id = $1 returning *', [id, JSON.stringify({ at: Date.now(), reason: String(reason) })]);
     },
     touchSeen: id => one('update kr_users set seen = $2 where id = $1 returning *', [id, Date.now()]),
+    async addCoins(id, n) { return one('update kr_users set coins = coins + $2 where id = $1 returning *', [id, coinsOf(n)]); },
+    async spendCoins(id, n) { return one('update kr_users set coins = coins - $2 where id = $1 and coins >= $2 returning *', [id, coinsOf(n)]); },
+    async buy(id, { kind, item, price }) {
+      const values = [id, [ownedKind(kind)], String(item), coinsOf(price)];
+      const r = await q(`update kr_users set coins = coins - $4, ${OWN} where id = $1 and coins >= $4 and ${NOT_OWNED} returning *`, values);
+      if (r.rows[0]) return row(r.rows[0]);
+      // Refused: say why. Coins credited between the two statements read as
+      // 'poor' all the same; the purchase was refused, the player retries.
+      const now = (await q('select coins, owned from kr_users where id = $1', [id])).rows[0];
+      if (!now) return null;
+      return now.owned?.[values[1][0]]?.includes(values[2]) ? 'owned' : 'poor';
+    },
+    async grant(id, { kind, item }) {
+      const values = [id, [ownedKind(kind)], String(item)];
+      const r = await q(`update kr_users set ${OWN} where id = $1 and ${NOT_OWNED} returning *`, values);
+      return r.rows[0] ? row(r.rows[0]) : one('select * from kr_users where id = $1', [id]);   // already owned: unchanged
+    },
+    async setOwned(id, owned) {
+      return one('update kr_users set owned = $2::jsonb where id = $1 returning *', [id, owned == null ? null : JSON.stringify(objectOf(owned, 'owned'))]);
+    },
+    async setStats(id, stats) { return one('update kr_users set stats = $2::jsonb where id = $1 returning *', [id, JSON.stringify(objectOf(stats, 'stats'))]); },
     async createSession(userId) { const t = newToken(); await q('insert into kr_sessions (token, user_id, created) values ($1, $2, $3)', [t, userId, Date.now()]); return t; },
     async sessionUser(token) {
       if (typeof token !== 'string') return null;

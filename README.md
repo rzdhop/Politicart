@@ -47,7 +47,7 @@ Accounts are kept in a JSON file by default, or in Postgres when `DATABASE_URL` 
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `DATABASE_URL` | unset | A Postgres connection string. The server creates its tables (`kr_users`, `kr_sessions`, `kr_friends`, and `kr_docs` for the admin's cast and the dashboard's race counters) on start, and adds the `seen` and `banned` columns to an older `kr_users`. Hosted databases give a URL ending in `?sslmode=require`. |
+| `DATABASE_URL` | unset | A Postgres connection string. The server creates its tables (`kr_users`, `kr_sessions`, `kr_friends`, and `kr_docs` for the admin's cast and the dashboard's race counters) on start, and adds the `seen`, `banned`, `coins`, `owned` and `stats` columns to an older `kr_users`. Hosted databases give a URL ending in `?sslmode=require`. |
 | `KR_DATA` | `apps/server/data/kr-accounts.json` (`/data/kr-accounts.json` in the container) | The JSON file used without `DATABASE_URL`. `:memory:` keeps accounts in memory only. The admin's cast and the race counters are kept beside it, in `kr-docs/roster.json` and `kr-docs/stats.json`. |
 | `KR_ADMIN_USER` | `rida` | The one admin account. Nobody can sign up under this name. |
 | `KR_ADMIN_PASSWORD_HASH` | unset | The admin's password hash (see below). Unset or malformed: nobody is admin and the Workshop is off. |
