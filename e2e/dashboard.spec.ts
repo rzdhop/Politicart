@@ -151,6 +151,36 @@ test.describe('R-19 dashboard', () => {
   });
 });
 
+test.describe('R-24 the admin credits politicoins', () => {
+  test('the grant reaches the account at once, which sees it in Compte with its stats', async ({ browser }) => {
+    const alice = 'Alice' + RUN + 'c';
+    const player = await visitor(browser);
+    await signIn(player, alice, 'république', { register: true });
+
+    const admin = await visitor(browser);
+    await signIn(admin, ADMIN_USER, ADMIN_PASSWORD);
+    await admin.locator('#b-dashboard').click();
+    await expect(admin.locator('#s-dashboard')).toBeVisible();
+    await admin.locator('#dash-user-q').fill(alice.toLowerCase());
+    await admin.locator('#b-dash-search').click();
+    await expect(admin.locator('#dash-users tr')).toHaveCount(1);
+    await expect(admin.locator('#dash-users')).toContainText('0 politicoins');
+    await admin.locator('#dash-grant-amount').fill('250');
+    await admin.locator('#dash-users tr').first().locator('button', { hasText: 'Créditer' }).click();
+    await expect(admin.locator('#dash-status')).toContainText('250 politicoins crédités à ' + alice);
+    await expect(admin.locator('#dash-users')).toContainText('250 politicoins');
+
+    // The player's open socket hears the new balance: Compte shows it, with the stats panel and the best laps.
+    await player.locator('#b-account').click();
+    await expect(player.locator('#acc-coins')).toHaveText('250');
+    await expect(player.locator('#acc-stats')).toBeVisible();
+    await expect(player.locator('#acc-fig-races')).toContainText('0');
+    await expect(player.locator('#acc-bestlaps tr')).toHaveCount(5);
+    await expect(player.locator('#acc-bestlaps')).toContainText('—');
+    await expect(player.locator('#acc-friend-stats')).toHaveCount(0);
+  });
+});
+
 test.describe('R-20 absolute power', () => {
   test('the admin enters a race already running, from the dashboard, and ends it from the god console', async ({ browser }) => {
     test.setTimeout(150_000);
