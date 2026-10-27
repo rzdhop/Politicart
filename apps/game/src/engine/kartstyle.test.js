@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  builtinStyle, cleanStyle, DEFAULT_ACCENT, defaultStyle, mergeStyle, playerStyle, SPOILERS, STICKERS, WHEELS,
+  builtinStyle, cleanStyle, DEFAULT_ACCENT, defaultStyle, EXHAUSTS, MASTS, mergeStyle, NOSES, playerStyle, SKINS, SPOILERS, STICKERS,
+  TRAILS, UNDERGLOWS, WHEELS,
 } from './kartstyle.js';
 
 const char = (extra = {}) => ({ id: 'victor', kart: 0x1f3a93, ...extra });
@@ -10,6 +11,21 @@ describe('cleanStyle', () => {
   it('keeps every valid field', () => {
     const s = { body: '#ff0000', accent: '#00ff00', wheels: 'gold', spoiler: 'wing', pods: false, number: 7, sticker: 'rosette' };
     expect(cleanStyle(s)).toEqual(s);
+  });
+
+  it('keeps the exhaust, underglow, mast, nose, skin and trail when they are listed values', () => {
+    const s = { exhaust: 'turbine', underglow: 'rainbow', mast: 'pirate', nose: 'ram', skin: 'flames', trail: 'laser' };
+    expect(cleanStyle(s)).toEqual(s);
+    for (const [key, list] of [['exhaust', EXHAUSTS], ['underglow', UNDERGLOWS], ['mast', MASTS], ['nose', NOSES], ['skin', SKINS], ['trail', TRAILS]]) {
+      for (const v of list) expect(cleanStyle({ [key]: v })).toEqual({ [key]: v });
+    }
+  });
+
+  it('drops an unknown trail, exhaust or skin', () => {
+    expect(cleanStyle({ trail: 'rainbow', exhaust: 'none', skin: 'gold', underglow: 'flat', mast: 'stock', nose: 'wing' })).toEqual({});
+    expect(cleanStyle({ trail: 'LASER' })).toEqual({});
+    expect(cleanStyle({ trail: null })).toEqual({});
+    expect(cleanStyle({ trail: 'laser', number: 3 })).toEqual({ trail: 'laser', number: 3 });
   });
 
   it('lowercases colours so equal colours compare equal', () => {
@@ -56,6 +72,7 @@ describe('builtinStyle', () => {
   it('reproduces the original kart', () => {
     expect(builtinStyle(char())).toEqual({
       body: '#1f3a93', accent: DEFAULT_ACCENT, wheels: 'classic', spoiler: 'standard', pods: true, number: null, sticker: 'none',
+      exhaust: 'stock', underglow: 'none', mast: 'none', nose: 'stock', skin: 'flat', trail: 'none',
     });
   });
 
@@ -65,6 +82,17 @@ describe('builtinStyle', () => {
     expect(WHEELS).toContain(s.wheels);
     expect(SPOILERS).toContain(s.spoiler);
     expect(STICKERS).toContain(s.sticker);
+    expect(EXHAUSTS).toContain(s.exhaust);
+    expect(UNDERGLOWS).toContain(s.underglow);
+    expect(MASTS).toContain(s.mast);
+    expect(NOSES).toContain(s.nose);
+    expect(SKINS).toContain(s.skin);
+    expect(TRAILS).toContain(s.trail);
+  });
+
+  it('starts every new part on its free option and without a trail', () => {
+    const s = builtinStyle(char());
+    expect([s.exhaust, s.underglow, s.mast, s.nose, s.skin, s.trail]).toEqual(['stock', 'none', 'none', 'stock', 'flat', 'none']);
   });
 });
 

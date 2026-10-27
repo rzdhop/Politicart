@@ -47,6 +47,13 @@ export interface KartStyle {
   pods: boolean;
   number: number | null;
   sticker: string;
+  exhaust: 'stock' | 'double' | 'side' | 'quad' | 'turbine';
+  underglow: 'none' | 'blue' | 'red' | 'gold' | 'rainbow';
+  mast: 'none' | 'antenna' | 'tricolore' | 'europe' | 'pirate';
+  nose: 'stock' | 'splitter' | 'wedge' | 'bull' | 'ram';
+  skin: 'flat' | 'stripes' | 'carbon' | 'camo' | 'flames';
+  /** What the kart leaves behind in a race; lootbox-only, 'none' by default. */
+  trail: 'none' | 'ribbon' | 'smoke' | 'sparkles' | 'confetti' | 'laser';
 }
 
 /** One character's edits in the admin's roster (and the Workshop's draft), keyed as the inputs' data-k attributes. */
