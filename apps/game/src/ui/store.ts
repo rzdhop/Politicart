@@ -15,20 +15,22 @@ import { useSyncExternalStore } from 'react';
 import * as account from '../engine/account.js';
 import { initAudio, isMuted, toggleMute as toggleAudioMute } from '../engine/audio.js';
 import { beginDraft, clearDraft, getDraft, setRoster } from '../engine/custom.js';
-import { getGarage, resetGarage, setGarage } from '../engine/garage.js';
-import { getState, onTransition, transition } from '../engine/machine.js';
+import { emptyOwned } from '../engine/catalog.js';
+import { getGarage, resetGarage, setGarage, setOwned } from '../engine/garage.js';
+import { playOpening, skipOpening as skipBoxOpening, stopOpening } from '../engine/lootbox.js';
+import { canTransition, getState, onTransition, transition } from '../engine/machine.js';
 import * as net from '../engine/net.js';
 import { isNetRace, onNetResults, pressItem, pressPower } from '../engine/netrace.js';
 import { applyGodCommand } from '../engine/godcmd.js';
 import { useItem as engineUseItem } from '../engine/items.js';
 import { usePower as engineUsePower } from '../engine/powers.js';
-import { CHARACTERS } from '../engine/data.js';
+import { CHARACTERS, TRACKS } from '../engine/data.js';
 import { hasPreview, makeThumbs, setPreview } from '../engine/preview.js';
 import { STARTERS } from '../engine/progress.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
 
-export type GameState = 'title' | 'select' | 'tracks' | 'admin' | 'countdown' | 'race' | 'paused' | 'results' | 'lobby' | 'account' | 'garage' | 'dashboard';
+export type GameState = 'title' | 'select' | 'tracks' | 'admin' | 'countdown' | 'race' | 'paused' | 'results' | 'lobby' | 'account' | 'garage' | 'dashboard' | 'shop' | 'lootbox';
 export type TeamId = 'bleu' | 'rouge';
 
 /** One player in a team-race room, as the game server describes it. A god (the admin, DEC-030) has no team. */
@@ -44,13 +46,36 @@ export interface NetView {
   status: 'idle' | 'connecting' | 'open' | 'closed'; id: string | null; room: RoomView | null; error: string | null;
   friends: Friend[]; invite: Invite | null; notice: string | null;
 }
-/** An account as the server describes it (engine/progress.js profileOf). */
-export interface Profile { id: string; name: string; xp: number; level: number; xpInto: number; xpNext: number; unlocked: string[]; admin?: true }
+/** What an account holds beyond the commons (engine/catalog.js): candidate ids, part keys ('wheels:gold'), trail ids. */
+export interface Owned { chars: string[]; parts: string[]; trails: string[] }
+/**
+ * An account as the server describes it (engine/progress.js profileOf):
+ * `unlocked` is what it may drive, `reachable` what its level lets it buy
+ * (DEC-034), `coins` its politicoins, `owned` its inventory.
+ */
+export interface Profile {
+  id: string; name: string; xp: number; level: number; xpInto: number; xpNext: number;
+  reachable: string[]; unlocked: string[]; coins: number; owned: Owned; stats: Record<string, unknown>; admin?: true;
+}
+/** The bonuses a race paid on top (economy.js settleRace). */
+export interface Bonus { daily: boolean; levelUp: boolean; levelUpCoins: number }
 /** What the account API answers (engine/account.js). */
-type AuthReply = { ok: boolean; status: number; error?: string; token?: string; profile?: Profile; gained?: number };
+type AuthReply = { ok: boolean; status: number; error?: string; token?: string; profile?: Profile; gained?: number; coins?: number; bonus?: Bonus };
 
-/** What the last race earned, for the results screen. */
-export interface Gain { gained: number; level: number; levelUp: boolean; unlockedNow: string[] }
+/** What the last race earned, for the results screen: experience, politicoins (daily and level-up bonuses included), a level, candidates. */
+export interface Gain { gained: number; coins: number; daily: boolean; levelUpCoins: number; level: number; levelUp: boolean; unlockedNow: string[] }
+
+export type Grade = 'common' | 'rare' | 'mythic' | 'incredible';
+/** What a Politibox held (engine/catalog.js rollBox): politicoins, or an item, refunded when it was already owned. */
+export type Drop =
+  | { kind: 'coins'; amount: number }
+  | { kind: 'char' | 'part' | 'trail'; id: string; grade: Grade; duplicate: boolean; refund: number };
+/** Where the opening is, for the DOM half (the library's RevealStage). */
+export type RevealPhase = 'idle' | 'opening' | 'burst' | 'reveal';
+export type ShopTab = 'box' | 'chars' | 'parts';
+/** The Boutique: where it was opened from, the tab on show, the last call's outcome, and the Politibox being opened. */
+export interface ShopView { from: 'title' | 'select'; tab: ShopTab; busy: boolean; error: string | null; notice: string | null; drop: Drop | null; phase: RevealPhase }
+type ShopReply = { ok: boolean; status: number; error?: string; profile?: Profile; drop?: Drop };
 export type AdminStatus = 'idle' | 'saved';
 /** What the roster API answers (engine/account.js fetchRoster / saveRoster). */
 type RosterReply = { ok: boolean; status: number; error?: string; field?: string; roster?: unknown };
@@ -117,6 +142,8 @@ export interface UiSnapshot {
   godConsole: boolean;
   /** What the last god command in a solo race said (team races answer through net.notice / net.error). */
   godReply: string | null;
+  /** The Boutique and the Politibox (DEC-037). */
+  shop: ShopView;
 }
 
 export interface NetRankRow { slot: number; name: string; charId: string; team: TeamId | null; isAI: boolean; god?: boolean; rank: number; finished: boolean; time: number | null; bestLap: number | null; points: number }
@@ -134,6 +161,16 @@ function saveToken(token: string | null) { try { if (token) localStorage.setItem
 /** Whether this session is the administrator's: only then is the Workshop offered (the server checks again on save). */
 export function isAdmin(ui: Pick<UiSnapshot, 'account'>): boolean {
   return ui.account?.profile?.admin === true;
+}
+
+/**
+ * What this player owns, for drawing and racing their kart (DEC-035): null
+ * without a game server (no economy: everything goes), the account's
+ * inventory, or a guest's -- the commons only.
+ */
+export function ownedOf(ui: Pick<UiSnapshot, 'netAvailable' | 'account'>): Owned | null {
+  if (!ui.netAvailable) return null;
+  return ui.account ? ui.account.profile.owned : emptyOwned();
 }
 
 /** The candidate ids this player may drive: the account's unlocks, or the starters for a guest. */
@@ -166,6 +203,7 @@ let snapshot: UiSnapshot = {
   dashboard: { stats: null, users: [], connections: [], rooms: [], query: '', busy: false, error: null, notice: null, updatedAt: null },
   godConsole: false,
   godReply: null,
+  shop: { from: 'title', tab: 'box', busy: false, error: null, notice: null, drop: null, phase: 'idle' },
 };
 
 const listeners = new Set<() => void>();
@@ -203,30 +241,56 @@ onTransition((to: string, from: string) => {
 net.onNet((view: NetView) => set({ net: view }));
 onNetResults((r: NetResults) => set({ netResults: r }));
 
-/** A new profile from the server: keep it, and note what the race it follows earned. */
-function takeProfile(profile: Profile, gained: number) {
+/**
+ * Tell the Garage what the player owns (DEC-035), and redraw what shows
+ * their kart if that changed: the turntable and the Garage form.
+ */
+let ownedKey = 'null';
+function applyOwned(owned: Owned | null) {
+  const key = JSON.stringify(owned);
+  if (key === ownedKey) return;
+  ownedKey = key;
+  setOwned(owned);
+  refreshPreview();
+  set({ garageVersion: snapshot.garageVersion + 1 });
+}
+
+/** A new profile from the server: keep it, put its inventory in force, and note what the race it follows earned. */
+function takeProfile(profile: Profile, gained = 0, coins = 0, bonus: Bonus | null = null) {
   const before = snapshot.account?.profile;
   if (!snapshot.account) return;
   const patch: Partial<UiSnapshot> = { account: { token: snapshot.account.token, profile } };
-  if (gained > 0) {
+  if (gained > 0 || coins > 0) {
     const had = new Set(before?.unlocked ?? []);
-    patch.lastGain = { gained, level: profile.level, levelUp: !!before && profile.level > before.level, unlockedNow: profile.unlocked.filter(id => !had.has(id)) };
+    patch.lastGain = {
+      gained, coins, daily: !!bonus?.daily, levelUpCoins: bonus?.levelUpCoins ?? 0,
+      level: profile.level, levelUp: !!before && profile.level > before.level, unlockedNow: profile.unlocked.filter(id => !had.has(id)),
+    };
   }
   set(patch);
+  applyOwned(profile.owned ?? null);
 }
 
 // The server says who this connection is: a fresh profile, or nobody (the session expired).
-net.onProfile((profile: Profile | null, gained: number) => {
+net.onProfile((profile: Profile | null, gained: number, coins: number, bonus: Bonus | null) => {
   if (!snapshot.account) return;
-  if (!profile) { saveToken(null); set({ account: null }); keepCharUnlocked(); leaveWorkshopUnlessAdmin(); return; }
-  takeProfile(profile, gained);
+  if (!profile) { saveToken(null); set({ account: null }); applyOwned(emptyOwned()); keepCharUnlocked(); leaveWorkshopUnlessAdmin(); return; }
+  takeProfile(profile, gained, coins, bonus);
   leaveWorkshopUnlessAdmin();
 });
 
+/** A solo race just ended: tell the server how it went (rank, circuit, candidate, times) and keep what it paid. */
 function reportSoloRace() {
-  const acc = snapshot.account; const k = G.player as unknown as { rank: number; finished: boolean } | null; if (!acc || !k) return;
-  account.reportRace(acc.token, { rank: k.rank, field: G.karts.length, finished: !!k.finished }, { base: remoteServer })
-    .then((r: AuthReply) => { if (r.ok && r.profile) takeProfile(r.profile, r.gained ?? 0); });
+  const acc = snapshot.account; const k = G.player as unknown as { rank: number; finished: boolean; finishTime: number; bestLap: number; def?: { id: string } } | null; if (!acc || !k) return;
+  const race = {
+    rank: k.rank, field: G.karts.length, finished: !!k.finished,
+    trackId: (TRACKS as { id: string }[])[G.trackIdx]?.id ?? null,
+    charId: k.def?.id ?? (CHARACTERS as { id: string }[])[G.charIdx]?.id ?? null,
+    time: k.finished && Number.isFinite(k.finishTime) ? k.finishTime : null,
+    bestLap: Number.isFinite(k.bestLap) ? k.bestLap : null,
+  };
+  account.reportRace(acc.token, race, { base: remoteServer })
+    .then((r: AuthReply) => { if (r.ok && r.profile) takeProfile(r.profile, r.gained ?? 0, r.coins ?? 0, r.bonus ?? null); });
 }
 
 /** After logging out (or a lost session), fall back to a candidate a guest may drive. */
@@ -236,10 +300,11 @@ function keepCharUnlocked() {
   if (!cur || !allowed.includes(cur.id)) { G.charIdx = 0; set({ charIdx: 0 }); }
 }
 
-/** Logged in: keep the account, remember the token, and say hello on the socket so friends see us. */
+/** Logged in: keep the account, remember the token, put its inventory in force, and say hello on the socket so friends see us. */
 function signedIn(token: string, profile: Profile) {
   saveToken(token);
   set({ account: { token, profile }, accountBusy: false, accountError: null, netName: profile.name });
+  applyOwned(profile.owned ?? null);
   net.connect(socketUrl(), profile.name, token);
 }
 
@@ -313,9 +378,36 @@ async function dashCall(fn: (token: string) => Promise<DashReply>): Promise<Dash
 function sessionExpired() {
   saveToken(null);
   set({ account: null, lastGain: null, netName: '' });
+  applyOwned(emptyOwned());
   net.disconnect();
   keepCharUnlocked();
   leaveWorkshopUnlessAdmin();
+}
+
+// ---- The Boutique and the Politibox (DEC-032..037) ----
+/** Change the shop's view. */
+function shop(patch: Partial<ShopView>) { set({ shop: { ...snapshot.shop, ...patch } }); }
+
+/** The engine's opening phases, as the DOM half shows them. */
+const REVEAL_OF: Record<string, RevealPhase> = { drop: 'opening', spin: 'opening', shake: 'opening', burst: 'burst', reveal: 'reveal', hold: 'reveal' };
+const onBoxPhase = (name: string) => { if (getState() === 'lootbox') shop({ phase: REVEAL_OF[name] ?? 'opening' }); };
+
+/**
+ * One shop call with the account's token: busy while it runs, and on an
+ * answer the new profile put in force -- or the server's sentence shown, a
+ * 401 forgetting the session as everywhere else. Resolves to the answer
+ * when it succeeded.
+ */
+async function shopCall(fn: (token: string) => Promise<ShopReply>): Promise<ShopReply | null> {
+  const acc = snapshot.account;
+  if (!acc || snapshot.shop.busy) return null;
+  shop({ busy: true, error: null, notice: null });
+  const r = await fn(acc.token);
+  shop({ busy: false });
+  if (r.ok && r.profile) { takeProfile(r.profile); return r; }
+  if (r.status === 401) { sessionExpired(); shop({ error: 'Session expirée : reconnectez-vous dans Compte.' }); return null; }
+  shop({ error: r.error ?? 'Erreur du serveur.' });
+  return null;
 }
 
 export const actions = {
@@ -534,7 +626,8 @@ export const actions = {
   async detectServer() {
     const ok: boolean = await net.probeServer(globalThis.fetch, remoteServer);
     set({ netAvailable: ok });
-    if (!ok) return;                                             // the static build: the default cast, no accounts
+    if (!ok) { applyOwned(null); return; }                       // the static build: the default cast, no accounts, no economy
+    if (!snapshot.account) applyOwned(emptyOwned());             // a guest until a saved session says otherwise
     const token = loadToken();
     await Promise.all([
       refreshRoster(),
@@ -586,6 +679,7 @@ export const actions = {
     saveToken(null);
     resumeDraft = false;
     set({ account: null, lastGain: null, netName: '' });
+    applyOwned(emptyOwned());                                   // a guest on a server owns the commons
     net.disconnect();
     keepCharUnlocked();
     leaveWorkshopUnlessAdmin();
@@ -600,6 +694,8 @@ export const actions = {
     net.clearInvite();
     const st = getState();
     if (st === 'tracks') transition('select');
+    if (st === 'lootbox') actions.boxDone();
+    if (getState() === 'shop') transition('title');
     if (getState() === 'select' || getState() === 'admin' || (getState() === 'results' && !isNetRace())) transition('title');
     if (getState() === 'title' || getState() === 'account' || getState() === 'dashboard') transition('lobby');
     if (getState() !== 'lobby') return;
@@ -607,4 +703,52 @@ export const actions = {
     net.joinRoom(inv.code, getGarage());
   },
   dismissInvite() { net.clearInvite(); },
+
+  // ---- The Boutique and the Politibox (DEC-032..037) ----
+  /** "Boutique", from the title or the roster, optionally on a tab. Only where a game server runs the economy. */
+  openShop(from: 'title' | 'select', tab?: ShopTab) {
+    if (!snapshot.netAvailable || !canTransition('shop')) return;
+    initAudio();
+    // The candidates' cards show the roster portraits, rendered once per detail level.
+    const thumbs = makeThumbs() as Record<string, string>;
+    shop({ from, error: null, notice: null, ...(tab ? { tab } : {}) });
+    set({ thumbs });
+    transition('shop');
+    setPreview(G.charIdx);
+  },
+  /** "Retour": back where the shop was opened from. */
+  closeShop() {
+    if (getState() !== 'shop') return;
+    shop({ error: null, notice: null });
+    transition(snapshot.shop.from);
+    if (snapshot.shop.from === 'select') { keepCharUnlocked(); setPreview(G.charIdx); }
+  },
+  shopTab(tab: ShopTab) { shop({ tab, error: null, notice: null }); },
+  /** Buy candidate `id`. The price is the server's (catalog.js): the request names the candidate only. */
+  async buyChar(id: string) {
+    if (await shopCall(t => account.shop.buyChar(t, id, { base: remoteServer }))) shop({ notice: 'Acquis !' });
+  },
+  /** Buy option `value` of part `category`; the server prices it. */
+  async buyPart(category: string, value: string) {
+    if (await shopCall(t => account.shop.buyPart(t, category, value, { base: remoteServer }))) shop({ notice: 'Acquis !' });
+  },
+  /** Open a Politibox: the server charges and rolls; the opening plays on the canvas, from the shop or again from the result. */
+  async openBox() {
+    const r = await shopCall(t => account.shop.openBox(t, { base: remoteServer }));
+    if (!r?.drop) return;
+    const st = getState();
+    if (st !== 'shop' && st !== 'lootbox') return;          // left the shop while the server answered
+    shop({ drop: r.drop, phase: 'opening' });
+    if (st === 'shop') transition('lootbox');
+    playOpening(r.drop, { onPhase: onBoxPhase });
+  },
+  /** A tap on the stage: hurry the opening along (to the burst, then to the prize). */
+  skipOpening() { if (getState() === 'lootbox') skipBoxOpening(); },
+  /** "Retour à la boutique". */
+  boxDone() {
+    stopOpening();
+    if (getState() === 'lootbox') transition('shop');
+    shop({ phase: 'idle', drop: null, error: null, notice: null });
+    setPreview(G.charIdx);
+  },
 };

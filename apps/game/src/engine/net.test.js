@@ -110,6 +110,19 @@ describe('the social side of the connection', () => {
     expect(got).toEqual([['Alice', 0], ['Alice', 70]]);
   });
 
+  it('passes what a race paid in politicoins, and its bonuses, along with the profile', () => {
+    const got = []; onProfile((p, g, c, b) => got.push([p?.name ?? null, g, c, b]));
+    connect('ws://x/ws', 'A', 'tok'); const sock = FakeSocket.last; sock.open();
+    sock.serve({ t: 'welcome', id: 'c1', profile: { name: 'Alice', level: 1, coins: 0 } });
+    sock.serve({ t: 'profile', profile: { name: 'Alice', level: 2, coins: 310 }, gained: 70, coins: 310, bonus: { daily: true, levelUp: true, levelUpCoins: 200 } });
+    sock.serve({ t: 'profile', profile: { name: 'Alice', level: 2, coins: 999 } });     // an admin's grant: no race, no bonus
+    expect(got).toEqual([
+      ['Alice', 0, 0, null],
+      ['Alice', 70, 310, { daily: true, levelUp: true, levelUpCoins: 200 }],
+      ['Alice', 0, 0, null],
+    ]);
+  });
+
   it('keeps the friend list, invitations and notices in the view', () => {
     connect('ws://x/ws', 'A', 'tok'); const sock = FakeSocket.last; sock.open();
     sock.serve({ t: 'friends', list: [{ id: 'u2', name: 'Bob', status: 'friend', online: true }] });

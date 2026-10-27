@@ -34,12 +34,18 @@
 // `dashboard` is the admin's dashboard (DEC-030): statistics, accounts and
 // live rooms. Reached from the title, it leads back there or -- when the
 // admin enters a room as a god -- straight into the lobby.
+//
+// `shop` is the Boutique (DEC-037): candidates and kart parts for
+// politicoins, and the Politibox. Reached from the title or from the roster
+// (a locked candidate's tile), it goes back where it came from, or into
+// `lootbox`, where the Politibox opens on the canvas and which only ever
+// returns to the shop.
 
-export const STATES = Object.freeze(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'account', 'garage', 'dashboard']);
+export const STATES = Object.freeze(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'account', 'garage', 'dashboard', 'shop', 'lootbox']);
 
 const NEXT = Object.freeze({
-  title: Object.freeze(['select', 'admin', 'lobby', 'account', 'dashboard']),
-  select: Object.freeze(['title', 'tracks', 'garage']),
+  title: Object.freeze(['select', 'admin', 'lobby', 'account', 'dashboard', 'shop']),
+  select: Object.freeze(['title', 'tracks', 'garage', 'shop']),
   tracks: Object.freeze(['select', 'countdown']),
   admin: Object.freeze(['title']),
   countdown: Object.freeze(['race', 'paused', 'lobby']),
@@ -50,6 +56,8 @@ const NEXT = Object.freeze({
   account: Object.freeze(['title', 'lobby']),
   garage: Object.freeze(['select']),
   dashboard: Object.freeze(['title', 'lobby']),
+  shop: Object.freeze(['title', 'select', 'lootbox']),
+  lootbox: Object.freeze(['shop']),
 });
 
 let current = 'title';

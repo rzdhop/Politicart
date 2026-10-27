@@ -1,5 +1,6 @@
 import {
   Button,
+  CoinCount,
   ControlsGrid,
   Disclaimer,
   GameTitle,
@@ -42,6 +43,12 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
           {ui.netAvailable && (
             <Button id="b-account" variant={ui.account ? 'primary' : 'ghost'} onClick={actions.openAccount}>
               {ui.account ? ui.account.profile.name + ' · niv. ' + ui.account.profile.level + friendBadge(ui) : 'Compte · se connecter'}
+            </Button>
+          )}
+          {/* The Boutique exists only where a game server runs the economy (DEC-035). */}
+          {ui.netAvailable && (
+            <Button id="b-shop" variant="ghost" onClick={() => actions.openShop('title')}>
+              {'Boutique '}<CoinCount size="sm" value={ui.account?.profile.coins ?? 0} format={n => n.toLocaleString('fr-FR')} />
             </Button>
           )}
           <Button id="b-poly" variant="ghost" onClick={actions.togglePoly}>

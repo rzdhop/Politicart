@@ -168,10 +168,16 @@ describe('the roster for a guest', () => {
     act(() => actions.play());
     const tiles = [...container.querySelectorAll('#roster button')] as HTMLButtonElement[];
     expect(tiles).toHaveLength(16);
-    expect(tiles.filter(t => !t.disabled).map(t => t.textContent)).toEqual(['Emmanuel Macaron', 'Philippe Martini', 'Jean Lassalle-des-Fêtes', 'Sandrine Ruisseau']);
-    expect(tiles.find(t => t.disabled)?.dataset.lock).toBe('🔒 Compte requis');
+    expect(tiles.filter(t => !t.classList.contains('locked')).map(t => t.textContent)).toEqual(['Emmanuel Macaron', 'Philippe Martini', 'Jean Lassalle-des-Fêtes', 'Sandrine Ruisseau']);
+    expect(tiles.find(t => t.classList.contains('locked'))?.dataset.lock).toBe('🔒 Compte requis');
     act(() => actions.selectChar(15));
     expect(container.querySelector('#roster button[aria-pressed="true"]')?.textContent).toBe('Emmanuel Macaron');
+    // On the game server a locked tile is a way into the Boutique, not a dead button (DEC-037).
+    act(() => { tiles[15]!.click(); });
+    expect(getState()).toBe('shop');
+    expect(container.querySelector('#roster button[aria-pressed="true"]')?.textContent).toBe('Emmanuel Macaron');
+    act(() => actions.closeShop());
+    expect(getState()).toBe('select');
     act(() => actions.toTitle());
   });
 });

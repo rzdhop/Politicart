@@ -17,6 +17,16 @@ vi.mock('../engine/race.js', () => ({
 vi.mock('../engine/minimap.js', () => ({
   attachMinimap: vi.fn(),
 }));
+// The Politibox scene draws on the shared canvas; the timeline's phases are
+// played here by hand through the onPhase the store hands it.
+const box = vi.hoisted(() => ({ onPhase: null as ((name: string) => void) | null, played: [] as unknown[], skips: 0 }));
+vi.mock('../engine/lootbox.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../engine/lootbox.js')>()),
+  playOpening: (drop: unknown, o: { onPhase?: (name: string) => void } = {}) => { box.played.push(drop); box.onPhase = o.onPhase ?? null; box.onPhase?.('drop'); },
+  skipOpening: () => { box.skips++; },
+  stopOpening: () => {},
+  renderLootbox: () => {},
+}));
 vi.mock('../engine/audio.js', () => {
   let muted = false;
   return { initAudio: () => {}, isMuted: () => muted, toggleMute: () => { muted = !muted; return muted; } };
@@ -28,7 +38,8 @@ import { resetMachine, transition, getState } from '../engine/machine.js';
 import { setTransport } from '../engine/net.js';
 import { App } from './App';
 import { hud } from './Hud';
-import { actions, getSnapshot } from './store';
+import { loadGarage, myStyle, resetGarage } from '../engine/garage.js';
+import { actions, getSnapshot, ownedOf } from './store';
 
 /**
  * Every id the E2E suite addresses on the screens and the note. The
@@ -68,9 +79,12 @@ const DASH = {
 class SilentSocket { readyState = 0; onopen = null; onmessage = null; onclose = null; onerror = null; send() {} close() {} constructor(_url: string) {} }
 
 type Who = 'admin' | 'player';
-const profileOf = (who: Who) => ({
+const STARTER_IDS = ['victor', 'gege', 'maurice', 'capucine'];
+const profileOf = (who: Who, o: { coins?: number; owned?: { chars: string[]; parts: string[]; trails: string[] } } = {}) => ({
   id: who === 'admin' ? 'u-admin' : 'u-player', name: who === 'admin' ? 'rida' : 'Marianne', xp: 0, level: 1, xpInto: 0, xpNext: 120,
-  unlocked: ['victor', 'gege', 'maurice', 'capucine'], ...(who === 'admin' ? { admin: true as const } : {}),
+  reachable: [...STARTER_IDS, 'lucie'], unlocked: [...STARTER_IDS, ...(o.owned?.chars ?? [])], coins: o.coins ?? 0,
+  owned: o.owned ?? { chars: [], parts: [], trails: [] }, stats: {},
+  ...(who === 'admin' ? { admin: true as const } : {}),
 });
 
 interface FakeOptions {
@@ -82,6 +96,10 @@ interface FakeOptions {
   roster?: unknown;
   /** Force an answer for PUT /api/admin/roster: [status, body], or 'offline'. */
   save?: [number, unknown] | 'offline';
+  /** The account's politicoins (the fake server charges the catalogue's prices). */
+  coins?: number;
+  /** What the next Politibox holds. */
+  drop?: unknown;
 }
 
 /**
@@ -91,7 +109,11 @@ interface FakeOptions {
  * every call.
  */
 function fakeServer(o: FakeOptions = {}) {
-  const state = { roster: o.roster ?? { chars: {}, ads: [] }, sessions: new Map<string, Who>(o.who ? [['tok-' + o.who, o.who]] : []) };
+  const state = {
+    roster: o.roster ?? { chars: {}, ads: [] }, sessions: new Map<string, Who>(o.who ? [['tok-' + o.who, o.who]] : []),
+    coins: o.coins ?? 0, owned: { chars: [] as string[], parts: [] as string[], trails: [] as string[] },
+  };
+  const me = (who: Who) => profileOf(who, { coins: state.coins, owned: state.owned });
   const calls: Array<{ url: string; method: string; body: unknown; auth?: string }> = [];
   const answer = (status: number, body?: unknown) => ({
     ok: status >= 200 && status < 300,
@@ -107,7 +129,18 @@ function fakeServer(o: FakeOptions = {}) {
     const who = auth ? state.sessions.get(auth.slice(7)) : undefined;
     if (url === './api/kr') return answer(200, { kr: 'server' });
     if (url === './api/roster') return answer(200, state.roster);
-    if (url === './api/me') return who ? answer(200, { profile: profileOf(who) }) : answer(401, { error: 'Session expirée.' });
+    if (url === './api/me') return who ? answer(200, { profile: me(who) }) : answer(401, { error: 'Session expirée.' });
+    // The economy, priced like the catalogue (lucie 300, wheels:gold 400, a box 120); bodies never carry a price.
+    if (url === './api/shop/char' || url === './api/shop/part' || url === './api/box/open') {
+      if (!who) return answer(401, { error: 'Session expirée.' });
+      const price = url === './api/box/open' ? 120 : url === './api/shop/char' ? ({ lucie: 300 } as Record<string, number>)[(body as { id: string }).id] ?? 9999 : 400;
+      if (state.coins < price) return answer(402, { error: 'Pas assez de politicoins.' });
+      state.coins -= price;
+      if (url === './api/shop/char') state.owned.chars.push((body as { id: string }).id);
+      if (url === './api/shop/part') state.owned.parts.push((body as { category: string; value: string }).category + ':' + (body as { value: string }).value);
+      if (url === './api/box/open') { const d = (o.drop ?? { kind: 'coins', amount: 50 }) as { kind: string; amount?: number; refund?: number }; state.coins += d.amount ?? d.refund ?? 0; return answer(200, { profile: me(who), drop: d }); }
+      return answer(200, { profile: me(who), bought: {} });
+    }
     if (url === './api/logout') { if (auth) state.sessions.delete(auth.slice(7)); return answer(200, {}); }
     if (url.startsWith('./api/admin/') && url !== './api/admin/roster') {
       if (who !== 'admin') return answer(401, { error: 'Réservé à l’administrateur : connectez-vous avec son compte.' });
@@ -146,6 +179,7 @@ async function renderServed(o: FakeOptions) {
 
 const $ = (container: HTMLElement, id: string) => container.querySelector('#' + id) as HTMLInputElement | null;
 const pressed = (container: HTMLElement, id: string) => $(container, id)?.getAttribute('aria-pressed');
+const disabled = (container: HTMLElement, id: string) => ($(container, id) as HTMLButtonElement | null)?.disabled;
 
 beforeEach(() => {
   // resetMachine clears listeners too; the store re-subscribes when imported,
@@ -153,7 +187,7 @@ beforeEach(() => {
   // we only ever reset to 'title' without clearing by going through transitions.
   while (getState() !== 'title') {
     const s = getState();
-    transition(s === 'select' || s === 'admin' || s === 'paused' || s === 'results' || s === 'lobby' || s === 'account' || s === 'dashboard' ? 'title' : s === 'tracks' || s === 'garage' ? 'select' : 'paused');
+    transition(s === 'select' || s === 'admin' || s === 'paused' || s === 'results' || s === 'lobby' || s === 'account' || s === 'dashboard' || s === 'shop' ? 'title' : s === 'tracks' || s === 'garage' ? 'select' : s === 'lootbox' ? 'shop' : 'paused');
   }
   setTransport(SilentSocket);
 });
@@ -549,5 +583,184 @@ describe('the admin dashboard (DEC-030)', () => {
     fireEvent.click($(container, 'b-dash-god-ABCD')!);
     expect(getState()).toBe('lobby');
     expect($(container, 's-lobby')!.hidden).toBe(false);
+  });
+});
+
+/** The Boutique and the Politibox's contract ids (DEC-009), on a game server only. */
+const SHOP_IDS = ['b-shop', 's-shop', 'coins', 'shop-tab-box', 'shop-tab-chars', 'shop-tab-parts', 'shop-char-lucie', 'b-buy-char-lucie', 'shop-part-wheels-gold', 'b-buy-part-wheels-gold', 'b-open-box', 'shop-error', 'shop-notice', 'b-shop-back', 's-lootbox', 'lb-stage'];
+
+describe('the Boutique and the Politibox (DEC-032..037)', () => {
+  beforeEach(() => { box.onPhase = null; box.played = []; box.skips = 0; });
+
+  it('render their contract ids on the game server, and the reveal\'s once a box is open', async () => {
+    const { container } = await renderServed({ server: true, who: 'player', coins: 1000 });
+    for (const id of SHOP_IDS) expect($(container, id), '#' + id).not.toBeNull();
+    fireEvent.click($(container, 'b-shop')!);
+    fireEvent.click($(container, 'b-open-box')!);
+    await settle();
+    act(() => { box.onPhase?.('reveal'); });
+    for (const id of ['box-result', 'box-grade', 'b-box-again', 'b-box-back']) expect($(container, id), '#' + id).not.toBeNull();
+  });
+
+  it('are absent from the static build, title button included', async () => {
+    const { container } = await renderServed({ server: false });
+    for (const id of SHOP_IDS) expect($(container, id), '#' + id).toBeNull();
+    actions.openShop('title');
+    expect(getState()).toBe('title');
+  });
+
+  it('show a guest the shop with every button disabled and an invitation to sign up', async () => {
+    const { container } = await renderServed({ server: true });
+    fireEvent.click($(container, 'b-shop')!);
+    expect(getState()).toBe('shop');
+    expect($(container, 's-shop')!.hidden).toBe(false);
+    expect($(container, 'shop-guest')?.textContent).toBe('Créez un compte pour gagner des politicoins.');
+    expect($(container, 'coins')?.textContent).toBe('0');
+    expect(disabled(container, 'b-open-box')).toBe(true);
+    expect(disabled(container, 'b-buy-char-lucie')).toBe(true);
+    expect(disabled(container, 'b-buy-part-wheels-gold')).toBe(true);
+    const buttons = [...container.querySelectorAll<HTMLButtonElement>('#s-shop .shop-card button')];
+    expect(buttons.length).toBeGreaterThan(30);
+    expect(buttons.every(b => b.disabled)).toBe(true);
+    fireEvent.click($(container, 'b-shop-back')!);
+    expect(getState()).toBe('title');
+  });
+
+  it('buy a candidate and a part with the token, the bodies naming the item and never a price, then count the coins down', async () => {
+    const { container, server } = await renderServed({ server: true, who: 'player', coins: 1000 });
+    expect($(container, 'b-shop')?.textContent).toContain('1');
+    fireEvent.click($(container, 'b-shop')!);
+    expect($(container, 'coins')?.textContent).toBe((1000).toLocaleString('fr-FR'));
+    fireEvent.click($(container, 'shop-tab-chars')!);
+    expect($(container, 'shop-panel-chars')!.hidden).toBe(false);
+    expect($(container, 'b-buy-char-lucie')?.textContent).toBe('Acheter');
+    expect($(container, 'b-buy-char-patrick')?.textContent).toBe('Niveau 3 requis');
+    expect(disabled(container, 'b-buy-char-patrick')).toBe(true);
+    expect($(container, 'b-buy-char-victor')?.textContent).toBe('Acquis');
+
+    fireEvent.click($(container, 'b-buy-char-lucie')!);
+    await settle();
+    const buy = server.calls.find(c => c.url === './api/shop/char')!;
+    expect(buy).toMatchObject({ method: 'POST', auth: 'Bearer tok-player', body: { id: 'lucie' } });
+    expect($(container, 'b-buy-char-lucie')?.textContent).toBe('Acquis');
+    expect($(container, 'coins')?.textContent).toBe('700');
+    expect($(container, 'shop-notice')?.textContent).toBe('Acquis !');
+
+    fireEvent.click($(container, 'shop-tab-parts')!);
+    fireEvent.click($(container, 'b-buy-part-wheels-gold')!);
+    await settle();
+    expect(server.calls.find(c => c.url === './api/shop/part')?.body).toEqual({ category: 'wheels', value: 'gold' });
+    expect($(container, 'coins')?.textContent).toBe('300');
+    expect($(container, 'b-buy-part-wheels-gold')?.textContent).toBe('Acquis');
+    // 300 left: a mythic part (400) is out of reach, a rare one (150) is not.
+    expect($(container, 'b-buy-part-underglow-gold')?.textContent).toBe('Pas assez de politicoins');
+    expect(disabled(container, 'b-buy-part-wheels-chrome')).toBe(false);
+    for (const c of server.calls.filter(c => c.url.startsWith('./api/shop/') || c.url === './api/box/open')) expect(JSON.stringify(c.body)).not.toMatch(/price|cost|amount/);
+
+    // Bought, the candidate is on the roster.
+    fireEvent.click($(container, 'b-shop-back')!);
+    fireEvent.click($(container, 'b-play')!);
+    const lucie = CHARACTERS.findIndex(c => c.id === 'lucie');
+    const tile = container.querySelectorAll('#roster .tile')[lucie]!;
+    expect(tile.classList.contains('locked')).toBe(false);
+  });
+
+  it('show the server\'s refusal on a 402, coins unchanged', async () => {
+    const { container } = await renderServed({ server: true, who: 'player', coins: 1000 });
+    fireEvent.click($(container, 'b-shop')!);
+    // The page thinks it can afford it; the server says otherwise.
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 402, json: async () => ({ error: 'Pas assez de politicoins.' }) })));
+    fireEvent.click($(container, 'shop-tab-parts')!);
+    fireEvent.click($(container, 'b-buy-part-wheels-gold')!);
+    await settle();
+    expect($(container, 'shop-error')?.textContent).toBe('Pas assez de politicoins.');
+    expect($(container, 'shop-error')!.hidden).toBe(false);
+    expect($(container, 'coins')?.textContent).toBe((1000).toLocaleString('fr-FR'));
+    expect(getState()).toBe('shop');
+  });
+
+  it('open a Politibox: charge it, play the opening, skip on a tap, show the prize, and go back', async () => {
+    const drop = { kind: 'part', id: 'wheels:gold', grade: 'mythic', duplicate: true, refund: 400 };
+    const { container, server } = await renderServed({ server: true, who: 'player', coins: 150, drop });
+    fireEvent.click($(container, 'b-shop')!);
+    expect(disabled(container, 'b-open-box')).toBe(false);
+    fireEvent.click($(container, 'b-open-box')!);
+    await settle();
+    expect(server.calls.find(c => c.url === './api/box/open')).toMatchObject({ method: 'POST', body: {}, auth: 'Bearer tok-player' });
+    expect(getState()).toBe('lootbox');
+    expect(box.played).toEqual([drop]);
+    expect($(container, 's-lootbox')!.hidden).toBe(false);
+    expect($(container, 'box-result')).toBeNull();                 // still opening
+    fireEvent.click($(container, 'lb-stage')!);
+    expect(box.skips).toBe(1);
+    act(() => { box.onPhase?.('burst'); });
+    expect(container.querySelector('.kr-flash')).not.toBeNull();
+    act(() => { box.onPhase?.('reveal'); });
+    expect($(container, 'box-result')?.textContent).toBe('Pièce : Roues doréesDoublon : +400 politicoins remboursés');
+    expect($(container, 'box-grade')?.getAttribute('data-grade')).toBe('mythic');
+    expect($(container, 'box-grade')?.textContent).toBe('Mythique');
+    // 150 - 120 + 400 refunded: enough for another
+    expect(getSnapshot().account!.profile.coins).toBe(430);
+    expect(disabled(container, 'b-box-again')).toBe(false);
+    fireEvent.click($(container, 'b-box-back')!);
+    expect(getState()).toBe('shop');
+    expect($(container, 'coins')?.textContent).toBe('430');
+  });
+
+  it('keep "Encore une !" disabled under the price of a box', async () => {
+    const { container } = await renderServed({ server: true, who: 'player', coins: 125, drop: { kind: 'coins', amount: 5 } });
+    fireEvent.click($(container, 'b-shop')!);
+    fireEvent.click($(container, 'b-open-box')!);
+    await settle();
+    act(() => { box.onPhase?.('reveal'); });
+    expect($(container, 'box-result')?.textContent).toBe('5 politicoins');
+    expect(disabled(container, 'b-box-again')).toBe(true);
+    fireEvent.click($(container, 'b-box-back')!);
+    expect(disabled(container, 'b-open-box')).toBe(true);
+  });
+
+  it('open on the candidates from a locked roster tile, and come back to the roster', async () => {
+    const { container } = await renderServed({ server: true, who: 'player', coins: 0 });
+    fireEvent.click($(container, 'b-play')!);
+    const lucie = CHARACTERS.findIndex(c => c.id === 'lucie');
+    const tile = container.querySelectorAll('#roster .tile')[lucie] as HTMLButtonElement;
+    expect(tile.disabled).toBe(false);
+    expect(tile.getAttribute('data-lock')).toContain('Boutique');
+    fireEvent.click(tile);
+    expect(getState()).toBe('shop');
+    expect($(container, 'shop-panel-chars')!.hidden).toBe(false);
+    expect(getSnapshot().charIdx).not.toBe(lucie);
+    fireEvent.click($(container, 'b-shop-back')!);
+    expect(getState()).toBe('select');
+  });
+
+  it('keep a locked tile inert on the static build', () => {
+    const { container } = render(<App />);
+    fireEvent.click($(container, 'b-play')!);
+    const lucie = CHARACTERS.findIndex(c => c.id === 'lucie');
+    const tile = container.querySelectorAll('#roster .tile')[lucie] as HTMLButtonElement;
+    expect(tile.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(tile);
+    expect(getState()).toBe('select');
+  });
+});
+
+describe('ownedOf (DEC-035)', () => {
+  it('is null without a server, the commons for a guest on one, and the account\'s inventory signed in', async () => {
+    expect(ownedOf({ netAvailable: false, account: null })).toBeNull();
+    expect(ownedOf({ netAvailable: true, account: null })).toEqual({ chars: [], parts: [], trails: [] });
+    const profile = profileOf('player', { owned: { chars: ['lucie'], parts: ['wheels:gold'], trails: [] } });
+    expect(ownedOf({ netAvailable: true, account: { token: 't', profile } })).toEqual(profile.owned);
+  });
+
+  it('is what the Garage draws with: a guest on a server sees an unowned edit dropped, the static build does not', async () => {
+    localStorage.setItem('kr-kart', JSON.stringify({ wheels: 'gold' }));
+    loadGarage();
+    await renderServed({ server: true });
+    expect(myStyle(CHARACTERS[0]!).wheels).toBe('classic');
+    cleanup();
+    await renderServed({ server: false });
+    expect(myStyle(CHARACTERS[0]!).wheels).toBe('gold');
+    resetGarage();
   });
 });
