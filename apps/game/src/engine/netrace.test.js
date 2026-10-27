@@ -12,6 +12,7 @@ import { encodeSnapshot } from './netstate.js';
 import { abortNetRace, beginNetRace, finishNetRace, isNetRace, netStep, onNetResults, pressItem, receiveKartJoin, receiveSnap } from './netrace.js';
 import { simStep, startField } from './race.js';
 import { G } from './state.js';
+import { MIN_SPEED } from './trail.js';
 
 const ROSTER = ['victor', 'gege', 'maurice', 'capucine', 'hubert', 'lulu'].map((charId, i) => ({ charId, isAI: i < 4, team: i < 4 ? null : (i === 4 ? 'bleu' : 'rouge'), name: 'P' + i }));
 const SNAPS = [];
@@ -83,6 +84,21 @@ describe('a networked race on the client', () => {
     expect(G.karts[4].style).toEqual(playerStyle(def(roster[4].charId), { wheels: 'gold', number: 7 }));
     expect(G.karts[0].style).toEqual(defaultStyle(def(roster[0].charId)));
     expect(G.karts[5].style).toEqual(defaultStyle(def(roster[5].charId)));
+  });
+
+  it("gives a slot's kart the trail of its style, in the scene, and none to the rest (DEC-036)", () => {
+    clientInLobby();
+    const roster = ROSTER.map((s, i) => (i === 0 ? { ...s, style: { trail: 'laser' } } : s));
+    beginNetRace({ trackIdx: 0, roster, you: 5 });
+    const trail = G.karts[0].mesh.userData.trail;
+    expect(trail).not.toBeNull();
+    expect(trail.group.name).toBe('trail:laser');
+    expect(G.scene.children).toContain(trail.group);
+    expect(G.karts.filter(k => k.mesh.userData.trail)).toHaveLength(1);
+    for (const s of SNAPS) receiveSnap({ s, ev: [], fx: [] });      // 6 s in: the field is racing
+    for (let n = 0; n < 30; n++) netStep(1 / 60);
+    expect(G.karts[0].speed).toBeGreaterThan(MIN_SPEED);
+    expect(trail.group.children.filter(o => o.visible).length).toBeGreaterThan(0);   // a kart at speed, drawn through updateKartVisual, trails
   });
 
   it('draws the karts between snapshots, goes green with the server, and mirrors hazards', () => {
