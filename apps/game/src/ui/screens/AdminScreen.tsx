@@ -22,7 +22,7 @@ import { getDraft } from '../../engine/custom.js';
 import { BASE, CHARACTERS } from '../../engine/data.js';
 import { builtinStyle, mergeStyle } from '../../engine/kartstyle.js';
 import { hex } from '../../engine/util.js';
-import { chips, parseRaceNumber, PODS, SPOILERS, STICKERS, WHEELS } from '../kartChoices';
+import { chips, EXHAUSTS, MASTS, NOSES, parseRaceNumber, PODS, SKINS, SPOILERS, STICKERS, TRAILS, UNDERGLOWS, WHEELS } from '../kartChoices';
 import { readImage } from '../readImage';
 import { actions, type UiSnapshot } from '../store';
 import type { BaseCharacter, Character, CustomCharacter, CustomData, KartStyle } from '../types';
@@ -101,6 +101,13 @@ function CharacterForm({ c, base }: { c: Character; base: BaseCharacter }) {
       <ChoiceGroup label="Aileron" options={chips('adm-spoiler-' + c.id + '-', SPOILERS)} value={style.spoiler} onChange={v => writeStyle('spoiler', v)} />
       <ChoiceGroup label="Pontons latéraux" options={chips('adm-pods-' + c.id + '-', PODS)} value={style.pods ? 'on' : 'off'} onChange={v => writeStyle('pods', v === 'on')} />
       <ChoiceGroup label="Autocollant" options={chips('adm-sticker-' + c.id + '-', STICKERS)} value={style.sticker} onChange={v => writeStyle('sticker', v)} />
+      {/* The catalogue's other parts and the trail: a roster default may be any option, the admin owning the whole catalogue (A-031). */}
+      <ChoiceGroup label="Échappement" options={chips('adm-exhaust-' + c.id + '-', EXHAUSTS)} value={style.exhaust} onChange={v => writeStyle('exhaust', v)} />
+      <ChoiceGroup label="Néons" options={chips('adm-underglow-' + c.id + '-', UNDERGLOWS)} value={style.underglow} onChange={v => writeStyle('underglow', v)} />
+      <ChoiceGroup label="Mât" options={chips('adm-mast-' + c.id + '-', MASTS)} value={style.mast} onChange={v => writeStyle('mast', v)} />
+      <ChoiceGroup label="Nez" options={chips('adm-nose-' + c.id + '-', NOSES)} value={style.nose} onChange={v => writeStyle('nose', v)} />
+      <ChoiceGroup label="Carrosserie" options={chips('adm-skin-' + c.id + '-', SKINS)} value={style.skin} onChange={v => writeStyle('skin', v)} />
+      <ChoiceGroup label="Traînée" options={chips('adm-trail-' + c.id + '-', TRAILS)} value={style.trail} onChange={v => writeStyle('trail', v)} />
     </AdminCard>
   );
 }

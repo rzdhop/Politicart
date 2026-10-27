@@ -54,13 +54,48 @@ export interface NetView {
 /** What an account holds beyond the commons (engine/catalog.js): candidate ids, part keys ('wheels:gold'), trail ids. */
 export interface Owned { chars: string[]; parts: string[]; trails: string[] }
 /**
+ * An account's race and economy counters, as the server keeps them
+ * (apps/server/src/economy.js normaliseStats). The best lap and time are per
+ * circuit id, in seconds; a profile may carry a partial or empty object, so
+ * read it through statsOf().
+ */
+export interface Stats {
+  races: number; wins: number; podiums: number; finished: number; dnf: number; solo: number; team: number; teamWins: number;
+  boxes: number; coinsEarned: number; coinsSpent: number;
+  bestLap: Record<string, number>; bestTime: Record<string, number>; byChar: Record<string, number>;
+  drops: Record<string, number>; lastDaily: string | null; lastRaceAt: number | null;
+}
+/** How much of the catalogue an account holds (engine/catalog.js collection). */
+export interface Collection { have: number; total: number; pct: number }
+/** A friend's figures, as GET /api/stats/friends lists them. */
+export interface FriendStats { id: string; name: string; level: number; stats: Partial<Stats>; collection: Collection }
+/**
  * An account as the server describes it (engine/progress.js profileOf):
  * `unlocked` is what it may drive, `reachable` what its level lets it buy
- * (DEC-034), `coins` its politicoins, `owned` its inventory.
+ * (DEC-034), `coins` its politicoins, `owned` its inventory, `stats` its counters.
  */
 export interface Profile {
   id: string; name: string; xp: number; level: number; xpInto: number; xpNext: number;
-  reachable: string[]; unlocked: string[]; coins: number; owned: Owned; stats: Record<string, unknown>; admin?: true;
+  reachable: string[]; unlocked: string[]; coins: number; owned: Owned; stats: Partial<Stats>; admin?: true;
+}
+
+const COUNTERS = ['races', 'wins', 'podiums', 'finished', 'dnf', 'solo', 'team', 'teamWins', 'boxes', 'coinsEarned', 'coinsSpent'] as const;
+const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
+const numbers = (v: unknown): Record<string, number> => {
+  const out: Record<string, number> = {};
+  if (v && typeof v === 'object') for (const [k, n] of Object.entries(v as Record<string, unknown>)) if (typeof n === 'number' && Number.isFinite(n)) out[k] = n;
+  return out;
+};
+
+/** A profile's stats with every counter present: zeros and empty tables for whatever the server left out. */
+export function statsOf(s: Partial<Stats> | null | undefined): Stats {
+  const src = (s ?? {}) as Record<string, unknown>;
+  const out = {} as Record<string, unknown>;
+  for (const k of COUNTERS) out[k] = count(src[k]);
+  out.bestLap = numbers(src.bestLap); out.bestTime = numbers(src.bestTime); out.byChar = numbers(src.byChar); out.drops = numbers(src.drops);
+  out.lastDaily = typeof src.lastDaily === 'string' ? src.lastDaily : null;
+  out.lastRaceAt = typeof src.lastRaceAt === 'number' ? src.lastRaceAt : null;
+  return out as unknown as Stats;
 }
 /** The bonuses a race paid on top (economy.js settleRace). */
 export interface Bonus { daily: boolean; levelUp: boolean; levelUpCoins: number }
@@ -89,7 +124,7 @@ export type AdminStatus = 'idle' | 'saved';
 type RosterReply = { ok: boolean; status: number; error?: string; field?: string; roster?: unknown };
 
 // ---- The admin's dashboard (DEC-030), as the server describes it (dashboard.js) ----
-export interface DashUser { id: string; name: string; xp: number; level: number; created: number; seen: number | null; banned: { at: number; reason: string } | null; online: boolean; room: string | null }
+export interface DashUser { id: string; name: string; xp: number; level: number; coins: number; created: number; seen: number | null; banned: { at: number; reason: string } | null; online: boolean; room: string | null }
 export interface DashConn { id: string; name: string; userId: string | null; guest: boolean; admin: boolean; room: string | null }
 /** A kart of a race in progress, as the dashboard lists it (DEC-031). */
 export interface DashKart { slot: number; name: string; charId: string; isAI: boolean; god: boolean }
@@ -154,6 +189,12 @@ export interface UiSnapshot {
   godReply: string | null;
   /** The Boutique and the Politibox (DEC-037). */
   shop: ShopView;
+  /** The friends' figures, once Compte asked for them; null until then and for a guest. */
+  friendStats: FriendStats[] | null;
+  /** The friend whose figures Compte shows, by id. */
+  friendShown: string | null;
+  /** Why the friends' figures could not be shown. */
+  friendStatsError: string | null;
 }
 
 export interface NetRankRow { slot: number; name: string; charId: string; team: TeamId | null; isAI: boolean; god?: boolean; rank: number; finished: boolean; time: number | null; bestLap: number | null; points: number }
@@ -215,6 +256,9 @@ let snapshot: UiSnapshot = {
   godConsole: false,
   godReply: null,
   shop: { from: 'title', tab: 'box', busy: false, error: null, notice: null, drop: null, phase: 'idle' },
+  friendStats: null,
+  friendShown: null,
+  friendStatsError: null,
 };
 
 const listeners = new Set<() => void>();
@@ -297,7 +341,7 @@ function takeProfile(profile: Profile, gained = 0, coins = 0, bonus: Bonus | nul
 // The server says who this connection is: a fresh profile, or nobody (the session expired).
 net.onProfile((profile: Profile | null, gained: number, coins: number, bonus: Bonus | null) => {
   if (!snapshot.account) return;
-  if (!profile) { saveToken(null); set({ account: null }); applyOwned(emptyOwned()); keepCharUnlocked(); leaveWorkshopUnlessAdmin(); return; }
+  if (!profile) { saveToken(null); set({ account: null, friendStats: null, friendShown: null }); applyOwned(emptyOwned()); keepCharUnlocked(); leaveWorkshopUnlessAdmin(); return; }
   takeProfile(profile, gained, coins, bonus);
   leaveWorkshopUnlessAdmin();
 });
@@ -400,7 +444,7 @@ async function dashCall(fn: (token: string) => Promise<DashReply>): Promise<Dash
 /** The server no longer knows this token (a 401): forget it here too, as a logout would, without calling the server. */
 function sessionExpired() {
   saveToken(null);
-  set({ account: null, lastGain: null, netName: '' });
+  set({ account: null, lastGain: null, netName: '', friendStats: null, friendShown: null });
   applyOwned(emptyOwned());
   net.disconnect();
   keepCharUnlocked();
@@ -578,6 +622,15 @@ export const actions = {
     const r = await dashCall(t => account.dashboard.kick(t, id, { base: remoteServer }));
     if (r) { dash({ notice: 'Connexion fermée.', error: null }); await actions.refreshDashboard(); }
   },
+  /** Give account `id` `amount` politicoins (the server caps it at 100 000); the list then shows the new balance. */
+  async grantCoins(id: string, amount: number) {
+    if (!Number.isSafeInteger(amount) || amount < 0) { dash({ error: 'Un nombre entier de politicoins.', notice: null }); return; }
+    const r = await dashCall(t => account.dashboard.grantCoins(t, id, amount, { base: remoteServer }));
+    if (!r) return;
+    const u = r.user as { name?: string; coins?: number } | undefined;
+    dash({ notice: amount.toLocaleString('fr-FR') + ' politicoins crédités' + (u?.name ? ' à ' + u.name : '') + (typeof u?.coins === 'number' ? ' (solde ' + u.coins.toLocaleString('fr-FR') + ').' : '.'), error: null });
+    await actions.refreshDashboard();
+  },
   /**
    * Any command on room `code`, from the dashboard (DEC-031): start, track,
    * kick, team, char in the lobby; every god command in a race.
@@ -701,12 +754,29 @@ export const actions = {
     account.logout(acc.token, { base: remoteServer });
     saveToken(null);
     resumeDraft = false;
-    set({ account: null, lastGain: null, netName: '' });
+    set({ account: null, lastGain: null, netName: '', friendStats: null, friendShown: null });
     applyOwned(emptyOwned());                                   // a guest on a server owns the commons
     net.disconnect();
     keepCharUnlocked();
     leaveWorkshopUnlessAdmin();
   },
+  /** Ask the server for the friends' figures (GET /api/stats/friends); a guest has none. Resolves to what it answered. */
+  async loadFriendStats(): Promise<FriendStats[] | null> {
+    const acc = snapshot.account; if (!acc) return null;
+    const r = await account.shop.friendStats(acc.token, { base: remoteServer }) as { ok: boolean; status: number; error?: string; friends?: FriendStats[] };
+    if (r.ok) { const list = Array.isArray(r.friends) ? r.friends : []; set({ friendStats: list }); return list; }
+    if (r.status === 401) { sessionExpired(); set({ accountError: 'Session expirée : reconnectez-vous.' }); return null; }
+    set({ friendStats: null, friendStatsError: r.error ?? 'Statistiques indisponibles.' });
+    return null;
+  },
+  /** "Stats" on a friend's row: show their figures, fetched afresh so a race just run counts. */
+  async showFriendStats(id: string) {
+    if (!snapshot.account) return;
+    set({ friendShown: id, friendStatsError: null });
+    const list = await actions.loadFriendStats();
+    if (list && !list.some(f => f.id === id)) set({ friendShown: null, friendStatsError: 'Cette personne n’est plus dans vos ami·es.' });
+  },
+  hideFriendStats() { set({ friendShown: null, friendStatsError: null }); },
   addFriend(name: string) { if (name.trim()) net.addFriend(name.trim()); },
   acceptFriend(id: string) { net.acceptFriend(id); },
   removeFriend(id: string) { net.removeFriend(id); },
@@ -738,6 +808,16 @@ export const actions = {
     set({ thumbs });
     transition('shop');
     setPreview(G.charIdx);
+  },
+  /**
+   * A locked chip's badge in the Garage (DEC-035): back to the roster, then
+   * the Boutique on `tab`, so its "Retour" lands on the roster (the machine
+   * has no garage → shop edge; the player reopens the Garage from there).
+   */
+  shopFromGarage(tab: ShopTab) {
+    if (!snapshot.netAvailable) return;
+    if (getState() === 'garage') transition('select');
+    actions.openShop('select', tab);
   },
   /** "Retour": back where the shop was opened from. */
   closeShop() {

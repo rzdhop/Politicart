@@ -52,6 +52,7 @@ const CONTRACT_IDS = [
   's-title', 'b-play', 'b-poly', 'b-mute',
   's-select', 'roster', 'showcase', 'b-back1', 'b-garage', 'b-next1',
   's-garage', 'g-body', 'g-accent', 'g-number', 'g-wheels-gold', 'g-spoiler-wing', 'g-pods-off', 'g-sticker-rosette', 'b-garage-reset', 'b-garage-back',
+  'g-exhaust-turbine', 'g-underglow-rainbow', 'g-mast-pirate', 'g-nose-ram', 'g-skin-flames', 'g-trail-laser', 'g-trail-note',
   's-tracks', 'trackcards', 'b-back2', 'b-start',
   's-pause', 'b-resume', 'b-quit',
   's-results', 'r-title', 'r-sub', 'r-body', 'b-again', 'b-menu',
@@ -64,13 +65,14 @@ const ADMIN_IDS = [
   's-admin', 'admin-chars', 'ad-files', 'ad-preview', 'admin-error', 'b-admin-reset', 'b-admin-save',
   'adm-name-victor', 'adm-title-victor', 'adm-quote-victor', 'adm-suit-victor', 'adm-kart-victor', 'adm-livery-victor', 'adm-livimg-victor',
   'adm-accent-victor', 'adm-number-victor', 'adm-wheels-victor-gold', 'adm-spoiler-victor-wing', 'adm-pods-victor-off', 'adm-sticker-victor-rosette',
-  'b-dashboard', 's-dashboard', 'dash-status', 'dash-user-q', 'dash-ban-reason', 'b-dash-search', 'b-dash-refresh', 'b-dash-back',
+  'adm-exhaust-victor-turbine', 'adm-underglow-victor-rainbow', 'adm-mast-victor-pirate', 'adm-nose-victor-ram', 'adm-skin-victor-flames', 'adm-trail-victor-laser',
+  'b-dashboard', 's-dashboard', 'dash-status', 'dash-user-q', 'dash-ban-reason', 'dash-grant-amount', 'b-dash-search', 'b-dash-refresh', 'b-dash-back',
 ];
 
 /** What the fake server's dashboard answers (dashboard.js). */
 const DASH = {
   stats: { accounts: { total: 42, banned: 1, new7d: 3, online: 2 }, live: { connections: 3, guests: 1, rooms: 1, races: 0 }, races: { races: 7, finished: 6, solo: 12, byTrack: { 0: 7 }, recent: [{ at: 1, code: 'ABCD', trackIdx: 0, humans: 2, gods: 0, winner: 'Zoé', teams: [{ team: 'bleu', points: 10 }] }] }, top: [{ id: 'u-z', name: 'Zoé', xp: 500, level: 4 }] },
-  users: { users: [{ id: 'u-z', name: 'Zoé', xp: 500, level: 4, created: 1, seen: 2, banned: null, online: true, room: 'ABCD' }, { id: 'u-b', name: 'Banni', xp: 0, level: 1, created: 1, seen: null, banned: { at: 3, reason: 'triche' }, online: false, room: null }] },
+  users: { users: [{ id: 'u-z', name: 'Zoé', xp: 500, level: 4, coins: 1250, created: 1, seen: 2, banned: null, online: true, room: 'ABCD' }, { id: 'u-b', name: 'Banni', xp: 0, level: 1, coins: 0, created: 1, seen: null, banned: { at: 3, reason: 'triche' }, online: false, room: null }] },
   live: { connections: [{ id: 'c1', name: 'Zoé', userId: 'u-z', guest: false, admin: false, room: 'ABCD' }], rooms: [
     { code: 'ABCD', host: 'c1', trackIdx: 0, phase: 'lobby', since: null, race: null, players: [{ id: 'c1', name: 'Zoé', team: 'bleu', charId: 'victor', ready: false, god: false }] },
     { code: 'WXYZ', host: 'c2', trackIdx: 1, phase: 'race', since: 1, race: [{ slot: 0, name: 'Macaron', charId: 'victor', isAI: true, god: false }, { slot: 1, name: 'Yann', charId: 'gege', isAI: false, god: false }], players: [{ id: 'c2', name: 'Yann', team: 'rouge', charId: 'gege', ready: false, god: false }] },
@@ -80,14 +82,30 @@ const DASH = {
 /** A socket that never opens: signing in connects to the game server, which is not there. */
 class SilentSocket { readyState = 0; onopen = null; onmessage = null; onclose = null; onerror = null; send() {} close() {} constructor(_url: string) {} }
 
+/** A socket a test opens and speaks through, for what only the game server pushes: the friend list. */
+class OpenSocket {
+  static last: OpenSocket | null = null;
+  readyState = 0; sent: Array<Record<string, unknown>> = [];
+  onopen?: () => void; onmessage?: (e: { data: string }) => void; onclose?: () => void; onerror?: () => void;
+  constructor(public url: string) { OpenSocket.last = this; }
+  send(s: string) { this.sent.push(JSON.parse(s)); }
+  close() { this.readyState = 3; this.onclose?.(); }
+  open() { this.readyState = 1; this.onopen?.(); }
+  serve(m: unknown) { this.onmessage?.({ data: JSON.stringify(m) }); }
+}
+
 type Who = 'admin' | 'player';
+type Owned = { chars: string[]; parts: string[]; trails: string[] };
 const STARTER_IDS = ['victor', 'gege', 'maurice', 'capucine'];
-const profileOf = (who: Who, o: { coins?: number; owned?: { chars: string[]; parts: string[]; trails: string[] } } = {}) => ({
+const profileOf = (who: Who, o: { coins?: number; owned?: Owned; stats?: Record<string, unknown> } = {}) => ({
   id: who === 'admin' ? 'u-admin' : 'u-player', name: who === 'admin' ? 'rida' : 'Marianne', xp: 0, level: 1, xpInto: 0, xpNext: 120,
   reachable: [...STARTER_IDS, 'lucie'], unlocked: [...STARTER_IDS, ...(o.owned?.chars ?? [])], coins: o.coins ?? 0,
-  owned: o.owned ?? { chars: [], parts: [], trails: [] }, stats: {},
+  owned: o.owned ?? { chars: [], parts: [], trails: [] }, stats: o.stats ?? {},
   ...(who === 'admin' ? { admin: true as const } : {}),
 });
+
+/** What the fake server answers GET /api/stats/friends with. */
+const FRIEND_STATS = [{ id: 'u-z', name: 'Zoé', level: 4, stats: { races: 9, wins: 2, podiums: 5, bestLap: { elysee: 58.5 }, bestTime: { elysee: 181.25 } }, collection: { have: 3, total: 50, pct: 6 } }];
 
 interface FakeOptions {
   /** The page is served by (or names) the game server; else the static build. */
@@ -100,6 +118,10 @@ interface FakeOptions {
   save?: [number, unknown] | 'offline';
   /** The account's politicoins (the fake server charges the catalogue's prices). */
   coins?: number;
+  /** What the account owns beyond the commons. */
+  owned?: Owned;
+  /** The account's counters, as the server stores them. */
+  stats?: Record<string, unknown>;
   /** What the next Politibox holds. */
   drop?: unknown;
   /** What a solo race report pays (POST /api/progress): experience, politicoins, bonuses, and the level the profile comes back at. */
@@ -115,9 +137,9 @@ interface FakeOptions {
 function fakeServer(o: FakeOptions = {}) {
   const state = {
     roster: o.roster ?? { chars: {}, ads: [] }, sessions: new Map<string, Who>(o.who ? [['tok-' + o.who, o.who]] : []),
-    coins: o.coins ?? 0, owned: { chars: [] as string[], parts: [] as string[], trails: [] as string[] },
+    coins: o.coins ?? 0, owned: o.owned ?? { chars: [] as string[], parts: [] as string[], trails: [] as string[] },
   };
-  const me = (who: Who, level?: number) => ({ ...profileOf(who, { coins: state.coins, owned: state.owned }), ...(level ? { level } : {}) });
+  const me = (who: Who, level?: number) => ({ ...profileOf(who, { coins: state.coins, owned: state.owned, stats: o.stats }), ...(level ? { level } : {}) });
   const calls: Array<{ url: string; method: string; body: unknown; auth?: string }> = [];
   const answer = (status: number, body?: unknown) => ({
     ok: status >= 200 && status < 300,
@@ -152,11 +174,18 @@ function fakeServer(o: FakeOptions = {}) {
       state.coins += p.coins;
       return answer(200, { profile: me(who, p.level), gained: p.gained, coins: p.coins, bonus: p.bonus });
     }
+    if (url === './api/stats/friends') return who ? answer(200, { friends: FRIEND_STATS }) : answer(401, { error: 'Session expirée.' });
     if (url.startsWith('./api/admin/') && url !== './api/admin/roster') {
       if (who !== 'admin') return answer(401, { error: 'Réservé à l’administrateur : connectez-vous avec son compte.' });
       if (url === './api/admin/stats') return answer(200, DASH.stats);
       if (url.startsWith('./api/admin/users?') || url === './api/admin/users') return answer(200, DASH.users);
       if (url === './api/admin/live') return answer(200, DASH.live);
+      if (url === './api/admin/coins') {
+        const b = body as { id: string; amount: number };
+        if (!Number.isSafeInteger(b.amount) || b.amount < 0 || b.amount > 100_000) return answer(400, { error: 'Un nombre entier de 0 à 100 000 politicoins.' });
+        const u = DASH.users.users.find(x => x.id === b.id);
+        return u ? answer(200, { user: { id: u.id, name: u.name, coins: u.coins + b.amount } }) : answer(404, { error: 'Compte inconnu.' });
+      }
       return answer(200, {});
     }
     if (url === './api/admin/roster') {
@@ -752,6 +781,164 @@ describe('the Boutique and the Politibox (DEC-032..037)', () => {
     expect(tile.getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(tile);
     expect(getState()).toBe('select');
+  });
+});
+
+describe('the Garage locks (DEC-035)', () => {
+  const chipsOf = (container: HTMLElement) => [...container.querySelectorAll<HTMLButtonElement>('#s-garage .chip')];
+
+  it('offer every option, badge-free, on the static build', async () => {
+    const { container } = await renderServed({ server: false });
+    fireEvent.click($(container, 'b-play')!);
+    fireEvent.click($(container, 'b-garage')!);
+    const chips = chipsOf(container);
+    expect(chips.length).toBeGreaterThan(40);
+    expect(chips.filter(c => c.getAttribute('aria-disabled'))).toEqual([]);
+    expect(container.querySelectorAll('#s-garage .chip-badge')).toHaveLength(0);
+    fireEvent.click($(container, 'g-trail-laser')!);
+    fireEvent.click($(container, 'g-skin-flames')!);
+    expect(pressed(container, 'g-trail-laser')).toBe('true');
+    expect(JSON.parse(localStorage.getItem('kr-kart')!)).toEqual({ trail: 'laser', skin: 'flames' });
+    expect($(container, 'g-trail-note')?.textContent).toBe('Les traînées se gagnent dans la Politibox.');
+    resetGarage();
+  });
+
+  it('lock what the account does not own behind its grade, whose tap opens the Boutique on the parts (a trail: on the Politibox)', async () => {
+    resetGarage();
+    const { container } = await renderServed({ server: true, who: 'player', owned: { chars: [], parts: ['wheels:chrome'], trails: [] } });
+    fireEvent.click($(container, 'b-play')!);
+    fireEvent.click($(container, 'b-garage')!);
+    // Commons and what is owned are open; the rest is greyed with its grade.
+    for (const id of ['g-wheels-classic', 'g-wheels-chrome', 'g-spoiler-standard', 'g-exhaust-stock', 'g-trail-none', 'g-pods-off']) expect($(container, id)?.getAttribute('aria-disabled'), id).toBeNull();
+    expect($(container, 'g-wheels-gold')?.getAttribute('aria-disabled')).toBe('true');
+    expect($(container, 'g-exhaust-turbine')?.getAttribute('aria-disabled')).toBe('true');
+    expect($(container, 'g-buy-wheels-chrome')).toBeNull();
+    const badge = container.querySelector('#g-buy-wheels-gold [data-grade]')!;
+    expect(badge.getAttribute('data-grade')).toBe('mythic');
+    expect(badge.textContent).toBe('Mythique');
+    expect(container.querySelector('#g-buy-exhaust-turbine [data-grade]')?.getAttribute('data-grade')).toBe('incredible');
+    expect(container.querySelector('#g-buy-trail-laser [data-grade]')?.getAttribute('data-grade')).toBe('incredible');
+
+    // A tap on the locked chip itself changes nothing.
+    fireEvent.click($(container, 'g-wheels-gold')!);
+    expect(pressed(container, 'g-wheels-classic')).toBe('true');
+    expect(localStorage.getItem('kr-kart')).toBeNull();
+    // An owned rare option is picked like any common.
+    fireEvent.click($(container, 'g-wheels-chrome')!);
+    expect(pressed(container, 'g-wheels-chrome')).toBe('true');
+    expect(JSON.parse(localStorage.getItem('kr-kart')!)).toEqual({ wheels: 'chrome' });
+
+    // The badge leads to the Boutique's parts, and "Retour" to the roster.
+    fireEvent.click($(container, 'g-buy-wheels-gold')!);
+    expect(getState()).toBe('shop');
+    expect(getSnapshot().shop.tab).toBe('parts');
+    expect($(container, 'shop-panel-parts')!.hidden).toBe(false);
+    expect(JSON.parse(localStorage.getItem('kr-kart')!)).toEqual({ wheels: 'chrome' });
+    fireEvent.click($(container, 'b-shop-back')!);
+    expect(getState()).toBe('select');
+
+    fireEvent.click($(container, 'b-garage')!);
+    fireEvent.click($(container, 'g-buy-trail-laser')!);
+    expect(getState()).toBe('shop');
+    expect(getSnapshot().shop.tab).toBe('box');
+    resetGarage();
+  });
+
+  it('show a stale edit the account does not own as the candidate default, and an owned one as picked', async () => {
+    localStorage.setItem('kr-kart', JSON.stringify({ wheels: 'gold', skin: 'flames' }));
+    loadGarage();
+    const { container } = await renderServed({ server: true, who: 'player', owned: { chars: [], parts: ['wheels:gold'], trails: [] } });
+    fireEvent.click($(container, 'b-play')!);
+    fireEvent.click($(container, 'b-garage')!);
+    expect($(container, 'g-wheels-gold')?.getAttribute('aria-disabled')).toBeNull();
+    expect(pressed(container, 'g-wheels-gold')).toBe('true');
+    expect(pressed(container, 'g-skin-flames')).toBe('false');
+    expect(pressed(container, 'g-skin-flat')).toBe('true');
+    expect(JSON.parse(localStorage.getItem('kr-kart')!)).toEqual({ wheels: 'gold', skin: 'flames' });   // the edit is kept, just not worn
+    resetGarage();
+  });
+
+  it('lock everything beyond the commons for a guest on the server', async () => {
+    const { container } = await renderServed({ server: true });
+    fireEvent.click($(container, 'b-play')!);
+    fireEvent.click($(container, 'b-garage')!);
+    expect($(container, 'g-wheels-gold')?.getAttribute('aria-disabled')).toBe('true');
+    expect($(container, 'g-sticker-tricolore')?.getAttribute('aria-disabled')).toBeNull();
+    expect(chipsOf(container).filter(c => c.getAttribute('aria-disabled')).length).toBeGreaterThan(25);
+  });
+});
+
+describe('Compte stats (stage 6c)', () => {
+  const STATS = { races: 3, wins: 1, podiums: 2, dnf: 1, finished: 2, solo: 3, boxes: 4, coinsEarned: 260, coinsSpent: 480, bestLap: { elysee: 61.2 }, bestTime: { elysee: 190.5 } };
+
+  it('show the account its politicoins, its figures, its collection and its best laps per circuit', async () => {
+    const { container } = await renderServed({ server: true, who: 'player', coins: 250, stats: STATS, owned: { chars: ['lucie'], parts: ['wheels:gold'], trails: ['laser'] } });
+    fireEvent.click($(container, 'b-account')!);
+    expect($(container, 'acc-coins')?.textContent).toBe('250');
+    expect($(container, 'acc-stats')).not.toBeNull();
+    expect($(container, 'acc-fig-races')?.textContent).toContain('3');
+    expect($(container, 'acc-fig-wins')?.textContent).toContain('1');
+    expect($(container, 'acc-fig-podiums')?.textContent).toContain('2');
+    expect($(container, 'acc-fig-dnf')?.textContent).toContain('1');
+    expect($(container, 'acc-fig-boxes')?.textContent).toContain('4');
+    expect($(container, 'acc-fig-coins')?.textContent).toContain('260');
+    expect($(container, 'acc-fig-coins')?.textContent).toContain('480');
+    expect($(container, 'acc-fig-collection')?.textContent).toMatch(/^\d+ %collection · 3 \/ \d+ /);
+    const rows = [...container.querySelectorAll('#acc-bestlaps tr')];
+    expect(rows).toHaveLength(TRACKS.length);
+    expect(rows[0]!.textContent).toContain('1:01.20');
+    expect(rows[0]!.textContent).toContain('3:10.50');
+    expect(rows[1]!.textContent).toContain('—');
+    expect($(container, 'acc-friend-stats')).toBeNull();
+  });
+
+  it('show a friend\'s figures on "Stats", from the server, and close them', async () => {
+    setTransport(OpenSocket);
+    const { container, server } = await renderServed({ server: true, who: 'player' });
+    act(() => { OpenSocket.last!.open(); });
+    act(() => { OpenSocket.last!.serve({ t: 'friends', list: [{ id: 'u-z', name: 'Zoé', level: 4, status: 'friend', online: true, room: null }, { id: 'u-y', name: 'Yann', level: 2, status: 'incoming', online: false, room: null }] }); });
+    fireEvent.click($(container, 'b-account')!);
+    expect($(container, 'b-friend-stats-u-z')).not.toBeNull();
+    expect($(container, 'b-friend-stats-u-y')).toBeNull();                       // a request is not a friend yet
+    fireEvent.click($(container, 'b-friend-stats-u-z')!);
+    await settle();
+    expect(server.calls.find(c => c.url === './api/stats/friends')).toMatchObject({ method: 'GET', auth: 'Bearer tok-player' });
+    const panel = $(container, 'acc-friend-stats')!;
+    expect(panel.textContent).toContain('Zoé · niveau 4');
+    expect(panel.textContent).toContain('9');
+    expect(panel.textContent).toContain('6 %');
+    expect(panel.textContent).toContain('3 / 50');
+    expect(container.querySelector('#acc-friend-bestlaps tr')?.textContent).toContain('0:58.50');
+    fireEvent.click($(container, 'b-friend-stats-close')!);
+    expect($(container, 'acc-friend-stats')).toBeNull();
+  });
+
+  it('show a guest none of it', async () => {
+    const { container } = await renderServed({ server: true });
+    fireEvent.click($(container, 'b-account')!);
+    for (const id of ['acc-stats', 'acc-coins', 'acc-bestlaps', 'acc-friend-stats']) expect($(container, id), '#' + id).toBeNull();
+    await actions.showFriendStats('u-z');
+    expect(getSnapshot().friendStats).toBeNull();
+  });
+});
+
+describe('the dashboard grant (stage 6c)', () => {
+  it('credits the typed amount to an account with the token, and says so', async () => {
+    const { container, server } = await renderServed({ server: true, who: 'admin' });
+    fireEvent.click($(container, 'b-dashboard')!);
+    await settle();
+    expect($(container, 'dash-users')!.textContent).toContain((1250).toLocaleString('fr-FR') + ' politicoins');
+    fireEvent.change($(container, 'dash-grant-amount')!, { target: { value: '250' } });
+    fireEvent.click($(container, 'b-grant-u-z')!);
+    await settle();
+    expect(server.calls.find(c => c.url === './api/admin/coins')).toMatchObject({ method: 'POST', body: { id: 'u-z', amount: 250 }, auth: 'Bearer tok-admin' });
+    expect($(container, 'dash-status')?.textContent).toBe('250 politicoins crédités à Zoé (solde ' + (1500).toLocaleString('fr-FR') + ').');
+
+    fireEvent.change($(container, 'dash-grant-amount')!, { target: { value: '-5' } });
+    fireEvent.click($(container, 'b-grant-u-z')!);
+    await settle();
+    expect(server.calls.filter(c => c.url === './api/admin/coins')).toHaveLength(1);
+    expect($(container, 'dash-status')?.textContent).toBe('Un nombre entier de politicoins.');
   });
 });
 

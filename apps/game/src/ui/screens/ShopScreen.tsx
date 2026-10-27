@@ -191,7 +191,7 @@ export function ShopScreen({ ui }: { ui: UiSnapshot }) {
   const guest = !ui.account;
   const coins = ui.account?.profile.coins ?? 0;
   return (
-    <Screen id="s-shop" hidden={ui.state !== 'shop'}>
+    <Screen id="s-shop" hidden={ui.state !== 'shop'} className={ui.noteHidden ? undefined : 'noted'}>
       <div className="shop-top">
         <Heading size="screen">Boutique</Heading>
         <CoinCount value={coins} label="politicoins" format={fr} valueProps={{ id: 'coins' }} />

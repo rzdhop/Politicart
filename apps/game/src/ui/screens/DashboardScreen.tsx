@@ -17,16 +17,16 @@ import {
 
 import { CHARACTERS, TRACKS } from '../../engine/data.js';
 import { TEAM_NAMES } from '../../engine/teams.js';
+import { Figure } from '../Figure';
 import { GodConsole } from '../GodConsole';
 import { actions, type DashConn, type DashRoom, type DashStats, type DashUser, type GodCmd, type UiSnapshot } from '../store';
 import type { Character, Track } from '../types';
 
 const COLUMN = { display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' } as const;
 const WIDE = { width: 'min(980px, 100%)' } as const;
-const BIG = { fontFamily: 'var(--font-display)', fontSize: 32, color: 'var(--gold)', lineHeight: 1 } as const;
-const LABEL = { fontSize: 12, color: 'var(--muted)', fontFamily: 'var(--font-body)' } as const;
 const ACTIONS = { display: 'inline-flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' } as const;
 const REFRESH_MS = 5000;
+const fr = (n: number) => n.toLocaleString('fr-FR');
 
 const CHARS = CHARACTERS as unknown as Character[];
 const TRACK_LIST = TRACKS as unknown as Track[];
@@ -43,16 +43,6 @@ function when(ms: number | null | undefined): string {
 function since(ms: number | null): string {
   if (!ms) return '';
   return Math.max(0, Math.round((Date.now() - ms) / 60_000)) + ' min';
-}
-
-/** One figure with its caption. */
-function Figure({ value, label, id }: { value: number | string; label: string; id?: string }) {
-  return (
-    <AdminCard id={id} style={{ textAlign: 'center' }}>
-      <div style={BIG}>{value}</div>
-      <div style={LABEL}>{label}</div>
-    </AdminCard>
-  );
 }
 
 /** The headline figures: accounts, who is on, races played. */
@@ -84,19 +74,22 @@ function Top({ stats }: { stats: DashStats | null }) {
   );
 }
 
-/** Search, list and act on accounts: ban with a reason, lift a ban, close every session. */
+/** Search, list and act on accounts: ban with a reason, lift a ban, close every session, credit politicoins. */
 function Users({ ui }: { ui: UiSnapshot }) {
   const [q, setQ] = useState(ui.dashboard.query);
   const [reason, setReason] = useState('');
+  const [amount, setAmount] = useState('100');
   const search = (e: FormEvent) => { e.preventDefault(); void actions.searchUsers(q); };
+  const grant = (id: string) => { void actions.grantCoins(id, Number(amount.trim())); };
   const state = (u: DashUser) => (u.banned ? 'banni·e' + (u.banned.reason ? ' : ' + u.banned.reason : '') : u.online ? (u.room ? 'en ligne · salle ' + u.room : 'en ligne') : 'vu·e ' + when(u.seen));
   const rows: ResultsRow[] = ui.dashboard.users.map(u => ({
     id: u.id,
     rank: u.banned ? '⛔' : u.online ? '●' : '○',
-    name: u.name + ' · niv. ' + u.level,
+    name: u.name + ' · niv. ' + u.level + ' · ' + fr(u.coins ?? 0) + ' politicoins',
     detail: state(u) + ' · inscrit·e ' + when(u.created),
     time: (
       <span style={ACTIONS}>
+        <Button id={'b-grant-' + u.id} variant="ghost" onClick={() => grant(u.id)}>Créditer</Button>
         {u.banned
           ? <Button id={'b-dash-unban-' + u.id} variant="ghost" onClick={() => { void actions.unbanUser(u.id); }}>Débannir</Button>
           : <Button id={'b-dash-ban-' + u.id} variant="ghost" onClick={() => { void actions.banUser(u.id, reason); }}>Bannir</Button>}
@@ -116,6 +109,9 @@ function Users({ ui }: { ui: UiSnapshot }) {
             <Field label="Motif du prochain bannissement">
               <TextInput id="dash-ban-reason" maxLength={120} value={reason} placeholder="Banni par l’administrateur" onChange={e => setReason(e.target.value)} />
             </Field>
+            <Field label="Politicoins à créditer">
+              <input id="dash-grant-amount" type="number" inputMode="numeric" min={0} max={100_000} step={1} value={amount} onChange={e => setAmount(e.target.value)} />
+            </Field>
           </AdminGrid>
           <Button id="b-dash-search" type="submit">Chercher</Button>
         </Row>
@@ -123,7 +119,7 @@ function Users({ ui }: { ui: UiSnapshot }) {
       {rows.length
         ? <ResultsTable rows={rows} columns={['', 'Compte', '']} bodyProps={{ id: 'dash-users' }} />
         : <Disclaimer id="dash-users-empty">Aucun compte ne correspond.</Disclaimer>}
-      <Disclaimer>Un compte banni est déconnecté sur-le-champ et ne peut plus se connecter. « Déconnecter » ferme ses sessions sans le bannir.</Disclaimer>
+      <Disclaimer>Un compte banni est déconnecté sur-le-champ et ne peut plus se connecter. « Déconnecter » ferme ses sessions sans le bannir. « Créditer » verse au compte le nombre de politicoins saisi ci-dessus (100 000 au plus).</Disclaimer>
     </Panel>
   );
 }
