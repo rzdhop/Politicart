@@ -118,6 +118,8 @@ export const setMine = patch => send({ t: 'set', ...patch });
 export const pickTrack = trackIdx => send({ t: 'track', trackIdx });
 export const startNetRace = () => send({ t: 'start' });
 export const leaveRoom = () => { send({ t: 'leave' }); publish({ room: null }); };
+/** The admin enters room `code` as a god (DEC-030); the server refuses anyone else. */
+export const godJoin = (code, style) => send({ t: 'godJoin', code, style });
 
 export const requestFriends = () => send({ t: 'friends' });
 export const addFriend = name => send({ t: 'friendAdd', name });

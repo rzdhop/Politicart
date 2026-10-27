@@ -9,11 +9,15 @@
 // that invincibility, flight and the Langue de bois shield are honoured
 // everywhere; endStun is the one way a stun is cut short.
 //
-// Player-facing text goes through engine/events.js (toast, setHint are the
-// queue's emitters); sound is a direct call, see physics.js for why.
+// Player-facing text goes through engine/events.js (say, tell, hintFor route
+// it to the drivers concerned); sound is a direct call, see physics.js for
+// why, and is routed per kart the same way (sfxFor): the user of an item
+// hears it, the drivers it hits hear the hit, nobody else hears anything
+// (DEC-029). A god kart (DEC-030) is never stunned, never caught by a hazard
+// or a projectile: creative mode.
 import * as THREE from 'three';
 
-import { sfx, sfxFor } from './audio.js';
+import { sfxFor } from './audio.js';
 import { ITEMS, rollItem } from './data.js';
 import { hintFor, say, tell } from './events.js';
 import { updateProgress } from './physics.js';
@@ -36,26 +40,26 @@ export function pickupItems() {
 export function useItem(k) {
   if (!k.item || k.itemRolling > 0) return; const it = k.item; k.item = null;
   const fx = Math.sin(k.heading), fz = Math.cos(k.heading);
-  if (it === 'turbo') { k.boost = 1.6; k.boostPower = 1.55; sfx('boost'); say(k, '49.3 ! PASSAGE EN FORCE'); }
-  else if (it === 'greve') { spawnHazard('barricade', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5, null, k.team); k.hazardGrace = 1.0; sfx('drop'); }
-  else if (it === 'sondage') { spawnHazard('fakebox', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5, null, k.team); k.hazardGrace = 1.0; sfx('drop'); }
-  else if (it === 'immunite') { k.invincible = 6; endStun(k); sfx('shield'); say(k, 'IMMUNITÉ PARLEMENTAIRE'); }
-  else if (it === 'helico') { k.fly = 4; endStun(k); k.drift.active = false; sfx('helico'); say(k, 'HÉLICO PRÉSIDENTIEL'); }
+  if (it === 'turbo') { k.boost = 1.6; k.boostPower = 1.55; sfxFor(k, 'boost'); say(k, '49.3 ! PASSAGE EN FORCE'); }
+  else if (it === 'greve') { spawnHazard('barricade', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5, null, k.team); k.hazardGrace = 1.0; sfxFor(k, 'drop'); }
+  else if (it === 'sondage') { spawnHazard('fakebox', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5, null, k.team); k.hazardGrace = 1.0; sfxFor(k, 'drop'); }
+  else if (it === 'immunite') { k.invincible = 6; endStun(k); sfxFor(k, 'shield'); say(k, 'IMMUNITÉ PARLEMENTAIRE'); }
+  else if (it === 'helico') { k.fly = 4; endStun(k); k.drift.active = false; sfxFor(k, 'helico'); say(k, 'HÉLICO PRÉSIDENTIEL'); }
   else if (it === 'relance') { k.relance = 3; k.relanceTimer = 0; say(k, 'PLAN DE RELANCE : 3 BOOSTS'); }
-  else if (it === 'remaniement') { const hit = []; for (const o of G.karts) if (isFoe(k, o) && o.rank < k.rank) { if (o.item) o.item = null; if (stunKart(o, 0.7)) hit.push(o); } sfx('motion'); tell(k, 'REMANIEMENT : ' + hit.length + ' MINISTRES LIMOGÉS', 'REMANIEMENT : VOUS ÊTES LIMOGÉ·E !', hit); }
-  else if (it === 'dossier') { const ahead = foeAhead(k, G.karts); const target = ahead && !ahead.finished ? ahead : null; spawnProjectile('dossier', k, target); sfx('throw'); say(k, 'FUITE : MEDIAPART EST SUR LE COUP'); }
-  else if (it === 'motion') { const target = leadingFoe(k, G.karts); spawnProjectile('motion', k, target); sfx('motion'); tell(k, 'MOTION DE CENSURE !', 'MOTION DE CENSURE CONTRE VOUS !', [target]); }
+  else if (it === 'remaniement') { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished && o.rank < k.rank) { if (o.item) o.item = null; if (stunKart(o, 0.7)) hit.push(o); } sfxFor(k, 'motion'); tell(k, 'REMANIEMENT : ' + hit.length + ' MINISTRES LIMOGÉS', 'REMANIEMENT : VOUS ÊTES LIMOGÉ·E !', hit); }
+  else if (it === 'dossier') { const ahead = foeAhead(k, G.karts); const target = ahead && !ahead.finished ? ahead : null; spawnProjectile('dossier', k, target); sfxFor(k, 'throw'); say(k, 'FUITE : MEDIAPART EST SUR LE COUP'); }
+  else if (it === 'motion') { const target = leadingFoe(k, G.karts); spawnProjectile('motion', k, target); sfxFor(k, 'motion'); say(k, 'MOTION DE CENSURE !'); }
   else if (it === 'bravm') {
     // always two bikes, one on each side: the two karts just ahead, or both on the only one, or straight down the road
     const ahead = G.karts.filter(o => isFoe(k, o) && !o.finished && o.rank < k.rank).sort((a, b) => b.rank - a.rank).slice(0, 2);
     [1, -1].forEach((side, n) => spawnProjectile('bravm', k, ahead[n] ?? ahead[0] ?? null, side));
-    sfx('motion'); tell(k, 'BRAV-M DÉPLOYÉE !', 'LA BRAV-M VOUS PREND EN CHASSE !', ahead);
+    sfxFor(k, 'motion'); say(k, 'BRAV-M DÉPLOYÉE !');
   }
-  else if (it === 'lacrymo') { spawnHazard('lacrymo', k.pos.x - fx * 4, k.pos.z - fz * 4, k); k.hazardGrace = 1.2; sfx('drop'); say(k, 'NUAGE LACRYMOGÈNE LÂCHÉ'); }
-  else if (it === 'casserolade') { const hit = []; for (const o of G.karts) if (isFoe(k, o)) { const dx = o.pos.x - k.pos.x, dz = o.pos.z - k.pos.z; if (Math.hypot(dx, dz) < 20) { o.speed *= 0.5; if (stunKart(o, 0.8)) hit.push(o); } } const n = hit.length; sfx('motion'); tell(k, 'CASSEROLADE : ' + n + ' SONNÉ' + (n > 1 ? 'S' : ''), 'CASSEROLADE !', hit); }
-  else if (it === 'dissolution') { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { if (stunKart(o, 0.9)) hit.push(o); } const n = hit.length; sfx('motion'); tell(k, 'DISSOLUTION : ' + n + ' KART' + (n > 1 ? 'S' : '') + ' SONNÉ' + (n > 1 ? 'S' : ''), 'DISSOLUTION DE L’ASSEMBLÉE !', hit); }
-  else if (it === 'niche') { k.invincible = 5; k.phantom = 5; k.boost = Math.max(k.boost, 0.6); k.boostPower = 1.3; endStun(k); sfx('shield'); say(k, 'NICHE FISCALE : INTOUCHABLE'); }
-  else if (it === 'langue') { k.shield = 25; sfx('shield'); say(k, 'LANGUE DE BOIS : PRÊT À NE RIEN DIRE'); }
+  else if (it === 'lacrymo') { spawnHazard('lacrymo', k.pos.x - fx * 4, k.pos.z - fz * 4, k); k.hazardGrace = 1.2; sfxFor(k, 'drop'); say(k, 'NUAGE LACRYMOGÈNE LÂCHÉ'); }
+  else if (it === 'casserolade') { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { const dx = o.pos.x - k.pos.x, dz = o.pos.z - k.pos.z; if (Math.hypot(dx, dz) < 20) { o.speed *= 0.5; if (stunKart(o, 0.8)) hit.push(o); } } const n = hit.length; sfxFor(k, 'motion'); tell(k, 'CASSEROLADE : ' + n + ' SONNÉ' + (n > 1 ? 'S' : ''), 'CASSEROLADE !', hit); }
+  else if (it === 'dissolution') { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { if (stunKart(o, 0.9)) hit.push(o); } const n = hit.length; sfxFor(k, 'motion'); tell(k, 'DISSOLUTION : ' + n + ' KART' + (n > 1 ? 'S' : '') + ' SONNÉ' + (n > 1 ? 'S' : ''), 'DISSOLUTION DE L’ASSEMBLÉE !', hit); }
+  else if (it === 'niche') { k.invincible = 5; k.phantom = 5; k.boost = Math.max(k.boost, 0.6); k.boostPower = 1.3; endStun(k); sfxFor(k, 'shield'); say(k, 'NICHE FISCALE : INTOUCHABLE'); }
+  else if (it === 'langue') { k.shield = 25; sfxFor(k, 'shield'); say(k, 'LANGUE DE BOIS : PRÊT À NE RIEN DIRE'); }
   else if (it === 'cumul') {
     // two mandates, two items, used at once; a cumul never rolls another cumul
     const got = []; while (got.length < 2) { const r = rollItem(k.rank); if (r !== 'cumul') got.push(r); }
@@ -63,18 +67,18 @@ export function useItem(k) {
     for (const g of got) { k.item = g; useItem(k); }
     return;
   }
-  else if (it === 'factcheck') { const ahead = foeAhead(k, G.karts); spawnProjectile('factcheck', k, ahead && !ahead.finished ? ahead : null); sfx('throw'); say(k, 'FACT-CHECKING : VÉRIFICATION EN COURS'); }
+  else if (it === 'factcheck') { const ahead = foeAhead(k, G.karts); spawnProjectile('factcheck', k, ahead && !ahead.finished ? ahead : null); sfxFor(k, 'throw'); say(k, 'FACT-CHECKING : VÉRIFICATION EN COURS'); }
   else if (it === 'pantouflage') {
     // a jump down the road in a few short hops, so updateProgress follows it and counts a lap if it crosses the line
     for (let n = 0; n < 4; n++) { const s = G.samples[(k.idx + 9) % G.N]; k.pos.x = s.x; k.pos.z = s.z; updateProgress(k); }
     const s = G.samples[k.idx]; k.heading = Math.atan2(s.tx, s.tz); k.kx = 0; k.kz = 0; k.speed = Math.max(k.speed, 30); k.phantom = 1.2; k.hazardGrace = 1.2; endStun(k);
-    sfx('helico'); say(k, 'PANTOUFLAGE : RECONVERTI DANS LE PRIVÉ');
+    sfxFor(k, 'helico'); say(k, 'PANTOUFLAGE : RECONVERTI DANS LE PRIVÉ');
   }
   else if (it === 'referendum') {
     const r = Math.random();
-    if (r < 0.4) { const boosted = G.karts.filter(o => !o.finished); for (const o of boosted) { o.boost = Math.max(o.boost, 0.8); o.boostPower = Math.max(o.boostPower, 1.3); } k.boost = 1.6; k.boostPower = 1.5; sfx('boost'); tell(k, 'RÉFÉRENDUM : LE OUI L’EMPORTE, BOOST POUR TOUS', 'RÉFÉRENDUM : LE OUI L’EMPORTE, BOOST !', boosted); }
-    else if (r < 0.8) { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { if (stunKart(o, 0.7)) hit.push(o); } const n = hit.length; sfx('motion'); tell(k, 'RÉFÉRENDUM : LE NON L’EMPORTE, ' + n + ' SONNÉ' + (n > 1 ? 'S' : ''), 'RÉFÉRENDUM : LE NON L’EMPORTE !', hit); }
-    else { k.slowed = Math.max(k.slowed, 1.5); sfx('drop'); say(k, 'RÉFÉRENDUM : 12 % DE PARTICIPATION, RÉSULTAT ANNULÉ'); }
+    if (r < 0.4) { const boosted = G.karts.filter(o => !o.finished); for (const o of boosted) { o.boost = Math.max(o.boost, 0.8); o.boostPower = Math.max(o.boostPower, 1.3); if (o !== k) sfxFor(o, 'boost'); } k.boost = 1.6; k.boostPower = 1.5; sfxFor(k, 'boost'); tell(k, 'RÉFÉRENDUM : LE OUI L’EMPORTE, BOOST POUR TOUS', 'RÉFÉRENDUM : LE OUI L’EMPORTE, BOOST !', boosted); }
+    else if (r < 0.8) { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { if (stunKart(o, 0.7)) hit.push(o); } const n = hit.length; sfxFor(k, 'motion'); tell(k, 'RÉFÉRENDUM : LE NON L’EMPORTE, ' + n + ' SONNÉ' + (n > 1 ? 'S' : ''), 'RÉFÉRENDUM : LE NON L’EMPORTE !', hit); }
+    else { k.slowed = Math.max(k.slowed, 1.5); sfxFor(k, 'drop'); say(k, 'RÉFÉRENDUM : 12 % DE PARTICIPATION, RÉSULTAT ANNULÉ'); }
   }
   hintFor(k, 'Ramassez une urne dorée pour obtenir un objet.');
 }
@@ -96,6 +100,14 @@ export function buildHazard(type) {
     const cloud = new THREE.Mesh(new THREE.SphereGeometry(3.4, 10, 8), new THREE.MeshStandardMaterial({ color: 0xd4dcb2, transparent: true, opacity: 0.55, roughness: 1 })); cloud.position.y = 1.5; cloud.scale.y = 0.65; g.add(cloud);
     for (let i = 0; i < 4; i++) { const pf = new THREE.Mesh(new THREE.SphereGeometry(rand(1.3, 2.1), 8, 6), new THREE.MeshStandardMaterial({ color: 0xe2e6c8, transparent: true, opacity: 0.4, roughness: 1 })); pf.position.set(rand(-2, 2), 1.3 + rand(-0.3, 0.8), rand(-2, 2)); g.add(pf); }
     r = 4.2; life = 7; stun = 0;
+  } else if (type === 'chatons') {
+    // three kittens sitting in the road, one of each coat, tails up
+    [[-1.1, 0.2, 0xf4f4f4], [0.2, -0.4, 0xd98a3a], [1.2, 0.5, 0x6e6e6e]].forEach(([x, z, c]) => {
+      g.add(sph(0.42, c, x, 0.42, z, 10)); g.add(sph(0.3, c, x, 0.85, z + 0.25, 8));
+      g.add(cone(0.1, 0.22, c, x - 0.16, 1.1, z + 0.25, 4)); g.add(cone(0.1, 0.22, c, x + 0.16, 1.1, z + 0.25, 4));
+      g.add(cyl(0.05, 0.05, 0.7, c, x, 0.5, z - 0.5, 5));
+    });
+    r = 3.4; life = 25; stun = 0;
   } else if (type === 'rondpoint') {
     g.add(cyl(4.2, 4.4, 0.7, 0x8a8a84, 0, 0.35, 0, 24)); g.add(cyl(3.2, 3.2, 0.4, 0x5f9a48, 0, 0.9, 0, 24)); g.add(cyl(0.4, 0.4, 5, 0xc0c0c0, 0, 3.2, 0, 8)); [-0.8, 0, 0.8].forEach(o => g.add(box(0.4, 2.4, 0.4, 0xc0c0c0, o, 6.5, 0)));
     const sign = textPlane(2.4, 1.0, 'CÉDEZ', '#fff', '#c8102e', 80); sign.position.set(0, 2.2, 4.3); g.add(sign); g.add(cyl(0.05, 0.05, 2.2, 0x555555, 0, 1.1, 4.3, 5));
@@ -134,7 +146,7 @@ export function spawnProjectile(type, owner, target, side) {
   g.position.set(p.x, p.y, p.z); G.scene.add(g); G.projectiles.push(p);
 }
 export function stunKart(k, dur) {
-  if (k.invincible > 0 || k.fly > 0) return false;
+  if (k.god || k.invincible > 0 || k.fly > 0) return false;
   if (k.shield > 0) { k.shield = 0; sfxFor(k, 'shield'); say(k, 'LANGUE DE BOIS : « JE NE FERAI AUCUN COMMENTAIRE »'); return false; } k.stun = Math.max(k.stun, dur); k.drift.active = false; k.drift.charge = 0; k.boost = 0; sfxFor(k, 'hit'); return true;
 }
 /** Cut a stun short (an item that frees the driver) and face the road again, as the end of a spin does. */
@@ -157,7 +169,7 @@ export function updateProjectiles(dt) {
     p.mesh.position.set(p.x, p.y, p.z); p.mesh.rotation.y += dt * 9;
     let hit = false;
     if (p.mesh.userData.blink) p.mesh.userData.blink.material.color.setHex(Math.floor(G.time * 10) % 2 ? 0x3a6bff : 0xff3a4a);
-    for (const k of G.karts) { if (k === p.owner && p.life > (p.type === 'motion' ? 11.5 : p.type === 'bravm' ? 7.4 : 4.6)) continue; if (k !== p.owner && !isFoe(p.owner, k)) continue; if (p.type === 'motion' && k !== p.target) continue; if (k.fly > 0 || k.y > 1.5) continue; const d = (k.pos.x - p.x) ** 2 + (k.pos.z - p.z) ** 2; if (d < 6.5) {
+    for (const k of G.karts) { if (k.god) continue; if (k === p.owner && p.life > (p.type === 'motion' ? 11.5 : p.type === 'bravm' ? 7.4 : 4.6)) continue; if (k !== p.owner && !isFoe(p.owner, k)) continue; if (p.type === 'motion' && k !== p.target) continue; if (k.fly > 0 || k.y > 1.5) continue; const d = (k.pos.x - p.x) ** 2 + (k.pos.z - p.z) ** 2; if (d < 6.5) {
       // fact-checking goes through immunity, shields and tax loopholes alike
       if (p.type === 'factcheck') { k.invincible = 0; k.shield = 0; k.phantom = 0; stunKart(k, 1.2); say(k, 'FACT-CHECKÉ : C’ÉTAIT FAUX !'); hit = true; break; }
       stunKart(k, p.type === 'motion' ? 2.6 : p.type === 'bravm' ? 1.7 : 1.5); say(k, p.type === 'motion' ? 'GOUVERNEMENT RENVERSÉ !' : p.type === 'bravm' ? 'INTERPELLÉ PAR LA BRAV-M !' : 'MEDIAPART ENQUÊTE SUR VOUS !'); hit = true; break; } }
@@ -165,8 +177,9 @@ export function updateProjectiles(dt) {
   }
   for (let i = G.hazards.length - 1; i >= 0; i--) {
     const h = G.hazards[i]; h.life -= dt; let hit = false;
-    for (const k of G.karts) { if ((k.hazardGrace > 0 && h.type !== 'obstacle' && h.type !== 'lacrymo') || k.fly > 0 || k === h.owner || (h.team != null && k.team === h.team) || k.y > 1.2) continue; const d = (k.pos.x - h.x) ** 2 + (k.pos.z - h.z) ** 2; if (d < h.r * h.r) {
+    for (const k of G.karts) { if (k.god || (k.hazardGrace > 0 && h.type !== 'obstacle' && h.type !== 'lacrymo') || k.fly > 0 || k === h.owner || (h.team != null && k.team === h.team) || k.y > 1.2) continue; const d = (k.pos.x - h.x) ** 2 + (k.pos.z - h.z) ** 2; if (d < h.r * h.r) {
       if (h.type === 'lacrymo') { if (k.slowed <= 0) say(k, 'GAZ LACRYMOGÈNE !'); k.slowed = Math.max(k.slowed, 1.3); k.confused = Math.max(k.confused, 1.0); }
+      else if (h.type === 'chatons') { k.speed *= 0.35; k.confused = Math.max(k.confused, 1.2); k.hazardGrace = 1.2; sfxFor(k, 'bump'); say(k, 'CHATONS SUR LA ROUTE : ON PILE !'); }
       else if (h.type === 'lisier') { if (k.slip <= 0) say(k, 'LISIER : ÇA GLISSE !'); k.slip = Math.max(k.slip, 0.4); }
       else if (h.type === 'obstacle') { const dx = k.pos.x - h.x, dz = k.pos.z - h.z, dd = Math.hypot(dx, dz) || 1; k.pos.x = h.x + dx / dd * h.r; k.pos.z = h.z + dz / dd * h.r; if (k.speed > 12) { k.speed *= 0.55; sfxFor(k, 'bump'); } }
       else if (h.type === 'rondpoint') { const dx = k.pos.x - h.x, dz = k.pos.z - h.z, dd = Math.hypot(dx, dz) || 1; k.pos.x = h.x + dx / dd * h.r; k.pos.z = h.z + dz / dd * h.r; if (k.speed > 10) { k.speed *= 0.4; if (stunKart(k, h.stun)) say(k, 'PRIORITÉ AU ROND-POINT !'); k.hazardGrace = 0.8; } }

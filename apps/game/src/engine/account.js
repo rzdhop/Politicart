@@ -61,6 +61,23 @@ function rosterReply(r) {
   return out;
 }
 
+// ---------- The admin's dashboard (DEC-030) ----------
+// Every call is the admin's: 401 for anyone else, which the store treats as an
+// expired session. The answers are the server's JSON bodies (dashboard.js).
+export const dashboard = {
+  /** { ok, accounts, live, races, top } */
+  stats: (token, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'GET', '/api/admin/stats', { token }),
+  /** { ok, users }, filtered by `q` (a part of a name) when given. */
+  users: (token, q = '', { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'GET', '/api/admin/users' + (q ? '?q=' + encodeURIComponent(q) : ''), { token }),
+  /** { ok, connections, rooms } */
+  live: (token, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'GET', '/api/admin/live', { token }),
+  ban: (token, id, reason, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/admin/users/ban', { token, body: { id, reason } }),
+  unban: (token, id, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/admin/users/unban', { token, body: { id } }),
+  logoutUser: (token, id, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/admin/users/logout', { token, body: { id } }),
+  closeRoom: (token, code, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/admin/rooms/close', { token, body: { code } }),
+  kick: (token, id, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/admin/connections/kick', { token, body: { id } }),
+};
+
 /** The cast the admin set, the same for every player: { ok, roster } or { ok: false, error }. Public. */
 export const fetchRoster = async ({ fetchImpl = globalThis.fetch, base = '' } = {}) =>
   rosterReply(await call(fetchImpl, base, 'GET', '/api/roster'));

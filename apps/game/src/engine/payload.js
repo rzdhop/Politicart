@@ -6,7 +6,8 @@
 // decides how to render it. The fields are the exploration map's list from
 // the plan -- rank, lap, time, speed, drift charge, item, power state,
 // wrong-way flag and every kart's position -- plus the countdown label,
-// which used to be written to the centre of the HUD from inside frame().
+// which used to be written to the centre of the HUD from inside frame(), and
+// whether the kart is a god's (DEC-030), which the HUD labels.
 //
 // Pure: it reads state and returns a new object, so it can be tested with a
 // fake G and never has to know about Three.js or the DOM. One small object
@@ -37,6 +38,7 @@ export function framePayload(G, CFG) {
     powerCdMax: k.def.power.cd || CFG.powerCooldown,
     powerReady: k.powerCd <= 0,
     wrongWay: G.wrongTimer >= 1.2,
+    god: k.god === true,
     kartPositions: G.karts.map(o => ({ x: o.pos.x, z: o.pos.z, color: o.style ? parseInt(o.style.body.slice(1), 16) : o.def.kart, isPlayer: o === k })),
   };
 }

@@ -40,6 +40,16 @@ describe('the cast', () => {
     expect(title('martine')).toBe('Le ministre de l’Intérieur');
   });
 
+  it('gives each candidate the power of the politician parodied (DEC-028)', () => {
+    const power = id => CHARACTERS.find(c => c.id === id).power;
+    expect(power('capucine')).toMatchObject({ id: 'deconstruction', name: 'Déconstruction' });    // Sandrine Rousseau, not a generic ZFE
+    expect(power('bernadette')).toMatchObject({ id: 'chatons', name: 'Lâcher de chatons' });       // Marine Le Pen and her cats
+    expect(power('patrick')).toMatchObject({ id: 'fauchage', name: 'Fauchage volontaire' });       // José Bové the GMO mower
+    expect(power('martine').desc).not.toMatch(/\belle\b/);                                        // Darmanin is a man
+    const ids = CHARACTERS.map(c => c.power.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it('keeps a non-empty first word for the licence plate', () => {
     for (const c of CHARACTERS) expect(c.name.split(' ')[0].length).toBeGreaterThan(0);
   });

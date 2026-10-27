@@ -30,11 +30,15 @@
 //
 // `garage` is where the player styles their own kart, reached from and
 // returning to the roster, so the turntable stays on screen throughout.
+//
+// `dashboard` is the admin's dashboard (DEC-030): statistics, accounts and
+// live rooms. Reached from the title, it leads back there or -- when the
+// admin enters a room as a god -- straight into the lobby.
 
-export const STATES = Object.freeze(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'account', 'garage']);
+export const STATES = Object.freeze(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'account', 'garage', 'dashboard']);
 
 const NEXT = Object.freeze({
-  title: Object.freeze(['select', 'admin', 'lobby', 'account']),
+  title: Object.freeze(['select', 'admin', 'lobby', 'account', 'dashboard']),
   select: Object.freeze(['title', 'tracks', 'garage']),
   tracks: Object.freeze(['select', 'countdown']),
   admin: Object.freeze(['title']),
@@ -45,6 +49,7 @@ const NEXT = Object.freeze({
   lobby: Object.freeze(['title', 'countdown']),
   account: Object.freeze(['title', 'lobby']),
   garage: Object.freeze(['select']),
+  dashboard: Object.freeze(['title', 'lobby']),
 });
 
 let current = 'title';

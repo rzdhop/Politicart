@@ -13,6 +13,12 @@
 // Each player also carries their kart style: the Garage edits they made, a
 // partial style (kartstyle.js), cleaned here because it comes from the
 // client. Everyone in the room draws that player's kart with it.
+//
+// The admin may enter any room as a god (DEC-030): a seventh seat beyond the
+// six, in any phase, on no team and with every candidate open. A god races
+// as a neutral, untouchable kart with no cooldown (engine), scores no points
+// and earns no experience. A god who enters during a race waits in the room
+// for the next start.
 
 import { CHARACTERS, TRACKS } from '../../game/src/engine/data.js';
 import { cleanStyle } from '../../game/src/engine/kartstyle.js';
@@ -68,6 +74,21 @@ export class Room {
     return p;
   }
 
+  /**
+   * Seat the admin as a god: outside the six-player cap, during a race too,
+   * on no team, any candidate nobody else drives. Returns the player or an
+   * error string.
+   */
+  joinGod(id, name, who = {}, style) {
+    if (this.players.some(p => p.god)) return 'Un dieu est déjà dans cette salle.';
+    const taken = new Set(this.players.map(p => p.charId));
+    const charId = CHAR_IDS.find(c => !taken.has(c));
+    if (!charId) return 'Plus aucun candidat libre dans cette salle.';
+    const p = { id, name: cleanName(name), team: null, charId, ready: false, userId: who.userId ?? null, level: who.level ?? null, allowed: [...CHAR_IDS], style: cleanStyle(style), god: true };
+    this.players.push(p);
+    return p;
+  }
+
   /** An account levelled up while in the room: it may drive its new candidates. */
   setLevel(id, level) {
     const p = this.player(id); if (!p || !p.userId) return;
@@ -80,7 +101,7 @@ export class Room {
   set(id, { team, charId, ready, style } = {}) {
     const p = this.player(id); if (!p) return 'Joueur inconnu.';
     if (this.phase !== 'lobby') return 'La course a déjà commencé.';
-    if (team !== undefined) { if (!TEAMS.includes(team)) return 'Équipe inconnue.'; p.team = team; }
+    if (team !== undefined) { if (p.god) return 'Un dieu n’a pas d’équipe.'; if (!TEAMS.includes(team)) return 'Équipe inconnue.'; p.team = team; }
     if (charId !== undefined) {
       if (!CHAR_IDS.includes(charId)) return 'Candidat inconnu.';
       if (!p.allowed.includes(charId)) return p.userId ? 'Candidat pas encore débloqué.' : 'Les invité·es jouent les quatre candidats de départ.';
@@ -112,10 +133,12 @@ export class Room {
    * picked, up to six. Each slot says who drives it.
    */
   roster(rnd = Math.random) {
-    const humans = this.players.map(p => ({ playerId: p.id, name: p.name, charId: p.charId, team: p.team, isAI: false, style: p.style }));
+    const humans = this.players.map(p => ({ playerId: p.id, name: p.name, charId: p.charId, team: p.team, isAI: false, style: p.style, ...(p.god ? { god: true } : {}) }));
     const free = CHAR_IDS.filter(c => !humans.some(h => h.charId === c));
     for (let i = free.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [free[i], free[j]] = [free[j], free[i]]; }
-    const ai = free.slice(0, Math.max(0, MAX_PLAYERS - humans.length)).map(charId => ({ playerId: null, name: CHARACTERS.find(c => c.id === charId).name, charId, team: null, isAI: true }));
+    // the god's seat is the seventh: the AI still fills the grid to six around the mortals
+    const mortals = humans.filter(h => !h.god).length;
+    const ai = free.slice(0, Math.max(0, MAX_PLAYERS - mortals)).map(charId => ({ playerId: null, name: CHARACTERS.find(c => c.id === charId).name, charId, team: null, isAI: true }));
     return [...ai, ...humans];
   }
 
@@ -126,7 +149,7 @@ export class Room {
   view() {
     return {
       code: this.code, host: this.host, trackIdx: this.trackIdx, phase: this.phase,
-      players: this.players.map(({ id, name, team, charId, ready, userId, level, style }) => ({ id, name, team, charId, ready, userId, level, guest: !userId, style: { ...style } })),
+      players: this.players.map(({ id, name, team, charId, ready, userId, level, style, god }) => ({ id, name, team, charId, ready, userId, level, guest: !userId, god: !!god, style: { ...style } })),
     };
   }
 }

@@ -17,7 +17,8 @@ export function runRace(room, roster, io, { fast = false, hold } = {}) {
   const slotOf = new Map();
   roster.forEach((s, slot) => { if (s.playerId) slotOf.set(s.playerId, slot); });
   // style: a human's Garage edits (cleaned by the lobby), so every client draws their kart as they styled it.
-  const grid = roster.map(({ charId, team, isAI, name, style }) => ({ charId, team, isAI, name, ...(style ? { style } : {}) }));
+  // god: the admin's creative-mode kart (DEC-030), which the engine makes untouchable and the scoring ignores.
+  const grid = roster.map(({ charId, team, isAI, name, style, god }) => ({ charId, team, isAI, name, ...(style ? { style } : {}), ...(god ? { god: true } : {}) }));
 
   for (const [playerId, slot] of slotOf) io.send(playerId, { t: 'race', trackIdx: room.trackIdx, roster: grid, you: slot });
 

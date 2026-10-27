@@ -2,70 +2,145 @@
 //
 // usePower checks the cooldown and resolves the sixteen signature moves --
 // field-wide slowdowns, item theft, barricades, the round-about, the swap with
-// the kart ahead, a speed cap, a copied power -- through applyPower, by
-// composing the item layer's hazards, projectiles and stuns. The cooldown and
-// use count are tracked on the kart; the HUD reads them, this module never
-// writes to it. Text goes through engine/events.js, sound is direct.
+// the kart ahead, a speed cap, a dispel, a mowing, a copied power -- through
+// applyPower, by composing the item layer's hazards, projectiles and stuns.
+// The cooldown and use count are tracked on the kart; the HUD reads them,
+// this module never writes to it.
+//
+// What a driver sees and hears concerns them alone (DEC-018, DEC-029): the
+// user of a power reads and hears their own move, and the drivers of the
+// karts it actually affected read what was done to them and hear it. A move
+// that affects nobody else is silent for everybody else. Text goes through
+// engine/events.js; sound is routed per kart through sfxFor, never race-wide.
+//
+// A god kart (the admin playing in creative mode, DEC-030) pays only a token
+// cooldown, so it can fire its power about once a second.
 import * as THREE from 'three';
 
-import { sfx } from './audio.js';
+import { sfxFor } from './audio.js';
 import { ITEMS, rollItem } from './data.js';
 import { hintFor, say, tell } from './events.js';
 import { endStun, spawnHazard, stunKart } from './items.js';
 import { CFG, G } from './state.js';
 import { foeAhead, isFoe } from './teams.js';
 
+/** A god's power recharges in this many seconds instead of the candidate's cooldown. */
+export const GOD_COOLDOWN = 1;
+/** Déconstruction reaches karts within this many metres. */
+export const DECONSTRUCTION_RANGE = 40;
+/** Fauchage volontaire mows this many metres of road ahead of the tractor. */
+export const FAUCHAGE_RANGE = 60;
+
+/** The foes a move by `k` can still affect: everyone racing against it who has not finished. */
+const foesOf = k => G.karts.filter(o => isFoe(k, o) && !o.finished);
+/** Those of `karts` within `r` metres of k. */
+const near = (k, karts, r) => karts.filter(o => (o.pos.x - k.pos.x) ** 2 + (o.pos.z - k.pos.z) ** 2 < r * r);
+/** Everyone in `hit` hears `name`: the sound of what was just done to them. */
+const heard = (hit, name) => { for (const o of hit) sfxFor(o, name); };
+const plural = (n, word) => n + ' ' + word + (n > 1 ? 'S' : '');
+
 // ---------- Special powers ----------
 export function usePower(k) {
   if (k.powerCd > 0 || k.stun > 0 || G.state !== 'race' || k.finished) return;
   const id = k.def.power.id;
   if (id === 'rattrapage' && k.rank < 3) { say(k, 'TEMPS DE PAROLE : SEULEMENT À PARTIR DE LA 4e PLACE'); return; }
-  k.powerCd = k.def.power.cd || CFG.powerCooldown; k.powerUses++;
+  k.powerCd = k.god ? GOD_COOLDOWN : k.def.power.cd || CFG.powerCooldown; k.powerUses++;
   applyPower(k, id);
 }
 
+/** A boost for a move that found nobody to hit, with its own line. */
+function consolation(k, text) { k.boost = Math.max(k.boost, 1.4); k.boostPower = 1.4; sfxFor(k, 'boost'); say(k, text); }
+
 /** Resolve power `id` for kart k, cooldown already paid. Ralliement calls it with another candidate's id. */
 function applyPower(k, id) {
+  const name = k.def.name.toUpperCase();
   if (id === 'ralliement') {
     // the transfuge joins whoever is just ahead and borrows their move
     const t = G.karts.find(o => o.rank === k.rank - 1 && !o.finished);
     const copied = t && t.def.power.id !== 'ralliement' ? t.def.power.id : null;
     if (copied) { say(k, 'RALLIEMENT À ' + t.def.name.toUpperCase() + ' : ' + t.def.power.name.toUpperCase()); applyPower(k, copied); }
-    else { k.boost = 1.4; k.boostPower = 1.45; sfx('boost'); say(k, 'RALLIEMENT AU VAINQUEUR ANNONCÉ : BOOST'); }
+    else { k.boost = 1.4; k.boostPower = 1.45; sfxFor(k, 'boost'); say(k, 'RALLIEMENT AU VAINQUEUR ANNONCÉ : BOOST'); }
     return;
   }
-  if (id === 'rabot') { const foes = G.karts.filter(o => isFoe(k, o)); for (const o of foes) o.rabot = 4; k.boost = Math.max(k.boost, 0.8); k.boostPower = 1.35; sfx('motion'); tell(k, 'COUP DE RABOT : -15 % POUR TOUT LE MONDE SAUF VOUS', 'COUP DE RABOT BUDGÉTAIRE : -15 % DE VITESSE', foes); return; }
+  if (id === 'rabot') {
+    const hit = foesOf(k); for (const o of hit) o.rabot = 4;
+    k.boost = Math.max(k.boost, 0.8); k.boostPower = 1.35; sfxFor(k, 'motion'); heard(hit, 'motion');
+    tell(k, 'COUP DE RABOT : -15 % POUR TOUT LE MONDE SAUF VOUS', 'COUP DE RABOT BUDGÉTAIRE : -15 % DE VITESSE', hit);
+    return;
+  }
   if (id === 'fakenews') {
     // a fake row of golden urns down the road, laid out like the real ones
     const s = G.samples[(k.idx + 24) % G.N]; [-5, 0, 5].forEach(o => spawnHazard('fakebox', s.x + s.sx * o, s.z + s.sz * o, k, k.team));
-    sfx('drop'); say(k, 'FAKE NEWS : FAUSSES URNES DEVANT');
+    sfxFor(k, 'drop'); say(k, 'FAKE NEWS : FAUSSES URNES DEVANT');
     return;
   }
   if (id === 'controle') {
-    const behind = G.karts.filter(o => isFoe(k, o) && !o.finished && o.rank > k.rank && o.rank <= k.rank + 2);
+    const behind = foesOf(k).filter(o => o.rank > k.rank && o.rank <= k.rank + 2);
     let n = 0; for (const o of behind) { o.speed *= 0.5; if (stunKart(o, 1.2)) { n++; say(o, 'CONTRÔLE D’IDENTITÉ : VOS PAPIERS !'); } }
-    if (n) { sfx('motion'); say(k, 'CONTRÔLE D’IDENTITÉ : ' + n + ' KART' + (n > 1 ? 'S' : '') + ' ARRÊTÉ' + (n > 1 ? 'S' : '')); }
-    else { k.boost = 1.2; k.boostPower = 1.4; sfx('boost'); say(k, 'RIEN À SIGNALER : BOOST'); }
+    if (n) { sfxFor(k, 'motion'); say(k, 'CONTRÔLE D’IDENTITÉ : ' + plural(n, 'KART') + ' ARRÊTÉ' + (n > 1 ? 'S' : '')); }
+    else consolation(k, 'RIEN À SIGNALER : BOOST');
     return;
   }
-  if (id === 'directive') { const foes = G.karts.filter(o => isFoe(k, o)); for (const o of foes) o.capped = 3; sfx('shield'); tell(k, 'DIRECTIVE EUROPÉENNE : ADVERSAIRES BRIDÉS À 110', 'DIRECTIVE EUROPÉENNE : LIMITÉ À 110 KM/H', foes); return; }
-  if (id === 'elements') { const hit = G.karts.filter(o => isFoe(k, o) && (o.pos.x - k.pos.x) ** 2 + (o.pos.z - k.pos.z) ** 2 < 2500); for (const o of hit) o.confused = 3; const n = hit.length; sfx('shield'); tell(k, 'ÉLÉMENTS DE LANGAGE : ' + n + ' ADVERSAIRE' + (n > 1 ? 'S' : '') + ' RECADRÉ' + (n > 1 ? 'S' : ''), 'ÉLÉMENTS DE LANGAGE : COMMANDES INVERSÉES !', hit); return; }
-  if (id === 'audience') { const t = foeAhead(k, G.karts); if (t && t.item && t.itemRolling <= 0) { k.item = t.item; t.item = null; say(t, 'VOTRE OBJET A ÉTÉ VOLÉ !'); } else { k.item = rollItem(k.rank); } k.itemRolling = 0; sfx('pick'); say(k, 'VOL D’AUDIENCE : ' + ITEMS[k.item].name.toUpperCase()); hintFor(k, ITEMS[k.item].hint); return; }
-  if (id === 'examen') { const a = foeAhead(k, G.karts); const t = a && !a.finished ? a : null; if (t) { t.item = null; stunKart(t, 1.8); sfx('motion'); tell(k, 'MISE EN EXAMEN DE ' + t.def.name.toUpperCase(), 'VOUS ÊTES MIS·E EN EXAMEN !', [t]); } else { k.boost = 1.4; k.boostPower = 1.4; sfx('boost'); say(k, 'NON-LIEU : PERSONNE DEVANT, BOOST'); } return; }
-  if (id === 'epandage') { for (let i = 1; i <= 2; i++) { const s = G.samples[(k.idx - i * 5 + G.N) % G.N]; spawnHazard('lisier', s.x + s.sx * (i % 2 ? 2.5 : -2.5), s.z + s.sz * (i % 2 ? 2.5 : -2.5), k); } sfx('drop'); say(k, 'ÉPANDAGE EN COURS'); return; }
-  if (id === 'rattrapage') { k.boost = 2.6; k.boostPower = 1.7; endStun(k); sfx('boost'); say(k, 'TEMPS DE PAROLE : RATTRAPAGE !'); return; }
-  if (id === 'debat') { const foes = G.karts.filter(o => isFoe(k, o)); for (const o of foes) o.slowed = 3; sfx('shield'); tell(k, 'GRAND DÉBAT : TOUT LE MONDE ÉCOUTE', 'GRAND DÉBAT : VOUS ÉCOUTEZ ' + k.def.name.toUpperCase(), foes); }
-  else if (id === 'blocage') { for (let i = 1; i <= 4; i++) { const lat = (i % 2 ? 1 : -1) * 3.2; const s = G.samples[(k.idx - i * 4 + G.N) % G.N]; spawnHazard('barricade', s.x + s.sx * lat, s.z + s.sz * lat, null, k.team); } k.hazardGrace = 1.5; sfx('drop'); say(k, 'GRÈVE GÉNÉRALE !'); }
-  else if (id === 'rondpoint') { const s = G.samples[(k.idx + 18) % G.N]; spawnHazard('rondpoint', s.x, s.z, k); sfx('drop'); say(k, 'ROND-POINT INAUGURÉ'); }
-  else if (id === 'zfe') { const hit = []; for (const o of G.karts) if (isFoe(k, o) && (o.pos.x - k.pos.x) ** 2 + (o.pos.z - k.pos.z) ** 2 < 1600) { if (stunKart(o, 1.3)) hit.push(o); } const n = hit.length; k.boost = 1.2; k.boostPower = 1.4; sfx('boost'); tell(k, 'ZFE : ' + n + ' VIGNETTE' + (n > 1 ? 'S' : '') + ' REFUSÉE' + (n > 1 ? 'S' : ''), 'ZFE : VIGNETTE REFUSÉE !', hit); }
+  if (id === 'directive') {
+    const hit = foesOf(k); for (const o of hit) o.capped = 3;
+    sfxFor(k, 'shield'); heard(hit, 'motion');
+    tell(k, 'DIRECTIVE EUROPÉENNE : ADVERSAIRES BRIDÉS À 110', 'DIRECTIVE EUROPÉENNE : LIMITÉ À 110 KM/H', hit);
+    return;
+  }
+  if (id === 'chatons') {
+    // a litter of kittens behind her, spread across the road: nobody dares drive over them
+    [0, 3, -3].forEach((lat, i) => { const s = G.samples[(k.idx - (i + 1) * 4 + G.N) % G.N]; spawnHazard('chatons', s.x + s.sx * lat, s.z + s.sz * lat, k); });
+    k.hazardGrace = 1.5; sfxFor(k, 'drop'); say(k, 'LÂCHER DE CHATONS : ATTENTION, ILS SONT MIGNONS');
+    return;
+  }
+  if (id === 'audience') {
+    const t = foeAhead(k, G.karts);
+    if (t && t.item && t.itemRolling <= 0) { k.item = t.item; t.item = null; sfxFor(t, 'drop'); say(t, 'VOTRE OBJET A ÉTÉ VOLÉ !'); } else { k.item = rollItem(k.rank); }
+    k.itemRolling = 0; sfxFor(k, 'pick'); say(k, 'VOL D’AUDIENCE : ' + ITEMS[k.item].name.toUpperCase()); hintFor(k, ITEMS[k.item].hint);
+    return;
+  }
+  if (id === 'examen') {
+    const a = foeAhead(k, G.karts); const t = a && !a.finished ? a : null;
+    if (t) { t.item = null; stunKart(t, 1.8); sfxFor(k, 'motion'); tell(k, 'MISE EN EXAMEN DE ' + t.def.name.toUpperCase(), 'VOUS ÊTES MIS·E EN EXAMEN !', [t]); }
+    else consolation(k, 'NON-LIEU : PERSONNE DEVANT, BOOST');
+    return;
+  }
+  if (id === 'fauchage') {
+    // the swath: the road ahead of the tractor, hazards and karts alike
+    const fx = Math.sin(k.heading), fz = Math.cos(k.heading);
+    const inSwath = (x, z, side) => { const dx = x - k.pos.x, dz = z - k.pos.z; const ahead = dx * fx + dz * fz; return ahead > -2 && ahead < FAUCHAGE_RANGE && Math.abs(dx * fz - dz * fx) < side; };
+    let mown = 0;
+    for (let i = G.hazards.length - 1; i >= 0; i--) { const h = G.hazards[i]; if (inSwath(h.x, h.z, CFG.roadHalfWidth + 1)) { G.scene.remove(h.mesh); G.hazards.splice(i, 1); mown++; } }
+    const hit = []; for (const o of foesOf(k)) if (inSwath(o.pos.x, o.pos.z, 12) && stunKart(o, 1.0)) hit.push(o);
+    if (!mown && !hit.length) { consolation(k, 'RIEN À FAUCHER : LE TRACTEUR ACCÉLÈRE'); return; }
+    sfxFor(k, 'motion');
+    tell(k, 'FAUCHAGE VOLONTAIRE : ' + plural(mown, 'PIÈGE') + ' ET ' + plural(hit.length, 'KART') + ' FAUCHÉS', 'FAUCHÉ·E PAR ' + name + ' !', hit);
+    return;
+  }
+  if (id === 'rattrapage') { k.boost = 2.6; k.boostPower = 1.7; endStun(k); sfxFor(k, 'boost'); say(k, 'TEMPS DE PAROLE : RATTRAPAGE !'); return; }
+  if (id === 'debat') {
+    const hit = foesOf(k); for (const o of hit) o.slowed = 3;
+    sfxFor(k, 'shield'); heard(hit, 'motion');
+    tell(k, 'GRAND DÉBAT : TOUT LE MONDE ÉCOUTE', 'GRAND DÉBAT : VOUS ÉCOUTEZ ' + name, hit);
+  }
+  else if (id === 'blocage') { for (let i = 1; i <= 4; i++) { const lat = (i % 2 ? 1 : -1) * 3.2; const s = G.samples[(k.idx - i * 4 + G.N) % G.N]; spawnHazard('barricade', s.x + s.sx * lat, s.z + s.sz * lat, null, k.team); } k.hazardGrace = 1.5; sfxFor(k, 'drop'); say(k, 'GRÈVE GÉNÉRALE !'); }
+  else if (id === 'rondpoint') { const s = G.samples[(k.idx + 18) % G.N]; spawnHazard('rondpoint', s.x, s.z, k); sfxFor(k, 'drop'); say(k, 'ROND-POINT INAUGURÉ'); }
+  else if (id === 'deconstruction') {
+    // everything that props a kart up goes: boost, immunity, shield, loophole, helicopter, item
+    const hit = near(k, foesOf(k), DECONSTRUCTION_RANGE);
+    for (const o of hit) { o.boost = 0; o.relance = 0; o.invincible = 0; o.shield = 0; o.phantom = 0; o.fly = 0; o.item = null; o.pendingItem = null; o.itemRolling = 0; o.slowed = Math.max(o.slowed, 2); o.speed *= 0.6; }
+    if (!hit.length) { consolation(k, 'RIEN À DÉCONSTRUIRE : ON PÉDALE'); return; }
+    k.boost = Math.max(k.boost, 1.2); k.boostPower = 1.4; sfxFor(k, 'boost'); heard(hit, 'motion');
+    tell(k, 'DÉCONSTRUCTION : ' + plural(hit.length, 'KART') + ' DÉCONSTRUIT' + (hit.length > 1 ? 'S' : ''), 'DÉCONSTRUIT·E PAR ' + name + ' : PLUS RIEN NE TIENT', hit);
+  }
   else if (id === 'amendement') {
     const a = foeAhead(k, G.karts); const t = a && !a.finished ? a : null;
-    if (t) { const p = { ...k.pos }, h = k.heading, i = k.idx, l = k.lap, sp = k.speed; k.pos.x = t.pos.x; k.pos.z = t.pos.z; k.heading = t.heading; k.idx = t.idx; k.lap = t.lap; t.pos.x = p.x; t.pos.z = p.z; t.heading = h; t.idx = i; t.lap = l; k.speed = Math.max(sp, t.speed); t.speed *= 0.6; k.maxLap = Math.max(k.maxLap, k.lap); k.hazardGrace = 1; t.hazardGrace = 1; sfx('shield'); tell(k, 'AMENDEMENT ADOPTÉ : PLACE ÉCHANGÉE', 'AMENDEMENT : ' + k.def.name.toUpperCase() + ' VOUS PREND LA PLACE', [t]); }
-    else { k.boost = 1.4; k.boostPower = 1.4; sfx('boost'); say(k, 'AMENDEMENT : PERSONNE DEVANT, BOOST'); }
+    if (t) { const p = { ...k.pos }, h = k.heading, i = k.idx, l = k.lap, sp = k.speed; k.pos.x = t.pos.x; k.pos.z = t.pos.z; k.heading = t.heading; k.idx = t.idx; k.lap = t.lap; t.pos.x = p.x; t.pos.z = p.z; t.heading = h; t.idx = i; t.lap = l; k.speed = Math.max(sp, t.speed); t.speed *= 0.6; k.maxLap = Math.max(k.maxLap, k.lap); k.hazardGrace = 1; t.hazardGrace = 1; sfxFor(k, 'shield'); sfxFor(t, 'motion'); tell(k, 'AMENDEMENT ADOPTÉ : PLACE ÉCHANGÉE', 'AMENDEMENT : ' + name + ' VOUS PREND LA PLACE', [t]); }
+    else consolation(k, 'AMENDEMENT : PERSONNE DEVANT, BOOST');
   }
   else if (id === 'megaphone') {
-    const hit = []; for (const o of G.karts) if (isFoe(k, o)) { const dx = o.pos.x - k.pos.x, dz = o.pos.z - k.pos.z; const d = Math.hypot(dx, dz); if (d < 22) { const push = (22 - d) * 0.45; o.pos.x += dx / d * push; o.pos.z += dz / d * push; o.speed *= 0.3; if (stunKart(o, 0.9)) hit.push(o); } } const n = hit.length;
+    const hit = []; for (const o of foesOf(k)) { const dx = o.pos.x - k.pos.x, dz = o.pos.z - k.pos.z; const d = Math.hypot(dx, dz); if (d < 22) { const push = (22 - d) * 0.45; o.pos.x += dx / d * push; o.pos.z += dz / d * push; o.speed *= 0.3; if (stunKart(o, 0.9)) hit.push(o); } } const n = hit.length;
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.3, 6, 32), new THREE.MeshBasicMaterial({ color: 0xf2c14e, transparent: true, opacity: 0.8 })); ring.rotation.x = Math.PI / 2; ring.position.set(k.pos.x, 1, k.pos.z); G.scene.add(ring); let life = 0.7; const fn = dt => { life -= dt; ring.scale.setScalar(1 + (0.7 - life) * 30); ring.material.opacity = Math.max(0, life); if (life <= 0) { G.scene.remove(ring); G.animated.splice(G.animated.indexOf(fn), 1); } }; G.animated.push(fn);
-    sfx('motion'); tell(k, 'MÉGAPHONE : ' + n + ' KART' + (n > 1 ? 'S' : '') + ' REPOUSSÉ' + (n > 1 ? 'S' : ''), 'LE MÉGAPHONE DE LULU VOUS REPOUSSE !', hit);
+    sfxFor(k, 'motion'); tell(k, 'MÉGAPHONE : ' + plural(n, 'KART') + ' REPOUSSÉ' + (n > 1 ? 'S' : ''), 'LE MÉGAPHONE DE ' + name + ' VOUS REPOUSSE !', hit);
   }
 }

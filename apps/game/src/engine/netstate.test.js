@@ -43,7 +43,7 @@ describe('snapshots of a live race', () => {
 
 describe('mesh builders', () => {
   it('build every hazard and projectile type without placing it', () => {
-    for (const t of ['barricade', 'fakebox', 'lisier', 'lacrymo', 'rondpoint']) {
+    for (const t of ['barricade', 'fakebox', 'lisier', 'lacrymo', 'rondpoint', 'chatons']) {
       const h = buildHazard(t);
       expect(h.g.children.length).toBeGreaterThan(0);
       expect(h.r).toBeGreaterThan(0);

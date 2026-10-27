@@ -7,7 +7,8 @@ import { drain } from './events.js';
 import { stunKart, updateProjectiles, useItem } from './items.js';
 import { resetMachine, transition } from './machine.js';
 import { BUMP_TIME, DIRECTIVE_CAP, kartCollisions, updateKart } from './physics.js';
-import { usePower } from './powers.js';
+import { GOD_COOLDOWN, usePower } from './powers.js';
+import { isFoe } from './teams.js';
 import { startField } from './race.js';
 import { G } from './state.js';
 
@@ -180,5 +181,125 @@ describe('BRAV-M and who hears about it', () => {
     const readers = k => events.filter(e => (!e.to || e.to === k) && e.except !== k);
     expect(readers(b).length).toBeGreaterThan(0);
     expect(readers(c)).toHaveLength(0);
+  });
+});
+
+describe('the retuned powers (DEC-028)', () => {
+  it('Déconstruction strips the nearby karts of what props them up and slows them', () => {
+    race({ victor: 'capucine' }); const [k, near, far] = G.karts;
+    place(k, 100, 0, 30); place(near, 110, 2, 40); place(far, 400, 0, 40);
+    near.boost = 1.5; near.invincible = 4; near.shield = 10; near.item = 'turbo'; near.fly = 2; far.boost = 1.5; far.item = 'turbo';
+    usePower(k);
+    expect(near).toMatchObject({ boost: 0, invincible: 0, shield: 0, item: null, fly: 0 }); expect(near.slowed).toBe(2);
+    expect(far.boost).toBe(1.5); expect(far.item).toBe('turbo');     // out of range
+    expect(k.boost).toBeGreaterThan(0);
+  });
+
+  it('Déconstruction with nobody in range is a boost', () => {
+    race({ victor: 'capucine' }); const k = G.karts[0];
+    G.karts.forEach((o, i) => place(o, 100 + i * 300, 0, 30));
+    usePower(k); expect(k.boost).toBe(1.4);
+  });
+
+  it('Lâcher de chatons drops kittens behind that make a kart brake and swerve without stunning it', () => {
+    race({ victor: 'bernadette' }); const [k, o] = G.karts; place(k, 300, 0, 30);
+    const before = G.hazards.length; usePower(k);
+    const kittens = G.hazards.slice(before);
+    expect(kittens).toHaveLength(3); expect(kittens.every(h => h.type === 'chatons' && h.owner === k && h.stun === 0)).toBe(true);
+    o.isAI = false; o.pos.x = kittens[0].x; o.pos.z = kittens[0].z; o.speed = 40; o.hazardGrace = 0; drain();
+    updateProjectiles(STEP);
+    expect(o.stun).toBe(0); expect(o.speed).toBeLessThan(15); expect(o.confused).toBeGreaterThan(1);
+    expect(G.hazards).toContain(kittens[0]);                          // the kittens stay on the road
+    expect(drain().some(e => e.to === o && /CHATONS/.test(e.text))).toBe(true);
+  });
+
+  it('Fauchage volontaire mows the hazards and the karts in the swath ahead, and nothing behind', () => {
+    race({ victor: 'patrick' }); const [k, ahead, behind] = G.karts;
+    place(k, 100, 0, 30); place(ahead, 120, 3, 30); place(behind, 80, 0, 30);
+    const s1 = G.samples[115], s2 = G.samples[90];
+    G.hazards = []; k.item = null;
+    k.item = 'greve'; k.itemRolling = 0; useItem(k); G.hazards[0].x = s1.x; G.hazards[0].z = s1.z;
+    behind.item = 'greve'; behind.itemRolling = 0; useItem(behind); G.hazards[1].x = s2.x; G.hazards[1].z = s2.z;
+    usePower(k);
+    expect(G.hazards).toHaveLength(1); expect(G.hazards[0].x).toBe(s2.x);
+    expect(ahead.stun).toBeGreaterThan(0); expect(behind.stun).toBe(0);
+  });
+
+  it('Fauchage volontaire with nothing to mow is a boost', () => {
+    race({ victor: 'patrick' }); const k = G.karts[0];
+    G.karts.forEach((o, i) => place(o, 100 + i * 300, 0, 30)); G.hazards = [];
+    usePower(k); expect(k.boost).toBe(1.4);
+  });
+});
+
+describe('what reaches a driver (DEC-029)', () => {
+  beforeEach(() => race());
+
+  it('does not warn the target of a Motion de censure until it lands', () => {
+    const [a, b] = G.karts; a.isAI = false; b.isAI = false; a.rank = 1; b.rank = 0;
+    place(a, 100, 0, 30); place(b, 104, 0, 30); drain();
+    a.item = 'motion'; a.itemRolling = 0; useItem(a);
+    expect(drain().filter(e => e.to === b)).toHaveLength(0);
+    for (let n = 0; n < 60 && b.stun === 0; n++) updateProjectiles(STEP);
+    expect(b.stun).toBeGreaterThan(0);
+    expect(drain().some(e => e.to === b && /RENVERSÉ/.test(e.text))).toBe(true);
+  });
+
+  it('tells nothing to a driver who has finished, even for a field-wide power', () => {
+    race({ victor: 'gaspard' }); const [k, done, racing] = G.karts;
+    done.isAI = false; racing.isAI = false; done.finished = true; drain();
+    usePower(k);
+    const texts = drain();
+    expect(texts.some(e => e.to === racing)).toBe(true);
+    expect(texts.some(e => e.to === done)).toBe(false);
+    expect(done.rabot).toBe(0);
+  });
+
+  it('plays a power’s sound for its user and the karts it hit, never race-wide', async () => {
+    const { setSfxSink } = await import('./audio.js');
+    const heard = []; setSfxSink((name, k) => heard.push(k));
+    try {
+      race({ victor: 'lulu' }); const [k, o, far] = G.karts; place(k, 100, 0, 30); place(o, 103, 0, 30); place(far, 600, 0, 30);
+      for (const x of [k, o, far]) x.isAI = false;
+      usePower(k);
+      expect(heard).toContain(k); expect(heard).toContain(o);
+      expect(heard).not.toContain(far); expect(heard).not.toContain(null);
+    } finally { setSfxSink(null); }
+  });
+});
+
+describe('the god kart (DEC-030)', () => {
+  function godRace() {
+    resetMachine('tracks'); G.trackIdx = 0;
+    startField([{ def: def('victor'), isAI: true }, { def: def('gege'), isAI: true }, { def: def('lulu'), isAI: false, god: true, local: true }]);
+    transition('race'); G.countdown = 0; drain();
+    for (const k of G.karts) k.powerCd = 0;
+    return G.karts;
+  }
+
+  it('is never stunned, slowed or caught by a hazard, and shrugs debuffs off', () => {
+    const [a, , g] = godRace(); expect(g.god).toBe(true);
+    expect(stunKart(g, 2)).toBe(false); expect(g.stun).toBe(0);
+    g.slowed = 3; g.confused = 2; g.capped = 3; updateKart(g, STEP);
+    expect(g.slowed).toBe(0); expect(g.confused).toBe(0); expect(g.capped).toBe(0);
+    place(a, 100, 0, 30); a.item = 'greve'; a.itemRolling = 0; useItem(a);
+    const h = G.hazards.at(-1); g.pos.x = h.x; g.pos.z = h.z; g.hazardGrace = 0; updateProjectiles(STEP);
+    expect(g.stun).toBe(0); expect(G.hazards).toContain(h);
+  });
+
+  it('pays only a token cooldown and always has an item on the way', () => {
+    const [, , g] = godRace(); place(g, 100, 0, 30);
+    usePower(g); expect(g.powerCd).toBe(GOD_COOLDOWN); expect(g.powerUses).toBe(1);
+    g.item = null; g.pendingItem = null; g.itemRolling = 0; updateKart(g, STEP);
+    expect(g.pendingItem).not.toBeNull(); expect(g.itemRolling).toBeGreaterThan(0);
+  });
+
+  it('is everyone’s foe and does not hold the results back', () => {
+    const [a, b, g] = godRace();
+    expect(isFoe(g, a)).toBe(true); expect(isFoe(a, g)).toBe(true);
+    a.isAI = false; a.lap = 2; a.maxLap = 2; place(a, G.N - 5, 0, 30); G.time = 100;
+    for (let n = 0; n < 30 && !a.finished; n++) updateKart(a, STEP);
+    expect(a.finished).toBe(true); expect(G.resultsAt).toBe(G.time + 5);   // the god still racing does not matter
+    expect(b.finished).toBe(false);
   });
 });

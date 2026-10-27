@@ -69,7 +69,7 @@ export function beginNetRace(m) {
   G.trackIdx = m.trackIdx;
   const slots = m.roster.map((s, i) => {
     const def = CHARACTERS.find(c => c.id === s.charId);
-    return { def, isAI: s.isAI, team: s.team, local: i === m.you, ...(s.style ? { style: playerStyle(def, s.style) } : {}) };
+    return { def, isAI: s.isAI, team: s.team, god: s.god === true, local: i === m.you, ...(s.style ? { style: playerStyle(def, s.style) } : {}) };
   });
   active = true; buffer = []; newest = { tk: 0, at: now() }; presses = { item: 0, power: 0 }; lastSent = 0; lastKey = ''; drawn = false;
   lastResults = null; hazards = new Map(); projectiles = new Map();

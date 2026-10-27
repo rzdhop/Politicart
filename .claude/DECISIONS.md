@@ -608,3 +608,86 @@ when the service sleeps, so durable storage there means Postgres.
   8 MB with 16 candidates.
 - No cookie means no CSRF surface. Any page may read the roster, which is
   public anyway.
+
+## DEC-028 -- Three powers are retuned to the politician parodied
+
+**Context.** The human asked that each candidate's catch phrase and power
+be checked against the traits the parodied politician is known for, and
+that a power which does not match be replaced. Three did not: Sandrine
+Ruisseau's *Zone à faibles émissions* is any ecologist's policy, where
+Rousseau is known for "déconstruire"; Marine Le Stylo's *Éléments de
+langage* fits any politician, where Le Pen is known for her cats; José
+Bovin's *Épandage* is a FNSEA protest, where Bové is the GMO "faucheur
+volontaire". Two texts were wrong too: Darmalin's description said "elle"
+(martine was a woman before the rename) and the megaphone still named
+"LULU", the pre-rename name.
+
+**Decision.** `deconstruction` (dispel: boost, immunity, shield, loophole,
+helicopter and item of every foe within 40 m, plus a 2 s slow), `chatons` (a
+soft hazard: three kittens behind her; a kart that reaches them brakes to
+35 % and swerves 1.2 s, no stun, the kittens stay), `fauchage` (every hazard
+in the 60 m swath ahead is removed and the foes in it spin out; a boost when
+there is nothing to mow). Titles and quotes for capucine and patrick follow
+("L'écoféministe à vélo-cargo", "Le faucheur volontaire"); lulu's quote
+becomes his real line "La République, c'est moi !". Titles the human fixed in
+the plan (martine, aymeric and the rest) are untouched; so are the character
+ids and the unlock order. The other thirteen powers were judged to match.
+
+**Consequence.** The hazard vocabulary gains `chatons` (snapshots carry it by
+type, as every hazard). A power with nobody to hit now boosts through one
+helper, `consolation`. The README's content list names the new powers.
+
+## DEC-029 -- A driver reads and hears only what landed on them
+
+**Context.** DEC-018 routed the banners, yet the human still found too much
+on the screen. What was left: a projectile's target was warned when it was
+thrown, not when it hit; finished drivers kept receiving field-wide
+effects; every power, item and even every AI's mini-turbo played its sound
+race-wide (`sfx`, not `sfxFor`), in solo play and, through the worker's
+race-wide channel, in team races; and several toasts in one frame replaced
+each other before anyone could read them.
+
+**Decision.** The rule is "what landed on you, and what you did". `tell`
+skips finished karts and every power builds its hit list from the karts it
+actually affected; projectile launches tell only the thrower (the target
+reads the hit); every sound in physics, items and powers goes through
+`sfxFor`, the user's own and, for a hit, the victim's (`heard`), so the
+only race-wide sounds left are the countdown and the green light. The HUD
+writer feeds toasts to a banner queue (`engine/banner.js`): one at a time,
+held 1.1 s before the next waiting one takes over, 2.2 s when nothing
+follows, at most two waiting, oldest dropped first; a new race clears it.
+
+**Consequence.** A busy race is quieter without losing anything that
+concerns the player. A banner can show up to 1.1 s late. The worker's
+`m.fx` carries almost nothing now.
+
+## DEC-030 -- The admin has a dashboard and may race as a god
+
+**Context.** The human asked for an admin dashboard (statistics, bans,
+rooms) and for the admin to join players' games "as a god in creative
+mode".
+
+**Decision.**
+- **Store.** Users gain `seen` and `banned` (`{ at, reason }` or null);
+  `listUsers`, `setBanned`, `touchSeen`, `dropSessionsOf`; a banned
+  account has no valid session (`sessionUser` answers null) and its login
+  answers 403 with the reason. A `stats` document holds the race counters
+  (team races, finished, solo, by circuit, the last twenty).
+- **API** (`dashboard.js`, admin Bearer only, 401 otherwise): stats, users
+  (search), live (sockets and rooms), ban, unban, logout (sessions only),
+  close a room, kick a connection. The admin cannot ban itself.
+- **God seat.** `godJoin {code}` over the socket: the lobby seats the
+  admin as a seventh player (`god: true`), on no team, any candidate, in
+  any phase (mid-race it waits for the next start). The grid still has six
+  karts around the god. In the engine a god kart pays a 1 s cooldown,
+  always has an item on the way (0.6 s), is never stunned, slowed, capped,
+  confused or caught by a hazard or projectile, is everyone's foe, scores
+  no points, earns no experience and does not hold the results back.
+- **Client.** A `dashboard` state (title <-> dashboard -> lobby), a
+  Tableau de bord screen that refreshes every 5 s, the lobby and the
+  results tag the god, the HUD's power key reads "F · MODE DIEU".
+
+**Consequence.** Postgres gets two `alter table ... add column if not
+exists` on boot. The grid can now hold seven karts; every consumer already
+iterated the roster. A god who enters mid-race cannot spectate: that is a
+follow-up (A-022).

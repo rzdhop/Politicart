@@ -39,6 +39,31 @@ describe.each(backends)('%s store', (_kind, open) => {
     expect((await store.addXp(a.id, -10)).xp).toBe(75);       // never takes experience away
   });
 
+  it('lists accounts newest first without their hashes, bans and unbans them, and notes when they were seen', async () => {
+    const a = await store.createUser({ name: 'Liste1', hash: 'h' }), b = await store.createUser({ name: 'Liste2', hash: 'h' });
+    const list = await store.listUsers();
+    expect(list.map(u => u.name)).toContain('Liste1');
+    expect(list.every(u => !('hash' in u) && 'banned' in u && 'seen' in u)).toBe(true);
+    expect(list.findIndex(u => u.id === b.id)).toBeLessThanOrEqual(list.findIndex(u => u.id === a.id));
+    expect((await store.listUsers({ limit: 1 }))).toHaveLength(1);
+
+    const t = await store.createSession(a.id);
+    expect((await store.sessionUser(t)).id).toBe(a.id);
+    const banned = await store.setBanned(a.id, 'triche');
+    expect(banned.banned).toMatchObject({ reason: 'triche' }); expect(banned.banned.at).toBeGreaterThan(0);
+    expect(await store.sessionUser(t)).toBeNull();                              // banned: no valid session
+    expect((await store.userByName('Liste1')).banned.reason).toBe('triche');     // but the account is still there
+    expect((await store.setBanned(a.id, null)).banned).toBeNull();
+    expect(await store.setBanned('nobody', 'x')).toBeNull();
+
+    expect((await store.user(a.id)).seen).toBeNull();
+    const before = Date.now(); const seen = await store.touchSeen(a.id);
+    expect(seen.seen).toBeGreaterThanOrEqual(before);
+    const t2 = await store.createSession(a.id);
+    await store.dropSessionsOf(a.id);
+    expect(await store.sessionUser(t2)).toBeNull();
+  });
+
   it('keeps sessions until they are dropped', async () => {
     const u = await store.createUser({ name: 'Sess', hash: 'h' });
     const t = await store.createSession(u.id);
@@ -96,7 +121,7 @@ describe('documents', () => {
   const doc = name => ({ chars: { victor: { name } }, ads: [] });
 
   it('accept only the allowlisted keys', () => {
-    expect(DOC_KEYS).toEqual(['roster']);
+    expect(DOC_KEYS).toEqual(['roster', 'stats']);
     expect(Object.isFrozen(DOC_KEYS)).toBe(true);
   });
 
@@ -246,7 +271,7 @@ describe('setHash on Postgres (a fake Pool)', () => {
     const { Pool, calls } = fakePool([{ id: 'u1', name: 'Pg', hash: 'new', xp: '12', created: '5' }]);
     const store = await openPgStore('postgres://fake', { Pool });
     calls.length = 0;                                  // drop the schema query
-    expect(await store.setHash('u1', 'new')).toEqual({ id: 'u1', name: 'Pg', hash: 'new', xp: 12, created: 5 });
+    expect(await store.setHash('u1', 'new')).toEqual({ id: 'u1', name: 'Pg', hash: 'new', xp: 12, created: 5, seen: null, banned: null });
     expect(calls).toHaveLength(2);
     expect(calls[0][0]).toMatch(/^delete from kr_sessions where user_id = \$1$/);
     expect(calls[0][1]).toEqual(['u1']);

@@ -20,6 +20,8 @@ const FLOWS = [
   ['title', 'lobby', 'countdown', 'race', 'lobby'],                                 // left mid-race
   ['title', 'account', 'title'],                                                    // the account screen and back
   ['title', 'account', 'lobby', 'title'],                                           // accepted an invitation from it
+  ['title', 'dashboard', 'title'],                                                  // the admin's dashboard and back
+  ['title', 'dashboard', 'lobby', 'countdown', 'race', 'results', 'lobby'],         // entered a room as a god from it
 ];
 
 describe('game state machine', () => {
@@ -27,8 +29,8 @@ describe('game state machine', () => {
     expect(getState()).toBe('title');
   });
 
-  it('lists exactly the nine states the game has', () => {
-    expect([...STATES]).toEqual(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'account', 'garage']);
+  it('lists exactly the twelve states the game has', () => {
+    expect([...STATES]).toEqual(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'account', 'garage', 'dashboard']);
   });
 
   it.each(FLOWS)('accepts the flow %s -> %s -> %s ...', (...flow) => {
@@ -41,7 +43,7 @@ describe('game state machine', () => {
   });
 
   it('refuses moves the game has no path for, and stays put', () => {
-    for (const [from, to] of [['title', 'race'], ['title', 'results'], ['select', 'countdown'], ['race', 'title'], ['race', 'select'], ['admin', 'select'], ['results', 'race'], ['countdown', 'results'], ['lobby', 'race'], ['lobby', 'select'], ['lobby', 'paused'], ['select', 'lobby'], ['account', 'select'], ['race', 'account']]) {
+    for (const [from, to] of [['title', 'race'], ['title', 'results'], ['select', 'countdown'], ['race', 'title'], ['race', 'select'], ['admin', 'select'], ['results', 'race'], ['countdown', 'results'], ['lobby', 'race'], ['lobby', 'select'], ['lobby', 'paused'], ['select', 'lobby'], ['account', 'select'], ['race', 'account'], ['dashboard', 'select'], ['select', 'dashboard'], ['race', 'dashboard']]) {
       resetMachine(from);
       expect(canTransition(to)).toBe(false);
       expect(() => transition(to)).toThrow(/Illegal game state transition: /);

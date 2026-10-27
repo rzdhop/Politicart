@@ -2,6 +2,7 @@ import { NoteBanner } from '@kart-republique/ui';
 
 import { AccountScreen } from './screens/AccountScreen';
 import { AdminScreen } from './screens/AdminScreen';
+import { DashboardScreen } from './screens/DashboardScreen';
 import { GarageScreen } from './screens/GarageScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { PauseScreen } from './screens/PauseScreen';
@@ -29,8 +30,9 @@ export function App() {
   return (
     <>
       <TitleScreen ui={ui} />
-      {/* The Workshop exists only inside the admin's session; it goes with a logout or an expired token. */}
+      {/* The Workshop and the dashboard exist only inside the admin's session; they go with a logout or an expired token. */}
       {isAdmin(ui) && <AdminScreen ui={ui} />}
+      {isAdmin(ui) && <DashboardScreen ui={ui} />}
       <SelectScreen ui={ui} />
       <GarageScreen ui={ui} />
       <TracksScreen ui={ui} />

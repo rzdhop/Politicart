@@ -51,7 +51,15 @@ const ADMIN_IDS = [
   's-admin', 'admin-chars', 'ad-files', 'ad-preview', 'admin-error', 'b-admin-reset', 'b-admin-save',
   'adm-name-victor', 'adm-title-victor', 'adm-quote-victor', 'adm-suit-victor', 'adm-kart-victor', 'adm-livery-victor', 'adm-livimg-victor',
   'adm-accent-victor', 'adm-number-victor', 'adm-wheels-victor-gold', 'adm-spoiler-victor-wing', 'adm-pods-victor-off', 'adm-sticker-victor-rosette',
+  'b-dashboard', 's-dashboard', 'dash-status', 'dash-user-q', 'dash-ban-reason', 'b-dash-search', 'b-dash-refresh', 'b-dash-back',
 ];
+
+/** What the fake server's dashboard answers (dashboard.js). */
+const DASH = {
+  stats: { accounts: { total: 42, banned: 1, new7d: 3, online: 2 }, live: { connections: 3, guests: 1, rooms: 1, races: 0 }, races: { races: 7, finished: 6, solo: 12, byTrack: { 0: 7 }, recent: [{ at: 1, code: 'ABCD', trackIdx: 0, humans: 2, gods: 0, winner: 'Zoé', teams: [{ team: 'bleu', points: 10 }] }] }, top: [{ id: 'u-z', name: 'Zoé', xp: 500, level: 4 }] },
+  users: { users: [{ id: 'u-z', name: 'Zoé', xp: 500, level: 4, created: 1, seen: 2, banned: null, online: true, room: 'ABCD' }, { id: 'u-b', name: 'Banni', xp: 0, level: 1, created: 1, seen: null, banned: { at: 3, reason: 'triche' }, online: false, room: null }] },
+  live: { connections: [{ id: 'c1', name: 'Zoé', userId: 'u-z', guest: false, admin: false, room: 'ABCD' }], rooms: [{ code: 'ABCD', host: 'c1', trackIdx: 0, phase: 'lobby', since: null, players: [{ id: 'c1', name: 'Zoé', team: 'bleu', charId: 'victor', ready: false, god: false }] }] },
+};
 
 /** A socket that never opens: signing in connects to the game server, which is not there. */
 class SilentSocket { readyState = 0; onopen = null; onmessage = null; onclose = null; onerror = null; send() {} close() {} constructor(_url: string) {} }
@@ -98,6 +106,13 @@ function fakeServer(o: FakeOptions = {}) {
     if (url === './api/roster') return answer(200, state.roster);
     if (url === './api/me') return who ? answer(200, { profile: profileOf(who) }) : answer(401, { error: 'Session expirée.' });
     if (url === './api/logout') { if (auth) state.sessions.delete(auth.slice(7)); return answer(200, {}); }
+    if (url.startsWith('./api/admin/') && url !== './api/admin/roster') {
+      if (who !== 'admin') return answer(401, { error: 'Réservé à l’administrateur : connectez-vous avec son compte.' });
+      if (url === './api/admin/stats') return answer(200, DASH.stats);
+      if (url.startsWith('./api/admin/users?') || url === './api/admin/users') return answer(200, DASH.users);
+      if (url === './api/admin/live') return answer(200, DASH.live);
+      return answer(200, {});
+    }
     if (url === './api/admin/roster') {
       if (o.save === 'offline') throw new TypeError('Failed to fetch');
       if (o.save) return answer(o.save[0], o.save[1]);
@@ -135,7 +150,7 @@ beforeEach(() => {
   // we only ever reset to 'title' without clearing by going through transitions.
   while (getState() !== 'title') {
     const s = getState();
-    transition(s === 'select' || s === 'admin' || s === 'paused' || s === 'results' || s === 'lobby' || s === 'account' ? 'title' : s === 'tracks' || s === 'garage' ? 'select' : 'paused');
+    transition(s === 'select' || s === 'admin' || s === 'paused' || s === 'results' || s === 'lobby' || s === 'account' || s === 'dashboard' ? 'title' : s === 'tracks' || s === 'garage' ? 'select' : 'paused');
   }
   setTransport(SilentSocket);
 });
@@ -456,5 +471,55 @@ describe('the HUD', () => {
     expect((container.querySelector('#h-wrong') as HTMLElement).hidden).toBe(false);
     expect(container.querySelector('#h-toast')?.classList.contains('on')).toBe(true);
     expect(container.querySelector('#h-center')?.textContent).toBe('PARTEZ !');
+  });
+});
+
+describe('the admin dashboard (DEC-030)', () => {
+  it('is offered to the admin only, loads the figures, the users, the rooms, and bans with the typed reason', async () => {
+    const { container, server } = await renderServed({ server: true, who: 'admin' });
+    fireEvent.click($(container, 'b-dashboard')!);
+    expect(getState()).toBe('dashboard');
+    await settle();
+    expect($(container, 's-dashboard')!.hidden).toBe(false);
+    expect($(container, 'dash-fig-accounts')!.textContent).toContain('42');
+    expect($(container, 'dash-fig-races')!.textContent).toContain('12 courses solo');
+    expect(container.querySelectorAll('#dash-users tr')).toHaveLength(2);
+    expect($(container, 'dash-users')!.textContent).toContain('triche');
+    expect(container.querySelectorAll('#dash-rooms tr')).toHaveLength(1);
+    expect($(container, 'b-dash-god-ABCD')).not.toBeNull();
+    expect($(container, 'dash-top')!.textContent).toContain('Zoé');
+    expect($(container, 'dash-recent')!.textContent).toContain('Zoé');
+
+    fireEvent.change($(container, 'dash-ban-reason')!, { target: { value: 'spam' } });
+    fireEvent.click($(container, 'b-dash-ban-u-z')!);
+    await settle();
+    const ban = server.calls.find(c => c.url === './api/admin/users/ban');
+    expect(ban).toMatchObject({ method: 'POST', body: { id: 'u-z', reason: 'spam' }, auth: 'Bearer tok-admin' });
+    expect($(container, 'b-dash-unban-u-b')).not.toBeNull();
+
+    fireEvent.change($(container, 'dash-user-q')!, { target: { value: 'zo' } });
+    fireEvent.click($(container, 'b-dash-search')!);
+    await settle();
+    expect(server.calls.some(c => c.url === './api/admin/users?q=zo')).toBe(true);
+
+    fireEvent.click($(container, 'b-dash-back')!);
+    expect(getState()).toBe('title');
+  });
+
+  it('is absent for a player, and its button never renders', async () => {
+    const { container } = await renderServed({ server: true, who: 'player' });
+    expect($(container, 'b-dashboard')).toBeNull();
+    expect($(container, 's-dashboard')).toBeNull();
+    actions.openDashboard();
+    expect(getState()).toBe('title');
+  });
+
+  it('enters a room as a god from the dashboard: the lobby opens and the server is asked', async () => {
+    const { container } = await renderServed({ server: true, who: 'admin' });
+    fireEvent.click($(container, 'b-dashboard')!);
+    await settle();
+    fireEvent.click($(container, 'b-dash-god-ABCD')!);
+    expect(getState()).toBe('lobby');
+    expect($(container, 's-lobby')!.hidden).toBe(false);
   });
 });

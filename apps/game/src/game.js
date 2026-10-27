@@ -18,6 +18,7 @@ import '@kart-republique/ui/styles.css';
 import './game.css';
 
 import { updateEngine } from './engine/audio.js';
+import { createBannerQueue } from './engine/banner.js';
 import { loadCustom } from './engine/custom.js';
 import { ITEMS } from './engine/data.js';
 import { drain, resolveFor } from './engine/events.js';
@@ -49,7 +50,7 @@ import { initTouch, isCoarsePointer, isTouchMode, setTouchMode, touchHeld } from
 // against an unchanged value, so a readout that did not move costs nothing
 // at 60 fps, and nothing here ever goes through React state. The minimap is
 // not written from here at all: the engine draws it (engine/minimap.js).
-let lastItemShown = '', lastPowerReady = null;
+let lastItemShown = '', lastPowerReady = null, lastGod = null;
 function updateHUD(p) {
   const h = hud;
   if (!h.pos || !h.lap || !h.time || !h.item || !h.power || !h.speed || !h.drift || !h.center || !h.wrong) return;
@@ -63,7 +64,7 @@ function updateHUD(p) {
   else if (p.item) shown = ITEMS[p.item].icon + '|' + ITEMS[p.item].name; else shown = '·|aucun objet';
   if (shown !== lastItemShown) { lastItemShown = shown; const [ico, nm] = shown.split('|'); h.item.setItem({ icon: ico, label: nm, filled: !!p.item }); }
   h.power.setCharge(1 - p.powerCd / p.powerCdMax);
-  if (p.powerReady !== lastPowerReady) { lastPowerReady = p.powerReady; h.power.setReady(p.powerReady); h.power.setKeyHint(p.powerReady ? 'F · PRÊT !' : 'F · recharge'); }
+  if (p.powerReady !== lastPowerReady || p.god !== lastGod) { lastPowerReady = p.powerReady; lastGod = p.god; h.power.setReady(p.powerReady); h.power.setKeyHint(p.god ? 'F · MODE DIEU' : p.powerReady ? 'F · PRÊT !' : 'F · recharge'); }
   h.power.setName(p.powerName);
   h.center.setText(p.announce);
   h.wrong.setVisible(p.wrongWay);
@@ -71,12 +72,14 @@ function updateHUD(p) {
   touchHud.item?.(shown.split('|')[0], !!p.item && !p.itemRolling);
   touchHud.power?.(1 - p.powerCd / p.powerCdMax, p.powerReady);
 }
-// The two text channels the engine's event queue feeds. The toast fades on
-// its own clock, which belongs here with the writer that showed it.
-let toastTimer = 0;
+// The two text channels the engine's event queue feeds. Toasts go through
+// the banner queue (engine/banner.js): one at a time, each held long enough
+// to be read, so a burst of events does not flash past (DEC-029). Its clock
+// is this writer's frame clock.
+const banners = createBannerQueue();
 function setHint(t) { if (hud.hint) hud.hint.setText(t); }
-function toast(t) { if (!t || !hud.toast) return; hud.toast.show(t); toastTimer = 2.2; }
-function tickToast(dt) { if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0 && hud.toast) hud.toast.hide(); } }
+function toast(t) { banners.push(t); }
+function tickToast(dt) { const r = banners.tick(dt); if (!r || !hud.toast) return; if (r.show) hud.toast.show(r.show); else if (r.hide) hud.toast.hide(); }
 
 // ---------- Input ----------
 const keys = {};
@@ -127,6 +130,7 @@ if (isCoarsePointer()) actions.togglePoly();
 // catch-up after a pause, so the first frame back is not a 0.05 s jump.
 onTransition((to, from) => {
   if (from === 'paused') lastFrame = performance.now();
+  if (to === 'countdown' && from !== 'paused') { banners.clear(); if (hud.toast) hud.toast.hide(); }   // a new race starts with a clean ribbon
 });
 
 // ---------- Screens: mount ----------
@@ -145,7 +149,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
   const state = getState();
-  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'garage') { if (state === 'select' || state === 'tracks' || state === 'garage' || hasPreview()) renderPreview(dt); return; }
+  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'garage' || state === 'dashboard') { if (state === 'select' || state === 'tracks' || state === 'garage' || hasPreview()) renderPreview(dt); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
 
   const payload = isNetRace() ? netStep(dt) : stepRace(dt);

@@ -6,7 +6,7 @@
 // each driver's latest controls, and every third tick (20 Hz) posts a
 // snapshot plus, per human slot, the messages and sounds addressed to them.
 //
-// workerData: { trackIdx, roster: [{ charId, team, isAI, name }], cast, fast, hold }
+// workerData: { trackIdx, roster: [{ charId, team, isAI, name, god? }], cast, fast, hold }
 //   cast: [{ id, name, title, quote }], the cast as the main thread has it
 //   (the admin's edits, roster.js); this thread's CHARACTERS start at the defaults.
 //   fast: step as fast as possible instead of in real time (tests only).
@@ -42,7 +42,7 @@ const IDLE = Object.freeze({ throttle: false, brake: false, left: false, right: 
 applyCast(cast, CHARACTERS);
 resetMachine('tracks');
 G.trackIdx = trackIdx;
-startField(roster.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team })));
+startField(roster.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team, god: s.god === true })));
 
 const humans = new Map();        // slot -> { c, item, power, usedItem, usedPower, ev, fx }
 roster.forEach((s, slot) => {
@@ -106,7 +106,7 @@ function finish() {
   running = false;
   endRace();
   const ranking = G.karts.map((k, slot) => ({
-    slot, name: roster[slot].name, charId: roster[slot].charId, team: k.team, isAI: roster[slot].isAI,
+    slot, name: roster[slot].name, charId: roster[slot].charId, team: k.team, isAI: roster[slot].isAI, god: roster[slot].god === true,
     rank: k.rank, finished: k.finished, time: k.finished ? k.finishTime : null, bestLap: Number.isFinite(k.bestLap) ? k.bestLap : null,
     points: roster[slot].isAI || k.team == null ? 0 : placementPoints(k.rank),
   })).sort((a, b) => a.rank - b.rank);

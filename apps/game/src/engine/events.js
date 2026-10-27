@@ -75,7 +75,7 @@ export function tell(k, mine, others, to) {
   say(k, mine);
   if (!others || !to) return;
   for (const o of to) {
-    if (!o || o === k || o.isAI) continue;
+    if (!o || o === k || o.isAI || o.finished) continue;     // a finished driver is out of the race: nothing concerns them any more
     queue.push({ type: 'toast', text: others, to: o });
   }
 }

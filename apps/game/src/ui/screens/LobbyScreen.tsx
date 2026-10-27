@@ -95,13 +95,14 @@ function RoomPanel({ ui, room }: { ui: UiSnapshot; room: RoomView }) {
   const isHost = room.host === ui.net.id;
   const others = room.players.filter(p => p.id !== room.host);
   const canStart = isHost && others.every(p => p.ready);
-  const allowed = unlockedOf(ui);
+  // A god (the admin, DEC-030) drives any candidate and belongs to no team.
+  const allowed = me?.god ? CHARS.map(c => c.id) : unlockedOf(ui);
   const rows: ResultsRow[] = room.players.map(p => {
     const c = CHARS.find(x => x.id === p.charId);
     return {
       id: p.id,
-      rank: TEAM_NAMES[p.team],
-      name: p.name + (p.guest ? ' (invité·e)' : p.level ? ' · niv. ' + p.level : '') + (p.id === room.host ? ' (hôte)' : ''),
+      rank: p.god ? 'Dieu' : p.team ? TEAM_NAMES[p.team] : '—',
+      name: p.name + (p.god ? ' (dieu)' : p.guest ? ' (invité·e)' : p.level ? ' · niv. ' + p.level : '') + (p.id === room.host ? ' (hôte)' : ''),
       detail: c?.name,
       time: p.id === room.host ? 'hôte' : p.ready ? 'prêt·e' : '…',
       highlighted: p.id === ui.net.id,
@@ -112,13 +113,15 @@ function RoomPanel({ ui, room }: { ui: UiSnapshot; room: RoomView }) {
     <>
       <Subtitle id="lobby-room" style={{ fontSize: 18 }}>{'Salle ' + room.code + ' · donnez ce code à vos ami·es'}</Subtitle>
       <ResultsTable rows={rows} columns={['Équipe', 'Joueur·se', 'État']} bodyProps={{ id: 'lobby-players' }} />
+      {me?.god && room.phase === 'race' && <Disclaimer id="lobby-god-wait">Course en cours : vous entrez en dieu à la prochaine.</Disclaimer>}
       {me && (
         <Row>
-          {TEAM_IDS.map(t => (
+          {!me.god && TEAM_IDS.map(t => (
             <Button key={t} id={'b-mp-team-' + t} variant={me.team === t ? 'primary' : 'ghost'} aria-pressed={me.team === t} onClick={() => actions.setTeam(t)}>
               {'Équipe ' + TEAM_NAMES[t]}
             </Button>
           ))}
+          {me.god && <span id="lobby-god" style={{ color: 'var(--gold)' }}>Mode dieu : sans équipe, sans recharge, intouchable, hors classement.</span>}
           <Button id="b-mp-char-prev" variant="ghost" aria-label="Candidat précédent" onClick={() => actions.setChar(nextFreeChar(room, me.id, me.charId, -1, allowed))}>◀</Button>
           <span id="lobby-char" style={{ minWidth: 160, textAlign: 'center' }}>{myChar?.name}</span>
           <Button id="b-mp-char-next" variant="ghost" aria-label="Candidat suivant" onClick={() => actions.setChar(nextFreeChar(room, me.id, me.charId, 1, allowed))}>▶</Button>
