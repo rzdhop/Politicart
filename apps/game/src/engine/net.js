@@ -43,7 +43,11 @@ export function onSnap(fn) { handlers.snap = fn; }
 export function onResults(fn) { handlers.results = fn; }
 /** A kart joined the race in progress (the admin as a god). */
 export function onKartJoin(fn) { handlers.kartJoin = fn; }
-/** `fn(profile, gained)` whenever the server says who we are or what a race earned. */
+/**
+ * `fn(profile, gained, coins, bonus)` whenever the server says who we are or
+ * what a race earned: `gained` experience, `coins` politicoins, `bonus`
+ * { daily, levelUp, levelUpCoins } (null on a welcome).
+ */
 export function onProfile(fn) { handlers.profile = fn; }
 
 /**
@@ -71,13 +75,13 @@ const send = m => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
 
 function onMessage(raw) {
   let m; try { m = JSON.parse(typeof raw === 'string' ? raw : String(raw)); } catch { return; }
-  if (m.t === 'welcome') { publish({ id: m.id }); handlers.profile?.(m.profile ?? null, 0); if (m.profile) send({ t: 'friends' }); }
+  if (m.t === 'welcome') { publish({ id: m.id }); handlers.profile?.(m.profile ?? null, 0, 0, null); if (m.profile) send({ t: 'friends' }); }
   else if (m.t === 'room') publish({ room: m.room, error: null });
   else if (m.t === 'error') publish({ error: m.msg, notice: null });
   else if (m.t === 'notice') publish({ notice: m.msg, error: null });
   else if (m.t === 'friends') publish({ friends: Array.isArray(m.list) ? m.list : [] });
   else if (m.t === 'invite') publish({ invite: { from: m.from, code: m.code } });
-  else if (m.t === 'profile') handlers.profile?.(m.profile, m.gained || 0);
+  else if (m.t === 'profile') handlers.profile?.(m.profile, m.gained || 0, m.coins || 0, m.bonus ?? null);
   else if (m.t === 'race') handlers.race?.(m);
   else if (m.t === 'snap') handlers.snap?.(m);
   else if (m.t === 'results') handlers.results?.(m);

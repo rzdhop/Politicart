@@ -142,3 +142,49 @@ html,body{overscroll-behavior:none;}
 .admin input[type=password]{font:inherit;font-size:14px;color:var(--fg);background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:7px;padding:6px 8px;}
 .invite-banner{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:30;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;width:max-content;max-width:calc(100vw - 32px);border:2px solid var(--gold);}
 .xp-gain{color:var(--gold);font-family:var(--font-display);font-size:18px;letter-spacing:.02em;}
+
+/* ---------------------------------------------------------------------------
+   The Boutique (#s-shop) and the Politibox (#s-lootbox), DEC-037.
+   The shop is a long page: it scrolls from the top like the roster. Its
+   header keeps the coin count beside the title. On a phone the cards go two
+   by two with a shorter picture, so the list stays a list. */
+#s-shop{justify-content:flex-start;}
+#s-shop [role=tabpanel][hidden]{display:none!important;}
+#s-shop .box-text{margin:0;max-width:620px;font-size:15px;line-height:1.45;color:var(--fg);}
+#s-shop .shop-top{display:flex;align-items:center;justify-content:center;gap:18px;flex-wrap:wrap;}
+#s-shop .shop-top h2{margin:0;}
+#s-shop .shop-cat{display:flex;flex-direction:column;gap:10px;}
+#s-shop .box-odds{border-collapse:collapse;min-width:min(320px,100%);font-size:15px;}
+#s-shop .box-odds th{text-align:left;font-family:var(--font-body);font-weight:normal;text-transform:none;letter-spacing:normal;color:var(--fg);padding:4px 18px 4px 0;}
+#s-shop .box-odds td{text-align:right;letter-spacing:normal;font-family:var(--font-display);color:var(--gold);padding:4px 0;}
+#s-shop .box-odds tr.sub th{padding-left:16px;color:var(--muted);font-size:13px;}
+#s-shop .box-odds tr.sub td{color:var(--muted);font-size:13px;}
+#s-shop .shop-trails{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;}
+#s-shop .shop-trails li{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;}
+#s-shop .shop-trails li .name{font-family:var(--font-display);font-size:16px;}
+#s-shop .shop-trails li .trail-note{margin-left:auto;font-size:12px;color:var(--muted);}
+#s-shop .shop-trails li.owned{border-color:rgba(242,193,78,.6);}
+#s-shop .shop-trails li.owned .trail-note{color:var(--gold);}
+#b-shop .coin-count{margin-left:6px;vertical-align:middle;}
+@media (max-width:480px){
+  #s-shop .shop-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+  #s-shop .shop-card{padding:10px;gap:6px;}
+  #s-shop .shop-card .shop-image{aspect-ratio:16/10;}
+  #s-shop .shop-card .shop-title{font-size:16px;}
+  #s-shop .shop-card .shop-foot .btn{font-size:14px;padding:6px 8px;min-height:40px;}
+  #s-shop .panel{padding:12px;}
+}
+/* A locked candidate that the shop sells: the tile opens it, so it is a button again. */
+.tile.locked.to-shop{cursor:pointer;}
+/* The Politibox's stage: the whole screen is one invisible skip button over the canvas. */
+#s-lootbox{padding:0;}
+#s-lootbox .lb-stage{position:absolute;inset:0;width:100%;height:100%;background:transparent;border:0;padding:0 0 max(28px,env(safe-area-inset-bottom,0px));margin:0;cursor:pointer;display:flex;align-items:flex-end;justify-content:center;color:var(--muted);touch-action:manipulation;}
+/* The opening needs its light: a faint dim while the urn rattles, a lighter one under the result card, which
+   sits at the bottom so the prize turns on the pedestal above it (engine/lootbox.js frames it high). */
+#s-lootbox .kr-reveal-phase-opening .kr-reveal-dim{background:rgba(12,18,48,.12);}
+#s-lootbox .kr-reveal-phase-reveal .kr-reveal-dim{background:linear-gradient(to bottom,rgba(12,18,48,0) 35%,rgba(12,18,48,.7));}
+#s-lootbox .kr-reveal{align-items:flex-end;padding-bottom:max(56px,env(safe-area-inset-bottom,0px));}   /* clear of the note banner */
+#s-lootbox .lb-hint{font-size:14px;letter-spacing:.04em;opacity:.8;}
+#s-lootbox .lb-card{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;box-sizing:border-box;}
+#s-lootbox .lb-result{display:flex;flex-direction:column;align-items:center;gap:6px;}
+#s-lootbox .lb-result h3{margin:0;}

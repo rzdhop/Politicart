@@ -42,6 +42,9 @@ export const me = (token, { fetchImpl = globalThis.fetch, base = '' } = {}) =>
  * `gained` is the experience, `coins` the politicoins and `bonus`
  * { daily, levelUp, levelUpCoins } what they include. `trackId`, `charId`,
  * `time` and `bestLap` (seconds) feed the account's stats.
+ *
+ * @param {string} token
+ * @param {{ rank: number, field: number, finished: boolean, trackId?: string | null, charId?: string | null, time?: number | null, bestLap?: number | null }} race
  */
 export const reportRace = (token, { rank, field, finished, trackId = null, charId = null, time = null, bestLap = null }, { fetchImpl = globalThis.fetch, base = '' } = {}) =>
   call(fetchImpl, base, 'POST', '/api/progress', { token, body: { rank, field, finished, trackId, charId, time, bestLap } });

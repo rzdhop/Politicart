@@ -57,18 +57,27 @@ export function SelectScreen({ ui }: { ui: UiSnapshot }) {
         <Roster id="roster">
           {characters.map((c, i) => {
             const locked = !unlocked.includes(c.id);
-            const lock = ui.account ? 'Niveau ' + unlockLevel(c.id) : 'Compte requis';
+            // On a game server a locked tile opens the Boutique on the candidates; elsewhere it does nothing.
+            const shop = locked && ui.netAvailable;
+            const reachable = !!ui.account?.profile.reachable?.includes(c.id);
+            const lock = !ui.account ? 'Compte requis' : reachable ? 'Boutique' : 'Niveau ' + unlockLevel(c.id);
+            const why = !ui.account ? 'Créez un compte et montez de niveau pour le débloquer'
+              : reachable ? 'À acheter dans la Boutique' : 'En vente dans la Boutique dès le niveau ' + unlockLevel(c.id);
             return (
               <CharacterTile
                 key={c.id}
                 name={c.name}
                 image={ui.thumbs[c.id]}
                 selected={i === ui.charIdx}
-                className={locked ? 'locked' : undefined}
-                disabled={locked}
+                className={locked ? (shop ? 'locked to-shop' : 'locked') : undefined}
+                aria-disabled={locked && !shop ? true : undefined}
                 data-lock={locked ? '🔒 ' + lock : undefined}
-                title={locked ? (ui.account ? 'Débloqué au niveau ' + unlockLevel(c.id) : 'Créez un compte et montez de niveau pour le débloquer') : undefined}
-                onClick={() => { initAudio(); actions.selectChar(i); }}
+                title={locked ? why : undefined}
+                onClick={() => {
+                  initAudio();
+                  if (!locked) actions.selectChar(i);
+                  else if (shop) actions.openShop('select', 'chars');
+                }}
               />
             );
           })}
