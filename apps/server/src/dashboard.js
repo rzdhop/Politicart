@@ -12,6 +12,8 @@
 //   POST /api/admin/users/ban          {id, reason?}  -> { user }  closes the account's sessions and sockets
 //   POST /api/admin/users/unban        {id}           -> { user }
 //   POST /api/admin/users/logout       {id}           -> {}  closes the account's sessions and sockets, no ban
+//   POST /api/admin/coins              {id, amount}   -> { user: {id, name, coins} }  grants 0 to 100 000
+//        politicoins; the account's sockets see the new balance at once
 //   POST /api/admin/rooms/close        {code}         -> {}  ends the race if one runs, empties the room
 //   POST /api/admin/connections/kick   {id}           -> {}  closes one socket
 //   POST /api/admin/rooms/command      {code, cmd}    -> { text }  any lobby or race command (DEC-031):
@@ -40,6 +42,8 @@ export const DOC = 'stats';
 export const RECENT_MAX = 20;
 const USERS_MAX = 200;
 const BODY_MAX = 4096;
+/** The most politicoins one grant gives. */
+const COINS_MAX = 100_000;
 const DAY_MS = 24 * 3600 * 1000;
 
 export const emptyStats = () => ({ races: 0, finished: 0, solo: 0, byTrack: {}, recent: [] });
@@ -82,19 +86,20 @@ export async function recordSolo(store) {
 /**
  * The dashboard routes on `store`. `requireAdmin(req)` resolves to the admin's
  * user for an admin session, else null (accounts.js); `live` is described
- * above. Returns `handle(req, res, path)`, which answers and returns true for
- * the routes above, false for any other path.
+ * above; `onProfile(user)` is told of an account whose balance the admin
+ * changed. Returns `handle(req, res, path)`, which answers and returns true
+ * for the routes above, false for any other path.
  */
-export function dashboardApi(store, { requireAdmin, live, log = console }) {
+export function dashboardApi(store, { requireAdmin, live, onProfile = () => {}, log = console }) {
   const reply = (res, status, body, headers = {}) => {
     res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*', ...headers });
     res.end(JSON.stringify(body));
   };
 
-  /** A user as the dashboard lists it: level, presence and room added, never the hash. */
+  /** A user as the dashboard lists it: level, politicoins, presence and room added, never the hash. */
   const describe = (u, conns) => {
     const mine = conns.filter(c => c.userId === u.id);
-    return { id: u.id, name: u.name, xp: u.xp, level: levelFromXp(u.xp).level, created: u.created, seen: u.seen ?? null, banned: u.banned ?? null, online: mine.length > 0, room: mine.find(c => c.room)?.room ?? null };
+    return { id: u.id, name: u.name, xp: u.xp, level: levelFromXp(u.xp).level, coins: u.coins ?? 0, created: u.created, seen: u.seen ?? null, banned: u.banned ?? null, online: mine.length > 0, room: mine.find(c => c.room)?.room ?? null };
   };
 
   const body = async req => { const b = await readJsonBody(req, BODY_MAX); return b.ok && b.value && typeof b.value === 'object' ? b.value : null; };
@@ -139,6 +144,14 @@ export function dashboardApi(store, { requireAdmin, live, log = console }) {
       await store.dropSessionsOf(uid);
       live.disconnectUser(uid, 'Session fermée par l’administrateur.');
       reply(res, 200, {});
+    },
+    'POST /api/admin/coins': async (req, res) => {
+      const b = await body(req); const uid = b && id(b.id); if (!uid) return reply(res, 400, { error: 'Compte manquant.' });
+      if (!Number.isSafeInteger(b.amount) || b.amount < 0 || b.amount > COINS_MAX) return reply(res, 400, { error: 'Un nombre entier de 0 à 100 000 politicoins.' });
+      const user = await store.addCoins(uid, b.amount);
+      if (!user) return reply(res, 404, { error: 'Aucun compte avec cet identifiant.' });
+      onProfile(user);
+      reply(res, 200, { user: { id: user.id, name: user.name, coins: user.coins } });
     },
     'POST /api/admin/rooms/close': async (req, res) => {
       const b = await body(req); const code = b && typeof b.code === 'string' ? b.code.toUpperCase().trim() : '';

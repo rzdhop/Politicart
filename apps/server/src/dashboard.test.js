@@ -105,7 +105,7 @@ describe('statistics and accounts', () => {
 
     const { users } = await (await get('/api/admin/users?q=' + alice.name.toLowerCase(), token)).json();
     expect(users).toHaveLength(1);
-    expect(users[0]).toMatchObject({ name: alice.name, level: 1, online: true, room: room.code, banned: null });
+    expect(users[0]).toMatchObject({ name: alice.name, level: 1, coins: 0, online: true, room: room.code, banned: null });
     expect(users[0]).not.toHaveProperty('hash');
     expect(users[0].seen).toBeGreaterThan(0);
     const all = await (await get('/api/admin/users', token)).json();
@@ -318,12 +318,13 @@ describe('the god seat over the WebSocket (DEC-030)', () => {
     expect(race.roster).toHaveLength(7);
     expect(race.roster.filter(s => s.isAI)).toHaveLength(5);
     expect(race.roster.find(s => s.god)).toMatchObject({ playerId: g.welcome.id, team: null });
-    // the god's result earns no experience
-    const xpBefore = (await (await get('/api/me', token)).json()).profile.xp;
+    // the god's result earns no experience, no politicoins, no stats
+    const { xp: xpBefore, coins: coinsBefore, stats: statsBefore } = (await (await get('/api/me', token)).json()).profile;
     race.io.done({ ranking: [{ slot: 6, name: 'rida', rank: 0, finished: true, isAI: false, team: null, god: true }, { slot: 5, name: host.name, rank: 1, finished: true, isAI: false, team: 'bleu' }], teams: [{ team: 'bleu', points: 8 }] });
     await g.next(x => x.t === 'results');
     await new Promise(r => setTimeout(r, 50));
-    expect((await (await get('/api/me', token)).json()).profile.xp).toBe(xpBefore);
+    expect((await (await get('/api/me', token)).json()).profile).toMatchObject({ xp: xpBefore, coins: coinsBefore, stats: statsBefore });
+    expect((await (await get('/api/me', host.token)).json()).profile).toMatchObject({ xp: expect.any(Number), coins: 45 + 20 + 50, stats: { races: 1, team: 1, teamWins: 1 } });   // second place, the winning team, the first race of the day
     expect((await (await get('/api/me', host.token)).json()).profile.xp).toBeGreaterThan(0);
     h.close(); m.close(); g.close();
   });

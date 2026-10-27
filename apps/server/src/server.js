@@ -7,11 +7,13 @@
 //                    elsewhere (GitHub Pages) can probe a remote server.
 //   /api/register, /api/login, /api/logout, /api/me, /api/progress
 //                 -> accounts (accounts.js), open to every origin
+//   /api/shop/char, /api/shop/part, /api/box/open, /api/stats/friends
+//                 -> the politicoins economy (economy.js), the account's own
 //   GET /api/roster, PUT /api/admin/roster
 //                 -> the admin's cast (roster.js): public read, admin write
 //   /api/admin/stats, /api/admin/users, /api/admin/live, /api/admin/users/ban,
 //   /api/admin/users/unban, /api/admin/users/logout, /api/admin/rooms/close,
-//   /api/admin/connections/kick
+//   /api/admin/connections/kick, /api/admin/coins
 //                 -> the admin's dashboard (dashboard.js), admin only
 //   GET /*        -> apps/game/dist, read-only, no directory escapes
 //   WS  /ws       -> the lobby protocol below; races run in a worker
@@ -24,15 +26,18 @@
 // at will, DEC-031: lobby commands here, race commands in the worker).
 // Server -> client: welcome {id, profile} | room {room} | error {msg} |
 // notice {msg} | race {...} | snap {...} | results {...} | profile {profile,
-// gained} | friends {list} | invite {from: {id, name}, code}. Every message is
-// one JSON object with a `t`.
+// gained, coins, bonus} | friends {list} | invite {from: {id, name}, code}.
+// Every message is one JSON object with a `t`.
 //
 // A connection that says hello with a valid session token is that account:
 // its friends see it online, it can create rooms, invite friends into them,
-// and earns experience from team races. Without a token it is a guest, who
-// may only join a room (by code or by invitation) with the starters.
+// and earns experience, politicoins and stats from team races (economy.js
+// settleRace). Without a token it is a guest, who may only join a room (by
+// code or by invitation) with the starters.
 // Every player's kart style (their Garage edits) rides on create, join and
-// set, is cleaned by the lobby, and reaches every client with the race grid.
+// set, is cleaned by the lobby and stripped of what the account does not own
+// (DEC-035; a guest owns the commons only), and reaches every client with
+// the race grid.
 
 import { randomUUID } from 'node:crypto';
 import { createReadStream, statSync } from 'node:fs';
@@ -41,9 +46,12 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 
 import { WebSocketServer } from 'ws';
 
-import { levelFromXp, xpForRace } from '../../game/src/engine/progress.js';
+import { emptyOwned } from '../../game/src/engine/catalog.js';
+import { TRACKS } from '../../game/src/engine/data.js';
+import { levelFromXp } from '../../game/src/engine/progress.js';
 import { accountApi } from './accounts.js';
 import { dashboardApi, recordRace, recordSolo } from './dashboard.js';
+import { economyApi, settleRace } from './economy.js';
 import { newCode, Room } from './lobby.js';
 import { rosterApi } from './roster.js';
 import { openFileStore } from './store.js';
@@ -67,9 +75,11 @@ export const PROTOCOL = 1;
  * Before listening it loads the admin's cast from the store and applies it to
  * CHARACTERS (roster.js), so lobbies and races name the AI as edited; an
  * invalid stored cast is logged and the default one used.
+ * `rng` draws the Plitibox and `now` is the clock of race rewards (the daily
+ * bonus); tests inject both.
  * Resolves to `{ port, close() }` once listening.
  */
-export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, store = openFileStore(null), loginTries, admin }) {
+export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, store = openFileStore(null), loginTries, admin, rng = Math.random, now = Date.now }) {
   const root = resolve(staticDir);
   const rooms = new Map();          // code -> Room
   const races = new Map();          // code -> race handle
@@ -77,7 +87,10 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
   const conns = new Map();          // id -> { ws, id, name, code, user }
   const online = new Map();         // user id -> Set of connections
 
-  const api = accountApi(store, { onProfile: user => updateProfile(user, 0), onSoloRace: () => recordSolo(store).catch(e => console.error('solo race not counted:', e)), tries: loginTries, admin });
+  // A change of balance or inventory outside a race (a solo report, a purchase, a box, an admin grant): no gain to show.
+  const tellProfile = user => { updateProfile(user).catch(e => console.error('profile not pushed:', e)); };
+  const api = accountApi(store, { onProfile: tellProfile, onSoloRace: () => recordSolo(store).catch(e => console.error('solo race not counted:', e)), tries: loginTries, admin, now });
+  const economy = economyApi(store, { profile: api.profile, onProfile: tellProfile, isAdmin: api.isAdmin, rng, now });
   const cast = rosterApi(store, { requireAdmin: api.requireAdmin });
   // The dashboard's window on the live server: sockets and rooms, and the levers on them.
   const live = {
@@ -91,7 +104,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
   // A race in progress is listed with its grid, so the dashboard can name its karts.
   const raceGrid = code => races.get(code)?.grid?.map((g, slot) => ({ slot, name: g.name, charId: g.charId, isAI: g.isAI, god: g.god === true })) ?? null;
   const isAdminConn = c => !!c?.user && api.isAdmin(c.user);
-  const dashboard = dashboardApi(store, { requireAdmin: api.requireAdmin, live });
+  const dashboard = dashboardApi(store, { requireAdmin: api.requireAdmin, live, onProfile: tellProfile });
 
   const http = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
@@ -101,7 +114,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
       res.end(JSON.stringify({ kr: 'server', protocol: PROTOCOL, rooms: rooms.size, accounts: store.kind }));
       return;
     }
-    if (url.pathname.startsWith('/api/') && (await api(req, res, url.pathname) || await cast(req, res, url.pathname) || await dashboard(req, res, url.pathname))) return;
+    if (url.pathname.startsWith('/api/') && (await api(req, res, url.pathname) || await economy(req, res, url.pathname) || await cast(req, res, url.pathname) || await dashboard(req, res, url.pathname))) return;
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405).end(); return; }
     let rel; try { rel = decodeURIComponent(url.pathname); } catch { res.writeHead(400).end(); return; }
     if (rel.endsWith('/')) rel += 'index.html';
@@ -156,14 +169,21 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
     }
   }
 
-  /** An account's experience changed: tell its connections, and let it drive what it unlocked. */
-  function updateProfile(user, gained) {
-    const profile = api.profile(user);
+  /**
+   * An account changed (experience, coins, inventory, stats): tell its
+   * connections what it gained, if anything, and let it drive and wear what it
+   * owns now. `gained` stays the experience, a number, as before the economy.
+   */
+  async function updateProfile(user, gain = null) {
+    const profile = await api.profile(user);
+    const msg = { t: 'profile', profile, gained: gain?.xp ?? 0, coins: gain?.coins ?? 0, bonus: { daily: !!gain?.daily, levelUp: !!gain?.levelUp, levelUpCoins: gain?.levelUpCoins ?? 0 } };
     for (const c of online.get(user.id) ?? []) {
-      c.user = user; send(c.id, { t: 'profile', profile, gained });
-      const room = c.code && rooms.get(c.code); if (room) { room.setLevel(c.id, profile.level); showRoom(room); }
+      c.user = user; send(c.id, msg);
+      const room = c.code && rooms.get(c.code); if (room) { room.setProfile(c.id, { level: profile.level, owned: profile.owned }); showRoom(room); }
     }
   }
+  /** Who a connection is for the lobby: its account, level and inventory, or a guest who owns the commons. */
+  const whoOf = async c => (c.user ? { userId: c.user.id, level: levelFromXp(c.user.xp).level, owned: await api.ownedOf(c.user) } : { owned: emptyOwned() });
 
   // ---- rooms
   function leaveRoom(c) {
@@ -176,22 +196,30 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
     showRoom(room);
   }
 
-  function enter(c, room) {
-    const r = room.join(c.id, c.name, c.user ? { userId: c.user.id, level: levelFromXp(c.user.xp).level } : {}, c.style);
+  /** Seat c in room; `who` is whoOf(c), read before anything changed so nothing awaits in between. */
+  function enter(c, room, who) {
+    const r = room.join(c.id, c.name, who, c.style);
     if (typeof r === 'string') return fail(c.id, r);
     c.code = room.code; showRoom(room);
     if (c.user) pushToFriendsOf(c.user.id).catch(console.error);
   }
 
-  /** Award each account in the race its experience, once the results are out. A god earns none. */
-  async function award(roster, results) {
+  /**
+   * Pay each account in the race (experience, politicoins, stats: economy.js
+   * settleRace), once the results are out. A god earns nothing. `trackIdx`
+   * is the circuit the race ran on.
+   */
+  async function award(roster, results, trackIdx) {
     const first = results.teams?.[0];
+    const trackId = TRACKS[trackIdx]?.id ?? null;
     for (const r of results.ranking ?? []) {
-      const playerId = roster[r.slot]?.playerId; const c = playerId && conns.get(playerId);
-      if (!c || !c.user || r.isAI || roster[r.slot]?.god) continue;
-      const gained = xpForRace({ rank: r.rank, field: results.ranking.length, finished: r.finished, teamWon: !!first && first.points > 0 && first.team === r.team });
-      const after = await store.addXp(c.user.id, gained);
-      if (after) updateProfile(after, gained);
+      const slot = roster[r.slot]; const c = slot?.playerId && conns.get(slot.playerId);
+      if (!c || !c.user || r.isAI || r.god || slot.god) continue;
+      const settled = await settleRace(store, c.user, {
+        rank: r.rank, field: results.ranking.length, finished: r.finished, teamWon: !!first && first.points > 0 && first.team === r.team,
+        trackId, bestLap: r.bestLap, time: r.time, charId: slot.charId, solo: false,
+      }, { now: now() });
+      if (settled) await updateProfile(settled.after, settled.gain);
     }
   }
 
@@ -200,12 +228,12 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
     if (force) { if (room.phase !== 'lobby') return c && fail(c.id, 'La course a déjà commencé.'); }
     else { const why = room.cannotStart(c.id); if (why) return fail(c.id, why); }
     room.phase = 'race';
-    const roster = room.roster();
+    const roster = room.roster(), trackIdx = room.trackIdx;
     const io = {
       send, broadcast: msg => toRoom(room, msg),
       done: results => {
         races.delete(room.code); raceSince.delete(room.code); room.endRace(); toRoom(room, { t: 'results', ...results }); showRoom(room);
-        if (!results.error) award(roster, results).catch(e => console.error('experience not awarded:', e));
+        if (!results.error) award(roster, results, trackIdx).catch(e => console.error('race not paid:', e));
         recordRace(store, { room, roster, results }).catch(e => console.error('race not counted:', e));
       },
     };
@@ -259,22 +287,28 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
       if (!user) c.name = typeof m.name === 'string' ? m.name : c.name;
       else store.touchSeen(user.id).catch(console.error);
       await setUser(c, user);
-      send(c.id, { t: 'welcome', id: c.id, protocol: PROTOCOL, profile: user ? api.profile(user) : null });
+      send(c.id, { t: 'welcome', id: c.id, protocol: PROTOCOL, profile: user ? await api.profile(user) : null });
     },
-    create: (c, m) => {
+    create: async (c, m) => {
       if (!c.user) return fail(c.id, 'Connectez-vous pour créer une salle. Les invité·es peuvent en rejoindre une.');
-      c.style = m.style; leaveRoom(c); const room = new Room(newCode(new Set(rooms.keys()))); rooms.set(room.code, room); enter(c, room);
+      const who = await whoOf(c);
+      c.style = m.style; leaveRoom(c); const room = new Room(newCode(new Set(rooms.keys()))); rooms.set(room.code, room); enter(c, room, who);
     },
-    join: (c, m) => { const room = rooms.get(String(m.code ?? '').toUpperCase().trim()); if (!room) return fail(c.id, 'Aucune salle avec ce code.'); c.style = m.style; if (c.code !== room.code) { leaveRoom(c); enter(c, room); } },
+    join: async (c, m) => {
+      const who = await whoOf(c);
+      const room = rooms.get(String(m.code ?? '').toUpperCase().trim()); if (!room) return fail(c.id, 'Aucune salle avec ce code.');
+      c.style = m.style; if (c.code !== room.code) { leaveRoom(c); enter(c, room, who); }
+    },
     // The admin enters a room as a god (DEC-030): outside the six, in any phase, on no team; mid-race, straight into the race (DEC-031).
-    godJoin: (c, m) => {
+    godJoin: async (c, m) => {
       if (!isAdminConn(c)) return fail(c.id, 'Réservé à l’administrateur.');
+      const who = await whoOf(c);
       const room = rooms.get(String(m.code ?? '').toUpperCase().trim()); if (!room) return fail(c.id, 'Aucune salle avec ce code.');
       c.style = m.style;
       if (c.code === room.code) { showRoom(room); return enterRace(c, room); }
       leaveRoom(c);
       const avoid = races.get(room.code)?.grid?.map(g => g.charId) ?? [];
-      const r = room.joinGod(c.id, c.name, { userId: c.user.id, level: levelFromXp(c.user.xp).level }, c.style, avoid);
+      const r = room.joinGod(c.id, c.name, who, c.style, avoid);
       if (typeof r === 'string') return fail(c.id, r);
       c.code = room.code; showRoom(room);
       const racing = room.phase === 'race';
@@ -288,6 +322,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
       const r = await godCommand(m.code ?? c.code, m.cmd, c);
       (r.ok ? notice : fail)(c.id, r.text);
     },
+    // the style is filtered by what the player owns, as the lobby last heard it (join, or a profile change since)
     set: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = room.set(c.id, { team: m.team, charId: m.charId, ready: m.ready, style: m.style }); if (e) fail(c.id, e); showRoom(room); },
     // the admin picks the circuit and starts, host or not, ready or not (DEC-031)
     track: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = isAdminConn(c) ? room.forceTrack(m.trackIdx) : room.setTrack(c.id, m.trackIdx); if (e) fail(c.id, e); showRoom(room); },

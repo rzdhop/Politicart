@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { fetchRoster, login, me, register, reportRace, saveRoster } from './account.js';
+import { dashboard, fetchRoster, login, me, register, reportRace, saveRoster, shop } from './account.js';
 import { drivableIds, levelFromXp, profileOf, STARTERS, UNLOCKS, unlockedIds, unlockLevel, xpForRace, xpToNext } from './progress.js';
 import { CHARACTERS } from './data.js';
 
@@ -101,6 +101,48 @@ describe('account API client', () => {
   it('turns failures into a sentence instead of throwing', async () => {
     expect(await login('A', 'x', { fetchImpl: fake(401, { error: 'Pseudo ou mot de passe incorrect.' }) })).toMatchObject({ ok: false, status: 401, error: 'Pseudo ou mot de passe incorrect.' });
     expect(await login('A', 'x', { fetchImpl: async () => { throw new Error('offline'); } })).toMatchObject({ ok: false, error: 'Serveur injoignable.' });
+  });
+
+  it('reports the circuit, the candidate and the times of a solo race, null when unknown', async () => {
+    const f = fake(200, { profile: {}, gained: 70, coins: 110, bonus: { daily: true } });
+    expect(await reportRace('tok', { rank: 0, field: 6, finished: true, trackId: 'bourbon', charId: 'gege', time: 201.5, bestLap: 55.25 }, { fetchImpl: f })).toMatchObject({ ok: true, gained: 70, coins: 110 });
+    await reportRace('tok', { rank: 2, field: 6, finished: false }, { fetchImpl: f });
+    expect(JSON.parse(f.calls[0][1].body)).toEqual({ rank: 0, field: 6, finished: true, trackId: 'bourbon', charId: 'gege', time: 201.5, bestLap: 55.25 });
+    expect(JSON.parse(f.calls[1][1].body)).toEqual({ rank: 2, field: 6, finished: false, trackId: null, charId: null, time: null, bestLap: null });
+  });
+});
+
+describe('economy API client', () => {
+  const fake = (status, body) => { const calls = []; const f = async (url, init) => { calls.push([url, init]); return { ok: status < 400, status, json: async () => body }; }; f.calls = calls; return f; };
+  const sent = f => f.calls.map(([url, init]) => [init.method, url, init.body === undefined ? undefined : JSON.parse(init.body), init.headers.authorization]);
+
+  it('buys, opens a Plitibox and reads the friends’ stats under the account’s token', async () => {
+    const f = fake(200, { profile: { coins: 0 } });
+    await shop.buyChar('tok', 'lucie', { fetchImpl: f, base: 'https://kr.example' });
+    await shop.buyPart('tok', 'wheels', 'gold', { fetchImpl: f });
+    await shop.openBox('tok', { fetchImpl: f });
+    await shop.friendStats('tok', { fetchImpl: f });
+    expect(sent(f)).toEqual([
+      ['POST', 'https://kr.example/api/shop/char', { id: 'lucie' }, 'Bearer tok'],
+      ['POST', './api/shop/part', { category: 'wheels', value: 'gold' }, 'Bearer tok'],
+      ['POST', './api/box/open', {}, 'Bearer tok'],
+      ['GET', './api/stats/friends', undefined, 'Bearer tok'],
+    ]);
+    expect(f.calls.slice(0, 3).every(([, init]) => init.headers['content-type'] === 'application/json')).toBe(true);
+  });
+
+  it('lets the admin grant politicoins', async () => {
+    const f = fake(200, { user: { id: 'u1', name: 'A', coins: 1000 } });
+    expect(await dashboard.grantCoins('adm', 'u1', 1000, { fetchImpl: f })).toMatchObject({ ok: true, user: { coins: 1000 } });
+    expect(sent(f)).toEqual([['POST', './api/admin/coins', { id: 'u1', amount: 1000 }, 'Bearer adm']]);
+  });
+
+  it('turns a refusal into its sentence and never throws', async () => {
+    expect(await shop.buyChar('tok', 'lucie', { fetchImpl: fake(402, { error: 'Pas assez de politicoins.' }) })).toEqual({ ok: false, status: 402, error: 'Pas assez de politicoins.' });
+    expect(await shop.buyPart('tok', 'wheels', 'gold', { fetchImpl: fake(409, { error: 'Déjà à vous.' }) })).toMatchObject({ ok: false, status: 409, error: 'Déjà à vous.' });
+    expect(await shop.openBox('tok', { fetchImpl: fake(429, {}) })).toMatchObject({ ok: false, status: 429, error: 'Erreur du serveur (429).' });
+    expect(await shop.friendStats('tok', { fetchImpl: async () => { throw new TypeError('offline'); } })).toEqual({ ok: false, status: 0, error: 'Serveur injoignable.' });
+    expect(await dashboard.grantCoins('tok', 'u1', 5, { fetchImpl: null })).toMatchObject({ ok: false, error: 'Serveur injoignable.' });
   });
 });
 
