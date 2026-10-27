@@ -42,6 +42,21 @@ function repoRoot(): string {
   return dir;
 }
 
+/** The index just past the balanced `{ ... }` block that starts after `from`. */
+function skipBlock(css: string, from: number): number {
+  const brace = css.indexOf('{', from);
+  if (brace === -1) return css.length;
+  let depth = 0;
+  for (let j = brace; j < css.length; j += 1) {
+    if (css[j] === '{') depth += 1;
+    else if (css[j] === '}') {
+      depth -= 1;
+      if (depth === 0) return j + 1;
+    }
+  }
+  return css.length;
+}
+
 /** Flatten a stylesheet into rules, inlining `@media` blocks with a prefix. */
 function parse(css: string): Rule[] {
   const out: Rule[] = [];
@@ -59,6 +74,15 @@ function parse(css: string): Rule[] {
     }
     if (css.startsWith('@import', i)) {
       i = css.indexOf(';', i) + 1;
+      continue;
+    }
+    if (css.startsWith('@', i) && !css.startsWith('@media', i) && !css.startsWith('@font-face', i)) {
+      // Other at-rules (fx.css brings @keyframes, @property and @supports from
+      // stage 6a) are not game CSS and have no `selector { declarations }`
+      // shape to compare, so their whole balanced block is skipped. Without
+      // this the fallback below, finding no `{`, restarted at 0 and never
+      // ended: the worker died of memory on a suite that is skipped anyway.
+      i = skipBlock(css, i);
       continue;
     }
     if (css.startsWith('@media', i)) {
@@ -81,6 +105,7 @@ function parse(css: string): Rule[] {
       continue;
     }
     const brace = css.indexOf('{', i);
+    if (brace === -1) break;
     const end = css.indexOf('}', brace);
     out.push({
       selector: css.slice(i, brace).trim().replace(/\s+/g, ' '),
