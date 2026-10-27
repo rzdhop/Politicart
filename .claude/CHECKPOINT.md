@@ -4,17 +4,41 @@ Current state only. History lives in git.
 
 ## Latest task -- 2026-10-27: politicoins, the Politibox, grades, parts, trails, two circuits, stats
 
-- **Branch:** `feature/epic-turing-clj1rj`, cut from `main` at `1bbcd2e`.
-- **Plan:** `.claude/PLAN.md` (DEC-032..039, A-026..A-035). Stages run in
-  worker agents dispatched by the session (DEC-039): wave 1 (catalogue,
-  store, maps, lines, mobile), wave 2 (kart parts and trails, server
-  economy, library components), then shop and Politibox, Garage locks and
-  stats, the Garage in play, docs and push.
-- **Baseline at `1bbcd2e`:** `npm ci` (this container had no node_modules);
-  Tier 1 green (ui 241 + 8 skipped, game 254, server 118), audit 0. E2E
-  baseline: see the action log (the container's software WebGL fails the
-  desktop solo-race specs on main too; stages are judged against it).
-- **Progress:** stage 0 done. (Updated as stages land.)
+- **Branch:** `feature/epic-turing-clj1rj`, cut from `main` at `1bbcd2e`, pushed.
+- **Plan:** `.claude/PLAN.md`, all stages **done** (DEC-032..039, A-026..A-035).
+  Every stage ran in its own worker agent dispatched by the session
+  (DEC-039): wave 1 (catalogue, store, maps, lines, mobile), wave 2 (kart
+  parts and trails, server economy, library components), then the shop and
+  the Politibox, Garage locks and stats, the Garage in play.
+- **Shipped:** politicoins paid per race, level-up and first race of the day;
+  the Boutique (candidates by level AND price, parts by grade); the Politibox
+  (120 coins, 2 % candidate, 4 % part or trail, coins otherwise, duplicates
+  refunded) opened in a 3D sequence on the shared canvas; grades
+  common/rare/mythic/incredible with CSS motion in `packages/ui`; six new
+  kart style fields (exhaust, underglow, mast, nose, skin, trail) rendered
+  with more detail and animated; five trails (lootbox-only) seen by every
+  player; Montmartre and Marseille plus denser decor on the three Paris
+  circuits; per-account stats and friends' stats on Compte; the admin grants
+  coins from the dashboard; one LINES table with 4-6 variants per banner;
+  the chase camera closer; kart cards on pause and results; no long-press
+  selection on phones. Ownership is enforced on the server (DEC-035).
+- **Tests:** Tier 1 green on the tip `733498e`: typecheck clean, ui 286 + 8
+  skipped, game 455, server 164, audit 0. E2E: see the action log's last
+  line (the container's software WebGL times out every desktop race-start
+  spec, on main too; the economy, garage, dashboard, admin, mobile and
+  multiplayer specs run).
+- **Known flakes (pre-existing, pass alone):** `apps/server/src/race.test.js`
+  "drives their kart from their input" (wall-clock, fails under load) and
+  headless "knocks over a cyclist".
+- **Owed by the human:** play a race on each new circuit and open a few
+  Politibox on a phone; judge the grades of the parts and candidates
+  (A-026, A-027) and the camera (A-033); say whether trails should also be
+  sold; the first Render boot against Neon adds the three `kr_users`
+  columns (A-029: existing accounts keep what their level had unlocked).
+- **Follow-ups:** the long straights of the circuits still read a little
+  thin (a densification pass); per-user stats are read-modify-write
+  (A-034); the two flaky timing tests deserve a looser budget; the
+  `/design-sync` re-sync for the economy components and ChoiceGroup.
 
 ## Previous task -- 2026-10-27: cast review, quieter HUD, admin dashboard and god seat
 
@@ -151,12 +175,16 @@ The game at `index.html` must keep working. No item here may break.
 | R-10 | Three laps, five AI opponents, rubber-banding | none | UNVERIFIED (manual) |
 | R-11 | 16 characters (pun names) with their stats and signature powers | none | UNVERIFIED (manual) |
 | R-12 | 14 items with rank-weighted odds from golden ballot boxes | none | UNVERIFIED (manual) |
-| R-13 | 3 circuits with ramps, tricks, pits, dash panels, chicanes, crossings | none | UNVERIFIED (manual) |
+| R-13 | 5 circuits (Élysée, Palais Bourbon, Versailles, Montmartre, Marseille) with ramps, tricks, pits, dash panels, chicanes, crossings | `e2e/game.spec.ts` "offers the five circuits" + `engine/headless.test.js` (every circuit built and raced headless, road and mesh budget) | COVERED (redefined 2026-10-27: five cards) |
 | R-14 | Synthesized WebAudio sound and music | none | UNVERIFIED (manual) |
 | R-16 | Team race: an account hosts, players join by code or invitation, race on opposite teams, see team points and each other's Garage styles; the static (Pages) build without a server offers no Multijoueur | `e2e/multiplayer.spec.ts` (4 specs) + `apps/server/src/*.test.js` | COVERED 2026-10-20 |
 | R-17 | Garage: style your own kart (colours, wheels, spoiler, pods, number, sticker); kept in the browser; reset; races with it | `e2e/garage.spec.ts` (4 specs) + `engine/garage.test.js`, `engine/kart.test.js` | COVERED 2026-10-20 |
 | R-18 | Admin access: only the env-seeded admin account sees the Workshop; visitors, normal accounts and the static build never do; logout hides it; admin kart defaults reach players' Garage | `e2e/admin.spec.ts` access specs + `apps/server/src/admin.test.js`, `roster.test.js` | COVERED 2026-10-20 |
 | R-15 | Playable from GitHub Pages at the documented URL | Pages workflow run 38699287498 + HTTP check of the published index and bundle | VERIFIED 2026-10-15 |
+| R-21 | Economy: politicoins per race, the Boutique (candidates by level and price, parts by grade), the Politibox (odds, refunds) and its opening; guests see a disabled shop, the static build none | `e2e/shop.spec.ts` (5 specs) + `apps/server/src/economy.test.js`, `engine/catalog.test.js`, `engine/lootbox.test.js` | COVERED 2026-10-27 |
+| R-22 | Ownership: the server drops any kart part or trail the account does not own before a room sees it; the Garage greys unowned options behind their grade badge and leads to the Boutique; the static build offers every part | `e2e/garage.spec.ts` R-22 + `e2e/multiplayer.spec.ts` (the host buys her gold wheels first) + `apps/server/src/lobby.test.js`, `engine/garage.test.js` | COVERED 2026-10-27 |
+| R-23 | Six new kart part categories and five trails rendered and animated; trails and candidate grades shown in the lobby; kart cards on pause and results | `e2e/multiplayer.spec.ts` (lobby badges), `e2e/game.spec.ts` R-03 and `e2e/mobile.spec.ts` (`#pause-kart`) + `engine/kart.test.js`, `engine/trail.test.js`, `engine/headless.test.js` | COVERED 2026-10-27 |
+| R-24 | Per-account stats and friends' stats on Compte; the admin credits politicoins from the dashboard; a long press on a phone selects nothing | `e2e/dashboard.spec.ts` R-24 + `e2e/mobile.spec.ts` "a long press selects nothing" + `apps/server/src/economy.test.js`, `touch.test.ts` | COVERED 2026-10-27 |
 
 **Stage 7 maps the contract to specs** in `e2e/game.spec.ts`, whose describe
 blocks are named for the items above (R-01 .. R-09, plus R-01b for the results

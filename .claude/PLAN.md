@@ -1,6 +1,6 @@
 # Plan -- politicoins, the Politibox, grades, 5 kart parts, trails, 2 circuits, stats, lines, camera, mobile
 
-Branch `feature/epic-turing-clj1rj` (exists, == main `1bbcd2e`). Drafted 2026-10-27.
+Branch `feature/epic-turing-clj1rj`, cut from main `1bbcd2e`. Drafted and **approved** 2026-10-27; **all stages done** the same day, every stage in its own worker agent (DEC-039). Stage order as run: 0; wave 1 = 1 ∥ 2 ∥ 3a ∥ 3b ∥ 3c; wave 2 = 4 ∥ 5 ∥ 6a; 6b; 6c ∥ 7; 8. Details per stage in `claude-action.log`.
 
 ## Context
 
