@@ -11,6 +11,8 @@ services:
     name: kart-republique
     runtime: docker
     plan: free
+    # The players are in France. Render has no Paris region; Frankfurt is the
+    # nearest (about 10 ms away) and holds the Neon database too.
     region: frankfurt
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/kr
@@ -20,8 +22,9 @@ services:
       - key: HOST
         value: 0.0.0.0
       # Render's free disk is wiped whenever the service sleeps, so accounts
-      # need a database: paste a Postgres URL here (a free Neon or Supabase
-      # database works). Left empty, accounts vanish on every restart.
+      # need a database: paste the pooled URL of the Neon project Politikart
+      # (aws-eu-central-1, Frankfurt, next to this service). Left empty,
+      # accounts vanish on every restart.
       - key: DATABASE_URL
         sync: false
       # The admin account (it alone edits the cast) and its password hash,
