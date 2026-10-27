@@ -94,6 +94,47 @@ test.describe('R-10 phones', () => {
     expect(steer!.x + steer!.width).toBeLessThan(drift!.x);
     expect(drift!.x + drift!.width).toBeLessThanOrEqual(844);
   });
+
+  test('a long press selects nothing and opens no menu', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#b-play')).toBeVisible();
+    // Record whether a context menu was asked for and whether the game refused it.
+    await page.evaluate(() => {
+      const w = window as unknown as { __ctx: boolean | null };
+      w.__ctx = null;
+      document.addEventListener('contextmenu', e => { w.__ctx = e.defaultPrevented; });
+    });
+    /** What a long press left behind: the selected text and the context menu's fate. */
+    const aftermath = () => page.evaluate(() => ({
+      selection: window.getSelection()?.toString() ?? '',
+      ctx: (window as unknown as { __ctx: boolean | null }).__ctx,
+    }));
+    /** Hold a thumb on `selector` for longer than any long-press delay, then lift it. */
+    const longPress = async (selector: string) => {
+      await page.locator(selector).scrollIntoViewIfNeeded();
+      await finger(page, selector);
+      await page.waitForTimeout(900);
+      await finger(page, null);
+    };
+
+    await longPress('#b-play');
+    let left = await aftermath();
+    expect(left.selection, 'the long press selected the button’s label').toBe('');
+    if (left.ctx !== null) expect(left.ctx, 'a context menu opened on the button').toBe(true);
+    // A long press may still count as the tap it started as; either screen is fine, as long as nothing was selected.
+    await page.waitForTimeout(500);
+    const title = await page.locator('#s-title').isVisible(), select = await page.locator('#s-select').isVisible();
+    expect(title || select, 'neither the title nor the roster is on screen').toBe(true);
+
+    // The roster: a tile is an image with a name, the two things a long press likes to grab.
+    if (!select) await page.locator('#b-play').tap();
+    await expect(page.locator('#s-select')).toBeVisible();
+    await longPress('#roster .tile >> nth=3');
+    left = await aftermath();
+    expect(left.selection, 'the long press selected the tile’s name').toBe('');
+    if (left.ctx !== null) expect(left.ctx, 'a context menu opened on the tile').toBe(true);
+    await expect(page.locator('#s-select')).toBeVisible();
+  });
 });
 
 test.describe('R-10b computers', () => {

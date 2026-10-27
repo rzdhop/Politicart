@@ -34,7 +34,7 @@ import { hud } from './ui/Hud.tsx';
 import { mountUi } from './ui/mount.tsx';
 import { actions } from './ui/store.ts';
 import { touchHud } from './ui/TouchControls.tsx';
-import { initTouch, isCoarsePointer, isTouchMode, setTouchMode, touchHeld } from './touch.ts';
+import { initTouch, installNoContextMenu, isCoarsePointer, isTouchMode, setTouchMode, touchHeld } from './touch.ts';
 
 'use strict';
 /* =====================================================================================
@@ -122,6 +122,8 @@ function inputState() {
 // The engine reads the player's controls through this seam rather than the keys map.
 setInputSource(inputState);
 initTouch();
+// A long press on a menu button is a tap, not a context menu or a selection (the fields keep theirs).
+installNoContextMenu();
 // Phones and tablets start on the light graphics: shadows and round meshes cost frames a phone cannot spare.
 if (isCoarsePointer()) actions.togglePoly();
 
