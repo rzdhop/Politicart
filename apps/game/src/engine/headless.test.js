@@ -4,11 +4,13 @@
 // drives a race for thirty simulated seconds at the server's fixed step.
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { TRACKS } from './data.js';
+import { CHARACTERS, TRACKS } from './data.js';
+import { builtinStyle, mergeStyle } from './kartstyle.js';
 import { getState, resetMachine } from './machine.js';
-import { simStep, startRace } from './race.js';
+import { simStep, startField, startRace } from './race.js';
 import { drain, resolveFor } from './events.js';
 import { CFG, G } from './state.js';
+import { POOL } from './trail.js';
 
 const STEP = 1 / 60;
 
@@ -33,6 +35,31 @@ describe('headless engine', () => {
     ai.forEach((k, j) => expect(k.progress).toBeGreaterThan(start[j] + 0.1));
     expect(G.karts.map(k => k.rank).sort()).toEqual([0, 1, 2, 3, 4, 5]);
     for (const k of G.karts) { expect(Number.isFinite(k.pos.x)).toBe(true); expect(Number.isFinite(k.pos.z)).toBe(true); }
+  });
+});
+
+describe('styled karts, headless', () => {
+  beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; G.trackIdx = 0; });
+
+  it('races every part, skin, animated part and a trail for 10 s without a NaN', () => {
+    const parts = { exhaust: 'turbine', underglow: 'rainbow', mast: 'tricolore', nose: 'ram', skin: 'flames', trail: 'confetti' };
+    const slots = CHARACTERS.slice(0, 6).map((def, i) => ({ def, isAI: i < 5, local: i === 5, style: mergeStyle(builtinStyle(def), parts) }));
+    startField(slots);
+    for (const k of G.karts) {
+      expect(k.style).toMatchObject(parts);
+      expect(k.mesh.userData.anim.length).toBeGreaterThanOrEqual(3);
+      expect(k.mesh.userData.trail.group.children).toHaveLength(POOL);
+      expect(G.scene.children).toContain(k.mesh.userData.trail.group);
+    }
+    for (let n = 0; n < 10 * 60; n++) simStep(STEP);
+    expect(getState()).toBe('race');
+    for (const k of G.karts) {
+      expect(Number.isFinite(k.pos.x)).toBe(true); expect(Number.isFinite(k.pos.z)).toBe(true);
+      expect(Number.isFinite(k.mesh.position.x)).toBe(true);
+      const t = k.mesh.userData.trail; expect(t.group.children).toHaveLength(POOL);
+      for (const o of t.group.children) { expect(Number.isFinite(o.position.x)).toBe(true); expect(Number.isFinite(o.position.y)).toBe(true); }
+      if (k.isAI) expect(t.group.children.some(o => o.visible)).toBe(true);     // the AI is driving, so it trails
+    }
   });
 });
 

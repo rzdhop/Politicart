@@ -32,12 +32,17 @@ import { setCast } from './primitives.js';
 import { camera, getRenderer } from './render.js';
 import { CFG, G, SHADOWS } from './state.js';
 import { buildTrack } from './track.js';
+import { buildTrail } from './trail.js';
 import { clamp, lerp, rand } from './util.js';
 
 // ---------- Kart entities ----------
 function makeKart(def, isAI, style) {
   style = style ?? defaultStyle(def);
   const mesh = buildKart(def, style);
+  // The trail lives in world space, so it goes into the scene beside the kart, not under it.
+  // G.scene exists by now: startField builds it before the grid, joinField runs mid-race.
+  const trail = buildTrail(style.trail);
+  if (trail) { mesh.userData.trail = trail; G.scene.add(trail.group); }
   return {
     def, style, stats: def.stats, isAI, mesh, pos: { x: 0, z: 0 }, heading: 0, speed: 0,
     drift: { active: false, dir: 0, charge: 0 }, boost: 0, boostPower: 1.4, stun: 0, invincible: 0, slowed: 0, fly: 0, relance: 0, relanceTimer: 0,

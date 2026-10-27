@@ -162,10 +162,11 @@ export function updateKart(k, dt) {
 
 /**
  * Pose kart k's mesh from its state: position, lean, wheels, drift sparks,
- * shield ring, rotor, the stunned driver's bob and the phantom blink. `sf` is
- * the speed factor the physics step computed. Split out of updateKart so a
- * networked client, which receives the state instead of simulating it, can
- * draw karts exactly the way the simulation does (DEC-014).
+ * shield ring, rotor, the stunned driver's bob, the phantom blink, the parts
+ * that move on their own and the trail. `sf` is the speed factor the physics
+ * step computed. Split out of updateKart so a networked client, which
+ * receives the state instead of simulating it, can draw karts exactly the
+ * way the simulation does (DEC-014).
  */
 export function updateKartVisual(k, dt, sf) {
   const m = k.mesh; const flyY = k.fly > 0 ? Math.min(5, k.fly > 3.5 ? (4 - k.fly) * 10 : k.fly < 0.5 ? k.fly * 10 : 5) : 0;
@@ -182,6 +183,9 @@ export function updateKartVisual(k, dt, sf) {
   u.driver.position.y = 0.75 + (k.stun > 0 ? Math.abs(Math.sin(G.time * 20)) * 0.3 : 0);
   if (u.bumpSparks) { const on = bump > 0.35; u.bumpSparks.visible = on; if (on) { u.bumpSparks.rotation.y += dt * 25; u.bumpSparks.scale.setScalar(0.6 + (1 - bump) * 1.4); } }
   m.visible = k.phantom > 0 ? (Math.floor(G.time * 14) % 2 === 0) : true;
+  // the parts that move on their own (kart.js), then the trail (trail.js), which lives in world space
+  for (const f of u.anim) f(dt, G.time, k);
+  if (u.trail) u.trail.update(k, dt);
 }
 
 // ---------- The god kart ----------
