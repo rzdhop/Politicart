@@ -135,4 +135,17 @@ export const TRACKS = [
     points: [[0, -160], [110, -160], [150, -100], [110, -40], [150, 20], [120, 90], [40, 110], [-40, 110], [-120, 90], [-150, 20], [-110, -40], [-150, -100], [-110, -160]],
     scale: 3, boxRows: [0.04, 0.12, 0.30, 0.40, 0.58, 0.66, 0.80, 0.92],
     features: [{ t: 'pad', f: 0.08 }, { t: 'ramp', f: 0.20, h: 3.8, len: 10 }, { t: 'pit', f: 0.20833, len: 10, kind: 'water' }, { t: 'pad', f: 0.36 }, { t: 'ramp', f: 0.44, h: 2.6, len: 8 }, { t: 'chicane', f: 0.50, n: 4, kind: 'hedge' }, { t: 'pad', f: 0.64 }, { t: 'ramp', f: 0.72, h: 3.0, len: 8 }, { t: 'pit', f: 0.72667, len: 8, kind: 'water' }, { t: 'pad', f: 0.88 }, { t: 'pit', f: 0.97, len: 7, kind: 'works' }] },
+  // Tracks are referenced by index (saved stats, the lobby, the server's byTrack), so new ones are appended, never inserted.
+  // The butte has no elevation model: the climb is three ramps in series on the long right-hand straight,
+  // then the tight bends of the place du Tertre, then two more ramps on the way down the other side (A-030).
+  { id: 'montmartre', name: 'Montmartre — La Butte', desc: 'Montée pavée vers le Sacré-Cœur, place du Tertre et ses peintres, funiculaire et terrasses de café. Le Congrès est loin, les pigeons non.',
+    ground: 0x6f9a55, sky: [0x86b0e0, 0xf2dcd8], fog: 0xf2dcd8, kerb: [0x24357a, 0xf6f1e4], pavement: 0xcdbf9e, cobble: true,
+    points: [[0, -165], [95, -170], [165, -130], [175, -60], [180, 40], [150, 110], [100, 165], [30, 150], [-40, 172], [-120, 160], [-175, 100], [-160, 20], [-175, -80], [-110, -160]],
+    scale: 3, boxRows: [0.05, 0.13, 0.26, 0.40, 0.50, 0.57, 0.66, 0.82, 0.95],
+    features: [{ t: 'pad', f: 0.08 }, { t: 'ramp', f: 0.165, h: 3.6, len: 10 }, { t: 'ramp', f: 0.187, h: 3.9, len: 10 }, { t: 'ramp', f: 0.209, h: 4.2, len: 10 }, { t: 'pit', f: 0.21733, len: 9, kind: 'manif' }, { t: 'pad', f: 0.30 }, { t: 'pad', f: 0.46 }, { t: 'crossing', f: 0.60, color: 0xf6f1e4, taxi: true }, { t: 'pad', f: 0.63 }, { t: 'ramp', f: 0.70, h: 3.2, len: 10 }, { t: 'ramp', f: 0.722, h: 3.4, len: 10 }, { t: 'chicane', f: 0.78, n: 3, kind: 'vauban' }, { t: 'pit', f: 0.84, len: 8, kind: 'works' }, { t: 'pad', f: 0.92 }] },
+  { id: 'marseille', name: 'Marseille — Vieux-Port', desc: 'Les quais du Vieux-Port : bateaux, grande roue, Bonne Mère sur sa colline et terrasses de pastis. Rapide le long de l’eau, serré derrière. Le pastis n’est pas un carburant.',
+    ground: 0x8aa860, sky: [0x2b7fd6, 0xcfe9fb], fog: 0xcfe9fb, kerb: [0x2a7fd4, 0xf6f1e4], pavement: 0xd8c9a3,
+    points: [[0, -170], [110, -168], [172, -125], [178, -40], [165, 50], [175, 120], [110, 168], [30, 140], [-50, 170], [-120, 150], [-170, 95], [-140, 30], [-175, -50], [-120, -150]],
+    scale: 3, boxRows: [0.05, 0.17, 0.31, 0.44, 0.52, 0.61, 0.74, 0.83, 0.96],
+    features: [{ t: 'pad', f: 0.08 }, { t: 'ramp', f: 0.25, h: 3.4, len: 10 }, { t: 'pit', f: 0.25833, len: 9, kind: 'manif' }, { t: 'pad', f: 0.34 }, { t: 'pit', f: 0.40, len: 8, kind: 'works' }, { t: 'pad', f: 0.47 }, { t: 'crossing', f: 0.56, color: 0xf6f1e4, taxi: true }, { t: 'pad', f: 0.64 }, { t: 'chicane', f: 0.70, n: 3, kind: 'vauban' }, { t: 'ramp', f: 0.80, h: 2.8, len: 8 }, { t: 'pad', f: 0.86 }, { t: 'pit', f: 0.93, len: 8, kind: 'water' }] },
 ];

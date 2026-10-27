@@ -29,7 +29,7 @@ function TrackPreview({ points }: { points: [number, number][] }) {
   return <canvas ref={ref} width={240} height={150} />;
 }
 
-/** The three circuits as cards; the chosen one carries the gold ring. */
+/** The five circuits as cards; the chosen one carries the gold ring. */
 export function TracksScreen({ ui }: { ui: UiSnapshot }) {
   const tracks = TRACKS as unknown as Track[];
   return (
