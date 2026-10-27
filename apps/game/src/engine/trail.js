@@ -19,12 +19,12 @@ import * as THREE from 'three';
 
 import { clamp } from './util.js';
 
-/** Particles per trail. */
-export const POOL = 24;
+/** Particles per trail: enough for a dense ribbon at race distance (stage 7 raised it from 24). */
+export const POOL = 36;
 /** No trail below this speed (a kart idling on the grid leaves nothing). */
 export const MIN_SPEED = 4;
 /** Seconds between two spawns, at MIN_SPEED and at top speed. */
-export const SPAWN_SLOW = 0.04, SPAWN_FAST = 0.025;
+export const SPAWN_SLOW = 0.027, SPAWN_FAST = 0.017;
 /** The speed at which spawning is fastest (a stock kart's top speed, physics.js). */
 const TOP_SPEED = 42;
 /** Where a particle is born, in kart space: behind the rear bumper, at axle height. */
@@ -53,11 +53,11 @@ function geo() {
   GEO = {
     ribbon: new THREE.BoxGeometry(0.22, 0.1, 0.5),
     smoke: new THREE.SphereGeometry(0.3, 6, 5),
-    sparkle: new THREE.OctahedronGeometry(0.12, 0),
-    confetti: new THREE.PlaneGeometry(0.34, 0.22),
+    sparkle: new THREE.OctahedronGeometry(0.16, 0),
+    confetti: new THREE.PlaneGeometry(0.44, 0.3),
     // the beams start at the spawn point and run backwards, so scaling z stretches them away from the kart
-    beam: new THREE.BoxGeometry(0.1, 0.1, 1.2).translate(0, 0, -0.6),
-    core: new THREE.BoxGeometry(0.04, 0.04, 1.2).translate(0, 0, -0.6),
+    beam: new THREE.BoxGeometry(0.1, 0.1, 1.6).translate(0, 0, -0.8),
+    core: new THREE.BoxGeometry(0.04, 0.04, 1.6).translate(0, 0, -0.8),
   };
   return GEO;
 }
@@ -76,7 +76,7 @@ const KINDS = {
     life: 1.0, alpha: 0.45,
     build: () => { const m = basic(0x9a9a9a); return { obj: new THREE.Mesh(geo().smoke, m), mats: [m] }; },
     spawn: (p, k) => { p.vel.set((Math.random() - 0.5) * 0.6, 0.9 + Math.random() * 0.5, (Math.random() - 0.5) * 0.6); p.obj.rotation.set(0, 0, 0); },
-    move: (p, dt, f) => { p.obj.position.addScaledVector(p.vel, dt); p.obj.scale.setScalar(0.4 + f * 1.4); fade(p, f); },
+    move: (p, dt, f) => { p.obj.position.addScaledVector(p.vel, dt); p.obj.scale.setScalar(0.5 + f * 2.4); fade(p, f); },
   },
   sparkles: {
     life: 0.7, alpha: 1,
@@ -91,7 +91,7 @@ const KINDS = {
     move: (p, dt, f) => { p.vel.y -= 3 * dt; p.vel.x += Math.sin(p.age * 9) * 2 * dt; p.obj.position.addScaledVector(p.vel, dt); p.obj.rotation.x += p.spin.x * dt; p.obj.rotation.y += p.spin.y * dt; p.obj.rotation.z += p.spin.z * dt; fade(p, f); },
   },
   laser: {
-    life: 0.35, alpha: 0.85,
+    life: 0.45, alpha: 0.85,
     build: () => {
       const g = new THREE.Group(); const mats = [];
       for (const x of [-0.35, 0.35]) {
@@ -100,8 +100,8 @@ const KINDS = {
       }
       return { obj: g, mats };
     },
-    spawn: (p, k) => { p.obj.rotation.set(0, k.heading, 0); p.obj.scale.set(1, 1, 0.5); },
-    move: (p, dt, f) => { p.obj.scale.z = 0.5 + f * 2.5; p.obj.position.y = Math.max(0.1, p.obj.position.y); fade(p, f); },
+    spawn: (p, k) => { p.obj.rotation.set(0, k.heading, 0); p.obj.scale.set(1, 1, 0.6); },
+    move: (p, dt, f) => { p.obj.scale.z = 0.6 + f * 3.4; p.obj.position.y = Math.max(0.1, p.obj.position.y); fade(p, f); },
   },
 };
 

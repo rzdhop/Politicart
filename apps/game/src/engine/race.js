@@ -20,6 +20,7 @@ import { sfx } from './audio.js';
 import { CHARACTERS, TRACKS } from './data.js';
 import { updateCyclists } from './cyclists.js';
 import { hintFor, say, setHint } from './events.js';
+import { line } from './lines.js';
 import { pickupItems, stunKart, updateProjectiles } from './items.js';
 import { buildKart } from './kart.js';
 import { myStyle } from './garage.js';
@@ -131,12 +132,14 @@ function updateCamera(dt) {
   // pull back and up as the aspect drops below 1, so a phone in portrait
   // still shows the road ahead and the karts beside it.
   const narrow = clamp(1 - camera.aspect, 0, 0.6);
-  const back = (k.speed < -2 ? -11 : 12 - Math.min(2, k.boost * 2)) + narrow * 9;
-  const ty = 6.2 + (k.fly > 0 ? 3 : 0) + k.y * 0.6 + narrow * 5;
+  // Closer and lower than it used to be (A-033), so the kart's parts and its
+  // trail read on screen; the portrait terms are unchanged.
+  const back = (k.speed < -2 ? -11 : 10.5 - Math.min(2, k.boost * 2)) + narrow * 9;
+  const ty = 5.6 + (k.fly > 0 ? 3 : 0) + k.y * 0.6 + narrow * 5;
   const tx = k.pos.x - fx * back, tz = k.pos.z - fz * back;
   const a = 1 - Math.exp(-dt * (G.state === 'countdown' ? 1.6 : 6));
   camera.position.x = lerp(camera.position.x, tx, a); camera.position.z = lerp(camera.position.z, tz, a); camera.position.y = lerp(camera.position.y, ty, a);
-  camera.lookAt(k.pos.x + fx * 5, 1.2 + k.mesh.position.y * 0.5, k.pos.z + fz * 5);
+  camera.lookAt(k.pos.x + fx * 5, 1.0 + k.mesh.position.y * 0.5, k.pos.z + fz * 5);
   // a short camera shake when the followed kart is bumped
   if (k.bump > 0) { const e = k.bump * (k.bumpPower || 1) * 0.5; camera.position.x += Math.sin(G.time * 71) * e; camera.position.y += Math.sin(G.time * 53) * e * 0.6; }
   camera.fov = lerp(camera.fov, (k.boost > 0 ? 76 : 65) + narrow * 30, 1 - Math.exp(-dt * 5)); camera.updateProjectionMatrix();
@@ -204,7 +207,7 @@ export function simStep(dt) {
   kartCollisions(); pickupItems(); updateProjectiles(dt); updateRanks();
   for (const f of [...G.animated]) f(dt);
   for (const c of G.crossings) { c.t += dt; placeCrossing(c);
-    for (const k of G.karts) { if (k.hazardGrace > 0 || k.fly > 0 || k.y > 1.2) continue; const d = (k.pos.x - c.mesh.position.x) ** 2 + (k.pos.z - c.mesh.position.z) ** 2; if (d < 10) { k.hazardGrace = 1.5; k.speed *= 0.3; if (stunKart(k, 1.3)) say(k, 'RENVERSÉ PAR LE CORTÈGE !'); } } }
+    for (const k of G.karts) { if (k.hazardGrace > 0 || k.fly > 0 || k.y > 1.2) continue; const d = (k.pos.x - c.mesh.position.x) ** 2 + (k.pos.z - c.mesh.position.z) ** 2; if (d < 10) { k.hazardGrace = 1.5; k.speed *= 0.3; if (stunKart(k, 1.3)) say(k, line('hazard.cortege.hit')); } } }
   updateCyclists(dt);
   animateCrowd();
 }

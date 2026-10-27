@@ -34,8 +34,10 @@ vi.mock('../engine/audio.js', () => {
 
 import { setRoster } from '../engine/custom.js';
 import { BASE, CHARACTERS, TRACKS } from '../engine/data.js';
+import { builtinStyle } from '../engine/kartstyle.js';
 import { resetMachine, transition, getState } from '../engine/machine.js';
 import { setTransport } from '../engine/net.js';
+import { G } from '../engine/state.js';
 import { App } from './App';
 import { hud } from './Hud';
 import { loadGarage, myStyle, resetGarage } from '../engine/garage.js';
@@ -100,6 +102,8 @@ interface FakeOptions {
   coins?: number;
   /** What the next Politibox holds. */
   drop?: unknown;
+  /** What a solo race report pays (POST /api/progress): experience, politicoins, bonuses, and the level the profile comes back at. */
+  progress?: { gained: number; coins: number; bonus: { daily: boolean; levelUp: boolean; levelUpCoins: number }; level?: number };
 }
 
 /**
@@ -113,7 +117,7 @@ function fakeServer(o: FakeOptions = {}) {
     roster: o.roster ?? { chars: {}, ads: [] }, sessions: new Map<string, Who>(o.who ? [['tok-' + o.who, o.who]] : []),
     coins: o.coins ?? 0, owned: { chars: [] as string[], parts: [] as string[], trails: [] as string[] },
   };
-  const me = (who: Who) => profileOf(who, { coins: state.coins, owned: state.owned });
+  const me = (who: Who, level?: number) => ({ ...profileOf(who, { coins: state.coins, owned: state.owned }), ...(level ? { level } : {}) });
   const calls: Array<{ url: string; method: string; body: unknown; auth?: string }> = [];
   const answer = (status: number, body?: unknown) => ({
     ok: status >= 200 && status < 300,
@@ -142,6 +146,12 @@ function fakeServer(o: FakeOptions = {}) {
       return answer(200, { profile: me(who), bought: {} });
     }
     if (url === './api/logout') { if (auth) state.sessions.delete(auth.slice(7)); return answer(200, {}); }
+    if (url === './api/progress') {
+      if (!who) return answer(401, { error: 'Session expirée.' });
+      const p = o.progress ?? { gained: 40, coins: 60, bonus: { daily: false, levelUp: false, levelUpCoins: 0 } };
+      state.coins += p.coins;
+      return answer(200, { profile: me(who, p.level), gained: p.gained, coins: p.coins, bonus: p.bonus });
+    }
     if (url.startsWith('./api/admin/') && url !== './api/admin/roster') {
       if (who !== 'admin') return answer(401, { error: 'Réservé à l’administrateur : connectez-vous avec son compte.' });
       if (url === './api/admin/stats') return answer(200, DASH.stats);
@@ -762,5 +772,90 @@ describe('ownedOf (DEC-035)', () => {
     await renderServed({ server: false });
     expect(myStyle(CHARACTERS[0]!).wheels).toBe('gold');
     resetGarage();
+  });
+});
+
+/**
+ * A solo race on screen without the engine: the store's race flag is set by
+ * "C'est parti" (startRace itself is stubbed), then the local kart is put in
+ * G as startField would and the machine walked into the countdown, which is
+ * when the store captures the kart for the card.
+ */
+function raceWith(style: Record<string, unknown>) {
+  const def = CHARACTERS[0]!;
+  const player = { def, style: { ...builtinStyle(def), ...style }, rank: 0, finished: true, finishTime: 100.5, bestLap: 31.2, powerUses: 2, isAI: false };
+  act(() => { actions.play(); actions.toTracks(); actions.start(); });
+  engine.player = player; engine.karts = [player];
+  act(() => { transition('countdown'); });
+  return player;
+}
+/** The engine's state, typed loosely: state.js starts it with no kart at all, which TypeScript reads as `null` for good. */
+const engine = G as unknown as { player: unknown; karts: unknown[] };
+const leaveRace = () => { engine.player = null; engine.karts = []; };
+
+describe('the kart card and the coin line (stage 7)', () => {
+  afterEach(leaveRace);
+
+  it('shows the kart on the pause screen: the candidate with their grade, the parts fitted and the trail', async () => {
+    const { container } = await renderServed({ server: false });
+    expect($(container, 'pause-kart')).toBeNull();                 // no race yet
+    raceWith({ wheels: 'gold', spoiler: 'wing', sticker: 'tricolore', trail: 'confetti' });
+    act(() => { transition('paused'); });
+    const card = $(container, 'pause-kart')!;
+    expect(card).not.toBeNull();
+    expect(card.closest('#s-pause')).not.toBeNull();
+    expect(card.querySelector('.name')?.textContent).toBe(CHARACTERS[0]!.name);
+    expect(card.querySelector('.kart-title')?.textContent).toBe(CHARACTERS[0]!.title);
+    expect(card.querySelector('.kart-head .grade')?.getAttribute('data-grade')).toBe('common');
+    expect(card.querySelector('.kart-head .grade')?.textContent).toBe('Commun');
+    // the built-in look (classic wheels, standard spoiler, flat skin...) is not listed; the rest is, in catalogue order with its grade
+    const parts = [...card.querySelectorAll('.kart-part')].map(p => [p.querySelector('.kart-part-label')?.textContent, p.querySelector('.kart-part-value')?.textContent, p.getAttribute('data-grade')]);
+    expect(parts).toEqual([['Roues', 'Dorées', 'mythic'], ['Aileron', 'Grand aileron', 'rare'], ['Autocollant', 'Tricolore', 'common']]);
+    expect(card.querySelector('.kart-trail')?.textContent).toBe('Confettis');
+    expect(card.querySelector('.kart-trail')?.getAttribute('data-grade')).toBe('mythic');
+    act(() => { transition('race'); transition('paused'); });     // resuming and pausing again keeps the same kart
+    expect($(container, 'pause-kart')!.querySelectorAll('.kart-part')).toHaveLength(3);
+  });
+
+  it('shows a stock kart with no part and no trail line, and the card again on the results with the table intact', async () => {
+    const { container } = await renderServed({ server: false });
+    raceWith({});
+    act(() => { transition('race'); transition('results'); });
+    const card = $(container, 'r-kart')!;
+    expect(card.closest('#s-results')).not.toBeNull();
+    expect(card.querySelectorAll('.kart-part')).toHaveLength(0);
+    expect(card.querySelector('.kart-trail')).toBeNull();
+    expect($(container, 'r-body')!.querySelectorAll('tr')).toHaveLength(1);
+    expect($(container, 'r-xp')).toBeNull();                       // the static build has no accounts: no XP line at all
+  });
+
+  it('adds the politicoins and the daily bonus to the XP line of an account', async () => {
+    const { container, server } = await renderServed({ server: true, who: 'player', progress: { gained: 40, coins: 60, bonus: { daily: true, levelUp: false, levelUpCoins: 0 } } });
+    raceWith({ trail: 'laser' });
+    act(() => { transition('race'); transition('results'); });
+    await settle();
+    expect(server.calls.find(c => c.url === './api/progress')).toMatchObject({ method: 'POST', auth: 'Bearer tok-player', body: { rank: 0, field: 1, finished: true, charId: 'victor' } });
+    expect($(container, 'r-xp')?.textContent).toBe('+40 XP · +60 politicoins · bonus du jour +50');
+    expect($(container, 'r-kart')!.querySelector('.kart-trail')?.textContent).toBe('Laser');
+    expect(getSnapshot().account!.profile.coins).toBe(60);
+  });
+
+  it('names the level reached and its politicoins', async () => {
+    const { container } = await renderServed({ server: true, who: 'player', progress: { gained: 90, coins: 45, bonus: { daily: false, levelUp: true, levelUpCoins: 200 }, level: 2 } });
+    raceWith({});
+    act(() => { transition('race'); transition('results'); });
+    await settle();
+    expect($(container, 'r-xp')?.textContent).toBe('+90 XP · +45 politicoins · Niveau 2 atteint ! · niveau 2 : +200 politicoins');
+  });
+
+  it('says nothing about politicoins to a guest, who is invited to sign up', async () => {
+    const { container, server } = await renderServed({ server: true });
+    raceWith({});
+    act(() => { transition('race'); transition('results'); });
+    await settle();
+    expect(server.calls.find(c => c.url === './api/progress')).toBeUndefined();
+    expect($(container, 'r-xp')?.textContent).toBe('Créez un compte pour gagner de l’expérience et débloquer des candidat·es.');
+    expect($(container, 'r-xp')?.textContent).not.toContain('politicoins');
+    expect($(container, 'r-kart')).not.toBeNull();                 // the card needs no account
   });
 });

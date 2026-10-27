@@ -36,6 +36,7 @@ import { buildKart } from './kart.js';
 import { builtinStyle, mergeStyle } from './kartstyle.js';
 import { canvasTexture, mat } from './primitives.js';
 import { camera, getRenderer } from './render.js';
+import { buildTrail } from './trail.js';
 import { clamp, easeInOutCubic, easeOutBack, easeOutBounce, lerp } from './util.js';
 
 /** The phases of an opening, in the order they play. */
@@ -176,10 +177,11 @@ const PART_SPOT = {
   wheels: [0.98, 0.42, 1.0, 0.55], spoiler: [0, 1.35, -1.55, 1.0], sticker: [0, 0.78, 1.7, 0.5], exhaust: [0, 0.45, -1.85, 0.55],
   underglow: [0, 0.12, 0.2, 1.4], mast: [0.45, 1.7, -1.0, 0.5], nose: [0, 0.5, 2.25, 0.6], skin: [0, 0.75, 0.3, 1.5],
 };
-// What a trail prize streams behind its kart until the real trails (stage 7) take over.
-const TRAIL_COLOURS = { ribbon: [0x1f3a93, 0xf6f1e4, 0xc8102e], smoke: [0x9a9aa6, 0xc8c8d0], sparkles: [0xf2c14e, 0xffffff], confetti: [0x1f3a93, 0xc8102e, 0xf2c14e, 0x4fa3ff, 0xb14cff], laser: null };
-const TRAIL_BITS = 36, TRAIL_RADIUS = 1.75;
+// The trail prize: the kart's scale on the pedestal, the circle it drives, how fast it goes round,
+// and the speed its trail is told (a race speed, so the trail streams as it does on the circuit).
+const TRAIL_SCALE = 0.62, TRAIL_RADIUS = 1.75, TRAIL_RATE = 1.6, TRAIL_SPEED = 20;
 const extraMats = [];   // materials made for one prize, disposed with it
+let prizeTrail = null;  // the trail prize's real trail (trail.js), disposed with the prize
 
 const charDef = id => CHARACTERS.find(c => c.id === id) ?? CHARACTERS[0];
 
@@ -208,23 +210,26 @@ function partPrize(drop, colour) {
   return dt => { a += dt; k.rotation.y += dt * 0.7; ring.rotation.x = a * 2.1; ring.rotation.y = a * 1.3; halo.scale.setScalar(1 + 0.15 * Math.sin(a * 5)); };
 }
 
-/** A trail: a kart circling the pedestal with grade-coloured bits streaming behind it. */
-function trailPrize(drop, colour) {
+/**
+ * A trail: a kart circling the pedestal with the real trail (trail.js, the
+ * one the races draw) streaming behind it. The trail lives in the prize
+ * group, scaled like the kart, and is fed a fake kart driving the circle at
+ * race speed, so it needs no race scene. An unknown trail id circles bare.
+ */
+function trailPrize(drop) {
   const holder = new THREE.Group(); S.prize.add(holder);
-  const k = buildKart(CHARACTERS[0]); k.scale.setScalar(0.62); holder.add(k);
-  const palette = TRAIL_COLOURS[drop.id] ?? null;
-  const mats = (palette ?? [colour]).map(c => additive(c, drop.id === 'smoke' ? 0.45 : 0.85));
-  const geo = drop.id === 'laser' ? new THREE.BoxGeometry(0.1, 0.1, 0.34) : new THREE.SphereGeometry(0.13, 8, 6);
-  const bits = []; for (let i = 0; i < TRAIL_BITS; i++) { const b = new THREE.Mesh(geo, mats[i % mats.length]); holder.add(b); bits.push(b); }
+  const k = buildKart(CHARACTERS[0]); k.scale.setScalar(TRAIL_SCALE); holder.add(k);
+  prizeTrail = buildTrail(drop.id);
+  if (prizeTrail) { prizeTrail.group.scale.setScalar(TRAIL_SCALE); holder.add(prizeTrail.group); }
+  // The fake kart the trail follows, in the trail's (scaled) space: its nose is where it is going.
+  const fake = { pos: { x: 0, z: 0 }, y: 0, heading: 0, speed: TRAIL_SPEED, boost: 0 };
   let a = 0;
   return dt => {
-    a += dt * 1.6;
-    k.position.set(Math.cos(a) * TRAIL_RADIUS, 0, -Math.sin(a) * TRAIL_RADIUS); k.rotation.y = a;        // nose along the circle
-    for (let i = 0; i < TRAIL_BITS; i++) {
-      const b = bits[i], back = a - 0.12 - i * 0.075, fade = 1 - i / TRAIL_BITS;
-      b.position.set(Math.cos(back) * TRAIL_RADIUS, 0.35 + (drop.id === 'smoke' ? i * 0.02 : 0.08 * Math.sin(back * 6 + i)), -Math.sin(back) * TRAIL_RADIUS);
-      b.rotation.y = back; b.scale.setScalar(drop.id === 'smoke' ? 0.6 + i * 0.06 : 0.25 + fade);
-    }
+    a += dt * TRAIL_RATE;
+    // On the circle (cos a, sin a) the velocity is (-sin a, cos a): the heading whose forward (sin h, cos h) that is, is -a.
+    k.position.set(Math.cos(a) * TRAIL_RADIUS, 0, Math.sin(a) * TRAIL_RADIUS); k.rotation.y = -a;
+    fake.pos.x = k.position.x / TRAIL_SCALE; fake.pos.z = k.position.z / TRAIL_SCALE; fake.heading = -a;
+    prizeTrail?.update(fake, dt);
   };
 }
 
@@ -247,8 +252,9 @@ function coinsPrize(drop) {
   };
 }
 
-/** Forget the prize on the pedestal, geometries and one-off materials included. */
+/** Forget the prize on the pedestal, geometries and one-off materials included (a trail's shared geometries excepted, like a race's). */
 function disposePrize() {
+  if (prizeTrail) { prizeTrail.group.parent?.remove(prizeTrail.group); prizeTrail.dispose(); prizeTrail = null; }
   while (S.prize.children.length) {
     const c = S.prize.children[0]; S.prize.remove(c);
     c.traverse(o => { if (o.geometry) o.geometry.dispose(); });
@@ -262,6 +268,9 @@ let run = null;   // { drop, tl, clock, at (index of the phase entered), onPhase
 
 /** The phase on screen: one of PHASES, or 'idle' when no opening is playing. */
 export const boxPhase = () => (run ? PHASES[run.at] : 'idle');
+
+/** The Politibox scene once one exists (the tests look at what an opening put on the pedestal), else null. */
+export const boxScene = () => (S ? S.scene : null);
 
 /**
  * Start opening `drop` (the server's rollBox result): build its prize,
@@ -281,7 +290,7 @@ export function playOpening(drop, { onPhase = null } = {}) {
   S.lid.position.set(0, URN.h, 0); S.lid.rotation.set(0, 0, 0); S.lid.visible = true;
   S.slotMat.color.copy(S.dark); S.glow.intensity = 0;
   for (const m of S.sparks) m.visible = false; for (const m of S.confetti) m.visible = false;
-  S.animate = drop.kind === 'char' ? charPrize(drop) : drop.kind === 'trail' ? trailPrize(drop, colour) : drop.kind === 'coins' ? coinsPrize(drop) : partPrize(drop, colour);
+  S.animate = drop.kind === 'char' ? charPrize(drop) : drop.kind === 'trail' ? trailPrize(drop) : drop.kind === 'coins' ? coinsPrize(drop) : partPrize(drop, colour);
   S.prize.visible = false; S.prize.position.y = PEDESTAL_TOP - 2;
   run = { drop, tl: makeTimeline(drop), clock: 0, at: 0, onPhase, burstDone: false };
   onPhase?.('drop');

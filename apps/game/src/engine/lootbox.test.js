@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { boxPhase, dropGrade, makeTimeline, PHASE_TIME, PHASES, playOpening, REVEAL_TIME, skipOpening, stepOpening, stopOpening } from './lootbox.js';
+import { boxPhase, boxScene, dropGrade, makeTimeline, PHASE_TIME, PHASES, playOpening, REVEAL_TIME, skipOpening, stepOpening, stopOpening } from './lootbox.js';
+import { POOL } from './trail.js';
 
 // The Politibox opening runs headless here: the timeline is pure, and the
 // scene is plain Three.js objects that are posed but never drawn.
@@ -100,6 +101,18 @@ describe('an opening', () => {
     for (let i = 0; i < 120; i++) stepOpening(1 / 30);
     expect(boxPhase()).toBe('hold');
     expect(seen).toEqual([...PHASES]);
+  });
+
+  it('streams the real trail behind the circling kart of a trail prize, and forgets it with the prize', () => {
+    const trailGroup = () => { const found = []; boxScene().traverse(o => { if (o.name === 'trail:laser') found.push(o); }); return found; };
+    runFor(DROPS.trail, 8);
+    const [g] = trailGroup();
+    expect(trailGroup()).toHaveLength(1);
+    expect(g.children).toHaveLength(POOL);                         // trail.js's pool, not a stand-in
+    expect(g.children.some(o => o.visible)).toBe(true);            // the kart has been circling since the reveal
+    for (const o of g.children) { expect(Number.isFinite(o.position.x)).toBe(true); expect(Number.isFinite(o.position.z)).toBe(true); }
+    runFor(DROPS.coins, 0.1);
+    expect(trailGroup()).toHaveLength(0);
   });
 
   it('starts over from the drop when a new opening replaces one in progress', () => {

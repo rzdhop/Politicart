@@ -5,6 +5,7 @@ import {
   Button,
   Disclaimer,
   Field,
+  GradeBadge,
   Heading,
   Panel,
   ResultsTable,
@@ -17,7 +18,8 @@ import {
 
 import { CHARACTERS, TRACKS } from '../../engine/data.js';
 import { TEAM_NAMES } from '../../engine/teams.js';
-import { actions, isAdmin, unlockedOf, type RoomView, type TeamId, type UiSnapshot } from '../store';
+import { charGrade, GRADE_LABELS, kartCardOf } from '../kartChoices';
+import { actions, isAdmin, unlockedOf, type LobbyPlayer, type RoomView, type TeamId, type UiSnapshot } from '../store';
 import type { Character, Track } from '../types';
 
 const COLUMN = { display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' } as const;
@@ -41,6 +43,27 @@ function nextFreeChar(room: RoomView, me: string, from: string, dir: 1 | -1, all
     if (c && !taken.has(c.id) && allowed.includes(c.id)) return c.id;
   }
   return from;
+}
+
+/**
+ * A player's second line: their candidate with its grade badge, and their
+ * trail (DEC-036, A-032) as a named badge with its grade -- "—" for none --
+ * under `#lobby-trail-<id>`, so every player sees who brings what.
+ */
+function PlayerDetail({ p, c }: { p: LobbyPlayer; c: Character | undefined }) {
+  const trail = c ? kartCardOf(c, p.style ?? {}).trail : null;
+  const grade = c ? charGrade(c.id) : 'common';
+  return (
+    <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+        {c?.name}
+        {c && <GradeBadge grade={grade} label={GRADE_LABELS[grade]} size="sm" />}
+      </span>
+      <span id={'lobby-trail-' + p.id} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }} data-trail={p.style?.trail ?? 'none'}>
+        {trail ? <>{trail.label}<GradeBadge grade={trail.grade} label={GRADE_LABELS[trail.grade]} size="sm" /></> : '—'}
+      </span>
+    </span>
+  );
 }
 
 /** Name, then create a room or join one by its code. */
@@ -107,7 +130,7 @@ function RoomPanel({ ui, room }: { ui: UiSnapshot; room: RoomView }) {
       id: p.id,
       rank: p.god ? 'Dieu' : p.team ? TEAM_NAMES[p.team] : '—',
       name: p.name + (p.god ? ' (dieu)' : p.guest ? ' (invité·e)' : p.level ? ' · niv. ' + p.level : '') + (p.id === room.host ? ' (hôte)' : ''),
-      detail: c?.name,
+      detail: <PlayerDetail p={p} c={c} />,
       time: admin && p.id !== ui.net.id ? (
         <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
           {state(p.id, p.ready)}
