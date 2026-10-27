@@ -54,3 +54,26 @@ export function initTouch() {
   window.addEventListener('blur', releaseAll);
   apply();
 }
+
+/** The elements a finger may still select text in or open a menu on: the fields the player types into. */
+const EDITABLE = 'input, textarea, [contenteditable]:not([contenteditable="false"])';
+
+const editable = (target: EventTarget | null) => {
+  const el = target as Element | null;
+  return !!el && typeof el.closest === 'function' && !!el.closest(EDITABLE);
+};
+
+/**
+ * Refuse the context menu a long press raises on a phone (and a right click
+ * on a computer) everywhere but in an input, a textarea or an editable
+ * element, so a thumb resting on a button is a tap and nothing else. In
+ * touch mode the same goes for the selection older WebKit starts before the
+ * stylesheet's user-select:none is consulted. Returns the uninstall function.
+ */
+export function installNoContextMenu(doc: Document = document) {
+  const onMenu = (e: Event) => { if (!editable(e.target)) e.preventDefault(); };
+  const onSelect = (e: Event) => { if (touchMode && !editable(e.target)) e.preventDefault(); };
+  doc.addEventListener('contextmenu', onMenu);
+  doc.addEventListener('selectstart', onSelect);
+  return () => { doc.removeEventListener('contextmenu', onMenu); doc.removeEventListener('selectstart', onSelect); };
+}

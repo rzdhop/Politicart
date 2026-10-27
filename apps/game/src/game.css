@@ -14,6 +14,19 @@
    overflow-y itself). */
 html,body{overscroll-behavior:none;}
 #c,.hud{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;}
+/* The menus too: a long press on a button, a roster tile, a chip or a
+   circuit card must not select its label, raise the copy callout or drag
+   the portrait out of the tile, and a tap must not wait for a double-tap
+   (touch-action:manipulation keeps pinch-zoom on the screens that scroll;
+   #c, .hud and .touch keep touch-action:none). Only the fields the player
+   types into keep selection and the callout, so a name or a password can
+   still be pasted or corrected. The context menu itself is refused in
+   touch.ts (installNoContextMenu). */
+#ui,#ui .screen,#ui button,#ui .tile,#ui .chip,#ui .card,#ui .btn,#ui img{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;}
+#ui button,#ui .tile,#ui .chip,#ui .card,#ui .btn{touch-action:manipulation;}
+#ui .touch button{touch-action:none;}   /* the id outranks `.touch button` below; the race buttons keep their no-gesture rule */
+#ui img{-webkit-user-drag:none;}
+#ui input,#ui textarea{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default;}
 
 /* Touch controls (ui/TouchControls.tsx): steering under the left thumb,
    brake / drift / item / power under the right, pause and full screen at the
