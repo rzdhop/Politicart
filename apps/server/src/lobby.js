@@ -7,12 +7,17 @@
 // is distinguishable. The first player in is the host and picks the circuit
 // and the start; if the host leaves, the next player in line takes over.
 //
-// Each player may only drive the candidates their account has unlocked
-// (engine/progress.js); a guest -- no account -- drives the four starters.
+// Each player may only drive the starters and the candidates their account
+// owns (engine/progress.js drivableIds, DEC-034): the level alone unlocks
+// nothing any more; a guest -- no account -- drives the four starters.
 //
 // Each player also carries their kart style: the Garage edits they made, a
 // partial style (kartstyle.js), cleaned here because it comes from the
-// client. Everyone in the room draws that player's kart with it.
+// client, then stripped of every part and trail the player does not own
+// (catalog.js ownedStyle, DEC-035), so it falls back to the candidate's
+// default. Everyone in the room draws that player's kart with it. `owned` is
+// the inventory the server read for the account (the admin owns everything),
+// the commons only for a guest; it never leaves the room's state.
 //
 // The admin may enter any room as a god (DEC-030): a seventh seat beyond the
 // six, in any phase, on no team and with every candidate open. A god races
@@ -22,13 +27,16 @@
 // force() skip the host and unlock rules that bind the players.
 
 import { CHARACTERS, TRACKS } from '../../game/src/engine/data.js';
+import { emptyOwned, ownedStyle } from '../../game/src/engine/catalog.js';
 import { cleanStyle } from '../../game/src/engine/kartstyle.js';
-import { unlockedIds } from '../../game/src/engine/progress.js';
+import { drivableIds } from '../../game/src/engine/progress.js';
 import { TEAMS } from '../../game/src/engine/teams.js';
 
 export const MAX_PLAYERS = 6;
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';   // no I or O: codes are read aloud
 const CHAR_IDS = CHARACTERS.map(c => c.id);
+/** A style from the client, cleaned and kept to what `owned` owns (the commons when it is missing). */
+const styleFor = (style, owned) => ownedStyle(cleanStyle(style), owned ?? emptyOwned());
 
 /** A display name: trimmed, at most 16 characters, never empty. */
 export function cleanName(name, fallback = 'Député·e') {
@@ -47,7 +55,7 @@ export function newCode(taken, rnd = Math.random) {
 export class Room {
   constructor(code) {
     this.code = code;
-    this.players = [];          // { id, name, team, charId, ready, userId, level, allowed, style }, in join order
+    this.players = [];          // { id, name, team, charId, ready, userId, level, owned, allowed, style }, in join order
     this.trackIdx = 0;
     this.phase = 'lobby';       // 'lobby' | 'race'
   }
@@ -58,19 +66,21 @@ export class Room {
 
   /**
    * Add a player; returns the player, or an error string. `who` names the
-   * account behind the connection ({ userId, level }); without one the
-   * player is a guest. `style` is their kart style, cleaned here.
+   * account behind the connection ({ userId, level, owned }); without one
+   * the player is a guest, owning the commons. `style` is their kart style,
+   * cleaned and kept to what they own here.
    */
   join(id, name, who = {}, style) {
     if (this.phase !== 'lobby') return 'La course a déjà commencé.';
     if (this.players.length >= MAX_PLAYERS) return 'Salle complète (6 joueurs).';
-    const allowed = unlockedIds(who.userId ? who.level : 0);
+    const owned = who.userId ? who.owned ?? emptyOwned() : emptyOwned();
+    const allowed = drivableIds(who.userId ? who.level : 0, owned);
     const taken = new Set(this.players.map(p => p.charId));
     const charId = allowed.find(c => !taken.has(c));
     if (!charId) return 'Plus aucun candidat libre pour vous dans cette salle.';
     const count = t => this.players.filter(p => p.team === t).length;
     const team = count('bleu') <= count('rouge') ? 'bleu' : 'rouge';
-    const p = { id, name: cleanName(name), team, charId, ready: false, userId: who.userId ?? null, level: who.userId ? who.level : null, allowed, style: cleanStyle(style) };
+    const p = { id, name: cleanName(name), team, charId, ready: false, userId: who.userId ?? null, level: who.userId ? who.level : null, owned, allowed, style: styleFor(style, owned) };
     this.players.push(p);
     return p;
   }
@@ -78,7 +88,8 @@ export class Room {
   /**
    * Seat the admin as a god: outside the six-player cap, during a race too,
    * on no team, any candidate nobody else drives. Returns the player or an
-   * error string.
+   * error string. The style is kept to `who.owned` like anyone's (the server
+   * hands the admin the whole catalogue).
    */
   joinGod(id, name, who = {}, style, avoid = []) {
     if (this.players.some(p => p.god)) return 'Un dieu est déjà dans cette salle.';
@@ -86,15 +97,20 @@ export class Room {
     const taken = new Set([...this.players.map(p => p.charId), ...avoid]);
     const charId = CHAR_IDS.find(c => !taken.has(c));
     if (!charId) return 'Plus aucun candidat libre dans cette salle.';
-    const p = { id, name: cleanName(name), team: null, charId, ready: false, userId: who.userId ?? null, level: who.level ?? null, allowed: [...CHAR_IDS], style: cleanStyle(style), god: true };
+    const owned = who.owned ?? emptyOwned();
+    const p = { id, name: cleanName(name), team: null, charId, ready: false, userId: who.userId ?? null, level: who.level ?? null, owned, allowed: [...CHAR_IDS], style: styleFor(style, owned), god: true };
     this.players.push(p);
     return p;
   }
 
-  /** An account levelled up while in the room: it may drive its new candidates. */
-  setLevel(id, level) {
+  /**
+   * An account changed while in the room (a level, a purchase, a Plitibox
+   * win): it may drive and wear what it owns now. A god keeps every candidate.
+   */
+  setProfile(id, { level, owned }) {
     const p = this.player(id); if (!p || !p.userId) return;
-    p.level = level; p.allowed = unlockedIds(level);
+    p.level = level; p.owned = owned ?? emptyOwned();
+    p.allowed = p.god ? [...CHAR_IDS] : drivableIds(level, p.owned);
   }
 
   leave(id) { this.players = this.players.filter(p => p.id !== id); }
@@ -111,7 +127,7 @@ export class Room {
       p.charId = charId;
     }
     if (ready !== undefined) p.ready = !!ready;
-    if (style !== undefined) p.style = cleanStyle(style);
+    if (style !== undefined) p.style = styleFor(style, p.owned);
     return null;
   }
 

@@ -43,6 +43,19 @@ When a game server answers, the title screen shows **Compte**. An account is a p
 
 Solo races are scored by the browser and reported to the server (at most one reward a minute); team races are scored by the server. The game is not built to resist cheating.
 
+Every race also pays **politicoins**: 60 for a win down to 12 from sixth place, 5 for an unfinished race, 20 more for the winning team, 100 × the new level on a level-up, and 50 for the first race of the day (UTC). The server keeps the balance, what each account owns and its stats, and charges every price and draws every Plitibox itself; a style part or trail the account does not own never reaches a room. The routes, all under the account's `Authorization: Bearer` token and open to every origin:
+
+| Route | Body | Answer |
+| --- | --- | --- |
+| `POST /api/progress` | `{rank, field, finished, trackId?, charId?, time?, bestLap?}` | `{profile, gained, coins, bonus}`: the experience, the politicoins and the bonuses included (`daily`, `levelUp`, `levelUpCoins`) |
+| `POST /api/shop/char` | `{id}` | `{profile, bought}`; 403 below the candidate's level, 402 short of coins, 409 already owned |
+| `POST /api/shop/part` | `{category, value}` | `{profile, bought}`; commons are free and trails are never sold (400) |
+| `POST /api/box/open` | `{}` | `{profile, drop}`: 120 politicoins for a Plitibox; a duplicate is refunded by grade |
+| `GET /api/stats/friends` | | `{friends}`: each friend's level, stats and collection, never their balance |
+| `POST /api/admin/coins` | `{id, amount}` | `{user}`: the admin gives 0 to 100 000 politicoins |
+
+Shop and box calls are capped at 30 a minute per account.
+
 Accounts are kept in a JSON file by default, or in Postgres when `DATABASE_URL` is set:
 
 | Variable | Default | Meaning |

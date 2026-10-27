@@ -95,13 +95,16 @@ describe('lobby over WebSocket', () => {
     const a = await hello(alice), b = await hello('Bob');
     const wa = a.welcome, wb = b.welcome;
     expect(wa.profile.name).toBe(alice.name);
+    expect(wa.profile).toMatchObject({ coins: 0, owned: { chars: [], parts: [], trails: [] }, reachable: ['victor', 'gege', 'maurice', 'capucine'] });
     expect(wb.profile).toBeNull();
     a.send({ t: 'create' });
     const { room } = await a.next(isRoom(r => r.players.length === 1));
     expect(room.host).toBe(wa.id);
     expect(room.code).toMatch(/^[A-Z]{4}$/);
-    b.send({ t: 'join', code: room.code.toLowerCase() });
+    // a guest owns the commons only: the gold wheels it sends are dropped, its colours kept (DEC-035)
+    b.send({ t: 'join', code: room.code.toLowerCase(), style: { wheels: 'gold', trail: 'laser', body: '#112233' } });
     const both = await a.next(isRoom(r => r.players.length === 2));
+    expect(both.room.players[1].style).toEqual({ body: '#112233' });
     expect(both.room.players.map(p => p.name)).toEqual([alice.name, 'Bob']);
     expect(both.room.players.map(p => p.guest)).toEqual([false, true]);
     expect(both.room.players.map(p => p.team)).toEqual(['bleu', 'rouge']);
@@ -192,8 +195,21 @@ describe('accounts', () => {
     expect(first.gained).toBe(70);
     expect(first.profile.xp).toBe(70);
     const again = await (await post('/api/progress', { rank: 0, field: 6, finished: true }, u.token)).json();
-    expect(again.gained).toBe(0);
+    expect(again).toMatchObject({ gained: 0, coins: 0, bonus: { daily: false, levelUp: false, levelUpCoins: 0 } });
     expect((await post('/api/progress', { rank: 0 })).status).toBe(401);
+  });
+
+  it('pays a solo race in politicoins and keeps its stats: circuit, candidate, times', async () => {
+    const u = await account();
+    const r = await (await post('/api/progress', { rank: 1, field: 6, finished: true, trackId: 'bourbon', charId: 'gege', time: 201.5, bestLap: 55.25 }, u.token)).json();
+    expect(r).toMatchObject({ gained: 60, coins: 45 + 50, bonus: { daily: true, levelUp: false, levelUpCoins: 0 } });
+    expect(r.profile.coins).toBe(95);
+    expect(r.profile.stats).toMatchObject({ races: 1, podiums: 1, wins: 0, solo: 1, team: 0, bestLap: { bourbon: 55.25 }, bestTime: { bourbon: 201.5 }, byChar: { gege: 1 }, coinsEarned: 95 });
+    // anything else in those fields is ignored, never refused
+    const v = await account();
+    const odd = await (await post('/api/progress', { rank: 5, field: 6, finished: true, trackId: 'nowhere', charId: '__proto__', time: 'fast', bestLap: 2 }, v.token)).json();
+    expect(odd).toMatchObject({ gained: 20, coins: 12 + 50 });
+    expect(odd.profile.stats).toMatchObject({ races: 1, bestLap: {}, bestTime: {}, byChar: {} });
   });
 
   it('keeps guests out of room creation and away from locked candidates', async () => {
@@ -220,12 +236,16 @@ describe('accounts', () => {
     const race = races.at(-1);
     const slotA = race.roster.findIndex(s => s.playerId === a.welcome.id), slotB = race.roster.findIndex(s => s.playerId === b.welcome.id);
     race.io.done({
-      ranking: [{ slot: slotA, rank: 0, finished: true, team: 'bleu', isAI: false }, { slot: slotB, rank: 1, finished: true, team: 'rouge', isAI: false }],
+      ranking: [{ slot: slotA, rank: 0, finished: true, team: 'bleu', isAI: false, time: 130, bestLap: 41.5 }, { slot: slotB, rank: 1, finished: true, team: 'rouge', isAI: false }],
       teams: [{ team: 'bleu', points: 10, drivers: [slotA] }, { team: 'rouge', points: 8, drivers: [slotB] }],
     });
     const p = await a.next(m => m.t === 'profile');
     expect(p.gained).toBe(70 + 20);          // winner, and the winning team
     expect(p.profile.xp).toBe(90);
+    expect(p.coins).toBe(60 + 20 + 50);      // first place, the winning team, the first race of the day
+    expect(p.bonus).toEqual({ daily: true, levelUp: false, levelUpCoins: 0 });
+    expect(p.profile.coins).toBe(130);
+    expect(p.profile.stats).toMatchObject({ races: 1, wins: 1, podiums: 1, finished: 1, team: 1, teamWins: 1, solo: 0, bestLap: { elysee: 41.5 }, bestTime: { elysee: 130 } });
     expect(b.seen.some(m => m.t === 'profile')).toBe(false);
     a.close(); b.close();
   });
