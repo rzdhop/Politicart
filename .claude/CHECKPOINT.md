@@ -2,7 +2,21 @@
 
 Current state only. History lives in git.
 
-## Latest task -- 2026-10-27: cast review, quieter HUD, admin dashboard and god seat
+## Latest task -- 2026-10-27: politicoins, the Plitibox, grades, parts, trails, two circuits, stats
+
+- **Branch:** `feature/epic-turing-clj1rj`, cut from `main` at `1bbcd2e`.
+- **Plan:** `.claude/PLAN.md` (DEC-032..039, A-026..A-035). Stages run in
+  worker agents dispatched by the session (DEC-039): wave 1 (catalogue,
+  store, maps, lines, mobile), wave 2 (kart parts and trails, server
+  economy, library components), then shop and Plitibox, Garage locks and
+  stats, the Garage in play, docs and push.
+- **Baseline at `1bbcd2e`:** `npm ci` (this container had no node_modules);
+  Tier 1 green (ui 241 + 8 skipped, game 254, server 118), audit 0. E2E
+  baseline: see the action log (the container's software WebGL fails the
+  desktop solo-race specs on main too; stages are judged against it).
+- **Progress:** stage 0 done. (Updated as stages land.)
+
+## Previous task -- 2026-10-27: cast review, quieter HUD, admin dashboard and god seat
 
 - **Branch:** `feature/relaxed-pascal-rlbpu6`, cut from `main` at `fd118b5`.
 - **Shipped on the branch:** DEC-028 (three powers retuned: Déconstruction,
