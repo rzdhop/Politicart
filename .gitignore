@@ -36,3 +36,4 @@ ds-bundle/
 
 # Accounts kept by a local game server (apps/server/src/store.js)
 apps/server/data/
+.neon
