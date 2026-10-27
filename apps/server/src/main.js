@@ -13,8 +13,10 @@
 //   KR_ADMIN_PASSWORD_HASH  its password hash (admin.js); unset or malformed,
 //                           nobody is admin
 //
-// `npm start` also reads the repository's .env file when there is one
-// (.env.example lists the keys); variables already set win over it.
+// `npm start` also reads the repository's .env and .env.local files when
+// they exist (.env.example lists the keys); .env.local wins over .env, and
+// variables already set win over both. `neon deploy` writes the Neon
+// database's DATABASE_URL into .env.local.
 import { networkInterfaces } from 'node:os';
 import { fileURLToPath } from 'node:url';
 

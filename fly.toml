@@ -10,6 +10,8 @@
 #
 # The app name below is a placeholder; `fly launch` replaces it with yours.
 app = "kart-republique"
+# Paris: the players are in France. The Neon database is in Frankfurt (Neon
+# has no Paris region), about 10 ms away.
 primary_region = "cdg"
 
 [build]
