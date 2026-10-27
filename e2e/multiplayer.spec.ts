@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import { ADMIN_PASSWORD, ADMIN_USER } from './fixtures/admin';
 
 /**
  * Team races, end to end: two real browsers against the real game server
@@ -143,6 +144,14 @@ test.describe('Multijoueur', () => {
     // Gina (an account, so she may host) styled her kart in the Garage, kept in her browser; Bob, a guest, did not.
     // Account names are unique per server, and another spec here already signs up Alice + RUN.
     const host = await open(browser, 'Gina' + RUN, { account: true });
+    // Gold wheels are a mythic part: the server only shows what a player owns (DEC-035), so the
+    // admin grants Gina the politicoins and she buys them through the shop API before racing.
+    const bearer = (token: string) => ({ authorization: 'Bearer ' + token });
+    const token = await host.evaluate(() => (JSON.parse(localStorage.getItem('kr-account') ?? '{}') as { token: string }).token);
+    const me = await (await host.request.get(SERVER + 'api/me', { headers: bearer(token) })).json() as { profile: { id: string } };
+    const admin = await (await host.request.post(SERVER + 'api/login', { data: { name: ADMIN_USER, password: ADMIN_PASSWORD } })).json() as { token: string };
+    expect((await host.request.post(SERVER + 'api/admin/coins', { headers: bearer(admin.token), data: { id: me.profile.id, amount: 500 } })).status()).toBe(200);
+    expect((await host.request.post(SERVER + 'api/shop/part', { headers: bearer(token), data: { category: 'wheels', value: 'gold' } })).status()).toBe(200);
     await host.evaluate(() => localStorage.setItem('kr-kart', JSON.stringify({ wheels: 'gold', number: 7, body: '#00ff00' })));
     await host.reload();
     await expect(host.locator('#b-multi')).toBeVisible();
