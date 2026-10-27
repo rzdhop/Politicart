@@ -1,4 +1,4 @@
-import { expect, request, test, type Browser, type Page } from '@playwright/test';
+import { expect, request, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 
 import { ADMIN_PASSWORD, ADMIN_USER } from './fixtures/admin';
 
@@ -33,9 +33,13 @@ async function open(page: Page): Promise<Page> {
   return page;
 }
 
+// Every context a spec opens is closed after it: pages left open keep rendering and slow the specs that follow.
+const contexts: BrowserContext[] = [];
+
 /** A fresh browser (its own storage) on the game server: a different player, logged in nowhere. */
 async function visitor(browser: Browser): Promise<Page> {
-  const page = await (await browser.newContext()).newPage();
+  const context = await browser.newContext(); contexts.push(context);
+  const page = await context.newPage();
   page.on('pageerror', (error) => errors.push(error.message));
   return open(page);
 }
@@ -77,6 +81,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async () => {
+  await Promise.all(contexts.splice(0).map(c => c.close()));
   expect(errors, `page errors: ${errors.join('; ')}`).toEqual([]);
   // Safety net: the default cast on the server, whatever the spec did.
   const api = await request.newContext({ baseURL: SERVER });

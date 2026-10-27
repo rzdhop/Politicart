@@ -14,6 +14,9 @@
 //   POST /api/admin/users/logout       {id}           -> {}  closes the account's sessions and sockets, no ban
 //   POST /api/admin/rooms/close        {code}         -> {}  ends the race if one runs, empties the room
 //   POST /api/admin/connections/kick   {id}           -> {}  closes one socket
+//   POST /api/admin/rooms/command      {code, cmd}    -> { text }  any lobby or race command (DEC-031):
+//        start, track, kick, team, char here; stun, slow, boost, give, fire, cast,
+//        hazard, front, back, swap, lap, laps, god, finish in the race (godcmd.js)
 //
 // The race counters live in the store's 'stats' document, written once per
 // race from recordRace() and recordSolo(); everything else is computed on
@@ -25,6 +28,7 @@
 //   live.kick(connId)   -> closes that socket
 //   live.closeRoom(code)
 //   live.disconnectUser(userId, msg)  -> closes every socket of that account
+//   live.command(code, cmd)  -> Promise<{ ok, text }>
 
 import { levelFromXp } from '../../game/src/engine/progress.js';
 import { nameKey } from './store.js';
@@ -140,6 +144,12 @@ export function dashboardApi(store, { requireAdmin, live, log = console }) {
       const b = await body(req); const code = b && typeof b.code === 'string' ? b.code.toUpperCase().trim() : '';
       if (!live.closeRoom(code)) return reply(res, 404, { error: 'Aucune salle avec ce code.' });
       reply(res, 200, {});
+    },
+    'POST /api/admin/rooms/command': async (req, res) => {
+      const b = await body(req); if (!b || !b.cmd || typeof b.cmd !== 'object') return reply(res, 400, { error: 'Commande manquante.' });
+      const r = await live.command(b.code, b.cmd);
+      if (!r.ok) return reply(res, 400, { error: r.text });
+      reply(res, 200, { text: r.text });
     },
     'POST /api/admin/connections/kick': async (req, res) => {
       const b = await body(req); const cid = b && id(b.id); if (!cid) return reply(res, 400, { error: 'Connexion manquante.' });

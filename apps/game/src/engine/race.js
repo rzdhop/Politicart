@@ -88,12 +88,32 @@ export function startField(slots) {
     k.pos.x = s.x + s.sx * lane; k.pos.z = s.z + s.sz * lane; k.heading = Math.atan2(s.tx, s.tz); k.idx = 6 + i * 4;
     k.mesh.position.set(k.pos.x, 0, k.pos.z); k.mesh.rotation.y = k.heading; scene.add(k.mesh);
   });
-  G.time = 0; G.countdown = 3.6; G.resultsAt = Infinity; G.wrongTimer = 0;
+  G.time = 0; G.countdown = 3.6; G.resultsAt = Infinity; G.wrongTimer = 0; G.laps = CFG.laps;
   const s = G.samples[0]; camera.position.set(s.x - s.tx * 14, 7, s.z - s.tz * 14); camera.fov = 65;
   setHint('Ramassez une urne dorée pour obtenir un objet.');
   // The god's hint only: a banner here would reach the god twice in a team race, once from this client and once from the server's copy of the engine.
   if (G.player.god) hintFor(G.player, 'Mode dieu : pouvoir sans recharge, objets à volonté, intouchable. Vous ne marquez pas de points.');
   transition('countdown');
+}
+
+/**
+ * Add a kart to the race in progress (DEC-031: the admin joins any game at
+ * any moment). `sl` is a slot as startField takes them. The kart starts a
+ * little behind the last kart still racing, on its lap, and takes the next
+ * grid slot: its index in G.karts is G.karts.length before the call.
+ */
+export function joinField(sl) {
+  const k = makeKart(sl.def, sl.isAI, sl.style); k.team = sl.team ?? null; k.god = sl.god === true;
+  const racing = G.karts.filter(o => !o.finished);
+  const last = racing.length ? racing.reduce((m, o) => (o.progress < m.progress ? o : m)) : null;
+  let idx = last ? last.idx - 8 : 6, lap = last ? last.lap : 0;
+  if (idx < 0) { idx += G.N; lap--; }
+  const s = G.samples[idx];
+  k.pos.x = s.x; k.pos.z = s.z; k.heading = Math.atan2(s.tx, s.tz); k.idx = idx; k.lap = lap; k.maxLap = Math.max(0, lap); k.progress = lap + idx / G.N;
+  k.lapStart = G.time; k.rank = G.karts.length; k.powerCd = k.god ? 0 : k.powerCd;
+  k.mesh.position.set(k.pos.x, 0, k.pos.z); k.mesh.rotation.y = k.heading; G.scene.add(k.mesh);
+  G.karts.push(k);
+  return k;
 }
 
 /** Free the geometry of a scene (or any object tree) that is being replaced. */

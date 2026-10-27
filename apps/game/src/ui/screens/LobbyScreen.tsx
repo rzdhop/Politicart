@@ -17,7 +17,7 @@ import {
 
 import { CHARACTERS, TRACKS } from '../../engine/data.js';
 import { TEAM_NAMES } from '../../engine/teams.js';
-import { actions, unlockedOf, type RoomView, type TeamId, type UiSnapshot } from '../store';
+import { actions, isAdmin, unlockedOf, type RoomView, type TeamId, type UiSnapshot } from '../store';
 import type { Character, Track } from '../types';
 
 const COLUMN = { display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' } as const;
@@ -94,17 +94,27 @@ function RoomPanel({ ui, room }: { ui: UiSnapshot; room: RoomView }) {
   const me = room.players.find(p => p.id === ui.net.id);
   const isHost = room.host === ui.net.id;
   const others = room.players.filter(p => p.id !== room.host);
-  const canStart = isHost && others.every(p => p.ready);
+  // The admin has absolute power over the room (DEC-031): starts it ready or not, picks the circuit, moves or excludes anyone.
+  const admin = isAdmin(ui);
+  const canStart = (isHost && others.every(p => p.ready)) || admin;
   // A god (the admin, DEC-030) drives any candidate and belongs to no team.
-  const allowed = me?.god ? CHARS.map(c => c.id) : unlockedOf(ui);
+  const allowed = me?.god || admin ? CHARS.map(c => c.id) : unlockedOf(ui);
+  const state = (id: string, ready: boolean) => (id === room.host ? 'hôte' : ready ? 'prêt·e' : '…');
   const rows: ResultsRow[] = room.players.map(p => {
     const c = CHARS.find(x => x.id === p.charId);
+    const other = p.team === 'bleu' ? 'rouge' : 'bleu';
     return {
       id: p.id,
       rank: p.god ? 'Dieu' : p.team ? TEAM_NAMES[p.team] : '—',
       name: p.name + (p.god ? ' (dieu)' : p.guest ? ' (invité·e)' : p.level ? ' · niv. ' + p.level : '') + (p.id === room.host ? ' (hôte)' : ''),
       detail: c?.name,
-      time: p.id === room.host ? 'hôte' : p.ready ? 'prêt·e' : '…',
+      time: admin && p.id !== ui.net.id ? (
+        <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+          {state(p.id, p.ready)}
+          {!p.god && room.phase === 'lobby' && <Button id={'b-mp-move-' + p.id} variant="ghost" onClick={() => actions.godCommand({ cmd: 'team', id: p.id, team: other })}>{'→ ' + TEAM_NAMES[other]}</Button>}
+          <Button id={'b-mp-kick-' + p.id} variant="ghost" onClick={() => actions.godCommand({ cmd: 'kick', id: p.id })}>Exclure</Button>
+        </span>
+      ) : state(p.id, p.ready),
       highlighted: p.id === ui.net.id,
     };
   });
@@ -113,7 +123,13 @@ function RoomPanel({ ui, room }: { ui: UiSnapshot; room: RoomView }) {
     <>
       <Subtitle id="lobby-room" style={{ fontSize: 18 }}>{'Salle ' + room.code + ' · donnez ce code à vos ami·es'}</Subtitle>
       <ResultsTable rows={rows} columns={['Équipe', 'Joueur·se', 'État']} bodyProps={{ id: 'lobby-players' }} />
-      {me?.god && room.phase === 'race' && <Disclaimer id="lobby-god-wait">Course en cours : vous entrez en dieu à la prochaine.</Disclaimer>}
+      {admin && room.phase === 'race' && (
+        <Row id="lobby-race-running">
+          <Disclaimer>Course en cours dans cette salle.</Disclaimer>
+          <Button id="b-mp-god-enter" onClick={() => actions.godJoin(room.code)}>Entrer dans la course en dieu</Button>
+          <Button id="b-mp-god-finish" variant="ghost" onClick={() => actions.godCommand({ cmd: 'finish' })}>Terminer la course</Button>
+        </Row>
+      )}
       {me && (
         <Row>
           {!me.god && TEAM_IDS.map(t => (
@@ -129,7 +145,7 @@ function RoomPanel({ ui, room }: { ui: UiSnapshot; room: RoomView }) {
       )}
       <Row>
         {TRACK_LIST.map((t, i) => (
-          <Button key={t.name} id={'b-mp-track-' + i} variant={room.trackIdx === i ? 'primary' : 'ghost'} aria-pressed={room.trackIdx === i} disabled={!isHost} onClick={() => actions.pickTrack(i)}>
+          <Button key={t.name} id={'b-mp-track-' + i} variant={room.trackIdx === i ? 'primary' : 'ghost'} aria-pressed={room.trackIdx === i} disabled={!isHost && !admin} onClick={() => actions.pickTrack(i)}>
             {t.name.split(' — ')[0]}
           </Button>
         ))}
@@ -138,6 +154,7 @@ function RoomPanel({ ui, room }: { ui: UiSnapshot; room: RoomView }) {
         {isHost
           ? <Button id="b-mp-start" disabled={!canStart} onClick={actions.startNetRace}>{canStart ? 'Lancer la course' : 'En attente des joueur·ses…'}</Button>
           : <Button id="b-mp-ready" variant={me?.ready ? 'primary' : 'ghost'} aria-pressed={!!me?.ready} onClick={() => actions.setReady(!me?.ready)}>{me?.ready ? 'Prêt·e !' : 'Je suis prêt·e'}</Button>}
+        {admin && !isHost && room.phase === 'lobby' && <Button id="b-mp-force" onClick={actions.startNetRace}>Lancer maintenant (admin)</Button>}
         <Button id="b-mp-leave" variant="ghost" onClick={actions.leaveRoom}>Quitter la salle</Button>
       </Row>
       <InvitePanel ui={ui} room={room} />

@@ -76,6 +76,8 @@ export const dashboard = {
   logoutUser: (token, id, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/admin/users/logout', { token, body: { id } }),
   closeRoom: (token, code, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/admin/rooms/close', { token, body: { code } }),
   kick: (token, id, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/admin/connections/kick', { token, body: { id } }),
+  /** Any command on room `code`, lobby or race (DEC-031): { ok, text }. */
+  command: (token, code, cmd, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/admin/rooms/command', { token, body: { code, cmd } }),
 };
 
 /** The cast the admin set, the same for every player: { ok, roster } or { ok: false, error }. Public. */

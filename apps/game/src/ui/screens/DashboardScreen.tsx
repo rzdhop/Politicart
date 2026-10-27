@@ -17,7 +17,8 @@ import {
 
 import { CHARACTERS, TRACKS } from '../../engine/data.js';
 import { TEAM_NAMES } from '../../engine/teams.js';
-import { actions, type DashConn, type DashRoom, type DashStats, type DashUser, type UiSnapshot } from '../store';
+import { GodConsole } from '../GodConsole';
+import { actions, type DashConn, type DashRoom, type DashStats, type DashUser, type GodCmd, type UiSnapshot } from '../store';
 import type { Character, Track } from '../types';
 
 const COLUMN = { display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' } as const;
@@ -127,8 +128,50 @@ function Users({ ui }: { ui: UiSnapshot }) {
   );
 }
 
-/** The rooms open right now: who is in, which phase, enter as a god or close. */
-function Rooms({ rooms }: { rooms: DashRoom[] }) {
+/**
+ * Absolute power over one room (DEC-031). In the lobby: start it now, pick
+ * its circuit, move a player to the other team, exclude anyone. In a race:
+ * the whole god console, aimed at the race's karts.
+ */
+function RoomControl({ room, reply }: { room: DashRoom; reply: string | null }) {
+  const send = (cmd: GodCmd) => { void actions.roomCommand(room.code, cmd); };
+  const players = room.players.map(p => {
+    const other = p.team === 'bleu' ? 'rouge' : 'bleu';
+    return (
+      <span key={p.id} style={{ display: 'inline-flex', gap: 4, alignItems: 'center', marginRight: 10 }}>
+        <b>{p.name}</b>
+        {!p.god && room.phase === 'lobby' && <Button id={'b-dash-move-' + p.id} variant="ghost" onClick={() => send({ cmd: 'team', id: p.id, team: other })}>{'→ ' + TEAM_NAMES[other]}</Button>}
+        <Button id={'b-dash-exclude-' + p.id} variant="ghost" onClick={() => send({ cmd: 'kick', id: p.id })}>Exclure</Button>
+      </span>
+    );
+  });
+  return (
+    <AdminCard id={'dash-control-' + room.code} style={{ width: '100%', textAlign: 'left' }}>
+      <div className="name">{'Salle ' + room.code + (room.phase === 'race' ? ' · en course' : ' · salon')}</div>
+      <Row style={{ justifyContent: 'flex-start' }}>{players.length ? players : <span>Personne.</span>}</Row>
+      {room.phase === 'lobby' ? (
+        <Row style={{ justifyContent: 'flex-start' }}>
+          {TRACK_LIST.map((t, i) => (
+            <Button key={t.name} id={'b-dash-track-' + room.code + '-' + i} variant={room.trackIdx === i ? 'primary' : 'ghost'} aria-pressed={room.trackIdx === i} onClick={() => send({ cmd: 'track', trackIdx: i })}>{trackName(i)}</Button>
+          ))}
+          <Button id={'b-dash-start-' + room.code} disabled={!room.players.length} onClick={() => send({ cmd: 'start' })}>Lancer maintenant</Button>
+        </Row>
+      ) : room.race ? (
+        <GodConsole
+          idPrefix={'dash-god-' + room.code}
+          karts={room.race.map(k => ({ slot: k.slot, label: k.name + (k.isAI ? ' (IA)' : '') + (k.god ? ' ⚡' : '') }))}
+          self={null}
+          send={send}
+          reply={reply}
+        />
+      ) : <Disclaimer>La course démarre…</Disclaimer>}
+    </AdminCard>
+  );
+}
+
+/** The rooms open right now: who is in, which phase; enter as a god at any moment, take control, or close. */
+function Rooms({ rooms, reply }: { rooms: DashRoom[]; reply: string | null }) {
+  const [managed, setManaged] = useState<string | null>(null);
   const rows: ResultsRow[] = rooms.map(r => ({
     id: r.code,
     rank: r.code,
@@ -136,18 +179,21 @@ function Rooms({ rooms }: { rooms: DashRoom[] }) {
     detail: r.players.map(p => p.name + (p.god ? ' (dieu)' : p.team ? ' (' + TEAM_NAMES[p.team] + ')' : '') + ' · ' + charName(p.charId)).join(', ') || 'vide',
     time: (
       <span style={ACTIONS}>
-        {!r.players.some(p => p.god) && <Button id={'b-dash-god-' + r.code} onClick={() => actions.godJoin(r.code)}>Entrer en dieu</Button>}
+        <Button id={'b-dash-god-' + r.code} onClick={() => actions.godJoin(r.code)}>{r.phase === 'race' ? 'Entrer dans la course' : 'Entrer en dieu'}</Button>
+        <Button id={'b-dash-manage-' + r.code} variant={managed === r.code ? 'primary' : 'ghost'} aria-pressed={managed === r.code} onClick={() => setManaged(managed === r.code ? null : r.code)}>Contrôler</Button>
         <Button id={'b-dash-close-' + r.code} variant="ghost" onClick={() => { void actions.closeRoom(r.code); }}>Fermer</Button>
       </span>
     ),
   }));
+  const room = rooms.find(r => r.code === managed);
   return (
     <Panel style={{ ...COLUMN, gap: 8, ...WIDE }}>
       <Heading level={3} style={{ fontSize: 20 }}>Salles</Heading>
       {rows.length
         ? <ResultsTable rows={rows} columns={['Code', 'Salle', '']} bodyProps={{ id: 'dash-rooms' }} />
         : <Disclaimer id="dash-rooms-empty">Aucune salle ouverte pour l’instant.</Disclaimer>}
-      <Disclaimer>En dieu, vous entrez dans la salle hors des six places et des équipes : pouvoir sans recharge, objets à volonté, intouchable, et aucun point marqué. Pendant une course, vous attendez la suivante.</Disclaimer>
+      {room && <RoomControl room={room} reply={reply} />}
+      <Disclaimer>En dieu, vous entrez dans la salle ou dans la course en cours, à tout moment, hors des six places et des équipes : pouvoir sans recharge, objets à volonté, intouchable, aucun point marqué. « Contrôler » change la salle à distance : départ forcé, circuit, équipes, exclusions, et en course tout ce que permet la console divine.</Disclaimer>
     </Panel>
   );
 }
@@ -211,7 +257,7 @@ export function DashboardScreen({ ui }: { ui: UiSnapshot }) {
         {d.error ?? d.notice ?? (d.updatedAt ? 'Actualisé à ' + new Date(d.updatedAt).toLocaleTimeString('fr-FR') : '')}
       </Disclaimer>
       <Stats stats={d.stats} />
-      <Rooms rooms={d.rooms} />
+      <Rooms rooms={d.rooms} reply={d.error ?? d.notice} />
       <Users ui={ui} />
       <Connections connections={d.connections} />
       <Top stats={d.stats} />

@@ -20,7 +20,8 @@
 // charId, ready} | track {trackIdx} | start | leave | input {...} (during a
 // race) | friends | friendAdd {name} | friendAccept {id} | friendRemove {id}
 // | invite {id} | godJoin {code, style} (the admin enters a room as a god,
-// DEC-030).
+// DEC-030, mid-race included) | god {code?, cmd} (the admin changes any room
+// at will, DEC-031: lobby commands here, race commands in the worker).
 // Server -> client: welcome {id, profile} | room {room} | error {msg} |
 // notice {msg} | race {...} | snap {...} | results {...} | profile {profile,
 // gained} | friends {list} | invite {from: {id, name}, code}. Every message is
@@ -81,11 +82,15 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
   // The dashboard's window on the live server: sockets and rooms, and the levers on them.
   const live = {
     connections: () => [...conns.values()].map(c => ({ id: c.id, name: c.name, userId: c.user?.id ?? null, guest: !c.user, admin: !!c.user && api.isAdmin(c.user), room: c.code })),
-    rooms: () => [...rooms.values()].map(r => ({ ...r.view(), since: raceSince.get(r.code) ?? null })),
+    rooms: () => [...rooms.values()].map(r => ({ ...r.view(), since: raceSince.get(r.code) ?? null, race: raceGrid(r.code) })),
     kick: id => { const c = conns.get(id); if (!c) return false; send(id, { t: 'error', msg: 'Connexion fermée par l’administrateur.' }); c.ws.close(); return true; },
     closeRoom: code => { const room = rooms.get(code); if (!room) return false; for (const p of [...room.players]) { const c = conns.get(p.id); send(p.id, { t: 'error', msg: 'Salle fermée par l’administrateur.' }); if (c) leaveRoom(c); } races.get(code)?.stop(); races.delete(code); rooms.delete(code); return true; },
     disconnectUser: (userId, msg) => { for (const c of [...(online.get(userId) ?? [])]) { send(c.id, { t: 'error', msg }); c.ws.close(); } },
+    command: (code, cmd) => godCommand(code, cmd, null),
   };
+  // A race in progress is listed with its grid, so the dashboard can name its karts.
+  const raceGrid = code => races.get(code)?.grid?.map((g, slot) => ({ slot, name: g.name, charId: g.charId, isAI: g.isAI, god: g.god === true })) ?? null;
+  const isAdminConn = c => !!c?.user && api.isAdmin(c.user);
   const dashboard = dashboardApi(store, { requireAdmin: api.requireAdmin, live });
 
   const http = createServer(async (req, res) => {
@@ -190,8 +195,10 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
     }
   }
 
-  function start(c, room) {
-    const why = room.cannotStart(c.id); if (why) return fail(c.id, why);
+  /** Start the room's race. `force` (the admin) skips the host and readiness checks. */
+  function start(c, room, force = false) {
+    if (force) { if (room.phase !== 'lobby') return c && fail(c.id, 'La course a déjà commencé.'); }
+    else { const why = room.cannotStart(c.id); if (why) return fail(c.id, why); }
     room.phase = 'race';
     const roster = room.roster();
     const io = {
@@ -203,8 +210,47 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
       },
     };
     try { races.set(room.code, runRace(room, roster, io)); raceSince.set(room.code, Date.now()); }
-    catch (e) { room.endRace(); fail(c.id, 'Impossible de lancer la course.'); console.error(e); }
+    catch (e) { room.endRace(); if (c) fail(c.id, 'Impossible de lancer la course.'); console.error(e); }
     showRoom(room);
+  }
+
+  /** Seat the admin's connection `c`, already a god in `room`, in the race running there, if one is. */
+  function enterRace(c, room) {
+    const race = races.get(room.code); const p = room.player(c.id);
+    if (race?.addGod && p) race.addGod(c.id, { charId: p.charId, name: p.name, style: p.style });
+  }
+
+  /**
+   * The admin's absolute power over room `code` (DEC-031). Lobby commands run
+   * here: start (forced), track, kick, team, char. Every other command goes
+   * to the room's race (godcmd.js), as `actor`'s kart when the admin drives
+   * one. Resolves to { ok, text }. The caller has checked it is the admin.
+   */
+  async function godCommand(code, cmd, actor) {
+    const room = rooms.get(String(code ?? '').toUpperCase().trim());
+    if (!room) return { ok: false, text: 'Aucune salle avec ce code.' };
+    if (!cmd || typeof cmd !== 'object' || typeof cmd.cmd !== 'string') return { ok: false, text: 'Commande inconnue.' };
+    const done = (e, text) => { if (e) return { ok: false, text: e }; showRoom(room); return { ok: true, text }; };
+    switch (cmd.cmd) {
+      case 'start':
+        if (room.phase !== 'lobby') return { ok: false, text: 'La course a déjà commencé.' };
+        start(null, room, true);
+        return races.has(room.code) ? { ok: true, text: 'Course lancée.' } : { ok: false, text: 'Impossible de lancer la course.' };
+      case 'track': return done(room.forceTrack(cmd.trackIdx), 'Circuit changé.');
+      case 'team': return done(room.force(cmd.id, { team: cmd.team }), 'Équipe changée.');
+      case 'char': return done(room.force(cmd.id, { charId: cmd.charId }), 'Candidat changé.');
+      case 'kick': {
+        const p = typeof cmd.id === 'string' ? room.player(cmd.id) : null; const victim = p && conns.get(p.id);
+        if (!p) return { ok: false, text: 'Joueur inconnu.' };
+        // the empty room first: a room message clears the client's error line, which then says why
+        if (victim) { leaveRoom(victim); send(victim.id, { t: 'room', room: null }); send(victim.id, { t: 'error', msg: 'Exclu·e de la salle par l’administrateur.' }); }
+        else { room.leave(p.id); races.get(room.code)?.leave(p.id); showRoom(room); }
+        return { ok: true, text: p.name + ' est exclu·e.' };
+      }
+    }
+    const race = races.get(room.code);
+    if (!race?.god) return { ok: false, text: 'Aucune course en cours dans cette salle.' };
+    return race.god(cmd, actor?.id);
   }
 
   const handlers = {
@@ -220,22 +266,32 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
       c.style = m.style; leaveRoom(c); const room = new Room(newCode(new Set(rooms.keys()))); rooms.set(room.code, room); enter(c, room);
     },
     join: (c, m) => { const room = rooms.get(String(m.code ?? '').toUpperCase().trim()); if (!room) return fail(c.id, 'Aucune salle avec ce code.'); c.style = m.style; if (c.code !== room.code) { leaveRoom(c); enter(c, room); } },
-    // The admin enters a room as a god (DEC-030): outside the six, in any phase, on no team.
+    // The admin enters a room as a god (DEC-030): outside the six, in any phase, on no team; mid-race, straight into the race (DEC-031).
     godJoin: (c, m) => {
-      if (!c.user || !api.isAdmin(c.user)) return fail(c.id, 'Réservé à l’administrateur.');
+      if (!isAdminConn(c)) return fail(c.id, 'Réservé à l’administrateur.');
       const room = rooms.get(String(m.code ?? '').toUpperCase().trim()); if (!room) return fail(c.id, 'Aucune salle avec ce code.');
       c.style = m.style;
-      if (c.code === room.code) return showRoom(room);
+      if (c.code === room.code) { showRoom(room); return enterRace(c, room); }
       leaveRoom(c);
-      const r = room.joinGod(c.id, c.name, { userId: c.user.id, level: levelFromXp(c.user.xp).level }, c.style);
+      const avoid = races.get(room.code)?.grid?.map(g => g.charId) ?? [];
+      const r = room.joinGod(c.id, c.name, { userId: c.user.id, level: levelFromXp(c.user.xp).level }, c.style, avoid);
       if (typeof r === 'string') return fail(c.id, r);
       c.code = room.code; showRoom(room);
-      for (const p of room.players) if (p.id !== c.id) notice(p.id, c.name + ' entre dans la salle en dieu' + (room.phase === 'race' ? ' et attend la prochaine course.' : '.'));
+      const racing = room.phase === 'race';
+      for (const p of room.players) if (p.id !== c.id) notice(p.id, c.name + (racing ? ' entre dans la course en dieu.' : ' entre dans la salle en dieu.'));
+      enterRace(c, room);
       pushToFriendsOf(c.user.id).catch(console.error);
     },
+    // The admin changes any room at will (DEC-031): its own room by default, any other by code.
+    god: async (c, m) => {
+      if (!isAdminConn(c)) return fail(c.id, 'Réservé à l’administrateur.');
+      const r = await godCommand(m.code ?? c.code, m.cmd, c);
+      (r.ok ? notice : fail)(c.id, r.text);
+    },
     set: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = room.set(c.id, { team: m.team, charId: m.charId, ready: m.ready, style: m.style }); if (e) fail(c.id, e); showRoom(room); },
-    track: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = room.setTrack(c.id, m.trackIdx); if (e) fail(c.id, e); showRoom(room); },
-    start: c => { const room = rooms.get(c.code); if (room) start(c, room); },
+    // the admin picks the circuit and starts, host or not, ready or not (DEC-031)
+    track: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = isAdminConn(c) ? room.forceTrack(m.trackIdx) : room.setTrack(c.id, m.trackIdx); if (e) fail(c.id, e); showRoom(room); },
+    start: c => { const room = rooms.get(c.code); if (room) start(c, room, isAdminConn(c)); },
     leave: c => leaveRoom(c),
     input: (c, m) => { races.get(c.code)?.input(c.id, m); },
 

@@ -19,7 +19,7 @@ let Transport = typeof WebSocket === 'undefined' ? null : WebSocket;
 let ws = null;
 let view = Object.freeze({ status: 'idle', id: null, room: null, error: null, friends: [], invite: null, notice: null });
 const viewListeners = new Set();
-const handlers = { race: null, snap: null, results: null, profile: null };
+const handlers = { race: null, snap: null, results: null, profile: null, kartJoin: null };
 let pendingName = '';
 let pendingToken = null;
 
@@ -41,6 +41,8 @@ export function onNet(fn) { viewListeners.add(fn); return () => { viewListeners.
 export function onRace(fn) { handlers.race = fn; }
 export function onSnap(fn) { handlers.snap = fn; }
 export function onResults(fn) { handlers.results = fn; }
+/** A kart joined the race in progress (the admin as a god). */
+export function onKartJoin(fn) { handlers.kartJoin = fn; }
 /** `fn(profile, gained)` whenever the server says who we are or what a race earned. */
 export function onProfile(fn) { handlers.profile = fn; }
 
@@ -79,6 +81,7 @@ function onMessage(raw) {
   else if (m.t === 'race') handlers.race?.(m);
   else if (m.t === 'snap') handlers.snap?.(m);
   else if (m.t === 'results') handlers.results?.(m);
+  else if (m.t === 'kartJoin') handlers.kartJoin?.(m);
 }
 
 /**
@@ -120,6 +123,8 @@ export const startNetRace = () => send({ t: 'start' });
 export const leaveRoom = () => { send({ t: 'leave' }); publish({ room: null }); };
 /** The admin enters room `code` as a god (DEC-030); the server refuses anyone else. */
 export const godJoin = (code, style) => send({ t: 'godJoin', code, style });
+/** The admin changes room `code` (or the room it is in, when null) at will: lobby or race commands (DEC-031). */
+export const godCmd = (code, cmd) => send({ t: 'god', code: code ?? undefined, cmd });
 
 export const requestFriends = () => send({ t: 'friends' });
 export const addFriend = name => send({ t: 'friendAdd', name });

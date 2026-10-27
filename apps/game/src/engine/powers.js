@@ -51,8 +51,12 @@ export function usePower(k) {
 /** A boost for a move that found nobody to hit, with its own line. */
 function consolation(k, text) { k.boost = Math.max(k.boost, 1.4); k.boostPower = 1.4; sfxFor(k, 'boost'); say(k, text); }
 
-/** Resolve power `id` for kart k, cooldown already paid. Ralliement calls it with another candidate's id. */
-function applyPower(k, id) {
+/**
+ * Resolve power `id` for kart k, cooldown already paid. Ralliement calls it
+ * with another candidate's id; the admin's god commands (godcmd.js) call it
+ * with any id, for any kart.
+ */
+export function applyPower(k, id) {
   const name = k.def.name.toUpperCase();
   if (id === 'ralliement') {
     // the transfuge joins whoever is just ahead and borrows their move

@@ -33,6 +33,26 @@ describe('a god in a room (DEC-030)', () => {
     expect(r.view().players.find(p => p.id === 'p0').god).toBe(false);
   });
 
+  it('lets the admin pick the circuit and move or recast anyone, whatever they unlocked (DEC-031)', () => {
+    const r = new Room('ABCD'); r.join('a', 'A'); r.join('b', 'B'); r.joinGod('god', 'Rida');
+    expect(r.setTrack('b', 2)).toMatch(/hôte/);
+    expect(r.forceTrack(2)).toBeNull(); expect(r.trackIdx).toBe(2);
+    expect(r.forceTrack(99)).toMatch(/inconnu/);
+    expect(r.force('a', { team: 'rouge', charId: 'thierry' })).toBeNull();               // a guest, given a level-13 candidate
+    expect(r.player('a')).toMatchObject({ team: 'rouge', charId: 'thierry' });
+    expect(r.force('b', { charId: 'thierry' })).toMatch(/déjà pris/);
+    expect(r.force('god', { team: 'bleu' })).toMatch(/dieu/);
+    expect(r.force('zz', {})).toMatch(/inconnu/);
+    r.phase = 'race';
+    expect(r.forceTrack(0)).toMatch(/commencé/); expect(r.force('a', { team: 'bleu' })).toMatch(/commencé/);
+  });
+
+  it('seats a god mid-race on a candidate the race does not already drive', () => {
+    const r = new Room('ABCD'); r.join('a', 'A'); r.phase = 'race';
+    const all = ['victor', 'gege', 'maurice', 'capucine', 'hubert', 'lulu', 'bernadette', 'kevin', 'odile', 'patrick', 'lucie', 'gaspard', 'jeanmi', 'martine', 'aymeric'];
+    expect(r.joinGod('god', 'Rida', {}, undefined, all).charId).toBe('thierry');
+  });
+
   it('keeps the grid at six karts around the god, who is flagged in the roster and may enter mid-race', () => {
     const r = new Room('ABCD'); r.join('a', 'A'); r.join('b', 'B');
     r.phase = 'race';

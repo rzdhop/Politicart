@@ -84,7 +84,7 @@ function tickToast(dt) { const r = banners.tick(dt); if (!r || !hud.toast) retur
 // ---------- Input ----------
 const keys = {};
 window.addEventListener('keydown', e => {
-  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   if (keys[e.code]) return; keys[e.code] = true;
   // Driving from the keyboard hands the kart back to it: no touch buttons, no auto-acceleration.
@@ -94,6 +94,8 @@ window.addEventListener('keydown', e => {
   if (['KeyF', 'ShiftLeft', 'ShiftRight'].includes(e.code)) actions.usePower();
   if (e.code === 'Escape' && !isNetRace()) { if (G.state === 'race' || G.state === 'countdown') actions.pause(); else if (G.state === 'paused') actions.resume(); }
   if (e.code === 'KeyM') actions.toggleMute(false);
+  // The admin's god console over the race (DEC-031); the action ignores everyone else.
+  if (e.code === 'KeyG' && ['race', 'countdown', 'paused'].includes(G.state)) actions.toggleGodConsole();
   if (e.code === 'Enter' && G.state === 'title') $('b-play').click();
   if (e.code === 'Enter' && G.state === 'results') $('b-again').click();
   if (G.state === 'select' && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) actions.stepChar(e.code === 'ArrowRight' ? 1 : -1);

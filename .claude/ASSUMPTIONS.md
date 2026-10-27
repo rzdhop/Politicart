@@ -81,9 +81,14 @@ Marked UNCONFIRMED / confirmed / invalidated.
   it hits, not when it is thrown; a field-wide effect is announced to every
   driver it changes, since it does change them. If the human meant distance
   too, field-wide messages would need a range.
-- **A-022 -- A god joining mid-race waits for the next start.** UNCONFIRMED.
-  Spectating the running race would need the networked client to follow a
-  kart that is not its own; deferred. The god is seated in the room at once.
+- **A-022 -- A god joining mid-race waits for the next start.** INVALIDATED
+  2026-10-27: the human wants the admin to join any game at any moment. The
+  god now joins the running race at once (DEC-031).
+- **A-024 -- A god joins a running race behind the last kart.** UNCONFIRMED.
+  Fair and never on top of anyone; the console's "En tête" moves it up.
+- **A-025 -- Absolute power is the console's fourteen commands.**
+  UNCONFIRMED (DEC-031). Not included: editing a circuit's layout, the
+  physics constants or another player's controls.
 - **A-023 -- Creative mode is: no cooldown, endless items, untouchable.**
   UNCONFIRMED. Minecraft's reading of "creative"; the god still drives and
   cannot spawn arbitrary hazards or teleport.

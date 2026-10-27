@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from '@playwright/test';
+import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 
 import { ADMIN_PASSWORD, ADMIN_USER } from './fixtures/admin';
 
@@ -6,7 +6,9 @@ import { ADMIN_PASSWORD, ADMIN_USER } from './fixtures/admin';
  * R-19 -- the admin's dashboard and the god seat (DEC-030), on the game
  * server (port 4180, see playwright.config.ts): the figures, the accounts
  * with a ban, the rooms, and the admin entering a player's room as a god who
- * then races in it. Driven through the DOM like every other spec.
+ * then races in it. R-20 -- the admin's absolute power (DEC-031): entering a
+ * race already running, and ending it from the god console. Driven through
+ * the DOM like every other spec.
  */
 const SERVER = 'http://127.0.0.1:4180/';
 
@@ -14,10 +16,14 @@ const SERVER = 'http://127.0.0.1:4180/';
 const RUN = Date.now().toString(36).slice(-5);
 
 const errors: string[] = [];
+// Every context a spec opens is closed after it: a page left racing keeps rendering
+// in the background and starves the specs that follow (software WebGL).
+const contexts: BrowserContext[] = [];
 
 /** A fresh browser on the game server, once it has found the server. */
 async function visitor(browser: Browser): Promise<Page> {
-  const page = await (await browser.newContext()).newPage();
+  const context = await browser.newContext(); contexts.push(context);
+  const page = await context.newPage();
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(SERVER);
   await expect(page.locator('#b-account')).toBeVisible();
@@ -48,7 +54,10 @@ async function host(browser: Browser, name: string): Promise<{ page: Page; code:
 }
 
 test.beforeEach(() => { errors.length = 0; });
-test.afterEach(() => { expect(errors, `page errors: ${errors.join('; ')}`).toEqual([]); });
+test.afterEach(async () => {
+  await Promise.all(contexts.splice(0).map(c => c.close()));
+  expect(errors, `page errors: ${errors.join('; ')}`).toEqual([]);
+});
 
 test.describe('R-19 dashboard', () => {
   test('is offered to the admin only, shows the figures and the open room, and bans an account', async ({ browser }) => {
@@ -126,7 +135,7 @@ test.describe('R-19 dashboard', () => {
     await expect(player.locator('#b-mp-start')).toBeEnabled();
     await player.locator('#b-mp-start').click();
     for (const p of [player, admin]) {
-      await expect(p.locator('#hud')).toBeVisible();
+      await expect(p.locator('#hud')).toBeVisible({ timeout: 30_000 });
       await expect(p.locator('#h-time')).not.toHaveText(/^0:00\.00/, { timeout: 30_000 });
     }
     await expect(admin.locator('#h-pkey')).toHaveText('F · MODE DIEU');
@@ -139,5 +148,49 @@ test.describe('R-19 dashboard', () => {
     await expect(player.locator('#r-body')).toContainText('(dieu)');
     await expect(player.locator('#r-body')).toContainText('hors classement');
     await expect(player.locator('#r-teams tr')).toHaveCount(1);
+  });
+});
+
+test.describe('R-20 absolute power', () => {
+  test('the admin enters a race already running, from the dashboard, and ends it from the god console', async ({ browser }) => {
+    test.setTimeout(150_000);
+    // Races are capped at 15 s on this server (for three laps): the admin waits on the dashboard before the race starts.
+    const carol = 'Carol' + RUN;
+    const { page: player, code } = await host(browser, carol);
+    const admin = await visitor(browser);
+    await signIn(admin, ADMIN_USER, ADMIN_PASSWORD);
+    await admin.locator('#b-dashboard').click();
+    await expect(admin.locator('#b-dash-god-' + code)).toHaveText('Entrer en dieu');
+
+    // Alone in the room, the host starts at once: the race is running before the admin enters it.
+    await player.locator('#b-mp-start').click();
+    await expect(player.locator('#hud')).toBeVisible({ timeout: 30_000 });
+    await expect(player.locator('#b-god-console')).toHaveCount(0);           // no console for a player
+    await admin.locator('#b-dash-refresh').click();
+    await expect(admin.locator('#b-dash-god-' + code)).toHaveText('Entrer dans la course');
+    // From afar first: the race is set to nine laps, which also lengthens the server's cap three times.
+    await admin.locator('#b-dash-manage-' + code).click();
+    await expect(admin.locator('#dash-god-' + code + '-targets button')).toHaveCount(7);   // "Tous" and six karts
+    await admin.locator('#dash-god-' + code + '-laps-9').click();
+    await expect(admin.locator('#dash-status')).toContainText('9 tours');
+    await expect(player.locator('#h-lap')).toContainText('/9');
+    await admin.locator('#b-dash-god-' + code).click();
+
+    // Straight into the race, as a god.
+    await expect(admin.locator('#hud')).toBeVisible({ timeout: 45_000 });
+    await expect(admin.locator('#h-pkey')).toHaveText('F · MODE DIEU', { timeout: 30_000 });
+
+    // The god console: the G key opens it, it lists the seven karts, it strikes them, and the race ends at a click.
+    await admin.keyboard.press('KeyG');
+    await expect(admin.locator('#god-panel')).toBeVisible();
+    await expect(admin.locator('#god-targets button')).toHaveCount(8);       // "Tous" and seven karts
+    await admin.locator('#god-stun').click();
+    await expect(admin.locator('#god-reply')).toContainText('foudroy');
+    await admin.locator('#god-finish').click();
+    for (const p of [player, admin]) {
+      await expect(p.locator('#s-results')).toBeVisible({ timeout: 20_000 });
+      await expect(p.locator('#r-body tr')).toHaveCount(7);
+    }
+    await expect(player.locator('#r-body')).toContainText('(dieu)');
   });
 });

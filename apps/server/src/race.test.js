@@ -63,6 +63,36 @@ describe('a race in a worker', () => {
     } finally { race.stop(); }
   }, 15_000);
 
+  it('lets the admin join the race in progress as a god, change it, and end it (DEC-031)', async () => {
+    const { room, roster, sent, io, finished } = harness();
+    const race = runRace(room, roster, io, { fast: false, hold: 0 });
+    try {
+      race.input('alice', { c: { throttle: true } }); race.input('bob', { c: {} });
+      await until(() => sent.some(([, m]) => m.t === 'snap' && m.s.st === 'race'));
+      expect(race.addGod('rida', { charId: 'thierry', name: 'Rida', style: { body: '#123456' } })).toBe(true);
+      expect(race.addGod('rida', { charId: 'thierry', name: 'Rida' })).toBe(false);          // already driving
+      // the others build the kart, the admin gets the grid and its slot
+      expect(sent.find(([id, m]) => id === 'alice' && m.t === 'kartJoin')[1]).toMatchObject({ slot: 6, entry: { charId: 'thierry', god: true, team: null } });
+      const start = sent.find(([id, m]) => id === 'rida' && m.t === 'race')[1];
+      expect(start.you).toBe(6); expect(start.roster).toHaveLength(7);
+      expect(race.grid).toHaveLength(7); expect(roster).toHaveLength(7);
+      await until(() => sent.some(([id, m]) => id === 'rida' && m.t === 'snap' && m.s.k.length === 7));
+      const snap = sent.filter(([id, m]) => id === 'rida' && m.t === 'snap').at(-1)[1].s;
+      expect(snap.k[6].gd).toBe(true); expect(snap.lp).toBe(3);
+
+      expect(await race.god({ cmd: 'stun', target: 'all', dur: 2 }, 'rida')).toMatchObject({ ok: true });
+      expect(await race.god({ cmd: 'laps', laps: 5 }, 'rida')).toMatchObject({ ok: true });
+      await until(() => sent.some(([id, m]) => id === 'alice' && m.t === 'snap' && m.s.lp === 5 && m.s.k[4].stun > 0));
+      expect(sent.some(([id, m]) => id === 'alice' && m.t === 'snap' && m.ev.some(([, t]) => /INTERVENTION DIVINE/.test(t)))).toBe(true);
+      expect(await race.god({ cmd: 'nope' }, 'rida')).toMatchObject({ ok: false });
+      expect(await race.god({ cmd: 'finish' }, null)).toMatchObject({ ok: true, text: 'Course terminée.' });
+      const { ranking } = await finished;
+      expect(ranking).toHaveLength(7);
+      expect(ranking.find(r => r.slot === 6)).toMatchObject({ name: 'Rida', god: true, points: 0 });
+      expect(await race.god({ cmd: 'boost', target: 0 })).toMatchObject({ ok: false });
+    } finally { race.stop(); }
+  }, 20_000);
+
   it('runs to the finish when the drivers hand over to the AI, and scores the teams', async () => {
     const { room, roster, io, finished } = harness();
     const race = runRace(room, roster, io, { fast: true });

@@ -72,7 +72,13 @@ One account, `rida` by default, is the admin: only it sees **Atelier** on the ti
 
 The same account gets **Tableau de bord** on the title screen: the figures (accounts, who is online, open rooms and races, team and solo races played, by circuit, the last twenty races, the ten best accounts), every account with a search box, and what is live. From there the admin **bans** an account with a reason (its sockets close at once, its sessions end, and its logins are refused until the ban is lifted), **closes the sessions** of an account without banning it, **closes a room** (ending its race) and **ejects** a connection. The page refreshes every five seconds while it is open.
 
-**Entrer en dieu** seats the admin in any open room as a god: a seventh seat beyond the six, on no team, with every candidate open, during a race too (the god then waits for the next start). In the race a god kart is creative mode: its power recharges in a second, it always has an item on the way, nothing stuns, slows or catches it, and it is everyone's foe. It takes a place but scores no team points and earns no experience; the results list it "hors classement".
+**Entrer en dieu** seats the admin in any open room as a god: a seventh seat beyond the six, on no team, with every candidate open, at any moment. If the room is racing, the admin's kart joins the race on the spot, a little behind the last kart still running. In the race a god kart is creative mode: its power recharges in a second, it always has an item on the way, nothing stuns, slows or catches it, and it is everyone's foe. It takes a place but scores no team points and earns no experience; the results list it "hors classement".
+
+The admin has absolute power over every game, solo or team, from inside it or from the dashboard:
+
+- **In the lobby** of any room: start it now (nobody needs to be ready, the admin need not be host), pick the circuit, move a player to the other team, give a player any candidate, exclude anyone.
+- **In a race**, through the **console divine** (the ⚡ button on the HUD, or the G key; on the dashboard, **Contrôler** on a racing room): pick one kart or all of them, then strike them (stun through any immunity, freeze 6 s, slow, boost), give any item, make a kart fire its own power or cast any power of the cast, drop any hazard in front of it, send it to the front or the back, swap it with your own kart, add or take away a lap, make it a god or a mortal, set the race to 1 to 9 laps, or end the race now. The drivers affected read what was done to them.
+- Nobody else sees the console, and the server refuses every one of these commands from any other account.
 
 The admin's password is never stored, only its hash, held in an environment variable. To set it up:
 
@@ -124,6 +130,7 @@ Any host that runs a container and passes WebSockets through works the same way 
 | F / Shift | Special power |
 | Esc | Pause (solo only: a team race cannot be paused) |
 | M | Mute |
+| G | The admin's god console (admin only) |
 
 The game reads physical key codes, so the same keys work on AZERTY and QWERTY keyboards.
 
@@ -151,7 +158,7 @@ Both orientations work: in portrait the camera widens and pulls back. Phones sta
 - **Messages**: the banners during a race only concern you: what you did, and what was done to you, once it is done (a projectile is announced when it lands, not when it is thrown; nothing reaches a driver who has finished). Nobody else's item or power is announced to the whole field, and the same goes for sound: a mini-turbo or a power used across the circuit is silent on your side. Banners show one at a time and stay readable for a second before the next takes over; a burst keeps at most two waiting.
 - **Contact**: karts bounce off each other once per contact, with a hop, sparks and a camera shake; rubbing door to door costs about 2 % of speed, ramming the kart in front about 10 %, and the lighter kart takes more of it. A spun-out kart always straightens up along the road before it drives off.
 - **Workshop (admin only)**: the administrator account (`KR_ADMIN_USER`, `rida` by default) logs in through the ordinary Compte screen and gets an **Atelier** button on the title: rename candidates, change their colours and their default kart (accents, number, wheels, spoiler, side pods, sticker), upload kart liveries and campaign posters. Saving sends the cast to the game server, so every player gets it, the GitHub Pages build included when it names a server. Nobody else sees the Workshop. Without a reachable server the game plays the default cast.
-- **Dashboard and god seat (admin only)**: **Tableau de bord** shows the server's figures, lists the accounts (ban with a reason, lift a ban, close an account's sessions), the open rooms (close one, or **enter it as a god**) and the connections (eject one). A god races as a seventh, neutral kart in creative mode: power every second, items without end, untouchable, outside the scoring. See [The admin's dashboard](#the-admins-dashboard-and-the-god-seat).
+- **Dashboard, god seat and console (admin only)**: **Tableau de bord** shows the server's figures, lists the accounts (ban with a reason, lift a ban, close an account's sessions), the open rooms (close one, **control** it from afar, or **enter it as a god** at any moment, mid-race included) and the connections (eject one). A god races as a seventh, neutral kart in creative mode: power every second, items without end, untouchable, outside the scoring. The **console divine** (G in a race) changes any race at will. See [The admin's dashboard](#the-admins-dashboard-and-the-god-seat).
 - **Garage**: every player styles their own kart from the roster (body and accent colours, wheels, spoiler, side pods, race number, sticker). It applies to whichever candidate they pick, over that candidate's default kart, and is kept in this browser's `localStorage`.
 - Graphics toggle (detailed with shadows / light low-poly), synthesized sound and music via WebAudio.
 
@@ -186,6 +193,7 @@ The engine never touches the DOM; the UI never touches the simulation. They meet
 | `src/engine/net.js`, `netstate.js`, `netrace.js` | Team races on the client: the server connection, the snapshot format, and drawing a race from snapshots. |
 | `src/engine/events.js` | The **event queue** for the text the engine wants shown (toasts, hints), routed to the drivers it concerns. |
 | `src/engine/banner.js` | The **banner queue**: one toast at a time, held long enough to be read. |
+| `src/engine/godcmd.js` | The admin's **god commands**: what the console divine does to a race, in solo and in the race worker alike. |
 | `src/engine/input.js` | The **input seam**: the engine reads the controls through it. |
 | `src/engine/minimap.js`, `preview.js`, `render.js`, `audio.js` | The minimap, the character showcase and thumbnails, the one renderer and camera, WebAudio. |
 | `src/ui/` | The React screens and the HUD, composed from `@kart-republique/ui`; `store.ts` is what they read. |
@@ -207,4 +215,4 @@ npm run test        # Vitest: the design system, the engine and the server
 npm run test:e2e    # Playwright, Chromium, against the production build (about three minutes)
 ```
 
-The E2E suite is the regression net for the game: it drives the real build through the title, roster, circuits, a race with its HUD, pause, the Garage and the results, and asserts on the element ids the game has always had. `e2e/multiplayer.spec.ts` starts the game server too and races two browsers against each other, `e2e/admin.spec.ts` drives the admin's Workshop on that server with a test-only admin account whose hash the Playwright config computes at load, and `e2e/dashboard.spec.ts` drives the admin's dashboard, a ban and a race with the admin seated as a god.
+The E2E suite is the regression net for the game: it drives the real build through the title, roster, circuits, a race with its HUD, pause, the Garage and the results, and asserts on the element ids the game has always had. `e2e/multiplayer.spec.ts` starts the game server too and races two browsers against each other, `e2e/admin.spec.ts` drives the admin's Workshop on that server with a test-only admin account whose hash the Playwright config computes at load, and `e2e/dashboard.spec.ts` drives the admin's dashboard, a ban, a race with the admin seated as a god, and the admin entering a race already running and ending it from the console.

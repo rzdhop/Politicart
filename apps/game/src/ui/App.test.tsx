@@ -58,7 +58,10 @@ const ADMIN_IDS = [
 const DASH = {
   stats: { accounts: { total: 42, banned: 1, new7d: 3, online: 2 }, live: { connections: 3, guests: 1, rooms: 1, races: 0 }, races: { races: 7, finished: 6, solo: 12, byTrack: { 0: 7 }, recent: [{ at: 1, code: 'ABCD', trackIdx: 0, humans: 2, gods: 0, winner: 'Zoé', teams: [{ team: 'bleu', points: 10 }] }] }, top: [{ id: 'u-z', name: 'Zoé', xp: 500, level: 4 }] },
   users: { users: [{ id: 'u-z', name: 'Zoé', xp: 500, level: 4, created: 1, seen: 2, banned: null, online: true, room: 'ABCD' }, { id: 'u-b', name: 'Banni', xp: 0, level: 1, created: 1, seen: null, banned: { at: 3, reason: 'triche' }, online: false, room: null }] },
-  live: { connections: [{ id: 'c1', name: 'Zoé', userId: 'u-z', guest: false, admin: false, room: 'ABCD' }], rooms: [{ code: 'ABCD', host: 'c1', trackIdx: 0, phase: 'lobby', since: null, players: [{ id: 'c1', name: 'Zoé', team: 'bleu', charId: 'victor', ready: false, god: false }] }] },
+  live: { connections: [{ id: 'c1', name: 'Zoé', userId: 'u-z', guest: false, admin: false, room: 'ABCD' }], rooms: [
+    { code: 'ABCD', host: 'c1', trackIdx: 0, phase: 'lobby', since: null, race: null, players: [{ id: 'c1', name: 'Zoé', team: 'bleu', charId: 'victor', ready: false, god: false }] },
+    { code: 'WXYZ', host: 'c2', trackIdx: 1, phase: 'race', since: 1, race: [{ slot: 0, name: 'Macaron', charId: 'victor', isAI: true, god: false }, { slot: 1, name: 'Yann', charId: 'gege', isAI: false, god: false }], players: [{ id: 'c2', name: 'Yann', team: 'rouge', charId: 'gege', ready: false, god: false }] },
+  ] },
 };
 
 /** A socket that never opens: signing in connects to the game server, which is not there. */
@@ -485,7 +488,7 @@ describe('the admin dashboard (DEC-030)', () => {
     expect($(container, 'dash-fig-races')!.textContent).toContain('12 courses solo');
     expect(container.querySelectorAll('#dash-users tr')).toHaveLength(2);
     expect($(container, 'dash-users')!.textContent).toContain('triche');
-    expect(container.querySelectorAll('#dash-rooms tr')).toHaveLength(1);
+    expect(container.querySelectorAll('#dash-rooms tr')).toHaveLength(2);
     expect($(container, 'b-dash-god-ABCD')).not.toBeNull();
     expect($(container, 'dash-top')!.textContent).toContain('Zoé');
     expect($(container, 'dash-recent')!.textContent).toContain('Zoé');
@@ -504,6 +507,31 @@ describe('the admin dashboard (DEC-030)', () => {
 
     fireEvent.click($(container, 'b-dash-back')!);
     expect(getState()).toBe('title');
+  });
+
+  it('controls any room from afar: a lobby is started and its players moved, a race gets the god console (DEC-031)', async () => {
+    const { container, server } = await renderServed({ server: true, who: 'admin' });
+    fireEvent.click($(container, 'b-dashboard')!);
+    await settle();
+    fireEvent.click($(container, 'b-dash-manage-ABCD')!);
+    expect($(container, 'dash-control-ABCD')).not.toBeNull();
+    fireEvent.click($(container, 'b-dash-move-c1')!);
+    fireEvent.click($(container, 'b-dash-start-ABCD')!);
+    await settle();
+    const commands = server.calls.filter(c => c.url === './api/admin/rooms/command').map(c => c.body);
+    expect(commands).toEqual([{ code: 'ABCD', cmd: { cmd: 'team', id: 'c1', team: 'rouge' } }, { code: 'ABCD', cmd: { cmd: 'start' } }]);
+
+    fireEvent.click($(container, 'b-dash-manage-WXYZ')!);
+    expect($(container, 'dash-control-ABCD')).toBeNull();
+    expect(container.querySelectorAll('#dash-god-WXYZ-targets button')).toHaveLength(3);
+    fireEvent.click($(container, 'dash-god-WXYZ-target-1')!);
+    fireEvent.click($(container, 'dash-god-WXYZ-front')!);
+    fireEvent.click($(container, 'dash-god-WXYZ-finish')!);
+    await settle();
+    expect(server.calls.filter(c => c.url === './api/admin/rooms/command').slice(-2).map(c => c.body)).toEqual([
+      { code: 'WXYZ', cmd: { cmd: 'front', target: 1 } }, { code: 'WXYZ', cmd: { cmd: 'finish' } },
+    ]);
+    expect($(container, 'b-dash-god-WXYZ')!.textContent).toBe('Entrer dans la course');
   });
 
   it('is absent for a player, and its button never renders', async () => {

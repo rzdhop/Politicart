@@ -30,6 +30,14 @@ describe('snapshots of a live race', () => {
     });
   });
 
+  it('carry the race’s lap count and which karts are gods (DEC-031)', () => {
+    G.laps = 5; G.karts[2].god = true;
+    const snap = JSON.parse(JSON.stringify(encodeSnapshot(G, 480)));
+    expect(snap.lp).toBe(5);
+    const copy = blank(); applyKart(copy, snap.k[2]); expect(copy.god).toBe(true);
+    applyKart(copy, snap.k[1]); expect(copy.god).toBe(false);
+  });
+
   it('name hazards and projectiles by id', () => {
     const k = G.karts[0];
     k.item = 'greve'; k.itemRolling = 0; useItem(k);

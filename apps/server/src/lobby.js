@@ -17,8 +17,9 @@
 // The admin may enter any room as a god (DEC-030): a seventh seat beyond the
 // six, in any phase, on no team and with every candidate open. A god races
 // as a neutral, untouchable kart with no cooldown (engine), scores no points
-// and earns no experience. A god who enters during a race waits in the room
-// for the next start.
+// and earns no experience. A god who enters during a race joins it at once
+// (DEC-031). The admin also changes any room at will: forceTrack() and
+// force() skip the host and unlock rules that bind the players.
 
 import { CHARACTERS, TRACKS } from '../../game/src/engine/data.js';
 import { cleanStyle } from '../../game/src/engine/kartstyle.js';
@@ -79,9 +80,10 @@ export class Room {
    * on no team, any candidate nobody else drives. Returns the player or an
    * error string.
    */
-  joinGod(id, name, who = {}, style) {
+  joinGod(id, name, who = {}, style, avoid = []) {
     if (this.players.some(p => p.god)) return 'Un dieu est déjà dans cette salle.';
-    const taken = new Set(this.players.map(p => p.charId));
+    // `avoid`: the candidates a race in progress already drives (its AI included)
+    const taken = new Set([...this.players.map(p => p.charId), ...avoid]);
     const charId = CHAR_IDS.find(c => !taken.has(c));
     if (!charId) return 'Plus aucun candidat libre dans cette salle.';
     const p = { id, name: cleanName(name), team: null, charId, ready: false, userId: who.userId ?? null, level: who.level ?? null, allowed: [...CHAR_IDS], style: cleanStyle(style), god: true };
@@ -118,6 +120,30 @@ export class Room {
     if (id !== this.host) return 'Seul l’hôte choisit le circuit.';
     if (!Number.isInteger(trackIdx) || trackIdx < 0 || trackIdx >= TRACKS.length) return 'Circuit inconnu.';
     this.trackIdx = trackIdx; return null;
+  }
+
+  /** The admin picks the circuit, host or not, while the room waits. */
+  forceTrack(trackIdx) {
+    if (!Number.isInteger(trackIdx) || trackIdx < 0 || trackIdx >= TRACKS.length) return 'Circuit inconnu.';
+    if (this.phase !== 'lobby') return 'La course a déjà commencé.';
+    this.trackIdx = trackIdx; return null;
+  }
+
+  /**
+   * The admin changes a player's team or candidate, whatever they unlocked
+   * (a god keeps no team). Two players still never share a candidate.
+   * Returns an error string or null.
+   */
+  force(id, { team, charId } = {}) {
+    const p = this.player(id); if (!p) return 'Joueur inconnu.';
+    if (this.phase !== 'lobby') return 'La course a déjà commencé.';
+    if (team !== undefined) { if (p.god) return 'Un dieu n’a pas d’équipe.'; if (!TEAMS.includes(team)) return 'Équipe inconnue.'; p.team = team; }
+    if (charId !== undefined) {
+      if (!CHAR_IDS.includes(charId)) return 'Candidat inconnu.';
+      if (this.players.some(o => o !== p && o.charId === charId)) return 'Ce candidat est déjà pris.';
+      p.charId = charId;
+    }
+    return null;
   }
 
   /** Why the host cannot start now, or null if they can. */

@@ -12,28 +12,34 @@
 //   fast: step as fast as possible instead of in real time (tests only).
 //   hold: how long the clock may wait for the drivers to load, in ms (default 10 s).
 // In:  { t: 'input', slot, c: {throttle,brake,left,right,drift}, item, power }
-//      { t: 'leave', slot }      the driver left; an AI takes the wheel
+//      { t: 'leave', slot }      the driver left; an AI takes the wheel (a god's kart turns mortal)
+//      { t: 'join', slot, entry }  the admin joins the race in progress as a god (DEC-031)
+//      { t: 'god', id, cmd, actor }  a god command (godcmd.js); actor is the admin's slot or null
 //      { t: 'stop' }
 // Out: { t: 'snap', s, per: { [slot]: { ev: [[type, text]], fx: [name] } }, fx: [name] }
 //      { t: 'done', ranking, teams }
+//      { t: 'godReply', id, ok, text }
 import { parentPort, workerData } from 'node:worker_threads';
 
 import { setSfxSink } from '../../game/src/engine/audio.js';
 import { CHARACTERS } from '../../game/src/engine/data.js';
 import { drain, resolveFor } from '../../game/src/engine/events.js';
+import { applyGodCommand } from '../../game/src/engine/godcmd.js';
 import { useItem } from '../../game/src/engine/items.js';
 import { getState, resetMachine } from '../../game/src/engine/machine.js';
 import { encodeSnapshot } from '../../game/src/engine/netstate.js';
 import { usePower } from '../../game/src/engine/powers.js';
-import { endRace, raceOver, simStep, startField } from '../../game/src/engine/race.js';
-import { G } from '../../game/src/engine/state.js';
+import { endRace, joinField, raceOver, simStep, startField } from '../../game/src/engine/race.js';
+import { CFG, G } from '../../game/src/engine/state.js';
 import { placementPoints, teamStandings } from '../../game/src/engine/teams.js';
 import { applyCast } from './roster.js';
 
 const STEP = 1 / 60;
 const SNAP_EVERY = 3;            // 60 Hz / 3 = 20 snapshots a second
 // A race nobody can finish still ends. KR_MAX_RACE_S shortens it (the end-to-end suite does).
+// The cap is for a race of the default length: a race the admin lengthens gets a longer one (DEC-031).
 const MAX_RACE_TIME = Number(process.env.KR_MAX_RACE_S) || 12 * 60;
+const raceCap = () => MAX_RACE_TIME * Math.max(1, G.laps / CFG.laps);
 
 const { trackIdx, roster, cast = [], fast, hold = 10_000 } = workerData;
 const IDLE = Object.freeze({ throttle: false, brake: false, left: false, right: false, drift: false });
@@ -45,12 +51,13 @@ G.trackIdx = trackIdx;
 startField(roster.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team, god: s.god === true })));
 
 const humans = new Map();        // slot -> { c, item, power, usedItem, usedPower, ev, fx }
-roster.forEach((s, slot) => {
-  if (s.isAI) return;
+/** Seat a human at grid slot `slot`: their controls drive that kart. */
+function seat(slot) {
   const h = { c: IDLE, item: 0, power: 0, usedItem: 0, usedPower: 0, ev: [], fx: [] };
   humans.set(slot, h);
   G.karts[slot].ctrl = () => h.c;
-});
+}
+roster.forEach((s, slot) => { if (!s.isAI) seat(slot); });
 // A client builds the whole circuit before its first frame, and a slow one
 // takes longer than the countdown: it would come back to a race already
 // started. So the clock waits for every driver's first controls, which a
@@ -72,7 +79,17 @@ parentPort.on('message', m => {
     if (Number.isInteger(m.power) && m.power > h.power) h.power = m.power;
   } else if (m.t === 'leave') {
     const k = G.karts[m.slot]; if (!k || !humans.has(m.slot)) return;
-    humans.delete(m.slot); loading.delete(m.slot); k.ctrl = null; k.isAI = true; k.itemTimer = 1;
+    humans.delete(m.slot); loading.delete(m.slot); k.ctrl = null; k.isAI = true; k.itemTimer = 1; k.god = false;
+  } else if (m.t === 'join') {
+    // the admin's god kart, mid-race: the next slot, behind the last kart still racing
+    const def = CHARACTERS.find(c => c.id === m.entry?.charId);
+    if (!def || m.slot !== G.karts.length || !running) return;
+    const k = joinField({ def, isAI: false, team: null, god: m.entry.god === true });
+    roster.push(m.entry); slotOf.set(k, m.slot); seat(m.slot);
+  } else if (m.t === 'god') {
+    const actor = Number.isInteger(m.actor) ? G.karts[m.actor] ?? null : null;
+    let r; try { r = applyGodCommand(m.cmd, actor); } catch (e) { r = { ok: false, text: 'Commande impossible.' }; console.error('god command failed:', e); }
+    parentPort.postMessage({ t: 'godReply', id: m.id, ok: r.ok, text: r.text });
   } else if (m.t === 'stop') {
     running = false; process.exit(0);
   }
@@ -98,7 +115,7 @@ function step() {
     parentPort.postMessage({ t: 'snap', s: encodeSnapshot(G, tick), per, fx: raceFx });
     raceFx = [];
   }
-  if (raceOver() || G.time > MAX_RACE_TIME) { finish(); return false; }
+  if (raceOver() || G.time > raceCap()) { finish(); return false; }
   return true;
 }
 

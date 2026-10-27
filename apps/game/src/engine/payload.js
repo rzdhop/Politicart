@@ -25,7 +25,7 @@ export function framePayload(G, CFG) {
     announce,
     rank: k.rank,
     lap: k.lap,
-    laps: CFG.laps,
+    laps: G.laps ?? CFG.laps,              // the race's own: the admin can change it mid-race (DEC-031)
     finished: k.finished,
     finishTime: k.finishTime,
     bestLap: k.bestLap,

@@ -691,3 +691,40 @@ mode".
 exists` on boot. The grid can now hold seven karts; every consumer already
 iterated the roster. A god who enters mid-race cannot spectate: that is a
 follow-up (A-022).
+
+## DEC-031 -- The admin has absolute power over every game
+
+**Context.** After DEC-030 the human asked that the admin be able to join
+any game at any moment and change things at will: "the admin has the
+absolute power over any games". DEC-030 had made a god wait for the next
+start (A-022) and gave no way to change a race.
+
+**Decision.**
+- **Join at any moment.** `godJoin` mid-race seats the admin in the race
+  at once: the race handle's `addGod` pushes a god entry to the grid, tells
+  the other players to build it (`kartJoin`), sends the admin the grid and
+  its slot as at a start, and the worker adds the kart (`joinField`, a
+  little behind the last kart racing) and seats its controls. The god
+  takes a candidate the race does not already drive.
+- **Change at will.** `engine/godcmd.js` holds the race commands: stun
+  (through immunity), slow, boost, give, fire, cast (any power, any kart),
+  hazard (no owner: it catches everyone), front, back, swap, lap, laps (the
+  race's own lap count, `G.laps`, carried in snapshots as `lp`), god (make
+  any kart a god or a mortal, carried as `gd`), finish. One target or
+  'all' (everyone racing but the gods and the actor). The same function
+  runs in solo play on the admin's engine and in the race worker.
+- **Lobby commands** run on the server: forced start, circuit, team,
+  candidate (whatever was unlocked), exclude. The admin's own `start` and
+  `track` messages are forced too, host or not.
+- **Two ways in**, one server function (`godCommand`): the socket's `god
+  {code?, cmd}` (the console divine on the HUD, the admin's lobby buttons)
+  and `POST /api/admin/rooms/command` (the dashboard's Contrôler panel).
+  Both answer only the admin.
+
+**Consequence.** A grid can grow mid-race; every client already guarded
+snapshots shorter than its field. Excluding a player mid-race returns
+their client to the lobby (`room: null` aborts the net race). "Finish"
+is refused during the countdown, which has no path to the results. A god
+who leaves turns into an ordinary AI kart. A-022 is resolved: the god joins
+the running race. The worker's safety cap (KR_MAX_RACE_S, 12 min by
+default) is for three laps and scales with the laps the admin sets.

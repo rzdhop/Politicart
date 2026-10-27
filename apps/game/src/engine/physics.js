@@ -40,8 +40,8 @@ export function updateProgress(k) {
     if (k.lap > k.maxLap) {
       k.maxLap = k.lap;
       const lapTime = G.time - k.lapStart; k.lapStart = G.time; if (lapTime < k.bestLap) k.bestLap = lapTime;
-      if (k.lap >= CFG.laps && !k.finished) { k.finished = true; k.finishTime = G.time; if (!k.isAI) onHumanFinish(k); }
-      else if (!k.isAI) { say(k, k.lap === CFG.laps - 1 ? 'DERNIER TOUR !' : 'TOUR ' + (k.lap + 1) + ' — ' + fmtTime(lapTime)); sfxFor(k, 'lap'); }
+      if (k.lap >= G.laps && !k.finished) { k.finished = true; k.finishTime = G.time; if (!k.isAI) onHumanFinish(k); }
+      else if (!k.isAI) { say(k, k.lap === G.laps - 1 ? 'DERNIER TOUR !' : 'TOUR ' + (k.lap + 1) + ' — ' + fmtTime(lapTime)); sfxFor(k, 'lap'); }
     }
   } else if (prev < N * 0.2 && best > N * 0.8) k.lap--;
   k.progress = k.lap + best / N;

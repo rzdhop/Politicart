@@ -19,6 +19,7 @@ import { getGarage, resetGarage, setGarage } from '../engine/garage.js';
 import { getState, onTransition, transition } from '../engine/machine.js';
 import * as net from '../engine/net.js';
 import { isNetRace, onNetResults, pressItem, pressPower } from '../engine/netrace.js';
+import { applyGodCommand } from '../engine/godcmd.js';
 import { useItem as engineUseItem } from '../engine/items.js';
 import { usePower as engineUsePower } from '../engine/powers.js';
 import { CHARACTERS } from '../engine/data.js';
@@ -57,7 +58,11 @@ type RosterReply = { ok: boolean; status: number; error?: string; field?: string
 // ---- The admin's dashboard (DEC-030), as the server describes it (dashboard.js) ----
 export interface DashUser { id: string; name: string; xp: number; level: number; created: number; seen: number | null; banned: { at: number; reason: string } | null; online: boolean; room: string | null }
 export interface DashConn { id: string; name: string; userId: string | null; guest: boolean; admin: boolean; room: string | null }
-export interface DashRoom extends RoomView { since: number | null }
+/** A kart of a race in progress, as the dashboard lists it (DEC-031). */
+export interface DashKart { slot: number; name: string; charId: string; isAI: boolean; god: boolean }
+export interface DashRoom extends RoomView { since: number | null; race: DashKart[] | null }
+/** A god command (engine/godcmd.js, or a lobby command run by the server): `{ cmd, target?, ... }`. */
+export type GodCmd = { cmd: string } & Record<string, unknown>;
 export interface DashRecent { at: number; code: string; trackIdx: number; humans: number; gods: number; winner: string | null; teams: { team: TeamId; points: number }[] }
 export interface DashStats {
   accounts: { total: number; banned: number; new7d: number; online: number };
@@ -108,6 +113,10 @@ export interface UiSnapshot {
   lastGain: Gain | null;
   /** The admin's dashboard (DEC-030). */
   dashboard: DashboardView;
+  /** The admin's god console is open over the race (DEC-031). */
+  godConsole: boolean;
+  /** What the last god command in a solo race said (team races answer through net.notice / net.error). */
+  godReply: string | null;
 }
 
 export interface NetRankRow { slot: number; name: string; charId: string; team: TeamId | null; isAI: boolean; god?: boolean; rank: number; finished: boolean; time: number | null; bestLap: number | null; points: number }
@@ -155,6 +164,8 @@ let snapshot: UiSnapshot = {
   accountError: null,
   lastGain: null,
   dashboard: { stats: null, users: [], connections: [], rooms: [], query: '', busy: false, error: null, notice: null, updatedAt: null },
+  godConsole: false,
+  godReply: null,
 };
 
 const listeners = new Set<() => void>();
@@ -182,7 +193,7 @@ let soloRace = false;
 
 onTransition((to: string, from: string) => {
   const patch: Partial<UiSnapshot> = { state: to as GameState };
-  if (to === 'countdown' && from !== 'paused') { patch.noteHidden = true; patch.lastGain = null; }
+  if (to === 'countdown' && from !== 'paused') { patch.noteHidden = true; patch.lastGain = null; patch.godReply = null; }
   set(patch);
   // A solo race just ended: the account earns its experience (a team race's comes from the server).
   if (to === 'lobby') soloRace = false;
@@ -452,6 +463,29 @@ export const actions = {
     const r = await dashCall(t => account.dashboard.kick(t, id, { base: remoteServer }));
     if (r) { dash({ notice: 'Connexion fermée.', error: null }); await actions.refreshDashboard(); }
   },
+  /**
+   * Any command on room `code`, from the dashboard (DEC-031): start, track,
+   * kick, team, char in the lobby; every god command in a race.
+   */
+  async roomCommand(code: string, cmd: GodCmd) {
+    const r = await dashCall(t => account.dashboard.command(t, code, cmd, { base: remoteServer }));
+    if (r) { dash({ notice: String(r.text ?? 'Fait.'), error: null }); await actions.refreshDashboard(); }
+  },
+  /**
+   * A god command from the race or the lobby on screen (DEC-031). In a team
+   * race, or in a room, the server runs it (and checks it is the admin); in
+   * a solo race the admin's own engine does, on the spot.
+   */
+  godCommand(cmd: GodCmd) {
+    if (!isAdmin(snapshot)) return;
+    const st = getState();
+    if (isNetRace() || (st === 'lobby' && snapshot.net.room)) { net.clearMessages(); set({ godReply: null }); net.godCmd(null, cmd); return; }
+    if (st !== 'race' && st !== 'countdown' && st !== 'paused') return;
+    const r = applyGodCommand(cmd, G.player) as { ok: boolean; text: string };
+    set({ godReply: r.text });
+  },
+  /** Open or close the god console over the race (the G key, or its button). */
+  toggleGodConsole() { if (isAdmin(snapshot)) set({ godConsole: !snapshot.godConsole }); },
   /** Enter room `code` as a god: the lobby opens on it, and the server seats the admin outside the teams. */
   godJoin(code: string) {
     const acc = snapshot.account; if (!acc || !isAdmin(snapshot)) return;

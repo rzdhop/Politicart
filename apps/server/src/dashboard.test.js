@@ -40,7 +40,16 @@ const isRoom = pred => m => m.t === 'room' && pred(m.room);
 
 let srv, store, adminPw;
 const races = [];
-const fakeRace = (room, roster, io) => { const r = { room: room.code, roster, io, stopped: false }; races.push(r); return { input() {}, leave() {}, stop: () => { r.stopped = true; } }; };
+const fakeRace = (room, roster, io) => {
+  const r = { room: room.code, roster, io, stopped: false, gods: [], commands: [], left: [] };
+  races.push(r);
+  const grid = roster.map(({ charId, team, isAI, name, god }) => ({ charId, team, isAI, name, ...(god ? { god } : {}) }));
+  return {
+    grid, input() {}, leave: id => r.left.push(id), stop: () => { r.stopped = true; },
+    addGod: (playerId, entry) => { r.gods.push([playerId, entry]); grid.push({ ...entry, team: null, isAI: false, god: true }); return true; },
+    god: async (cmd, playerId) => { r.commands.push([cmd, playerId]); return cmd.cmd === 'nope' ? { ok: false, text: 'Commande inconnue.' } : { ok: true, text: 'fait : ' + cmd.cmd }; },
+  };
+};
 
 beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'kr-dash-')); writeFileSync(join(dir, 'index.html'), '<!doctype html>');
@@ -188,6 +197,94 @@ describe('rooms, connections and races', () => {
     expect(after.races).toBe(before + 1);
     expect(after.recent[0]).toMatchObject({ winner: eve.name, humans: 1 });
     e.close();
+  });
+});
+
+describe('absolute power over any room (DEC-031)', () => {
+  it('enters a race in progress as a god, at once, and lists the race grid on the dashboard', async () => {
+    const token = await adminToken();
+    const host = await account('Racer');
+    const h = await hello(host.token); h.send({ t: 'create' });
+    const { room } = await h.next(isRoom(r => r.players.length === 1));
+    h.send({ t: 'start' }); await h.next(isRoom(r => r.phase === 'race'));
+    const race = races.at(-1);
+    const g = await hello(token);
+    g.send({ t: 'godJoin', code: room.code });
+    await h.next(x => x.t === 'notice' && /course en dieu/.test(x.msg));
+    expect(race.gods).toHaveLength(1);
+    expect(race.gods[0][0]).toBe(g.welcome.id);
+    expect(race.roster.map(s => s.charId)).not.toContain(race.gods[0][1].charId);       // a candidate the race does not drive
+    const live = await (await get('/api/admin/live', token)).json();
+    const listed = live.rooms.find(r => r.code === room.code);
+    expect(listed.race).toHaveLength(7);
+    expect(listed.race[6]).toMatchObject({ slot: 6, god: true });
+    g.send({ t: 'godJoin', code: room.code });                                          // again: already driving, nothing new
+    await new Promise(r => setTimeout(r, 50));
+    expect(race.gods).toHaveLength(2);                                                  // asked twice; the real race refuses the second (race.test.js)
+    h.close(); g.close();
+  });
+
+  it('runs race commands from the dashboard or the socket, and refuses them to anyone else', async () => {
+    const token = await adminToken();
+    const host = await account('Victim');
+    const h = await hello(host.token); h.send({ t: 'create' });
+    const { room } = await h.next(isRoom(r => r.players.length === 1));
+    expect((await post('/api/admin/rooms/command', { code: room.code, cmd: { cmd: 'boost', target: 0 } }, token)).status).toBe(400);   // no race yet
+    h.send({ t: 'start' }); await h.next(isRoom(r => r.phase === 'race'));
+    const race = races.at(-1);
+    const r = await post('/api/admin/rooms/command', { code: room.code, cmd: { cmd: 'stun', target: 'all' } }, token);
+    expect(r.status).toBe(200); expect((await r.json()).text).toBe('fait : stun');
+    expect(race.commands.at(-1)).toEqual([{ cmd: 'stun', target: 'all' }, undefined]);
+    expect((await post('/api/admin/rooms/command', { code: room.code, cmd: { cmd: 'nope' } }, token)).status).toBe(400);
+    expect((await post('/api/admin/rooms/command', { code: 'ZZZZ', cmd: { cmd: 'finish' } }, token)).status).toBe(400);
+    expect((await post('/api/admin/rooms/command', { code: room.code, cmd: { cmd: 'finish' } }, host.token)).status).toBe(401);
+
+    const g = await hello(token);
+    g.send({ t: 'god', code: room.code, cmd: { cmd: 'finish' } });
+    expect((await g.next(x => x.t === 'notice')).msg).toBe('fait : finish');
+    h.send({ t: 'god', code: room.code, cmd: { cmd: 'finish' } });
+    expect((await h.next(x => x.t === 'error')).msg).toMatch(/administrateur/);
+    h.close(); g.close();
+  });
+
+  it('starts a room whose players are not ready, picks its circuit, moves and excludes its players', async () => {
+    const token = await adminToken();
+    const hostAcc = await account('Lazy');
+    const h = await hello(hostAcc.token); h.send({ t: 'create' });
+    const { room } = await h.next(isRoom(r => r.players.length === 1));
+    const guest = client(srv.port); await guest.open; guest.send({ t: 'hello', name: 'Invité' }); await guest.next(m => m.t === 'welcome');
+    guest.send({ t: 'join', code: room.code });
+    const both = await h.next(isRoom(r => r.players.length === 2));
+    const guestId = both.room.players[1].id;
+    h.send({ t: 'start' }); expect((await h.next(m => m.t === 'error')).msg).toMatch(/prêt/);   // the host cannot
+
+    const cmd = c => post('/api/admin/rooms/command', { code: room.code, cmd: c }, token);
+    expect((await cmd({ cmd: 'track', trackIdx: 2 })).status).toBe(200);
+    await h.next(isRoom(r => r.trackIdx === 2));
+    expect((await cmd({ cmd: 'team', id: guestId, team: 'bleu' })).status).toBe(200);
+    await h.next(isRoom(r => r.players[1].team === 'bleu'));
+    expect((await cmd({ cmd: 'char', id: guestId, charId: 'thierry' })).status).toBe(200);    // a guest, given a locked candidate
+    await h.next(isRoom(r => r.players[1].charId === 'thierry'));
+    expect((await cmd({ cmd: 'kick', id: guestId })).status).toBe(200);
+    expect((await guest.next(m => m.t === 'error')).msg).toMatch(/Exclu/);
+    await h.next(isRoom(r => r.players.length === 1));
+    expect((await cmd({ cmd: 'kick', id: 'nobody' })).status).toBe(400);
+    expect((await cmd({ cmd: 'start' })).status).toBe(200);                                  // nobody ready: forced
+    await h.next(isRoom(r => r.phase === 'race'));
+    expect((await cmd({ cmd: 'start' })).status).toBe(400);
+    h.close(); guest.close();
+  });
+
+  it('lets the admin start and pick the circuit of a room it sits in, host or not, ready or not', async () => {
+    const token = await adminToken();
+    const hostAcc = await account('Slow');
+    const h = await hello(hostAcc.token); h.send({ t: 'create' });
+    const { room } = await h.next(isRoom(r => r.players.length === 1));
+    const g = await hello(token); g.send({ t: 'join', code: room.code });
+    await h.next(isRoom(r => r.players.length === 2));
+    g.send({ t: 'track', trackIdx: 1 }); await h.next(isRoom(r => r.trackIdx === 1));
+    g.send({ t: 'start' }); await h.next(isRoom(r => r.phase === 'race'));
+    h.close(); g.close();
   });
 });
 
