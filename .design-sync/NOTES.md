@@ -265,3 +265,134 @@ files under `project/` in the Design System format: `components/bundle.js`,
 game was renamed Politikart: the package scope is `@politikart/*` and the bundle
 global `PolitikartUI`; the design system's namespace follows. A re-sync must
 write that layout, not the storybook-shape one this file describes above.
+
+## Re-sync to the artifact: the 3D select (2026-10-28, stage 10b)
+
+Synced from `52aa0e2` (stage 10a's `f840fcc` included; it touched only
+`apps/game`, so the bundle and its CSS are what `c81ba4d` produced). Version 16
+of the artifact.
+
+- **What changed.** New component `ShowcaseStage` (README, preview, `.d.ts`,
+  stories). `Showcase` (`stage` slot), `CharacterTile` (`pending`), `Roster`
+  (`footer`) and `SelectLayout` (the short-landscape pin; its props are
+  unchanged) got new stories, READMEs and previews. `components/bundle.js`
+  (54 components), `bundle.css` (the `.tricolore` `flex-shrink: 0`, the
+  `.roster-foot`, `.tile.pending` sweep, `.showcase-stage` and
+  `max-height: 520px` landscape rules) and `index.d.ts` were regenerated.
+  Tokens are unchanged.
+- **The economy components and `ChoiceGroup` needed no re-sync.** Their
+  `stories.js` regenerate byte for byte from the current tree, so the
+  follow-up in the checkpoint is closed. (`RevealStage`'s published
+  `stories.js` frames each story in a 420px box: an owned preview with no file
+  under `previews/`. Regenerating it would lose the frame; it was left alone.)
+- **Naming.** The index title, `tokens.json` `name` and `tokens.css` line 1
+  now say "Politikart Design System"; every `.d.ts` header (54 files and
+  `index.d.ts`) said `@kart-republique/ui` and now says `@politikart/ui`.
+  `assets/notes/COMPONENTS.md` and `MIGRATION-REPORT.md` still say
+  "Politicart": they are the move's record and list paths that no longer
+  exist, so they were left as written.
+- **The template's cast now uses the game's pun names.**
+  `templates/character-select/cast.js` holds the game's own copy
+  (`apps/game/src/engine/data.js`): ids, names, titles, quotes, powers, and the
+  stats as the game shows them, `(stat - 0.6) / 0.6`, keyed as in the plan's
+  section 3.1, slot by slot (the first slot -> `bernadette` ... the
+  eleventh -> `gaspard`; `tools/castgen.py` holds the order). Each
+  entry keeps the template's `look`, which is 3D technique data, not
+  identity. `app.jsx` reads `window.PolitikartUI` (it read
+  `KartRepubliqueUI`), uses the game's labels and copy, and composes the new
+  parts: `Showcase stage={<ShowcaseStage/>}`, `CharacterTile pending` until a
+  portrait lands, and the button, legend and parody lines in `Roster footer`.
+  `CharacterSelect.html` loaded `../../styles.css` and `../../_ds_bundle.js`,
+  which no longer exist in this layout, so the template could not run at all;
+  it now loads `../../tokens.css`, `../../components/bundle.css` and
+  `../../components/bundle.js`. The game's real-name scan
+  (`apps/game/src/engine/looks.test.js`) finds nothing in any file sent.
+- **Not fixed: the eleven `screenshots/*.jpg` show the real names in their
+  pixels** (tile labels and the showcase heading of the old template). They
+  are images, not text; replacing them needs the owner's call. Fresh captures
+  of the fixed template are possible, but under SwiftShader its hall renders
+  as a dark silhouette, so they would not be like for like.
+
+### How the files were produced: `.design-sync/tools/`
+
+The storybook-shape converter is not in this repo, so this sync reproduced its
+output with esbuild 0.28 from the root `node_modules`, with the scripts now
+kept in `.design-sync/tools/`. None holds a machine path: each takes its
+folders as arguments or from the environment, and finds the repo from its own
+location.
+
+- `assemble.sh <sync dir> <published project dir> [Comp...]`: the whole
+  regeneration. `<sync dir>` is a work folder holding `repo/` (a copy of this
+  repo at the commit being synced, `npm ci` done); it fills `out-cur/` and
+  `stage/project/` there. `<published project dir>` is a read-back of the
+  artifact's `project/` folder. `Comp...` defaults to the five select parts.
+- `gen.mjs <tree root> <out dir> bundle|stories <Comp...>`: `bundle.js` and
+  each `stories.js`. It reads `config.json` and `preview-root.jsx` beside
+  `tools/`. `REAL` (`/home/user/Politicart`) is not a path it reads: it is
+  the root the published module comments name, kept so a re-sync does not
+  rewrite every file.
+- `css.py <dist styles.css> <out bundle.css>` and `docs.py <published
+  project dir> <tree root> <stage project dir> <heights.json>`: the CSS and
+  the READMEs, `.d.ts` and `preview.html` of the select parts.
+- `castgen.py <template dir>`: rewrites the template's `cast.js` from
+  `apps/game/src/engine/data.js`, mapping the template's eleven slots by
+  position; it reproduces the published `cast.js` from the original template
+  byte for byte, and leaves a rewritten one unchanged.
+- `render.cjs <out dir> <Comp[:WxH]>...` and `tplshot.cjs <out dir> <WxH>
+  <tile,...> [prefix]`: local captures of the cards and of the template on
+  port 8411, with `DS_SYNC` (the work folder: `stage/project`, `lib/` with
+  React 18.3.1, `cdn/` with the cached unpkg files) and `DS_PUBLISHED` (the
+  published `project/` copy) set, Playwright on `NODE_PATH`, and `CHROMIUM`
+  naming a Chrome binary where Playwright's own is not installed.
+- `namescan.mjs <dir>`: the game's real-name scan over any folder. It reads
+  the names and the matching from `apps/game/src/engine/looks.test.js`, the
+  one list allowed to hold them, so run it over the staged files before a
+  publish.
+
+After the move into the repo, `gen.mjs` regenerated `bundle.js` and the five
+select `stories.js` byte for byte, and `namescan.mjs` found nothing in
+`tools/`. The recipe was first checked by regenerating the published
+`bundle.js`, `bundle.css` and twelve `stories.js` from the pre-stage-3 tree
+(`9d63676`): all byte-identical. Keep these facts if it is ever rebuilt:
+
+- `bundle.js`: an entry `export * from './index.ts'` plus `PreviewRoot` from
+  `.design-sync/preview-root.jsx`, `format: 'iife'`, `globalName:
+  'PolitikartUI'`, `jsx: 'automatic'`, unminified, `define` of
+  `process.env.NODE_ENV` and `import.meta.env: '{}'`. `react`,
+  `react/jsx-runtime` resolve to a shim over `window.React` (`jsx`/`jsxs` over
+  `createElement`), CSS imports load as empty modules. Strip esbuild's leading
+  `"use strict"`, then add line 1 `/* @ds-bundle: {"format":4,...} */` (the
+  component order is the `index.ts` export order) and the last-line
+  `window.PolitikartUI=...__dsMainNs...` assignment.
+- `stories.js`: per component, a preview module (passed as `stdin` with a
+  `sourcefile` under `src/components/<group>/previews/`) that imports the
+  stories as `S` and exports `compose(S, "<Story>")` per story. Imports of
+  library components from a story resolve to `module.exports =
+  window.PolitikartUI` (a `ds` namespace); fixtures are bundled. Prepend
+  `"use strict"` and append the mount IIFE with the card mode from
+  `config.json` (`MODE`, `PRIMARY`, `SKIP`).
+- The comment paths depend on the working directory: run from six levels below
+  `/` and map the copy's root to `/home/user/Politicart`, or every changed
+  file gains a scratch path.
+- `bundle.css` is `dist/styles.css` with the custom properties dropped from
+  the `:root` token block (`:root{color-scheme:dark}` stays): `tokens.css`
+  is the one source of the tokens.
+- The page serves `.d.ts` and `.jsx` only as `contentType: "text/plain"`; a
+  publish without it is refused.
+
+### Traps hit
+
+- **A story that renders a `Screen` is 0px tall in a card.** The new
+  `SelectLayout` "With Stage" story is the whole select screen in a `Screen`
+  (`position: fixed`). Its preview wraps that one story in a
+  `position: relative; height: 720px; transform: translateZ(0)` frame, the
+  same fix as the owned Screen and NoteBanner previews; regenerating it
+  without the frame brings the blank cell back.
+- **Wide stories are clipped in a two-column card.** `ShowcaseStage` (520px
+  decorator) and `Showcase` "With Stage" (560px) overflow a grid cell, so
+  `config.json` now gives both `cardMode: "column"`, with `Default` and
+  `WithStage` as their first stories.
+- The local check served the cards on port 8411 with `tokens.css`,
+  `bundle.css`, React 18.3.1 and `bundle.js` preloaded, the way the page
+  frames them. The `fonts/` 404s from `tokens.css` there are expected
+  locally; `bundle.css` embeds both fonts.

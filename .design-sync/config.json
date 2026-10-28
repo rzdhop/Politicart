@@ -29,6 +29,14 @@
     "SelectLayout": {
       "cardMode": "column"
     },
+    "Showcase": {
+      "cardMode": "column",
+      "primaryStory": "WithStage"
+    },
+    "ShowcaseStage": {
+      "cardMode": "column",
+      "primaryStory": "Default"
+    },
     "CardGrid": {
       "cardMode": "column"
     },
