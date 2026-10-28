@@ -1,4 +1,4 @@
-# Kart République
+# Politikart
 
 *Grand Prix de l'Hémicycle* — a satirical 3D kart racer in the browser, starring a cast of French politicians under pun names.
 
@@ -12,11 +12,11 @@ To run it locally you need Node 26 and npm:
 
 ```sh
 npm ci
-npm run build -w @kart-republique/ui   # the design system the game is built from
-npm run dev -w @kart-republique/game   # http://127.0.0.1:5173
+npm run build -w @politikart/ui   # the design system the game is built from
+npm run dev -w @politikart/game   # http://127.0.0.1:5173
 ```
 
-`npm run build` builds everything; `npm run preview -w @kart-republique/game` serves the production build at `http://127.0.0.1:4173`.
+`npm run build` builds everything; `npm run preview -w @politikart/game` serves the production build at `http://127.0.0.1:4173`.
 
 ## Team races (Multijoueur)
 
@@ -61,20 +61,20 @@ Accounts are kept in a JSON file by default, or in Postgres when `DATABASE_URL` 
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `DATABASE_URL` | unset | A Postgres connection string. The server creates its tables (`kr_users`, `kr_sessions`, `kr_friends`, and `kr_docs` for the admin's cast and the dashboard's race counters) on start, and adds the `seen`, `banned`, `coins`, `owned` and `stats` columns to an older `kr_users`. Hosted databases give a URL ending in `?sslmode=require`. |
-| `KR_DATA` | `apps/server/data/kr-accounts.json` (`/data/kr-accounts.json` in the container) | The JSON file used without `DATABASE_URL`. `:memory:` keeps accounts in memory only. The admin's cast and the race counters are kept beside it, in `kr-docs/roster.json` and `kr-docs/stats.json`. |
-| `KR_ADMIN_USER` | `rida` | The one admin account. Nobody can sign up under this name. |
-| `KR_ADMIN_PASSWORD_HASH` | unset | The admin's password hash (see below). Unset or malformed: nobody is admin and the Workshop is off. |
+| `DATABASE_URL` | unset | A Postgres connection string. The server creates its tables (`politikart_users`, `politikart_sessions`, `politikart_friends`, and `politikart_docs` for the admin's cast and the dashboard's race counters) on start, and adds the `seen`, `banned`, `coins`, `owned` and `stats` columns to an older `politikart_users`. Hosted databases give a URL ending in `?sslmode=require`. |
+| `POLITIKART_DATA` | `apps/server/data/politikart-accounts.json` (`/data/politikart-accounts.json` in the container) | The JSON file used without `DATABASE_URL`. `:memory:` keeps accounts in memory only. The admin's cast and the race counters are kept beside it, in `politikart-docs/roster.json` and `politikart-docs/stats.json`. |
+| `POLITIKART_ADMIN_USER` | `rida` | The one admin account. Nobody can sign up under this name. |
+| `POLITIKART_ADMIN_PASSWORD_HASH` | unset | The admin's password hash (see below). Unset or malformed: nobody is admin and the Workshop is off. |
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `PORT` | `8080` | Port to listen on. |
 | `HOST` | `0.0.0.0` | Interface to bind. `0.0.0.0` lets the local network in. |
-| `KR_STATIC` | `apps/game/dist` | The built game to serve. |
-| `KR_MAX_RACE_S` | `720` | A race ends after this many seconds even if nobody finishes. |
-| `DATABASE_URL`, `KR_DATA` | | Where accounts are kept; see [Accounts](#accounts-levels-and-friends). |
+| `POLITIKART_STATIC` | `apps/game/dist` | The built game to serve. |
+| `POLITIKART_MAX_RACE_S` | `720` | A race ends after this many seconds even if nobody finishes. |
+| `DATABASE_URL`, `POLITIKART_DATA` | | Where accounts are kept; see [Accounts](#accounts-levels-and-friends). |
 
-The game build reads one variable: `VITE_KR_SERVER`, the origin of a game server on another host (e.g. `https://kr.onrender.com`). Unset, the game looks for the server at its own origin.
+The game build reads one variable: `VITE_POLITIKART_SERVER`, the origin of a game server on another host (e.g. `https://kr.onrender.com`). Unset, the game looks for the server at its own origin.
 
 The server runs each race at 60 steps a second in its own worker thread and sends every player 20 snapshots a second. Each browser draws the race about 100 ms behind the server and sends its controls back 30 times a second. On a local network the delay is not noticeable. Over the internet, a player's own kart reacts with roughly half a round trip of extra lag.
 
@@ -97,19 +97,19 @@ The admin has absolute power over every game, solo or team, from inside it or fr
 The admin's password is never stored, only its hash, held in an environment variable. To set it up:
 
 ```sh
-npm run -s admin-hash -w @kart-republique/server     # asks for the password twice (12 characters or more), prints the hash
+npm run -s admin-hash -w @politikart/server     # asks for the password twice (12 characters or more), prints the hash
 ```
 
-Put the printed hash in `.env` at the repo root as `KR_ADMIN_PASSWORD_HASH='scrypt$...'` (single quotes: the hash contains `$`), or in your host's environment settings, and restart the server. At start the server creates the admin account, or resets its password to that hash, and logs whether administration is on. The admin then logs in through **Compte** like any player. Failed logins are limited per address and per account (10 every 15 minutes).
+Put the printed hash in `.env` at the repo root as `POLITIKART_ADMIN_PASSWORD_HASH='scrypt$...'` (single quotes: the hash contains `$`), or in your host's environment settings, and restart the server. At start the server creates the admin account, or resets its password to that hash, and logs whether administration is on. The admin then logs in through **Compte** like any player. Failed logins are limited per address and per account (10 every 15 minutes).
 
 ### Playing online (Render + GitHub Pages)
 
 The free way to play team races over the internet, with no machine of your own left running:
 
 1. **Host the server on Render.** On [render.com](https://render.com), choose **New > Blueprint**, pick this repository and apply. `render.yaml` builds the `Dockerfile` on the free plan as a single instance. The game, solo and team races, is then playable at the address Render gives, `https://<name>.onrender.com/`.
-2. **Point the GitHub page at it.** In the repository's **Settings > Secrets and variables > Actions > Variables**, add `KR_SERVER_URL` = `https://<name>.onrender.com` (no trailing path), then re-run the **Deploy to GitHub Pages** workflow. `https://rzdhop.github.io/Politicart/` now shows **Multijoueur** whenever the server answers.
+2. **Point the GitHub page at it.** In the repository's **Settings > Secrets and variables > Actions > Variables**, add `POLITIKART_SERVER_URL` = `https://<name>.onrender.com` (no trailing path), then re-run the **Deploy to GitHub Pages** workflow. `https://rzdhop.github.io/Politicart/` now shows **Multijoueur** whenever the server answers.
 
-3. **Make yourself admin.** In the Render service's **Environment**, set `KR_ADMIN_PASSWORD_HASH` to the hash printed by `npm run -s admin-hash -w @kart-republique/server` (the Blueprint leaves it for you to fill). Render restarts the service; log in as `rida` through **Compte**.
+3. **Make yourself admin.** In the Render service's **Environment**, set `POLITIKART_ADMIN_PASSWORD_HASH` to the hash printed by `npm run -s admin-hash -w @politikart/server` (the Blueprint leaves it for you to fill). Render restarts the service; log in as `rida` through **Compte**.
 
 Render's free disk is wiped whenever the service sleeps, so accounts and the admin's cast need a database there. The game uses the [Neon](https://console.neon.tech) project **Politikart** (`muddy-wave-64148556`, region `aws-eu-central-1`, Frankfurt, database `politikart`): paste its pooled connection string (Neon console > Connect, connection pooling on) into the service's `DATABASE_URL` variable, which the Blueprint leaves for you to fill. Everything targets players in France: neither Render nor Neon has a Paris region, so both sit in Frankfurt, side by side and inside the EU; Fly.io (`fly.toml`) runs the server in Paris (`cdg`). Locally, `neon deploy` writes the same variable into `.env.local`, which `npm start` reads. Without it the server still runs, but every account and every cast edit vanishes at each restart (the admin account itself is recreated from its hash).
 
@@ -120,13 +120,13 @@ The free plan sleeps after 15 minutes with nobody connected. The first visitor a
 The `Dockerfile` packages the server and the built game into one image, and `fly.toml` deploys it to [Fly.io](https://fly.io):
 
 ```sh
-docker build -t kart-republique .
-docker run --rm -p 8080:8080 kart-republique     # the same server, in a container
+docker build -t politikart .
+docker run --rm -p 8080:8080 politikart     # the same server, in a container
 
 fly launch --no-deploy --copy-config             # choose your own app name and region
 fly deploy
 fly volumes create kr_data --size 1              # once: the accounts file and the cast live on it (/data)
-fly secrets set KR_ADMIN_PASSWORD_HASH='scrypt$...'   # the admin's hash, in single quotes
+fly secrets set POLITIKART_ADMIN_PASSWORD_HASH='scrypt$...'   # the admin's hash, in single quotes
 fly scale count 1                                # rooms live in memory: exactly one machine
 ```
 
@@ -173,7 +173,7 @@ Both orientations work: in portrait the camera widens and pulls back. Phones sta
 - **Bike lane**: a green cycle lane runs along the right-hand edge of every circuit. Its cyclists ride where they like: they swerve into the karts' lanes, cut across the road, hop onto the pavement, stop dead or ride the wrong way. Hitting one knocks the rider over and shakes your kart.
 - **Messages**: the banners during a race only concern you: what you did, and what was done to you, once it is done (a projectile is announced when it lands, not when it is thrown; nothing reaches a driver who has finished). Nobody else's item or power is announced to the whole field, and the same goes for sound: a mini-turbo or a power used across the circuit is silent on your side. Banners show one at a time and stay readable for a second before the next takes over; a burst keeps at most two waiting.
 - **Contact**: karts bounce off each other once per contact, with a hop, sparks and a camera shake; rubbing door to door costs about 2 % of speed, ramming the kart in front about 10 %, and the lighter kart takes more of it. A spun-out kart always straightens up along the road before it drives off.
-- **Workshop (admin only)**: the administrator account (`KR_ADMIN_USER`, `rida` by default) logs in through the ordinary Compte screen and gets an **Atelier** button on the title: rename candidates, change their colours and their default kart (accents, number, wheels, spoiler, side pods, sticker), upload kart liveries and campaign posters. Saving sends the cast to the game server, so every player gets it, the GitHub Pages build included when it names a server. Nobody else sees the Workshop. Without a reachable server the game plays the default cast.
+- **Workshop (admin only)**: the administrator account (`POLITIKART_ADMIN_USER`, `rida` by default) logs in through the ordinary Compte screen and gets an **Atelier** button on the title: rename candidates, change their colours and their default kart (accents, number, wheels, spoiler, side pods, sticker), upload kart liveries and campaign posters. Saving sends the cast to the game server, so every player gets it, the GitHub Pages build included when it names a server. Nobody else sees the Workshop. Without a reachable server the game plays the default cast.
 - **Dashboard, god seat and console (admin only)**: **Tableau de bord** shows the server's figures, lists the accounts (ban with a reason, lift a ban, close an account's sessions), the open rooms (close one, **control** it from afar, or **enter it as a god** at any moment, mid-race included) and the connections (eject one). A god races as a seventh, neutral kart in creative mode: power every second, items without end, untouchable, outside the scoring. The **console divine** (G in a race) changes any race at will. See [The admin's dashboard](#the-admins-dashboard-and-the-god-seat).
 - **Garage**: every player styles their own kart from the roster (body and accent colours, wheels, spoiler, side pods, race number, sticker, exhaust, underglow, mast, nose, skin, trail). It applies to whichever candidate they pick, over that candidate's default kart, and is kept in this browser's `localStorage`. On a server, a part the account does not own is greyed with its grade and leads to the Boutique; the server never shows the others a part its owner did not buy.
 - **Messages**: every item, power and hazard has four to six lines, picked at random when it lands (`engine/lines.js`), so a race does not repeat itself.
@@ -189,7 +189,7 @@ An npm workspace with three packages.
 | --- | --- |
 | `apps/game` | The game: a Vite app. Three.js 0.128 engine, React screens. |
 | `apps/server` | The game server: static files, accounts and friends (`accounts.js`, `store.js`: a JSON file or Postgres via `pg`), the admin's cast (`roster.js`) and dashboard (`dashboard.js`), rooms over WebSocket (`ws`), one worker thread per race running the game's own engine. |
-| `packages/ui` | `@kart-republique/ui`, the design system: the game's look as React components, with Storybook. |
+| `packages/ui` | `@politikart/ui`, the design system: the game's look as React components, with Storybook. |
 | `e2e` | The Playwright suite that drives the game through its screens and HUD. |
 | `.github/workflows/pages.yml` | Builds, checks and publishes the game to GitHub Pages on every push to `main`. |
 
@@ -213,7 +213,7 @@ The engine never touches the DOM; the UI never touches the simulation. They meet
 | `src/engine/godcmd.js` | The admin's **god commands**: what the console divine does to a race, in solo and in the race worker alike. |
 | `src/engine/input.js` | The **input seam**: the engine reads the controls through it. |
 | `src/engine/minimap.js`, `preview.js`, `render.js`, `audio.js` | The minimap, the character showcase and thumbnails, the one renderer and camera, WebAudio. |
-| `src/ui/` | The React screens and the HUD, composed from `@kart-republique/ui`; `store.ts` is what they read. |
+| `src/ui/` | The React screens and the HUD, composed from `@politikart/ui`; `store.ts` is what they read. |
 | `src/game.js` | The per-frame HUD writer, the keyboard and the clock. |
 
 ### The design system (`packages/ui`)
@@ -221,7 +221,7 @@ The engine never touches the DOM; the UI never touches the simulation. They meet
 Tokens, typography, panels and buttons, the roster and showcase, track cards, every HUD readout, the results table and the workshop form, extracted from the original single-file game and typed. The HUD readouts expose imperative handles so a game loop can write them at 60 fps without a React render.
 
 ```sh
-npm run storybook -w @kart-republique/ui   # http://localhost:6006
+npm run storybook -w @politikart/ui   # http://localhost:6006
 ```
 
 ## Checks

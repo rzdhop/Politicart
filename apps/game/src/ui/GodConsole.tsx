@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent, type MouseEvent, type ReactNode } from 'react';
 
-import { Button, Disclaimer, Panel } from '@kart-republique/ui';
+import { Button, Disclaimer, Panel } from '@politikart/ui';
 
 import { CHARACTERS, ITEMS } from '../engine/data.js';
 import { GOD_HAZARDS, GOD_POWERS, MAX_LAPS } from '../engine/godcmd.js';

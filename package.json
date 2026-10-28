@@ -2,7 +2,7 @@
   "name": "politicart",
   "version": "0.0.0",
   "private": true,
-  "description": "Kart Republique: a satirical 3D kart racer, and the design system extracted from it",
+  "description": "Politikart: a satirical 3D kart racer, and the design system extracted from it",
   "license": "UNLICENSED",
   "workspaces": [
     "packages/*",
@@ -17,7 +17,7 @@
     "test": "npm run test --workspaces --if-present",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "serve": "npm run build -w @kart-republique/ui && npm run build -w @kart-republique/game && npm start -w @kart-republique/server"
+    "serve": "npm run build -w @politikart/ui && npm run build -w @politikart/game && npm start -w @politikart/server"
   },
   "devDependencies": {
     "@neon/config": "1.9.5",

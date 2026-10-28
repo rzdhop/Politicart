@@ -1,9 +1,9 @@
 // The one administrator account, configured from the environment.
 //
-//   KR_ADMIN_USER           the admin's account name (default "rida")
-//   KR_ADMIN_PASSWORD_HASH  its password, hashed as accounts.js hashes every
+//   POLITIKART_ADMIN_USER           the admin's account name (default "rida")
+//   POLITIKART_ADMIN_PASSWORD_HASH  its password, hashed as accounts.js hashes every
 //                           password: scrypt$<32 hex salt>$<128 hex key>.
-//                           `npm run -s admin-hash -w @kart-republique/server`
+//                           `npm run -s admin-hash -w @politikart/server`
 //                           prints one.
 //
 // The environment is the truth: at boot ensureAdmin() creates the account, or
@@ -36,9 +36,9 @@ export function adminConfig({ user, hash } = {}) {
   const name = (typeof user === 'string' ? user.trim() : '') || DEFAULT_ADMIN_USER;
   const raw = typeof hash === 'string' ? hash.trim() : '';
   let reason = null;
-  if (badName(name)) reason = 'KR_ADMIN_USER is not a valid account name';
-  else if (!raw) reason = 'KR_ADMIN_PASSWORD_HASH is not set';
-  else if (!validAdminHash(raw)) reason = 'KR_ADMIN_PASSWORD_HASH is malformed (expected scrypt$<32 hex>$<128 hex>)';
+  if (badName(name)) reason = 'POLITIKART_ADMIN_USER is not a valid account name';
+  else if (!raw) reason = 'POLITIKART_ADMIN_PASSWORD_HASH is not set';
+  else if (!validAdminHash(raw)) reason = 'POLITIKART_ADMIN_PASSWORD_HASH is malformed (expected scrypt$<32 hex>$<128 hex>)';
   return Object.freeze({ user: name, hash: reason ? null : raw, enabled: !reason, reason });
 }
 
@@ -79,6 +79,6 @@ export async function ensureAdmin(store, admin, log = console.log) {
   }
   if (user.hash === cfg.hash) return 'kept';
   if (!(await store.setHash(user.id, cfg.hash))) throw new Error('admin: cannot reset the account "' + cfg.user + '"');
-  log(`admin: the existing account "${user.name}" had another password; reset it to KR_ADMIN_PASSWORD_HASH and closed its sessions`);
+  log(`admin: the existing account "${user.name}" had another password; reset it to POLITIKART_ADMIN_PASSWORD_HASH and closed its sessions`);
   return 'reset';
 }

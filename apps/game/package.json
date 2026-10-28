@@ -1,7 +1,7 @@
 {
-  "name": "@kart-republique/game",
+  "name": "@politikart/game",
   "version": "0.1.0",
-  "description": "Kart Republique: Grand Prix de l'Hemicycle",
+  "description": "Politikart: Grand Prix de l'Hemicycle",
   "license": "UNLICENSED",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@kart-republique/ui": "0.1.0",
+    "@politikart/ui": "0.1.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "three": "0.128.0"

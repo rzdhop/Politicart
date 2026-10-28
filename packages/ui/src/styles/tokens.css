@@ -1,6 +1,6 @@
 /* Design tokens.
    
-   The palette, type stack and hairline colour of Kart Republique, exactly as the
+   The palette, type stack and hairline colour of Politikart, exactly as the
    game defines them. Everything else in this system is expressed in terms of
    these; a consumer that wants a different look re-declares these and nothing
    else. Dark only - the game has one committed look, not a light mode. */

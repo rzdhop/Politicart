@@ -397,13 +397,13 @@ describe('the roster across a restart', () => {
 
   it('persists in its own file next to the accounts, and is applied at boot', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'kr-roster-'));
-    const file = join(dir, 'kr-accounts.json');
+    const file = join(dir, 'politikart-accounts.json');
     const a = await serve({ store: openFileStore(file) });
     const roster = { chars: { victor: { name: 'Manu', livery: img('png') }, thierry: { quote: '« Je reste. »' } }, ads: [img('jpeg')] };
     expect((await a.put(roster, a.adminToken)).status).toBe(200);
     await a.srv.close(); await a.store.close();
 
-    expect(JSON.parse(readFileSync(join(dir, 'kr-docs', 'roster.json'), 'utf8'))).toEqual(roster);
+    expect(JSON.parse(readFileSync(join(dir, 'politikart-docs', 'roster.json'), 'utf8'))).toEqual(roster);
     expect(readFileSync(file, 'utf8')).not.toContain('Manu');                  // not in the accounts file
     resetCast();
     expect(CHARACTERS[0].name).toBe(BASE[0].name);
@@ -419,18 +419,18 @@ describe('the roster across a restart', () => {
   it('boots on the default cast when the stored roster is invalid or not JSON', async () => {
     for (const content of ['{"chars":{"nobody":{"name":"X"}}}', '{"chars":{"victor":{"name":"' + 'n'.repeat(40) + '"}}}', '{ not json']) {
       const dir = mkdtempSync(join(tmpdir(), 'kr-roster-'));
-      mkdirSync(join(dir, 'kr-docs'));
-      writeFileSync(join(dir, 'kr-docs', 'roster.json'), content);
+      mkdirSync(join(dir, 'politikart-docs'));
+      writeFileSync(join(dir, 'politikart-docs', 'roster.json'), content);
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       applyRoster(named('Résidu'), CHARACTERS, BASE);
-      const s = await serve({ store: openFileStore(join(dir, 'kr-accounts.json')) });
+      const s = await serve({ store: openFileStore(join(dir, 'politikart-accounts.json')) });
       try {
         expect(await (await s.get()).json()).toEqual({ chars: {}, ads: [] });
         expect(CHARACTERS[0].name).toBe(BASE[0].name);
         expect(warn).toHaveBeenCalledTimes(1);
         // the admin can still save over it
         expect((await s.put(named('Neuf'), s.adminToken)).status).toBe(200);
-        expect(JSON.parse(readFileSync(join(dir, 'kr-docs', 'roster.json'), 'utf8'))).toEqual(named('Neuf'));
+        expect(JSON.parse(readFileSync(join(dir, 'politikart-docs', 'roster.json'), 'utf8'))).toEqual(named('Neuf'));
       } finally { await s.srv.close(); await s.store.close(); vi.restoreAllMocks(); }
     }
   });
@@ -440,7 +440,7 @@ describe('the roster across a restart', () => {
     try {
       expect((await s.put(named('Volatile'), s.adminToken)).status).toBe(200);
       expect(s.store.kind).toBe('memory');
-      expect(existsSync(join(process.cwd(), 'kr-docs'))).toBe(false);
+      expect(existsSync(join(process.cwd(), 'politikart-docs'))).toBe(false);
     } finally { await s.srv.close(); }
   });
 });

@@ -1,7 +1,7 @@
 {
-  "name": "@kart-republique/ui",
+  "name": "@politikart/ui",
   "version": "0.1.0",
-  "description": "The Kart Republique design system: the game's own visual language as React components",
+  "description": "The Politikart design system: the game's own visual language as React components",
   "license": "UNLICENSED",
   "type": "module",
   "sideEffects": [

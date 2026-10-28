@@ -1,6 +1,6 @@
-# Building with @kart-republique/ui
+# Building with @politikart/ui
 
-This is the look of *Kart République*, a satirical browser kart racer: a dark
+This is the look of *Politikart*, a satirical browser kart racer: a dark
 "hemicycle night" palette, display type in Lilita One over body text in Nunito,
 glass panels over a live scene, and chunky arcade HUD readouts. It is **dark-only**:
 there is no light theme and every component assumes the dark background.
@@ -74,7 +74,7 @@ or children: the library bakes in no wording.
 <PreviewRoot>
   <Screen>
     <Tricolore />
-    <GameTitle>KART RÉPUBLIQUE</GameTitle>
+    <GameTitle>POLITIKART</GameTitle>
     <Subtitle>Grand Prix de l’Hémicycle</Subtitle>
     <Panel style={{ display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
       <Row>

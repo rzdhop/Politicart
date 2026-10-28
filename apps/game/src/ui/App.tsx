@@ -1,4 +1,4 @@
-import { NoteBanner } from '@kart-republique/ui';
+import { NoteBanner } from '@politikart/ui';
 
 import { AccountScreen } from './screens/AccountScreen';
 import { AdminScreen } from './screens/AdminScreen';

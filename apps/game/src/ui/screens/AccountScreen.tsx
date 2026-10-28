@@ -15,7 +15,7 @@ import {
   Subtitle,
   TextInput,
   type ResultsRow,
-} from '@kart-republique/ui';
+} from '@politikart/ui';
 
 import { collection } from '../../engine/catalog.js';
 import { CHARACTERS, TRACKS } from '../../engine/data.js';

@@ -1,4 +1,4 @@
-import { AdminCard } from '@kart-republique/ui';
+import { AdminCard } from '@politikart/ui';
 
 const BIG = { fontFamily: 'var(--font-display)', fontSize: 32, color: 'var(--gold)', lineHeight: 1 } as const;
 const LABEL = { fontSize: 12, color: 'var(--muted)', fontFamily: 'var(--font-body)' } as const;

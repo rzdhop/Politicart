@@ -19,7 +19,7 @@ describe('the Garage edits', () => {
   it('keep a valid change, persist it and apply it to any character', () => {
     expect(setGarage('number', 42)).toBe(true);
     expect(setGarage('wheels', 'gold')).toBe(true);
-    expect(JSON.parse(localStorage.getItem('kr-kart'))).toEqual({ number: 42, wheels: 'gold' });
+    expect(JSON.parse(localStorage.getItem('politikart-kart'))).toEqual({ number: 42, wheels: 'gold' });
     for (const c of CHARACTERS) expect(myStyle(c)).toEqual({ ...defaultStyle(c), number: 42, wheels: 'gold' });
   });
 
@@ -32,12 +32,12 @@ describe('the Garage edits', () => {
   });
 
   it('come back from storage, cleaned', () => {
-    localStorage.setItem('kr-kart', JSON.stringify({ body: '#ABCDEF', number: 1000, junk: true }));
+    localStorage.setItem('politikart-kart', JSON.stringify({ body: '#ABCDEF', number: 1000, junk: true }));
     expect(loadGarage()).toEqual({ body: '#abcdef' });
   });
 
   it('survive corrupt storage', () => {
-    localStorage.setItem('kr-kart', '{not json');
+    localStorage.setItem('politikart-kart', '{not json');
     expect(loadGarage()).toEqual({});
   });
 
@@ -45,7 +45,7 @@ describe('the Garage edits', () => {
     setGarage('spoiler', 'wing');
     resetGarage();
     expect(getGarage()).toEqual({});
-    expect(localStorage.getItem('kr-kart')).toBeNull();
+    expect(localStorage.getItem('politikart-kart')).toBeNull();
   });
 });
 
@@ -84,5 +84,20 @@ describe('the Garage under an economy (DEC-035)', () => {
     const styled = { ...victor, style: { wheels: 'gold' } };
     setOwned(emptyOwned());
     expect(myStyle(styled).wheels).toBe('gold');
+  });
+});
+
+describe('the key from before the rename', () => {
+  it('is read once, moved under the new key and removed', () => {
+    localStorage.setItem('kr-kart', JSON.stringify({ wheels: 'gold', number: 7 }));
+    expect(loadGarage()).toEqual({ wheels: 'gold', number: 7 });
+    expect(JSON.parse(localStorage.getItem('politikart-kart'))).toEqual({ wheels: 'gold', number: 7 });
+    expect(localStorage.getItem('kr-kart')).toBeNull();
+  });
+
+  it('never overrides edits already under the new key', () => {
+    localStorage.setItem('kr-kart', JSON.stringify({ wheels: 'gold' }));
+    localStorage.setItem('politikart-kart', JSON.stringify({ wheels: 'chrome' }));
+    expect(loadGarage()).toEqual({ wheels: 'chrome' });
   });
 });

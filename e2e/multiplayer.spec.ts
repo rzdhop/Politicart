@@ -153,12 +153,12 @@ test.describe('Multijoueur', () => {
     // Gold wheels are a mythic part: the server only shows what a player owns (DEC-035), so the
     // admin grants Gina the politicoins and she buys them through the shop API before racing.
     const bearer = (token: string) => ({ authorization: 'Bearer ' + token });
-    const token = await host.evaluate(() => (JSON.parse(localStorage.getItem('kr-account') ?? '{}') as { token: string }).token);
+    const token = await host.evaluate(() => (JSON.parse(localStorage.getItem('politikart-account') ?? '{}') as { token: string }).token);
     const me = await (await host.request.get(SERVER + 'api/me', { headers: bearer(token) })).json() as { profile: { id: string } };
     const admin = await (await host.request.post(SERVER + 'api/login', { data: { name: ADMIN_USER, password: ADMIN_PASSWORD } })).json() as { token: string };
     expect((await host.request.post(SERVER + 'api/admin/coins', { headers: bearer(admin.token), data: { id: me.profile.id, amount: 500 } })).status()).toBe(200);
     expect((await host.request.post(SERVER + 'api/shop/part', { headers: bearer(token), data: { category: 'wheels', value: 'gold' } })).status()).toBe(200);
-    await host.evaluate(() => localStorage.setItem('kr-kart', JSON.stringify({ wheels: 'gold', number: 7, body: '#00ff00' })));
+    await host.evaluate(() => localStorage.setItem('politikart-kart', JSON.stringify({ wheels: 'gold', number: 7, body: '#00ff00' })));
     await host.reload();
     await expect(host.locator('#b-multi')).toBeVisible();
     await host.locator('#b-multi').click();
@@ -185,6 +185,6 @@ test.describe('Multijoueur', () => {
     // Bob made no edits: his kart is his candidate's default, the same on both screens.
     expect(onGuest[5]!.style).toMatchObject({ wheels: 'classic', number: null });
     expect(onHost[5]!.style).toEqual(onGuest[5]!.style);
-    await host.evaluate(() => localStorage.removeItem('kr-kart'));
+    await host.evaluate(() => localStorage.removeItem('politikart-kart'));
   });
 });

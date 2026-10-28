@@ -33,7 +33,7 @@ Current state only. History lives in git.
 - **Owed by the human:** play a race on each new circuit and open a few
   Politibox on a phone; judge the grades of the parts and candidates
   (A-026, A-027) and the camera (A-033); say whether trails should also be
-  sold; the first Render boot against Neon adds the three `kr_users`
+  sold; the first Render boot against Neon adds the three `politikart_users`
   columns (A-029: existing accounts keep what their level had unlocked).
 - **Follow-ups:** the long straights of the circuits still read a little
   thin (a densification pass); per-user stats are read-modify-write
@@ -70,7 +70,7 @@ Current state only. History lives in git.
 - **Shipped:** `feat/cast-admin-garage` (pushed) is merged into `main` as
   `8922810`, whose tree is identical to the tested branch tip. Pages
   redeployed (bundle `index-A31GWlYp.js` carries the pun names), and Render
-  (`kart-republique.onrender.com`) serves the new server.
+  (`politikart.onrender.com`) serves the new server.
 - **Live checks 2026-10-20:**
   - `/api/kr` answers, with `accounts: file`, so there is no database yet.
   - `/api/roster` returns the default cast.
@@ -84,8 +84,8 @@ Current state only. History lives in git.
   names; ChoiceGroup; run every stage then push and merge; seeded admin;
   roster in the store).
 - **Owed by the human:**
-  - In Render > Environment, set `KR_ADMIN_PASSWORD_HASH` (made with
-    `npm run -s admin-hash -w @kart-republique/server`). Until then nobody is
+  - In Render > Environment, set `POLITIKART_ADMIN_PASSWORD_HASH` (made with
+    `npm run -s admin-hash -w @politikart/server`). Until then nobody is
     admin and the Workshop is off.
   - Set `DATABASE_URL` (a free Neon Postgres) so accounts and the cast
     survive the free plan's sleeps.
@@ -150,7 +150,7 @@ Historic, from the design-system task:
     npm run build          # vite lib build + tsc declarations -> dist/
     npm run typecheck      # tsc --noEmit, clean
     npm run test           # vitest, 14 files / 341 tests passing
-    npm run build-storybook -w @kart-republique/ui   # 115 stories, 46 components
+    npm run build-storybook -w @politikart/ui   # 115 stories, 46 components
     npm audit              # 0 vulnerabilities (with and without dev deps)
 
 All four run from the repo root across workspaces. The game's regression

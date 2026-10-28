@@ -47,7 +47,7 @@ test.beforeEach(async ({ page }) => {
 test.describe('R-01 title -> select -> tracks -> race', () => {
   test('opens on the title screen with the game ready', async ({ page }) => {
     await expect(page.locator('#s-title')).toBeVisible();
-    await expect(page.locator('h1')).toHaveText('KART RÉPUBLIQUE');
+    await expect(page.locator('h1')).toHaveText('POLITIKART');
     await expect(page.locator('#c')).toBeVisible();
     // Every other screen starts hidden.
     for (const id of ['#s-select', '#s-tracks', '#s-pause', '#s-results', '#s-admin']) {

@@ -45,10 +45,10 @@ describe('admin configuration', () => {
       const cfg = adminConfig({ hash: bad });
       expect(cfg.enabled).toBe(false);
       expect(cfg.hash).toBeNull();
-      expect(cfg.reason).toMatch(/KR_ADMIN_PASSWORD_HASH/);
+      expect(cfg.reason).toMatch(/POLITIKART_ADMIN_PASSWORD_HASH/);
       if (bad) expect(cfg.reason).not.toContain(bad.trim() || '\0');
     }
-    expect(adminConfig({ user: 'a b', hash })).toMatchObject({ enabled: false, reason: expect.stringMatching(/KR_ADMIN_USER/) });
+    expect(adminConfig({ user: 'a b', hash })).toMatchObject({ enabled: false, reason: expect.stringMatching(/POLITIKART_ADMIN_USER/) });
   });
 
   it('reserves the name case-, width- and accent-blind, even without a hash', () => {

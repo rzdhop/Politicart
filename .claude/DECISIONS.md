@@ -24,7 +24,7 @@ gains a `packages/ui` workspace and a build step it did not have.
 framework-free web components.
 
 **Decision.** React 19 + TypeScript, Vite library build, emitting
-`dist/index.js` plus `dist/index.css`. Package name `@kart-republique/ui`.
+`dist/index.js` plus `dist/index.css`. Package name `@politikart/ui`.
 
 **Consequence.** TypeScript prop types become the `.d.ts` contracts the design
 agent codes against -- the strongest fidelity signal available. Cost: the repo,
@@ -43,7 +43,7 @@ planning; they chose the port.
 
 **Decision.** Port the DOM overlay layer (title, workshop, character select,
 track select, HUD, pause, results) to React components consuming
-`@kart-republique/ui`. The Three.js engine -- physics, scene building, AI, items,
+`@politikart/ui`. The Three.js engine -- physics, scene building, AI, items,
 audio -- is moved behind a seam, not rewritten.
 
 **Consequence.** No drift: the game and the design system share one definition of
@@ -228,7 +228,7 @@ extra optional props on five components, each documented as what it is for.
 
 ## DEC-013 -- The design-sync ships a `PreviewRoot` provider rather than relying on the page background
 
-**Context.** Stage 15 synced `@kart-republique/ui` to Claude Design. The
+**Context.** Stage 15 synced `@politikart/ui` to Claude Design. The
 system is dark-only: its stylesheet paints `body` and every component assumes
 that canvas. The sync tool's preview cards paint their page white, and the
 Storybook decorator that paints the canvas would not bundle (the preview
@@ -240,7 +240,7 @@ the context through the tool's provider knob.
 added to the bundle through `cfg.extraEntries` and set as `cfg.provider`. It
 wraps each story in the system's background, foreground and body font, with
 horizontal padding only so full-height stories fit the capture viewport. It
-ships as `window.KartRepubliqueUI.PreviewRoot` and the conventions header
+ships as `window.PolitikartUI.PreviewRoot` and the conventions header
 tells the design agent when to use it (fragments on a page that does not
 carry the system's `body` rule).
 
@@ -283,9 +283,9 @@ network allows only an HTTPS proxy and the session itself is reclaimed when
 idle, so the link could not open and would not have lasted. Fly.io, already
 configured, needs a payment card.
 
-**Decision.** The game build reads `VITE_KR_SERVER`, a remote server origin;
+**Decision.** The game build reads `VITE_POLITIKART_SERVER`, a remote server origin;
 `net.serverUrl` and `net.probeServer` take it as an optional base and fall
-back to the page's origin. The Pages workflow passes the `KR_SERVER_URL`
+back to the page's origin. The Pages workflow passes the `POLITIKART_SERVER_URL`
 repository variable. The server's `/api/kr` probe sends
 `access-control-allow-origin: *` so the cross-origin probe can be read; the
 WebSocket needs no CORS. `render.yaml` deploys the existing `Dockerfile` on
@@ -386,10 +386,10 @@ the four starters, no level, a pseudo of their choice, and joining rooms
 but never creating them. Render's free disk does not survive a restart.
 
 **Decision.** `apps/server/src/store.js` is one async interface with two
-backends: a JSON file rewritten atomically (KR_DATA, default
-`apps/server/data/kr-accounts.json`, `:memory:` for tests) and Postgres
-through `pg` 8.23.1 when `DATABASE_URL` is set (tables `kr_users`,
-`kr_sessions`, `kr_friends`, created on start). `accounts.js` serves
+backends: a JSON file rewritten atomically (POLITIKART_DATA, default
+`apps/server/data/politikart-accounts.json`, `:memory:` for tests) and Postgres
+through `pg` 8.23.1 when `DATABASE_URL` is set (tables `politikart_users`,
+`politikart_sessions`, `politikart_friends`, created on start). `accounts.js` serves
 `/api/register|login|logout|me|progress` open to every origin with bearer
 tokens (no cookies), scrypt hashes, and a per-address limit on sign-ups
 and failed logins. The WebSocket `hello` carries the token: an
@@ -448,7 +448,7 @@ disk.
 `feat/cast-admin-garage`, is cut from `origin/main` (`2b14388`), and each
 feature is ported in its own tested stage (PLAN.md). The admin becomes a
 role on main's accounts: `rida` is a reserved name, seeded at boot from
-`KR_ADMIN_PASSWORD_HASH`, and logs in through the normal Compte screen. The
+`POLITIKART_ADMIN_PASSWORD_HASH`, and logs in through the normal Compte screen. The
 cast roster is stored in main's store. The Workshop works wherever the admin
 is logged in, Pages included.
 
@@ -542,10 +542,10 @@ env-seeded account over "whoever registers rida first" (2026-10-20). This
 supersedes `feat/multiplayer`'s cookie admin.
 
 **Decision.** `apps/server/src/admin.js`:
-- **Configuration.** `KR_ADMIN_USER` (default `rida`) and
-  `KR_ADMIN_PASSWORD_HASH` in main's own format
+- **Configuration.** `POLITIKART_ADMIN_USER` (default `rida`) and
+  `POLITIKART_ADMIN_PASSWORD_HASH` in main's own format
   (`scrypt$<32 hex>$<128 hex>`), produced by
-  `npm run -s admin-hash -w @kart-republique/server` from a password read on
+  `npm run -s admin-hash -w @politikart/server` from a password read on
   stdin.
 - **Reserved name.** The name is reserved from sign-up, whether or not a hash
   is set. The check is accent-, case- and width-blind.
@@ -584,9 +584,9 @@ when the service sleeps, so durable storage there means Postgres.
 **Decision.**
 - **Storage.** The store gains `getDoc`/`putDoc` for an allowlist of keys
   (`roster`).
-  - Postgres keeps them in a `kr_docs` table (jsonb).
-  - The file backend writes each doc to its own file, `kr-docs/<key>.json`
-    next to `KR_DATA`, atomically. It does not sit inside the accounts file,
+  - Postgres keeps them in a `politikart_docs` table (jsonb).
+  - The file backend writes each doc to its own file, `politikart-docs/<key>.json`
+    next to `POLITIKART_DATA`, atomically. It does not sit inside the accounts file,
     because that file is rewritten after every race's XP and the roster can
     weigh megabytes.
 - **Reading.** `GET /api/roster` is public, uncached and CORS `*`.
@@ -726,7 +726,7 @@ snapshots shorter than its field. Excluding a player mid-race returns
 their client to the lobby (`room: null` aborts the net race). "Finish"
 is refused during the countdown, which has no path to the results. A god
 who leaves turns into an ordinary AI kart. A-022 is resolved: the god joins
-the running race. The worker's safety cap (KR_MAX_RACE_S, 12 min by
+the running race. The worker's safety cap (POLITIKART_MAX_RACE_S, 12 min by
 default) is for three laps and scales with the laps the admin sets.
 
 ## DEC-032 -- One catalogue module is the shared truth for grades, prices, odds and the Politibox roll
@@ -749,14 +749,14 @@ an argument, so tests fix the sequence.
 charges `priceOf()` whatever the body says; the body carries no amount. The
 option names and grades are an assumption (A-026) the human may retune.
 
-## DEC-033 -- The economy lives on `kr_users`: coins, owned, stats; one conditional update, no transactions
+## DEC-033 -- The economy lives on `politikart_users`: coins, owned, stats; one conditional update, no transactions
 
 **Context.** Coins and an inventory must be spent and granted safely on a
 public server, on both store backends (JSON file, Postgres). The store has
 never used a transaction; documents (`getDoc/putDoc`) are read-modify-write
 and keyed by a fixed allowlist, so a per-user document would not do.
 
-**Decision.** Three columns on `kr_users`: `coins integer not null default
+**Decision.** Three columns on `politikart_users`: `coins integer not null default
 0`, `owned jsonb` (`{chars, parts, trails}` of item ids; null means the
 account predates the economy), `stats jsonb not null default '{}'`. A
 purchase is one statement: `coins = coins - price` and `owned` appended,
@@ -789,7 +789,7 @@ right to buy it. Existing players keep what they had.
 ## DEC-035 -- Ownership is enforced wherever an economy exists
 
 **Context.** A player's kart style is a partial object sent from the
-browser (`kr-kart`); anyone can send `wheels: 'gold'`.
+browser (`politikart-kart`); anyone can send `wheels: 'gold'`.
 
 **Decision.** The server filters every style a player sends on
 `lobby.join`, `joinGod` and `set` through `ownedStyle(cleanStyle(style),
@@ -801,7 +801,7 @@ option as before; a guest on a server owns commons only. The admin owns the
 whole catalogue (A-031).
 
 **Consequence.** No unowned part reaches a room or a race, on any client. A
-stale `kr-kart` from the static build is harmless on a server.
+stale `politikart-kart` from the static build is harmless on a server.
 
 ## DEC-036 -- The trail is a kart style field
 
