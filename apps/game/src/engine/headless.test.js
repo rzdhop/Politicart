@@ -2,15 +2,17 @@
 // (DEC-014). This suite imports the real race orchestration in vitest's node
 // environment -- no DOM, no canvas, no WebGL -- builds every circuit and
 // drives a race for thirty simulated seconds at the server's fixed step.
-import { beforeEach, describe, expect, it } from 'vitest';
+import * as THREE from 'three';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CHARACTERS, TRACKS } from './data.js';
 import { builtinStyle, mergeStyle } from './kartstyle.js';
 import { getState, resetMachine } from './machine.js';
-import { simStep, startField, startRace } from './race.js';
+import { animateCrowd, simStep, startField, startRace } from './race.js';
 import { drain, resolveFor } from './events.js';
-import { CFG, G } from './state.js';
-import { roadTexOf } from './track.js';
+import { countMeshes, countTriangles } from './geo.js';
+import { CFG, G, getPoly, togglePoly } from './state.js';
+import { buildTrack, roadTexOf } from './track.js';
 import { POOL } from './trail.js';
 
 const STEP = 1 / 60;
@@ -142,4 +144,103 @@ describe('several humans in one race', () => {
     onFinalStraight(b); onFinalStraight(G.player); simStep(STEP);
     expect(G.resultsAt).toBeLessThan(Infinity);
   });
+});
+
+// "Légers" folds the still decor into fewer draws (track.js foldStill, PLAN
+// 4.2): every circuit, built twice from the same random draws, once folded
+// and once not, paints the same triangles in the same colours and finishes,
+// before and after its animations and its crowd have run for a while, and
+// everything that moves is still its own object in the scene.
+describe('the "légers" decor', () => {
+  let seed = 0;
+  beforeEach(() => { if (getPoly() !== 'low') togglePoly(); });
+  afterEach(() => { if (getPoly() !== 'high') togglePoly(); vi.restoreAllMocks(); });
+  const r5 = v => Math.round(v * 1e5) / 1e5;
+  /**
+   * A scene's look: its visible triangles in world space, grouped by what paints them (material type, finish,
+   * map tiling, and the colour, the material's times the vertex colour), each as its centroid, its area and the
+   * side it faces (its winding against its vertex normals).
+   */
+  function look(root) {
+    root.updateMatrixWorld(true);
+    const out = new Map(), nm = new THREE.Matrix3(), col = new THREE.Color(), vcol = new THREE.Color(), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
+    const walk = o => {
+      if (!o.visible) return;
+      if (o.isMesh) {
+        const m = o.material, g = o.geometry, pos = g.attributes.position, nor = g.attributes.normal, vc = m.vertexColors ? g.attributes.color : null;
+        nm.getNormalMatrix(o.matrixWorld);
+        const total = g.index ? g.index.count : pos.count, at = g.index ? i => g.index.getX(i) : i => i;
+        for (let t = g.drawRange.start; t + 2 < Math.min(total, g.drawRange.start + g.drawRange.count); t += 3) {
+          const i0 = at(t), i1 = at(t + 1), i2 = at(t + 2);
+          col.copy(m.color ?? vcol.setRGB(1, 1, 1)); if (vc) col.multiply(vcol.setRGB(vc.getX(i0), vc.getY(i0), vc.getZ(i0)));
+          const key = [m.type, r5(m.roughness ?? -1), r5(m.metalness ?? -1), m.side, m.transparent ? 1 : 0, r5(m.opacity), m.blending, m.fog ? 1 : 0, m.map ? 'map' + m.map.repeat.toArray() + m.map.offset.toArray() : '', col.getHexString()].join(',');
+          a.fromBufferAttribute(pos, i0).applyMatrix4(o.matrixWorld); b.fromBufferAttribute(pos, i1).applyMatrix4(o.matrixWorld); c.fromBufferAttribute(pos, i2).applyMatrix4(o.matrixWorld);
+          const face = e1.subVectors(b, a).cross(e2.subVectors(c, a));
+          n.set(0, 0, 0); if (nor) for (const i of [i0, i1, i2]) n.add(e2.fromBufferAttribute(nor, i).applyMatrix3(nm).normalize());
+          if (!out.has(key)) out.set(key, []);
+          out.get(key).push([(a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3, (a.z + b.z + c.z) / 3, face.length() / 2, Math.sign(Math.round(face.dot(n) * 1e6))]);
+        }
+      }
+      o.children.forEach(walk);
+    };
+    walk(root);
+    return out;
+  }
+  /**
+   * The same look: the same paints, and every triangle of one matched by its own triangle of the other, of the
+   * same paint, within 1 mm, of the same area (to 1e-3, plus 1e-5 m² for the smallest caps) and facing the same
+   * side. The folded decor keeps its vertices in world space, in float32 like every vertex: about 0.05 mm of
+   * rounding at 700 m.
+   */
+  function sameLook(x, y, name) {
+    expect([...x.keys()].sort(), name).toEqual([...y.keys()].sort());
+    const cell = v => Math.floor(v / 0.01);
+    for (const [key, xs] of x) {
+      const ys = y.get(key); expect(ys.length, name + ' ' + key).toBe(xs.length);
+      const grid = new Map(), used = new Uint8Array(ys.length);
+      ys.forEach((t, j) => { const k = cell(t[0]) + ',' + cell(t[1]) + ',' + cell(t[2]); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(j); });
+      let missing = 0;
+      for (const t of xs) {
+        let hit = -1;
+        for (let dx = -1; dx <= 1 && hit < 0; dx++) for (let dy = -1; dy <= 1 && hit < 0; dy++) for (let dz = -1; dz <= 1 && hit < 0; dz++) {
+          for (const j of grid.get((cell(t[0]) + dx) + ',' + (cell(t[1]) + dy) + ',' + (cell(t[2]) + dz)) ?? []) {
+            const u = ys[j];
+            if (!used[j] && Math.hypot(u[0] - t[0], u[1] - t[1], u[2] - t[2]) < 1e-3 && Math.abs(u[3] - t[3]) <= 1e-3 * t[3] + 1e-5 && u[4] === t[4]) { hit = j; break; }
+          }
+        }
+        if (hit < 0) missing++; else used[hit] = 1;
+      }
+      expect(missing, name + ' ' + key + ': triangles without their match').toBe(0);
+    }
+  }
+  /**
+   * Build circuit i into a fresh scene from a fixed random sequence (three's uuids draw from their own: the
+   * caches a first build fills make a second one create fewer objects); what it registered, for running it.
+   */
+  const real = Math.random;
+  function build(i, fold) {
+    let s = 20261028 + seed;
+    vi.spyOn(Math, 'random').mockImplementation(() => { if (new Error().stack.includes('generateUUID')) return real(); s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; });
+    const scene = new THREE.Scene(); G.animated = []; G.trackIdx = i; G.track = TRACKS[i];
+    buildTrack(scene, TRACKS[i], { fold });
+    vi.restoreAllMocks();
+    return { scene, animated: G.animated, crowd: G.crowd, moving: [...G.crowd.map(c => c.g), ...G.cyclists.map(c => c.mesh), ...G.crossings.map(c => c.mesh), ...G.itemBoxes.map(b => b.mesh)] };
+  }
+  /** Run a built circuit's animations and crowd for `steps` server steps. */
+  function run(built, steps) {
+    const crowd = G.crowd; G.crowd = built.crowd;
+    for (let n = 0; n < steps; n++) { G.time = n * STEP; for (const f of built.animated) f(STEP); animateCrowd(); }
+    G.crowd = crowd;
+  }
+
+  it.each(TRACKS.map((t, i) => [t.name, i]))('paints %s the same in at most half the draws, and everything that moves still moves on its own', (_name, i) => {
+    seed = i;
+    const folded = build(i, true), plain = build(i, false);
+    expect(countTriangles(folded.scene)).toBe(countTriangles(plain.scene));
+    sameLook(look(folded.scene), look(plain.scene), TRACKS[i].id);
+    expect(countMeshes(folded.scene, true)).toBeLessThanOrEqual(countMeshes(plain.scene, true) / 2);
+    for (const o of folded.moving) { let p = o; while (p.parent) p = p.parent; expect(p).toBe(folded.scene); expect(countMeshes(o)).toBeGreaterThan(0); }
+    run(folded, 90); run(plain, 90);
+    sameLook(look(folded.scene), look(plain.scene), TRACKS[i].id + ' after 1.5 s');
+  }, 60000);
 });

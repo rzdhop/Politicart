@@ -61,7 +61,7 @@
 import * as THREE from 'three';
 
 import { surfaceSpec, textureTier } from './fabric.js';
-import { mergeByMaterial } from './geo.js';
+import { bakeVertexColours, finishOf, mergeByMaterial } from './geo.js';
 import { blade, capsuleMesh, hullGeometry, rimParts, roundedBoxGeometry, seat, STAGE_DETAIL, stagePalette, stageTexture, strut, surfaceHit, tubeBumper, tyreGeometry } from './kartstage.js';
 import { defaultStyle } from './kartstyle.js';
 import { LOOK3D } from './looks.js';
@@ -617,7 +617,8 @@ export function buildKart(def, style = defaultStyle(def), { profile = 'race', pi
 function build(def, style, stage, pilot, tier, tex, steering, lod) {
   const P = stage ? stagePaletteOf(style, tier, tex) : racePalette(style);
   const k = new THREE.Group(); const S = seg(); const high = getPoly() === 'high';
-  const wheels = []; const anim = []; const live = stage ? [] : null;
+  const fold = !stage && lod === 'race-low';   // "légers": the race kart folded into fewer draws (foldRaceLow)
+  const wheels = []; const anim = []; const live = stage || fold ? [] : null;
   const bodyMat = P.body;
   const bodyBox = (w, h, d, x, y, z) => { const m = tag(new THREE.Mesh(boxGeo(w, h, d), bodyMat)); m.position.set(x, y, z); return m; };
   const plate = new THREE.Mesh(geom(THREE.PlaneGeometry, 1.1, 0.28), P.plate(def, style.number));
@@ -734,6 +735,7 @@ function build(def, style, stage, pilot, tier, tex, steering, lod) {
   // trail: null here, the race attaches one (trail.js) from the style.
   k.userData = { wheels, sparks, ring, driver, rotor, blades: [bl, bl2], bumpSparks, shield, anim, trail: null };
   if (stage) finishStage(k, tier, live);
+  if (fold) foldRaceLow(k, live);
   return k;
 }
 
@@ -746,6 +748,39 @@ function finishStage(k, tier, live) {
   k.traverse(o => { if (o.isMesh) { o.castShadow = tier !== 'low' && !o.material.transparent && o.name !== 'exhaust-glow'; o.receiveShadow = !o.material.transparent; } });
   const u = k.userData;
   mergeByMaterial(k, [...u.wheels, u.driver, ...u.blades, ...live, 'plate', 'sticker', 'underglow']);
+}
+
+/**
+ * The race kart on "légers" (lod 'race-low', PLAN 4.2): the same parts in
+ * fewer draws. Every lit, untextured part takes its colour as a vertex
+ * colour on the shared material of its finish (geo.js finishOf: same
+ * roughness, metalness, side), identical unlit lights share one material,
+ * and the kart is merged by material: about 27 draws become 4 or 5 on a
+ * standard kart. Same triangles, same colours and finishes, so the same
+ * picture. What moves or what userData and the race point at stays its
+ * own object at its own place: the wheels, the driver, the sparks, the
+ * rings, the rotor and its blades, the bump sparks, the animated parts
+ * (flag strips, the turbine's heat, the underglow), the plate and the
+ * sticker. "Détaillés" (race-high) and the server's kart are not folded.
+ */
+function foldRaceLow(k, live) {
+  const u = k.userData, own = [...u.wheels, u.driver, ...u.sparks, u.ring, u.rotor, ...u.blades, u.bumpSparks, u.shield, ...live];
+  const kept = new Set(own), apart = o => kept.has(o) || o.name === 'plate' || o.name === 'sticker' || o.name === 'underglow';
+  const lights = new Map();
+  k.traverse(o => {
+    for (let p = o; p && p !== k; p = p.parent) if (apart(p)) return;
+    const m = o.material;
+    if (!o.isMesh || !m.isMeshBasicMaterial || m.map || m.transparent) return;
+    const key = m.color.getHex() + '|' + m.side + '|' + m.fog;
+    if (!lights.has(key)) lights.set(key, m);
+    o.material = lights.get(key);
+  });
+  bakeVertexColours(k, finishOf, { skip: apart });
+  // the parts hung on the kart itself go aside untouched (a merge would refold their insides: the pilot's, a wheel's hub)
+  const aside = k.children.filter(apart);
+  for (const o of aside) k.remove(o);
+  mergeByMaterial(k, apart);   // what is left apart further down (the flag's strips) is lifted out at its place
+  for (const o of aside) k.add(o);
 }
 
 // ---------- The standard kart on the stage ----------
