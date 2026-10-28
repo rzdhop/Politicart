@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /**
- * R-23 -- the 3D select stage (PLAN stage 7): the hemicycle, the podium, the
+ * R-25 -- the 3D select stage (PLAN stage 7): the hemicycle, the podium, the
  * candidate's kart with their pilot seated, on the select screen.
  *
  * Driven through the DOM and the keyboard like every spec, and read through
@@ -21,7 +21,8 @@ interface StageInfo {
   info: { calls: number; triangles: number; programs: number; geometries: number; textures: number };
   bbox: { x: number; y: number; w: number; h: number } | null;
   frame: { x: number; y: number; w: number; h: number } | null;
-  portraits: { ready: number; total: number };
+  /** How many portraits are final, of how many, and what rendering the last one cost (ms). */
+  portraits: { ready: number; total: number; ms: number };
   /** The Garage's part programs still to compile ahead (engine/preview.js planParts). */
   parts: number;
   /** Whether the stage stands still (the frame governor), and its measured frame cost in ms. */
@@ -29,6 +30,16 @@ interface StageInfo {
   frameMs: number | null;
   /** The "go" launch (engine/preview.js launch): playing, how far, how many played. */
   launch: { on: boolean; t: number | null; count: number };
+}
+
+/** What the portrait spec records in the page (performance.now() times). */
+interface PortraitLog {
+  /** The stage's first frame. */
+  first: number | null;
+  /** Each change of the count of tiles marked final. */
+  patches: { at: number; ready: number }[];
+  /** Each portrait the stage finished, as polled: the count, and the last one's render cost. */
+  done: { at: number; ready: number; ms: number }[];
 }
 
 const stage = (page: Page) => page.evaluate(() => (window as unknown as { __kr: { stage: () => StageInfo } }).__kr.stage());
@@ -81,21 +92,56 @@ async function textRects(page: Page) {
 const overlaps = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) =>
   a.x < b.x + b.w - 1 && b.x < a.x + a.w - 1 && a.y < b.y + b.h - 1 && b.y < a.y + a.h - 1;
 
-test.describe('R-23 the select stage', () => {
-  test('hands every tile a placeholder at once, then every portrait within a minute', async ({ page }) => {
-    test.setTimeout(150_000);
+test.describe('R-25 the select stage', () => {
+  // R-26 (CHECKPOINT's contract): the progressive portraits
+  test('hands every tile a placeholder at once, then every portrait one after another, each at about its own render cost', async ({ page }) => {
+    test.setTimeout(240_000);
+    // Recorded in the page from before the click, so the CPU's load moves no bound: when the stage drew its
+    // first frame (its warm-up, building and compiling a whole stage, is over), each patch of tiles going final
+    // (a MutationObserver on the roster), and each portrait the stage finished with what rendering it cost
+    // (stageInfo's portraits.ms, the stage's own measure, as slow as the machine is at that moment).
+    await page.evaluate(() => {
+      const w = window as unknown as { __kr: { stage: () => StageInfo }; __portraits: PortraitLog };
+      const log: PortraitLog = { first: null, patches: [], done: [] };
+      w.__portraits = log;
+      let shown = 0, done = 0;
+      new MutationObserver(() => {
+        const n = document.querySelectorAll('#roster .tile[data-portrait="ready"]').length;
+        if (n !== shown) { shown = n; log.patches.push({ at: performance.now(), ready: n }); }
+      }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-portrait'] });
+      const poll = setInterval(() => {
+        const s = w.__kr.stage();
+        if (log.first === null && s.info.calls > 0) log.first = performance.now();
+        if (s.portraits.ready !== done) { done = s.portraits.ready; log.done.push({ at: performance.now(), ready: done, ms: s.portraits.ms }); }
+        if (done >= s.portraits.total) clearInterval(poll);
+      }, 100);
+    });
     await page.locator('#b-play').click();
     // at once: sixteen images, each already showing something (the kart's colour and the initials)
     await expect(page.locator('#roster .tile img')).toHaveCount(16, { timeout: 2_000 });
     const srcs = await page.locator('#roster .tile img').evaluateAll((imgs) => imgs.map((i) => (i as HTMLImageElement).src));
     for (const s of srcs) expect(s.startsWith('data:image/')).toBe(true);
     expect(await page.locator('#roster .tile.pending').count()).toBeGreaterThan(0);
-    // then each one final, a frame at a time
-    const t0 = Date.now();
-    await portraitsReady(page, 60_000);
-    expect(Date.now() - t0).toBeLessThan(60_000);
+    // then each one final. The wait is headroom only (all 16 take about 35 s from the click on this container
+    // when idle, about 90 s at load 11); the bound is each portrait's cost, below, which the load does not move
+    await portraitsReady(page, 200_000);
     await expect(page.locator('#roster .tile.pending')).toHaveCount(0);
     await expect(page.locator('#roster .tile[aria-busy]')).toHaveCount(0);
+    const log = await page.evaluate(() => (window as unknown as { __portraits: PortraitLog }).__portraits);
+    const last = log.patches[log.patches.length - 1]!;
+    expect(log.first, 'the stage drew a frame').not.toBeNull();
+    expect(last.ready).toBe(16);
+    // progressively: the tiles go final in several patches as the portraits land, not all at once at the end (DEC-045)
+    expect(log.patches.filter((p) => p.ready > 0).length, 'patches of final tiles').toBeGreaterThanOrEqual(3);
+    // and each portrait costs about one render of it, everything between included (its rig built, its programs
+    // compiled a frame's share at a time, the UI patched): from the stage's first frame to the last portrait,
+    // under 2.5 times the median render cost per portrait. That holds however busy the CPU is (measured 1.4 to
+    // 1.7 from idle to load 12): a wait between portraits (the quiet delay after each one: 2.7), a compile again
+    // per portrait or the stage starving them breaks it. The median is not moved by the first renders, which pay for the target's pipelines.
+    const costs = log.done.map((d) => d.ms).sort((a, b) => a - b);
+    expect(costs.length, 'portraits seen landing').toBeGreaterThanOrEqual(8);
+    const median = costs[costs.length >> 1]!, perPortrait = (last.at - log.first!) / 16;
+    expect(perPortrait / median, `${Math.round(perPortrait)} ms a portrait, ${median} ms to render one`).toBeLessThan(2.5);
   });
 
   for (const [w, h, mobile] of [[1440, 900, false], [924, 540, false], [390, 844, true], [844, 390, true]] as const) {
