@@ -32,10 +32,11 @@ const fraction = (stat: number) => (stat - 0.6) / 0.6;
 
 /** The roster of candidates and the showcase of the chosen one. */
 /**
- * Where the turntable kart goes on a small screen: the free band of the
+ * Where the turntable kart goes, on every layout: the free band of the
  * visible screen's showcase, above the candidate's name (engine/preview.js
- * draws it there). The roster and the Garage share the turntable, and both
- * screens stay mounted, so this one frame function serves whichever is shown.
+ * fits the kart into it, so it never covers the showcase text). The roster
+ * and the Garage share the turntable, and both screens stay mounted, so this
+ * one frame function serves whichever is shown.
  */
 function showcaseBand() {
   const sc = document.querySelector('section.screen:not([hidden]) .showcase'); const big = sc?.querySelector('.big');
