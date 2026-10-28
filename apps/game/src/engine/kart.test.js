@@ -187,7 +187,9 @@ describe('buildKart', () => {
 // metalness, blending, opacity, side, map, shared instances, and whether it is
 // the very primitives.mat() instance for its colour and roughness) and what
 // each userData key points at. `apart(o)` leaves an object and its subtree
-// out (a reference to it reads 'apart').
+// out (a reference to it reads 'apart'). `vertices: false` leaves out what
+// only built vertices hold (triangle count, position checksum), for the
+// server's kart, whose meshes carry a geometry stub: type and parameters.
 //
 // RACE_GOLDEN holds the hashes of the race kart without its driver, taken
 // from kart.js before the race pilot (stage 7's tip, 5167505), per candidate
@@ -197,7 +199,7 @@ describe('buildKart', () => {
 // the new pilot's chest). PILOT_GOLDEN pins the race pilot itself, per
 // candidate and level of detail.
 const r5 = v => Math.round(v * 1e5) / 1e5;
-function fingerprint(k, apart = () => false, ownAnim = () => true) {
+function fingerprint(k, apart = () => false, ownAnim = () => true, { vertices = true } = {}) {
   const index = new Map(), geos = new Map(), mats = new Map(), lines = [];
   let tris = 0, count = 0;
   const walk = o => {
@@ -207,10 +209,14 @@ function fingerprint(k, apart = () => false, ownAnim = () => true) {
       ...o.position.toArray().map(r5), ...o.quaternion.toArray().map(r5), ...o.scale.toArray().map(r5), o.parent ? index.get(o.parent) ?? 'root' : -1];
     if (o.isMesh) {
       count++;
-      const g = o.geometry, p = g.attributes.position.array;
+      const g = o.geometry;
       if (!geos.has(g)) geos.set(g, geos.size);
-      let sum = 0; for (let i = 0; i < p.length; i++) sum += p[i] * ((i % 3) * 2 + 1);
-      const n = (g.index ? g.index.count : g.attributes.position.count) / 3; tris += n;
+      let sum = 0, n = 0;
+      if (vertices) {
+        const p = g.attributes.position.array;
+        for (let i = 0; i < p.length; i++) sum += p[i] * ((i % 3) * 2 + 1);
+        n = (g.index ? g.index.count : g.attributes.position.count) / 3; tris += n;
+      }
       const m = o.material;
       if (!mats.has(m)) mats.set(m, mats.size);
       const isMat = m.type === 'MeshStandardMaterial' && !m.map && m === mat(m.color.getHex(), m.roughness);
@@ -231,7 +237,9 @@ const sha = s => createHash('sha1').update(s).digest('hex').slice(0, 16);
 const isStrap = o => o.isMesh && o.geometry.type === 'BoxGeometry' && o.material.color?.getHex() === 0xc8102e
   && JSON.stringify(o.geometry.parameters) === JSON.stringify({ width: 0.1, height: 0.5, depth: 0.04, widthSegments: 1, heightSegments: 1, depthSegments: 1 });
 /** Everything but the driver (and the legacy straps): the kart's own anim functions, the ones the pilot brought apart. */
-const kartPart = k => fingerprint(k, o => o === k.userData.driver || isStrap(o), f => !k.userData.driver.userData.anim?.includes(f));
+const kartPart = (k, opts) => fingerprint(k, o => o === k.userData.driver || isStrap(o), f => !k.userData.driver.userData.anim?.includes(f), opts);
+/** Every BufferGeometry under an object, each counted once. */
+const geometries = o => { const out = new Set(); o.traverse(m => { if (m.geometry?.isBufferGeometry) out.add(m.geometry); }); return out.size; };
 
 /** The four Garage presets of the visual sheet (over the built-in style). */
 const PRESETS = {
@@ -312,12 +320,31 @@ describe('the race profile', () => {
     expect(raceFingerprints(raceKart)).toEqual(RACE_GOLDEN);
   }, 120000);
 
-  it('is the same kart under every race level of detail, the server\'s headless one included', () => {
-    for (const c of [victor, tractor, cargo]) for (const level of ['high', 'low']) withPoly(level, () => {
-      const prints = ['race-high', 'race-low', 'headless'].map(lod => kartPart(buildKart(c, defaultStyle(c), { lod })).text);
-      expect(new Set(prints).size).toBe(1);
+  // The server's kart (lod 'headless', DEC-014, PLAN R6) builds no geometry: each of its meshes carries a stub
+  // holding its geometry's type and parameters. Everything else is the browser's race kart: the same objects in the
+  // same tree, with the same transforms, rotation orders, visibility, shadow flags and materials, the same geometry
+  // sharing, the wheels in the same order, and every userData key on the same node; the driver (the headless pilot)
+  // in the same place. Before R6 the three levels built the same kart vertex for vertex; the vertices are what the
+  // server stopped paying for, and RACE_GOLDEN pins the browser's. Every candidate and Garage style, both levels.
+  it('is the same kart under every race level of detail, the server\'s headless one without a single geometry', () => {
+    const place = (k, o) => [k.children.indexOf(o), ...o.position.toArray(), ...o.quaternion.toArray(), ...o.scale.toArray(), o.rotation.order];
+    const check = (c, s, name, opts = {}) => {
+      const [high, low, server] = ['race-high', 'race-low', 'headless'].map(lod => buildKart(c, s, { lod, ...opts }));
+      expect(kartPart(low).text, name).toBe(kartPart(high).text);
+      expect(kartPart(server, { vertices: false }).text, name).toBe(kartPart(high, { vertices: false }).text);
+      expect(geometries(server), name).toBe(0);
+      expect(geometries(high), name).toBeGreaterThan(20);
+      expect(place(server, server.userData.driver), name).toEqual(place(high, high.userData.driver));
+      expect(server.userData.wheels.map(w => w.geometry.parameters), name).toEqual(high.userData.wheels.map(w => w.geometry.parameters));
+      for (const lod of [high, low]) if (lod.userData.driver.userData.lod) disposePilot(lod.userData.driver);
+    };
+    for (const c of CHARACTERS) for (const level of ['high', 'low']) withPoly(level, () => {
+      for (const [name, s] of stylesOf(c)) check(c, s, c.id + ' ' + level + '/' + name);
+      check({ ...c, livery: 'data:image/png;base64,AAAA' }, { ...mergeStyle(builtinStyle(c)), spoiler: 'wing' }, c.id + ' ' + level + '/livery');
     });
-  });
+    // the empty-seat kart (pilot: false), with and without its own steering, the same way
+    for (const c of BODIES) for (const steering of [true, false]) check(c, defaultStyle(c), c.id + ' seat ' + steering, { pilot: false, steering });
+  }, 120000);
 
   it('pins the race pilot of every candidate on both levels, whatever the kart style', () => {
     const out = {};
@@ -457,7 +484,7 @@ describe('the stage profile', () => {
     const v = new THREE.Vector3();
     const reach = k => { let r = 0; k.updateMatrixWorld(true); for (const m of visibleMeshes(k)) { if (m.material.depthWrite === false) continue; const a = m.geometry.attributes.position; for (let i = 0; i < a.count; i++) r = Math.max(r, Math.hypot(...v.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld).toArray().filter((_, j) => j !== 1))); } return r; };
     const reaching = /^(spoiler|nose|exhaust|wheels|mast|pods):|^(builtin|stock|podium|rare|incredible)$/;   // the fields that move a part outwards
-    for (const c of BODIES) for (const [n, s] of variants(c)) if (reaching.test(n)) expect(reach(stageKart(c, s))).toBeLessThanOrEqual(reach(buildKart(c, s)) + 0.01);
+    for (const c of BODIES) for (const [n, s] of variants(c)) if (reaching.test(n)) expect(reach(stageKart(c, s))).toBeLessThanOrEqual(reach(buildKart(c, s, { lod: 'race-high' })) + 0.01);
   }, 60000);
 
   it.each([['high', 60], ['low', 60]])('stays within %s budget: at most %i draws for every candidate and preset, pilot or not', (tier, max) => {
@@ -477,7 +504,7 @@ describe('the stage profile', () => {
 describe('pilot: false', () => {
   it.each([...BODIES.map(c => [c.id, c, 'race']), ...BODIES.map(c => [c.id, c, 'stage'])])('%s (%s) has no driver mesh, an empty seat anchor where the legacy driver sat, and steering', (_id, c, profile) => {
     const withDriver = buildKart(c, defaultStyle(c), { profile, lod: 'race-high' });
-    const k = buildKart(c, defaultStyle(c), { profile, pilot: false });
+    const k = buildKart(c, defaultStyle(c), { profile, pilot: false, lod: 'race-high' });
     expect(Object.keys(k.userData).sort()).toEqual(KEYS);
     const seatAnchor = k.userData.driver;
     expect(seatAnchor.isGroup).toBe(true);
@@ -550,7 +577,7 @@ describe('the race pilot', () => {
     for (const lod of ['race-high', 'race-low']) {
       // the kart brings no steering of its own: without its driver it is the steering-less seat kart
       const k = buildKart(c, defaultStyle(c), { lod });
-      expect(kartPart(k).text).toBe(kartPart(buildKart(c, defaultStyle(c), { pilot: false, steering: false })).text);
+      expect(kartPart(k).text).toBe(kartPart(buildKart(c, defaultStyle(c), { pilot: false, steering: false, lod })).text);
       // the pilot carries exactly one (seen unmerged), and its left hand is on it
       const p = buildPilot(c, lod, { merge: false, idle: false }); const kart = new THREE.Group(); kart.add(p); kart.updateMatrixWorld(true);
       const named = n => { const out = []; p.traverse(o => { if (o.name === n && o.isMesh) out.push(o); }); return out; };
