@@ -6,7 +6,10 @@
 // - A sky dome: a ShaderMaterial with a two-stop night gradient, the
 //   candidate's tint glowing on the horizon behind the benches, 16 slow light
 //   rays and twinkling stars. On "légers" it has a quarter of the segments
-//   and no rays (a define, so the shader itself is cheaper).
+//   and no rays (a define, so the shader itself is cheaper). Its 6 tiers
+//   end lower, leaving the horizon glow in view right above the back row
+//   as a hard band, so there the glow is dimmed and faded in from above
+//   the horizon (SKY_LOW_GLOW): the top edge reads as on 'high'.
 // - The ground and the hemicycle: 10 tiers (6 on "légers"), each a wooden
 //   riser, a carpet tread and a gold LED strip on its nosing, carrying rows
 //   of velvet seats. All the risers are one mesh, all the treads one, all
@@ -225,7 +228,8 @@ export function seatPositions(rows) {
 
 const SKY_VERTEX = 'varying vec3 vDir;\nvoid main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }';
 // The template's sky, unchanged but for r128's chunk names (encodings_fragment
-// is r152+'s colorspace_fragment) and the rays behind a define.
+// is r152+'s colorspace_fragment), the rays behind a define, and the dimmed
+// horizon glow of "légers" behind another.
 const SKY_FRAGMENT = `uniform float uTime;
 uniform vec3 uTint;
 varying vec3 vDir;
@@ -235,6 +239,12 @@ void main() {
 	vec3 col = mix( vec3( 0.03, 0.045, 0.14 ), vec3( 0.008, 0.012, 0.045 ), smoothstep( 0.0, 0.75, h ) );
 	col = mix( col, vec3( 0.006, 0.008, 0.03 ), smoothstep( 0.0, -0.3, h ) );
 	float g = pow( max( dot( d, normalize( vec3( 0.0, 0.12, -1.0 ) ) ), 0.0 ), 5.0 );
+#ifdef SKY_LOW_GLOW
+	// "légers": the horizon right above the 6 tiers fades into the fog colour (linear #0c1230), like distant seats
+	float lift = smoothstep( 0.04, 0.45, h );
+	col = mix( vec3( 0.0037, 0.0060, 0.0296 ), col, lift );
+	g *= SKY_LOW_GLOW * lift;
+#endif
 	col += uTint * g * 0.5;
 #ifdef SKY_RAYS
 	float a = atan( d.x, d.y );
@@ -316,7 +326,7 @@ export function buildStageScene(tier = 'high', { renderer = null, tint = GOLD, s
 
   // sky
   const skyU = { uTime: { value: 0 }, uTint: { value: cur.clone() } };
-  const skyMat = mine(new THREE.ShaderMaterial({ name: 'stage-sky', uniforms: skyU, vertexShader: SKY_VERTEX, fragmentShader: SKY_FRAGMENT, side: THREE.BackSide, depthWrite: false, fog: false, defines: C.rays ? { SKY_RAYS: 1 } : {} }));
+  const skyMat = mine(new THREE.ShaderMaterial({ name: 'stage-sky', uniforms: skyU, vertexShader: SKY_VERTEX, fragmentShader: SKY_FRAGMENT, side: THREE.BackSide, depthWrite: false, fog: false, defines: C.rays ? { SKY_RAYS: 1 } : { SKY_LOW_GLOW: '0.6' } }));
   const sky = mesh(new THREE.SphereGeometry(90, C.sky[0], C.sky[1]), skyMat, backdrop);
   sky.name = 'sky'; sky.renderOrder = -1; sky.frustumCulled = false;
 

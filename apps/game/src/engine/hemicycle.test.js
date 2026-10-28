@@ -160,6 +160,8 @@ describe('materials', () => {
     expect(byName(build('high'), 'sky').material.defines.SKY_RAYS).toBe(1);
     expect(byName(build('phone'), 'sky').material.defines.SKY_RAYS).toBe(1);
     expect(byName(build('low'), 'sky').material.defines.SKY_RAYS).toBeUndefined();
+    expect(byName(build('low'), 'sky').material.defines.SKY_LOW_GLOW).toBe('0.6');
+    expect(byName(build('high'), 'sky').material.defines.SKY_LOW_GLOW).toBeUndefined();
     const low = byName(build('low'), 'sky').geometry.parameters;
     expect([low.widthSegments, low.heightSegments]).toEqual([32, 16]);
   });
