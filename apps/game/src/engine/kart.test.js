@@ -3,10 +3,12 @@
 // spins every wheel and steers wheels 0 and 1, so every variant must keep them.
 import { createHash } from 'node:crypto';
 
+import * as THREE from 'three';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { CHARACTERS } from './data.js';
-import { buildKart } from './kart.js';
+import { countMeshes, countTriangles, geometryTriangles } from './geo.js';
+import { buildKart, PILOT_SCALE, seatPilot, TEMPLATE_HIP } from './kart.js';
 import { builtinStyle, defaultStyle, EXHAUSTS, MASTS, mergeStyle, NOSES, SKINS, SPOILERS, STICKERS, TRAILS, UNDERGLOWS, WHEELS } from './kartstyle.js';
 import { resetMachine } from './machine.js';
 import { framePayload } from './payload.js';
@@ -270,6 +272,180 @@ const RACE_GOLDEN = {
 describe('the race profile', () => {
   it('is the pre-change kart: same meshes, geometries, mat() instances and userData, for every candidate and Garage style', () => {
     expect(raceFingerprints((c, s) => buildKart(c, s))).toEqual(RACE_GOLDEN);
+  }, 60000);
+});
+
+// ---------- The stage profile (stage 6) ----------
+const stageKart = (c, s, opts = {}) => buildKart(c, s, { profile: 'stage', ...opts });
+const visibleMeshes = k => { const out = []; const walk = o => { if (!o.visible) return; if (o.isMesh) out.push(o); o.children.forEach(walk); }; walk(k); return out; };
+const BODIES = [victor, tractor, cargo];
+const KEYS = ['anim', 'blades', 'bumpSparks', 'driver', 'ring', 'rotor', 'shield', 'sparks', 'trail', 'wheels'];
+/** Every single-field Garage variant of a body's built-in style, colours and numbers included. */
+const variants = c => [['builtin', {}], ['colours', { body: '#abcdef', accent: '#123456' }], ...Object.entries(OPTIONS).flatMap(([f, vs]) => vs.map(v => [f + ':' + v, { [f]: v }])), ...Object.entries(PRESETS)]
+  .map(([n, p]) => [n, mergeStyle(builtinStyle(c), p)]);
+/** What a merged stage kart looks like, for telling options apart: its materials and every mesh's triangles and place. */
+const stageLook = k => visibleMeshes(k).map(m => (m.material.userData.key ?? m.material.uuid) + ':' + geometryTriangles(m.geometry) + '@' + m.getWorldPosition(new THREE.Vector3()).toArray().map(v => v.toFixed(3))).sort().join('|');
+
+describe('the stage profile', () => {
+  it.each(BODIES.map(c => [c.id, c]))('%s keeps the 10 userData keys, with and without the pilot, on both tiers', (_id, c) => {
+    for (const pilot of [true, false]) for (const tier of ['high', 'low']) {
+      const k = stageKart(c, defaultStyle(c), { pilot, tier });
+      expect(Object.keys(k.userData).sort()).toEqual(KEYS);
+      expect(k.userData.trail).toBeNull();
+      expect(k.userData.wheels).toHaveLength(c.cargo ? 3 : 4);
+      expect(named(k, 'plate')).toHaveLength(1);
+      // what userData points at survived the merge, in the kart
+      for (const o of [...k.userData.wheels, ...k.userData.sparks, k.userData.ring, k.userData.driver, k.userData.rotor, ...k.userData.blades, k.userData.bumpSparks, k.userData.shield]) {
+        let p = o; while (p.parent) p = p.parent;
+        expect(p).toBe(k);
+      }
+    }
+  });
+
+  it.each(BODIES.map(c => [c.id, c]))('%s keeps its wheels in order, front pair first, for every Garage variant', (_id, c) => {
+    for (const [, s] of variants(c)) {
+      const w = stageKart(c, s).userData.wheels;
+      expect(w).toHaveLength(c.cargo ? 3 : 4);
+      expect(w[0].position.z).toBeGreaterThan(0); expect(w[1].position.z).toBeGreaterThan(0);
+      expect(w[0].position.x).toBeLessThan(0); expect(w[1].position.x).toBeGreaterThan(0);
+      for (const wheel of w.slice(2)) expect(wheel.position.z).toBeLessThan(0);
+      for (const wheel of w) { expect(wheel.rotation.order).toBe('YXZ'); expect(wheel.parent).toBe(w[0].parent); }
+      if (!c.tractor && !c.cargo) for (const wheel of w) { wheel.geometry.computeBoundingBox(); expect(wheel.position.y).toBeCloseTo(-wheel.geometry.boundingBox.min.y, 2); }   // tyres on the ground
+    }
+  }, 60000);
+
+  it('builds every Garage option on every body under both profiles, on both tiers', () => {
+    for (const c of BODIES) for (const [n, s] of variants(c)) for (const tier of ['high', 'low']) withPoly(tier, () => {
+      expect(() => buildKart(c, s)).not.toThrow();
+      // the pilot changes nothing in the kart's parts: the legacy driver is built for the built-in style alone
+      for (const pilot of n === 'builtin' ? [true, false] : [false]) expect(visibleMeshes(stageKart(c, s, { pilot, tier })).length).toBeGreaterThan(5);
+    });
+  }, 60000);
+
+  it.each(['wheels', 'spoiler', 'sticker', 'exhaust', 'underglow', 'mast', 'nose', 'skin', 'pods', 'number'])('every %s option builds a different stage kart', field => {
+    const looks = OPTIONS[field].map(v => stageLook(stageKart(victor, style({ [field]: v }))));
+    expect(new Set(looks).size).toBe(OPTIONS[field].length);
+  });
+
+  it.each(['exhaust', 'underglow', 'mast', 'skin', 'wheels'])('%s options reach the stage tractor and cargo bike too', field => {
+    for (const c of [tractor, cargo]) {
+      const looks = OPTIONS[field].map(v => stageLook(stageKart(c, mergeStyle(builtinStyle(c), { [field]: v }))));
+      // the tractor and the cargo bike have their own wheels, whatever the style says, as in the race
+      expect(new Set(looks).size).toBe(field === 'wheels' ? 1 : OPTIONS[field].length);
+    }
+  });
+
+  it('draws the race profile with mat() instances and the stage profile never with one', () => {
+    for (const c of BODIES) for (const [, s] of variants(c)) {
+      for (const m of meshes(buildKart(c, s))) {
+        const mt = m.material;
+        if (mt.type === 'MeshStandardMaterial' && !mt.map) expect(mt).toBe(mat(mt.color.getHex(), mt.roughness));
+        else expect(['MeshBasicMaterial', 'MeshStandardMaterial']).toContain(mt.type);   // the race's own basic glows, and the skinned body
+        expect(mt.userData.stage).toBeUndefined();
+      }
+      for (const tier of ['high', 'low']) for (const m of meshes(stageKart(c, s, { tier, pilot: false }))) {
+        const mt = m.material;
+        expect(mt.userData.stage).toBe(tier === 'low' ? 'std' : 'phys');
+        expect(mt.type).toBe(tier === 'low' ? 'MeshStandardMaterial' : 'MeshPhysicalMaterial');
+        if (mt.type === 'MeshStandardMaterial') expect(mt).not.toBe(mat(mt.color.getHex(), mt.roughness));
+      }
+    }
+    for (const c of CHARACTERS) for (const tier of ['high', 'low']) for (const m of meshes(stageKart(c, defaultStyle(c), { tier }))) {   // every candidate's restaged driver
+      expect(m.material.userData.stage).toBe(tier === 'low' ? 'std' : 'phys');
+    }
+  }, 60000);
+
+  it('paints the stage kart like the design: clearcoat paint, chrome, leather, tread tyres', () => {
+    const k = stageKart(victor, style({ wheels: 'chrome' }), { pilot: false });
+    const byName = n => visibleMeshes(k).filter(m => m.material.name === n);
+    expect(byName('kart-paint')[0].material.clearcoat).toBe(1);
+    expect(byName('chrome').length).toBeGreaterThan(0);
+    expect(byName('seat-leather').length).toBe(1);
+    for (const w of k.userData.wheels) { expect(w.material.name).toBe('tire-rubber'); expect(w.material.map.name).toMatch(/^fabric:tread/); }
+    expect(k.userData.wheels[0].children.map(m => m.material.name)).toEqual(expect.arrayContaining(['rim-alloy', 'dark-metal', 'gold']));   // the spoked chrome rim
+  });
+
+  it('borrows the tricolore wing for a wing with the tricolore sticker, and a number roundel for a number', () => {
+    const names = k => visibleMeshes(k).map(m => m.material.name);
+    expect(names(stageKart(victor, style({ spoiler: 'wing', sticker: 'tricolore' }))).filter(n => n === 'tricolore')).toHaveLength(3);
+    expect(names(stageKart(victor, style({ spoiler: 'wing', sticker: 'rosette' })))).not.toContain('tricolore');
+    expect(names(stageKart(victor, style({ spoiler: 'standard', sticker: 'tricolore' })))).not.toContain('tricolore');
+    expect(names(stageKart(victor, style({ number: 7 })))).toContain('number-plate');
+    expect(names(stageKart(victor, style({ number: null })))).not.toContain('number-plate');
+    for (const c of [tractor, cargo]) expect(names(stageKart(c, mergeStyle(builtinStyle(c), { number: 3 })))).toContain('number-plate');
+  });
+
+  it('maps the Garage skin on the hull and keeps one sticker on top', () => {
+    for (const skin of SKINS.filter(s => s !== 'flat')) {
+      const k = stageKart(victor, style({ skin, sticker: 'etoile' }));
+      const body = visibleMeshes(k).find(m => m.material.name === 'kart-skin');
+      expect(body.material.map.name).toBe(skin);
+      expect(named(k, 'sticker')).toHaveLength(1);
+    }
+    expect(visibleMeshes(stageKart(victor, style({ skin: 'flat' }))).some(m => m.material.name === 'kart-skin')).toBe(false);
+  });
+
+  it('animates what the race animates, and the stage exhaust glow on "détaillés" alone', () => {
+    const glow = s => stageKart(victor, style(s)).userData.anim.length;
+    expect(glow({})).toBe(1);                                                // the two stock pipes' glow
+    expect(stageKart(victor, style({}), { tier: 'low' }).userData.anim).toHaveLength(0);
+    expect(glow({ exhaust: 'turbine', underglow: 'rainbow', mast: 'pirate' })).toBe(3);   // turbine (its heat), rainbow, flags; a turbine has no pipe mouths
+    const k = stageKart(victor, style({ underglow: 'rainbow', mast: 'tricolore' }));
+    const ug = named(k, 'underglow')[0], before = ug.material.emissive.getHex();
+    for (const f of k.userData.anim) { f(1 / 60, 1.5); f(1 / 60, 1.6, { boost: 1 }); }
+    expect(ug.material.emissive.getHex()).not.toBe(before);
+    expect(ug.material).not.toBe(named(stageKart(victor, style({ underglow: 'rainbow' })), 'underglow')[0].material);   // each rainbow cycles its own copy
+  });
+
+  it('keeps every part inside the race kart\'s reach, so the shield and the podium fit it as they fit the race kart', () => {
+    const v = new THREE.Vector3();
+    const reach = k => { let r = 0; k.updateMatrixWorld(true); for (const m of visibleMeshes(k)) { if (m.material.depthWrite === false) continue; const a = m.geometry.attributes.position; for (let i = 0; i < a.count; i++) r = Math.max(r, Math.hypot(...v.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld).toArray().filter((_, j) => j !== 1))); } return r; };
+    const reaching = /^(spoiler|nose|exhaust|wheels|mast|pods):|^(builtin|stock|podium|rare|incredible)$/;   // the fields that move a part outwards
+    for (const c of BODIES) for (const [n, s] of variants(c)) if (reaching.test(n)) expect(reach(stageKart(c, s))).toBeLessThanOrEqual(reach(buildKart(c, s)) + 0.01);
+  }, 60000);
+
+  it.each([['high', 60], ['low', 60]])('stays within %s budget: at most %i draws for every candidate and preset, pilot or not', (tier, max) => {
+    for (const c of CHARACTERS) for (const [, p] of Object.entries(PRESETS)) for (const pilot of [true, false]) {
+      expect(countMeshes(stageKart(c, mergeStyle(builtinStyle(c), p), { tier, pilot }), true)).toBeLessThanOrEqual(max);
+    }
+  }, 60000);
+
+  it('casts no shadow on "légers", where the stage has no shadow map, and none from a glow or a decal', () => {
+    expect(visibleMeshes(stageKart(victor, style(PRESETS.incredible), { tier: 'low' })).some(m => m.castShadow)).toBe(false);
+    const high = visibleMeshes(stageKart(victor, style(PRESETS.incredible)));
+    expect(high.some(m => m.castShadow)).toBe(true);
+    for (const m of high) if (m.material.transparent) expect(m.castShadow).toBe(false);
+  });
+});
+
+describe('pilot: false', () => {
+  it.each([...BODIES.map(c => [c.id, c, 'race']), ...BODIES.map(c => [c.id, c, 'stage'])])('%s (%s) has no driver mesh, an empty seat anchor where the driver sat, and steering', (_id, c, profile) => {
+    const withDriver = buildKart(c, defaultStyle(c), { profile });
+    const k = buildKart(c, defaultStyle(c), { profile, pilot: false });
+    expect(Object.keys(k.userData).sort()).toEqual(KEYS);
+    const seatAnchor = k.userData.driver;
+    expect(seatAnchor.isGroup).toBe(true);
+    expect(seatAnchor.name).toBe('seat');
+    expect(countMeshes(seatAnchor)).toBe(0);
+    expect(seatAnchor.position.toArray()).toEqual(withDriver.userData.driver.position.toArray());
+    expect(seatAnchor.scale.toArray()).toEqual([1, 1, 1]);
+    expect(seatAnchor.userData.seat).toEqual({ body: c.tractor ? 'tractor' : c.cargo ? 'cargo' : 'kart', pilotScale: PILOT_SCALE, hip: TEMPLATE_HIP });
+    expect(countTriangles(k)).toBeLessThan(countTriangles(withDriver));
+  });
+
+  it('seats a template-unit pilot on the anchor: scaled 1.45, its hip on the seat, bobbing with the driver', () => {
+    const k = buildKart(victor, defaultStyle(victor), { profile: 'stage', pilot: false });
+    const pilot = new THREE.Group(); const hip = new THREE.Object3D(); hip.position.set(...TEMPLATE_HIP); pilot.add(hip);
+    const fit = seatPilot(k, pilot);
+    k.updateMatrixWorld(true);
+    expect(fit.scale.x).toBeCloseTo(PILOT_SCALE);
+    const at = hip.getWorldPosition(new THREE.Vector3()), anchor = k.userData.driver.getWorldPosition(new THREE.Vector3());
+    expect(at.distanceTo(anchor)).toBeLessThan(1e-9);
+    k.userData.driver.position.y = 0.75 + 0.3;   // physics' stun bob writes the anchor's y
+    k.updateMatrixWorld(true);
+    expect(hip.getWorldPosition(new THREE.Vector3()).y).toBeCloseTo(1.05);
+    seatPilot(k, new THREE.Group());             // seating again replaces the pilot
+    expect(k.userData.driver.children).toHaveLength(1);
   });
 });
 
