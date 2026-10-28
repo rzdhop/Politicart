@@ -27,6 +27,8 @@ interface StageInfo {
   /** Whether the stage stands still (the frame governor), and its measured frame cost in ms. */
   still: boolean;
   frameMs: number | null;
+  /** The "go" launch (engine/preview.js launch): playing, how far, how many played. */
+  launch: { on: boolean; t: number | null; count: number };
 }
 
 const stage = (page: Page) => page.evaluate(() => (window as unknown as { __kr: { stage: () => StageInfo } }).__kr.stage());
@@ -208,6 +210,52 @@ test.describe('R-23 the select stage', () => {
     // the band is the drag target, not the text: the showcase itself stays click-through
     expect(await page.locator('#showcase').evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
     expect(await page.locator('#showcase-stage').evaluate((el) => getComputedStyle(el).touchAction)).toBe('pan-y');
+  });
+
+  test.describe('the launch to the circuits (Q3)', () => {
+    /**
+     * From the click's own event to the first frame that shows #s-tracks,
+     * measured in the page: the screen changes at once whether or not the
+     * kart's launch plays behind it (DEC-037: never wait on an animation).
+     */
+    const clickToTracks = (page: Page) => page.evaluate(() => new Promise<number>((done) => {
+      const button = document.querySelector('#b-next1') as HTMLElement, tracks = document.querySelector('#s-tracks') as HTMLElement;
+      button.addEventListener('click', () => {
+        const t0 = performance.now();
+        const seen = () => { if (!tracks.hidden && tracks.getBoundingClientRect().height > 0) done(performance.now() - t0); else requestAnimationFrame(seen); };
+        requestAnimationFrame(seen);
+      }, { once: true, capture: true });
+      button.click();
+    }));
+
+    test('opens the circuit screen within 100 ms of "Choisir le circuit →", and back on the roster the kart is on its podium', async ({ page }) => {
+      test.setTimeout(150_000);
+      await play(page);
+      expect(await clickToTracks(page)).toBeLessThanOrEqual(100);
+      await expect(page.locator('#s-tracks')).toBeVisible();
+      // whether it played or not (a still stage plays none), the launch is over within 1.5 s
+      await expect.poll(async () => (await stage(page)).launch.on, { timeout: 5_000 }).toBe(false);
+      await page.locator('#b-back2').click();
+      await expect(page.locator('#s-select')).toBeVisible();
+      const back = await settled(page);
+      const band = (await page.locator('#showcase-stage').boundingBox())!;
+      expect(back.bbox).not.toBeNull();
+      expect(back.bbox!.y).toBeGreaterThanOrEqual(band.y - 1);
+      expect(back.bbox!.y + back.bbox!.h).toBeLessThanOrEqual(band.y + band.height + 1);
+    });
+
+    test.describe('under prefers-reduced-motion', () => {
+      test.use({ reducedMotion: 'reduce' });
+
+      test('plays no launch: the circuits open at once on the plain background', async ({ page }) => {
+        test.setTimeout(150_000);
+        await play(page);
+        expect(await clickToTracks(page)).toBeLessThanOrEqual(100);
+        const info = await stage(page);
+        expect(info.launch.on).toBe(false);
+        expect(info.launch.count).toBe(0);
+      });
+    });
   });
 
   test.describe('from the keyboard', () => {

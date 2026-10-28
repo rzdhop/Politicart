@@ -101,6 +101,8 @@ export const STAGE_TIERS = Object.freeze({
 // SPAN radians behind the podium (centred on -z, the camera is on +z), tier
 // k sits RISE higher and DEPTH further out than tier k - 1, from R0.
 const SPAN = 2.5, R0 = 7.4, DEPTH = 0.95, RISE = 0.42, NOSE = 0.5, BACK = 0.45, SEAT_PITCH = 0.68;
+/** The drifting confetti's depth range (template units): from the template's back (-5) to the podium's front edge, never nearer the camera. */
+const CONFETTI_Z = [-5, 1.88];
 /** The design's colours (sRGB), converted where they are used. */
 const COL = {
   fog: 0x0c1230, ground: 0x0b1030, wood: 0x2e1d13, carpet: 0x171c40, led: GOLD, drum: 0x121a45, warm: 0xffd9a0,
@@ -412,8 +414,13 @@ export function buildStageScene(tier = 'high', { renderer = null, tint = GOLD, s
   fill.name = 'fill'; fill.position.set(-5, 2, 4);
   backdrop.add(hemi, key, key.target, topSpot, topSpot.target, rim, rim.target, fill, fill.target);
 
-  // confetti: the template's drift and burst, on a seeded stream
+  // confetti: the template's drift and burst, on a seeded stream. The template's drift fills a box
+  // reaching 3 in front of the podium's centre; here it stops at the podium's front edge (1.88): a
+  // piece falling between the podium and the camera is drawn largest, right where the showcase's
+  // name and text sit over the canvas, and on a still stage it stays there, reading as a stray
+  // glyph beside the name (stage 7's Garage shot). The burst still throws pieces forward.
   const N = C.confetti, rand = rng(seed);
+  const driftZ = () => CONFETTI_Z[0] + rand() * (CONFETTI_Z[1] - CONFETTI_Z[0]);
   const confettiMat = lit({ name: 'stage-confetti', roughness: 0.45, metalness: 0.35, side: THREE.DoubleSide });
   const confetti = new THREE.InstancedMesh(geo(new THREE.PlaneGeometry(0.055, 0.1)), confettiMat, N);
   confetti.name = 'confetti'; confetti.frustumCulled = false;
@@ -421,13 +428,13 @@ export function buildStageScene(tier = 'high', { renderer = null, tint = GOLD, s
   const bits = Array.from({ length: N }, (_, i) => {
     confetti.setColorAt(i, cols[i % cols.length]);
     return {
-      p: new THREE.Vector3((rand() - 0.5) * 12, rand() * 9, (rand() - 0.5) * 8 - 1),
+      p: new THREE.Vector3((rand() - 0.5) * 12, rand() * 9, driftZ()),
       v: new THREE.Vector3(0, -0.3 - rand() * 0.5, 0),
       r: new THREE.Euler(rand() * 6, rand() * 6, 0),
       s: 1 + rand() * 3,
     };
   });
-  const respawn = b => { b.p.set((rand() - 0.5) * 12, 9, (rand() - 0.5) * 8 - 1); b.v.set(0, -0.3 - rand() * 0.5, 0); };
+  const respawn = b => { b.p.set((rand() - 0.5) * 12, 9, driftZ()); b.v.set(0, -0.3 - rand() * 0.5, 0); };
   const placeConfetti = () => {
     bits.forEach((b, i) => { dummy.position.copy(b.p); dummy.rotation.copy(b.r); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); confetti.setMatrixAt(i, dummy.matrix); });
     confetti.instanceMatrix.needsUpdate = true;

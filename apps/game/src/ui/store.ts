@@ -25,7 +25,7 @@ import { applyGodCommand } from '../engine/godcmd.js';
 import { useItem as engineUseItem } from '../engine/items.js';
 import { usePower as engineUsePower } from '../engine/powers.js';
 import { CHARACTERS, TRACKS } from '../engine/data.js';
-import { hasPreview, makeThumbs, setPreview } from '../engine/preview.js';
+import { hasPreview, launch, makeThumbs, setPreview } from '../engine/preview.js';
 import { STARTERS } from '../engine/progress.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
@@ -719,7 +719,16 @@ export const actions = {
     setPreview(G.charIdx, { keepPilot: true });
     set({ garageVersion: snapshot.garageVersion + 1 });
   },
-  toTracks() { transition('tracks'); },
+  /**
+   * "Choisir le circuit →" and Enter: the circuit screen at once, then the
+   * kart's launch behind it (preview.js; nothing under reduced motion or on a
+   * still stage). A second press finds the roster gone and does nothing.
+   */
+  toTracks() {
+    if (getState() !== 'select') return;
+    transition('tracks');
+    launch();
+  },
   start() {
     initAudio();
     soloRace = true;

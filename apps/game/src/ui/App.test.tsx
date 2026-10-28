@@ -7,9 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // stubbed; the machine, the data and the custom store are the real ones.
 // makeThumbs hands back placeholders at once and keeps the listener the store
 // gives it; a test plays the portraits landing through that listener.
-const portraits = vi.hoisted(() => ({ listener: null as ((urls: Record<string, string>, ready: Record<string, boolean>) => void) | null }));
+const portraits = vi.hoisted(() => ({ listener: null as ((urls: Record<string, string>, ready: Record<string, boolean>) => void) | null, launches: 0 }));
 vi.mock('../engine/preview.js', () => ({
   hasPreview: () => false,
+  launch: () => { portraits.launches++; return true; },
   makeThumbs: (listener?: (urls: Record<string, string>, ready: Record<string, boolean>) => void) => { portraits.listener = listener ?? null; return { victor: 'data:image/png;base64,placeholder' }; },
   setPreview: () => {},
   setPreviewFrame: () => {},
@@ -319,6 +320,30 @@ describe('the React screens', () => {
     expect(tiles[3]!.classList.contains('sel')).toBe(true);
     expect(container.querySelectorAll('#roster .tile.sel')).toHaveLength(1);
     expect(container.querySelector('#showcase .big')?.textContent).toBe(CHARACTERS[3]!.name);
+  });
+
+  it('open the circuits within 100 ms of "Choisir le circuit →", then launch the kart behind them once, however often it is pressed', () => {
+    const { container } = render(<App />);
+    fireEvent.click(container.querySelector('#b-play')!);
+    const tracks = container.querySelector('#s-tracks')!;
+    expect(tracks.hasAttribute('hidden')).toBe(true);
+    const before = portraits.launches, t0 = performance.now();
+    fireEvent.click(container.querySelector('#b-next1')!);
+    expect(tracks.hasAttribute('hidden')).toBe(false);
+    expect(performance.now() - t0).toBeLessThanOrEqual(100);
+    expect(container.querySelector('#s-select')!.hasAttribute('hidden')).toBe(true);
+    expect(portraits.launches).toBe(before + 1);
+    // a double click, or Enter mashed (game.js clicks #b-next1 for it): the roster is gone, nothing more happens, nothing throws
+    fireEvent.click(container.querySelector('#b-next1')!);
+    act(() => actions.toTracks());
+    act(() => actions.toTracks());
+    expect(getState()).toBe('tracks');
+    expect(portraits.launches).toBe(before + 1);
+    // back to the roster and on again: a new launch
+    fireEvent.click(container.querySelector('#b-back2')!);
+    expect(getState()).toBe('select');
+    fireEvent.click(container.querySelector('#b-next1')!);
+    expect(portraits.launches).toBe(before + 2);
   });
 
   it('render the three circuits as cards with a name, a description and a canvas', () => {
