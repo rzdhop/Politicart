@@ -9,7 +9,7 @@ Current state only. History lives in git.
   (DEC-039), merged in order: `wt/kart` (`da1ff93`), `wt/ui` (`42e57c7`),
   `wt/pilot` (`4ed2da3`), then the race sway hook-up (`5883c6b`).
   DEC-047, DEC-048; DEC-044's consequence amended.
-- **PR:** (coordinator fills in), and the live check after the merge.
+- **PR:** #14 (`feature/polish-after-3d-select` into `main`), merged once CI passed. After the merge, check the live site (politikart.onrender.com) against a local build of `main`: the bundle names must match; screenshot the select screen upright and sideways and the favicon.
 - **The seven tasks:**
   1. Design System: the template's eleven old `screenshots/*.jpg` (real
      names in their pixels) removed from the artifact in one publish
