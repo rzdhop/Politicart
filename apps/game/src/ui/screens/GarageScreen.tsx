@@ -15,15 +15,18 @@ import {
   Screen,
   SelectLayout,
   Showcase,
+  ShowcaseStage,
   TextInput,
 } from '@politikart/ui';
 
 import { ownsPart, ownsTrail, PART_GRADE, TRAIL_GRADE } from '../../engine/catalog.js';
 import { CHARACTERS } from '../../engine/data.js';
 import { myStyle } from '../../engine/garage.js';
+import { stageDrag } from '../../engine/stageinput.js';
 import { chips, GRADE_LABELS, parseRaceNumber, PART_CHOICES, PODS, TRAILS, type PartCategory } from '../kartChoices';
 import { actions, ownedOf, type Grade, type Owned, type UiSnapshot } from '../store';
 import type { Character, KartStyle } from '../types';
+import { STAGE_LABEL } from './SelectScreen';
 
 /** One column: the workshop's input styling, without its card grid. */
 const ONE_COLUMN = { gridTemplateColumns: '1fr', width: '100%' } as const;
@@ -86,7 +89,8 @@ function trailChips(owned: Owned | null): ChoiceOption<string>[] {
 
 /**
  * The Garage: the player styles their own kart. Every change applies at once
- * and shows on the turntable; whatever the player leaves alone stays the
+ * and shows on the stage's podium (the kart alone is rebuilt, the pilot kept,
+ * the trail streaming behind it); whatever the player leaves alone stays the
  * chosen candidate's default, so the same edits follow them to any candidate.
  * Where a game server runs the economy, an option the player does not own is
  * locked behind its grade badge, which leads to the Boutique; the pressed chip
@@ -124,7 +128,7 @@ export function GarageScreen({ ui }: { ui: UiSnapshot }) {
             {owned === null ? '' : ' Une pièce grisée s’achète à la Boutique : touchez son badge.'}
           </Disclaimer>
         </Panel>
-        <Showcase id="g-showcase" name={chosen.name} title="Votre kart" quote="" />
+        <Showcase id="g-showcase" name={chosen.name} title="Votre kart" quote="" stage={<ShowcaseStage id="g-showcase-stage" aria-label={STAGE_LABEL} {...stageDrag()} />} />
       </SelectLayout>
       <Row>
         <Button id="b-garage-reset" variant="ghost" onClick={actions.resetGarage}>Par défaut</Button>

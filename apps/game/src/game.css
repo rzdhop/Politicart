@@ -63,17 +63,41 @@ html,body{overscroll-behavior:none;}
   .kr-touch .hud-br .speed{font-size:24px;}
 }
 
-/* ---------- Candidate select on phones ----------
-   Upright, the showcase sits above the roster (the library's 760px break)
-   and is made tall enough for the turntable kart to have a band of its own
-   above the candidate's name; engine/preview.js draws the kart into that
-   band. Sideways, a phone is too short for the desktop layout: the roster
-   packs six to a row on the left, the showcase drops its quote on the
-   right, and everything shrinks to fit without a scroll. */
+/* ---------- The select stage (engine/preview.js, SelectScreen) ----------
+   The tricolore sits over the heading, as in the design. Under the roster on
+   wide screens: the button row, the key legend and the line inviting the
+   player to drag the podium (the library's Roster footer). The legend goes
+   where there is no keyboard (touch mode drops it in React) and on short
+   windows, where it alone would make the page scroll (924x540).
+   The podium is drawn into the showcase's ShowcaseStage band. Upright on a
+   phone the showcase sits above the roster (the library's 760px break) and
+   the band is given a third of the screen, so the kart stays large; the
+   screen scrolls to the roster below, and a vertical swipe over the band
+   still scrolls it (touch-action: pan-y). */
+#s-select .select-head{display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0;}
+#s-select .select-head h2{margin:0;}
+#s-select .roster-foot .key-legend{width:auto;max-width:none;display:block;font-size:13px;}
+#s-select .stage-hint{margin:0;font-size:12px;}
+#s-select>.stage-hint{text-align:center;}
+/* A short wide window (924x540): the design's layout in one screen. The
+   legend goes, the roster column narrows and the type and the gaps tighten,
+   so the four rows of tiles, the buttons and the hint fit beside the
+   showcase. */
+@media (min-width:761px) and (max-height:600px){
+  #s-select{padding-block:10px;gap:8px;}
+  #s-select .select-head{gap:6px;}
+  #s-select .select-head h2{font-size:30px!important;}
+  #s-select .select-layout{grid-template-columns:minmax(260px,330px) 1fr;gap:18px;}
+  #s-select .roster{gap:7px;}
+  #s-select .tile .tname{font-size:11px;padding:2px 4px;}
+  #s-select .roster-foot{margin-top:4px;gap:6px;}
+  #s-select .roster-foot .key-legend{display:none;}
+  #s-select .roster-foot .row{gap:8px;}
+  #s-select .roster-foot .btn{font-size:16px;padding:8px 14px;}
+  #s-select .roster-foot .btn.ghost{font-size:14px;padding:6px 12px;}
+}
 @media (max-width:760px){
-  #s-select .showcase,#s-garage .showcase{min-height:54vh;}
-  /* the roster takes the height it needs and the screen scrolls, instead of squeezing it over the buttons */
-  #s-select .select-layout{flex:none;}
+  #s-select .showcase-stage,#s-garage .showcase-stage{min-height:max(140px,30vh);}
 }
 /* Compte's figure cards (stage 6c): small enough for two to a row on a phone. */
 #acc-stats,#acc-friend-stats .admin{grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;}
@@ -95,30 +119,25 @@ body{--note-room:calc(8px + 16px + 12px + env(safe-area-inset-bottom,0px));}
 .kr-touch #s-garage .chip{min-height:44px;}
 @media (pointer:coarse){#s-garage .chip{min-height:44px;}}
 /* The Garage on a phone held sideways: form left, turntable band right. */
+/* Phones held sideways (the library's short-landscape layout: two columns,
+   the showcase pinned at the top of the scroll while the roster or the form
+   scrolls beside it). The game drops the screens' top padding to 8px here,
+   so the pin inset follows (--select-pin-inset), and the type tightens so
+   the podium's band keeps more than its floor. */
 @media (max-height:520px) and (orientation:landscape){
-  #s-garage{padding-block:8px;gap:8px;}
-  #s-garage>h2{font-size:22px!important;}
-  #s-garage .select-layout{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:14px;}
-  #s-garage .showcase{order:0;min-height:0;align-items:flex-start;text-align:left;gap:4px;}
-  #s-garage .showcase .big{font-size:24px;}
-  #s-garage .btn{font-size:16px;padding:8px 16px;}
-}
-@media (max-height:520px) and (orientation:landscape){
-  #s-select{padding-block:8px;gap:8px;}
-  #s-select>h2{font-size:22px!important;}
-  #s-select .select-layout{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:14px;flex:1;min-height:0;}
-  #s-select .roster{grid-template-columns:repeat(6,1fr);gap:6px;align-self:start;}
-  #s-select .tile{border-width:2px;border-radius:10px;}
-  #s-select .tile .tname{font-size:9px;padding:2px 3px;}
-  #s-select .showcase{order:0;min-height:0;align-items:flex-start;text-align:left;gap:4px;}
-  #s-select .showcase .big{font-size:24px;}
+  #s-select,#s-garage{padding-block:8px;gap:8px;--select-pin-inset:8px;}
+  /* while the note banner shows, the pinned showcase stops above it, or the power box ends under the note */
+  #ui:has(>#note:not([hidden])) #s-select,#ui:has(>#note:not([hidden])) #s-garage{--select-pin-inset:calc(8px + var(--note-room));}
+  #s-select .select-head{gap:6px;}
+  #s-select .select-head h2,#s-garage>h2{font-size:22px!important;}
+  #s-select .roster{gap:6px;}
+  #s-select .tile .tname{font-size:10px;padding:2px 4px;}
   #s-select .showcase .title{font-size:11px;}
-  #s-select .showcase .quote{display:none;}
-  #s-select .showcase .stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 10px;}
+  #s-select .showcase .quote{display:none;}   /* sideways, the quote gives its lines to the podium's band */
   #s-select .powerbox{padding:6px 10px;}
   #s-select .powerbox b{font-size:14px;}
   #s-select .powerbox p{font-size:11px;line-height:1.25;}
-  #s-select .btn{font-size:16px;padding:8px 16px;}
+  #s-select .btn,#s-garage .btn{font-size:16px;padding:8px 16px;}
 }
 
 /* ---------- Every screen on a small display ----------

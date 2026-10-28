@@ -215,7 +215,7 @@ describe('the roster for a guest', () => {
     const { container } = render(<App />);
     await served(true);
     act(() => actions.play());
-    const tiles = [...container.querySelectorAll('#roster button')] as HTMLButtonElement[];
+    const tiles = [...container.querySelectorAll('#roster .tile')] as HTMLButtonElement[];
     expect(tiles).toHaveLength(16);
     expect(tiles.filter(t => !t.classList.contains('locked')).map(t => t.textContent)).toEqual(['Emmanuel Macaron', 'Philippe Martini', 'Jean Lassalle-des-Fêtes', 'Sandrine Ruisseau']);
     expect(tiles.find(t => t.classList.contains('locked'))?.dataset.lock).toBe('🔒 Compte requis');

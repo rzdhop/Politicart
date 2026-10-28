@@ -5,9 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // The screens call the engine through the store. The engine's rendering
 // modules open a WebGL context at import, which jsdom cannot, so those are
 // stubbed; the machine, the data and the custom store are the real ones.
+// makeThumbs hands back placeholders at once and keeps the listener the store
+// gives it; a test plays the portraits landing through that listener.
+const portraits = vi.hoisted(() => ({ listener: null as ((urls: Record<string, string>, ready: Record<string, boolean>) => void) | null }));
 vi.mock('../engine/preview.js', () => ({
   hasPreview: () => false,
-  makeThumbs: () => ({}),
+  makeThumbs: (listener?: (urls: Record<string, string>, ready: Record<string, boolean>) => void) => { portraits.listener = listener ?? null; return { victor: 'data:image/png;base64,placeholder' }; },
   setPreview: () => {},
   setPreviewFrame: () => {},
 }));
@@ -50,8 +53,8 @@ import { actions, getSnapshot, ownedOf } from './store';
  */
 const CONTRACT_IDS = [
   's-title', 'b-play', 'b-poly', 'b-mute',
-  's-select', 'roster', 'showcase', 'b-back1', 'b-garage', 'b-next1',
-  's-garage', 'g-body', 'g-accent', 'g-number', 'g-wheels-gold', 'g-spoiler-wing', 'g-pods-off', 'g-sticker-rosette', 'b-garage-reset', 'b-garage-back',
+  's-select', 'roster', 'showcase', 'showcase-stage', 'b-back1', 'b-garage', 'b-next1',
+  's-garage', 'g-showcase-stage', 'g-body', 'g-accent', 'g-number', 'g-wheels-gold', 'g-spoiler-wing', 'g-pods-off', 'g-sticker-rosette', 'b-garage-reset', 'b-garage-back',
   'g-exhaust-turbine', 'g-underglow-rainbow', 'g-mast-pirate', 'g-nose-ram', 'g-skin-flames', 'g-trail-laser', 'g-trail-note',
   's-tracks', 'trackcards', 'b-back2', 'b-start',
   's-pause', 'b-resume', 'b-quit',
@@ -265,6 +268,47 @@ describe('the React screens', () => {
     expect(container.querySelector('#showcase .big')?.textContent).toBe(CHARACTERS[0]!.name);
     expect(container.querySelectorAll('#showcase .stat')).toHaveLength(3);
     expect(container.querySelector('#showcase .powerbox')).not.toBeNull();
+  });
+
+  it('put the stage band in the showcase, the buttons and the drag hint under the roster, the tricolore over the heading', () => {
+    const { container } = render(<App />);
+    fireEvent.click(container.querySelector('#b-play')!);
+    const band = container.querySelector('#showcase > #showcase-stage')!;
+    expect(band.getAttribute('role')).toBe('img');
+    expect(band.getAttribute('aria-label')).toBe('Le podium : glissez pour le faire pivoter');
+    expect(band.nextElementSibling?.classList.contains('big')).toBe(true);          // first in the showcase, above the name
+    for (const id of ['b-back1', 'b-garage', 'b-next1']) expect(container.querySelector('#roster .roster-foot #' + id), id).not.toBeNull();
+    expect(container.querySelector('#roster .roster-foot .key-legend')?.textContent).toContain('choisir');
+    expect(container.querySelector('#roster .roster-foot .stage-hint')?.textContent).toBe('Glissez sur la scène pour faire pivoter le podium.');
+    expect(container.querySelector('#s-select .select-head > .tricolore + h2')).not.toBeNull();
+    expect(container.querySelector('#g-showcase > #g-showcase-stage')?.getAttribute('aria-label')).toBe('Le podium : glissez pour le faire pivoter');
+  });
+
+  it('show every tile pending on its placeholder, then ready as its portrait lands', () => {
+    const { container } = render(<App />);
+    fireEvent.click(container.querySelector('#b-play')!);
+    const tiles = [...container.querySelectorAll('#roster .tile')];
+    expect(tiles).toHaveLength(CHARACTERS.length);
+    for (const t of tiles) { expect(t.getAttribute('data-portrait')).toBe('pending'); expect(t.classList.contains('pending')).toBe(true); }
+    expect(tiles[0]!.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,placeholder');
+    act(() => portraits.listener!({ victor: 'data:image/jpeg;base64,final' }, { victor: true }));
+    expect(tiles[0]!.getAttribute('data-portrait')).toBe('ready');
+    expect(tiles[0]!.classList.contains('pending')).toBe(false);
+    expect(tiles[0]!.querySelector('img')?.getAttribute('src')).toBe('data:image/jpeg;base64,final');
+    expect(tiles[1]!.getAttribute('data-portrait')).toBe('pending');
+  });
+
+  it('step through the roster with the arrow keys: across, a row down the column, wrapping, past locked tiles', () => {
+    const { container } = render(<App />);
+    fireEvent.click(container.querySelector('#b-play')!);
+    const sel = () => [...container.querySelectorAll('#roster .tile')].findIndex(t => t.classList.contains('sel'));
+    // a guest drives the four starters, the first row
+    expect(sel()).toBe(0);
+    act(() => actions.stepChar(1)); expect(sel()).toBe(1);
+    act(() => actions.stepChar(-1)); act(() => actions.stepChar(-1)); expect(sel()).toBe(3);    // wraps round past the locked tiles
+    act(() => actions.stepChar(4)); expect(sel()).toBe(3);                                   // the column below is locked: stays put
+    act(() => actions.stepChar(-4)); expect(sel()).toBe(3);
+    expect(G.charIdx).toBe(3);
   });
 
   it('select a candidate on click and keep the gold ring on exactly one tile', () => {
