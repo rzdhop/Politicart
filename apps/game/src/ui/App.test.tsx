@@ -1,4 +1,8 @@
 // @vitest-environment jsdom
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -1138,5 +1142,21 @@ describe('the kart card and the coin line (stage 7)', () => {
     expect($(container, 'r-xp')?.textContent).toBe('Créez un compte pour gagner de l’expérience et débloquer des candidat·es.');
     expect($(container, 'r-xp')?.textContent).not.toContain('politicoins');
     expect($(container, 'r-kart')).not.toBeNull();                 // the card needs no account
+  });
+});
+
+describe('the page icons', () => {
+  const APP = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+
+  it('link the SVG favicon, its PNG fallback and the home-screen icon, by relative hrefs to files in public/', () => {
+    const doc = new DOMParser().parseFromString(readFileSync(resolve(APP, 'index.html'), 'utf8'), 'text/html');
+    const links = [...doc.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]')].map(l => [l.getAttribute('rel'), l.getAttribute('type'), l.getAttribute('href')]);
+    expect(links).toEqual([
+      ['icon', 'image/svg+xml', './favicon.svg'],
+      ['icon', 'image/png', './favicon-32.png'],
+      ['apple-touch-icon', null, './apple-touch-icon.png'],
+    ]);
+    // relative, so the build works at / and under /Politicart/ (base './'); and the bare /favicon.ico a browser asks for exists too
+    for (const f of ['favicon.svg', 'favicon-32.png', 'apple-touch-icon.png', 'favicon.ico']) expect(existsSync(resolve(APP, 'public', f)), f).toBe(true);
   });
 });
