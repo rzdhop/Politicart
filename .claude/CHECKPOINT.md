@@ -22,8 +22,19 @@ Current state only. History lives in git.
   passed, 19 failed of 59: the baseline's 18 plus R-05 "still races after
   switching to light graphics", a countdown-timing flake that passes 1 in 5
   alone both on the tip and on stage 0 (`5ad0d14`), so not a regression.
-- **Next:** wave 2 = stage 4 (hemicycle scene) || stage 5 (pilot builder) ||
-  stage 6 (kart stage profile).
+- **Wave 2 done:** stage 4 (hemicycle stage scene; merged as `ec4c7c4`),
+  stage 5 (pilot builder at four levels of detail, props; `22d3710`),
+  stage 6 (kart stage profile, `kartstage.js`, race profile pinned
+  hash-identical; `76dd0ae`). Tier 1 on the tip: ui 369 + 8 skipped, game
+  786, server 166, typecheck clean, no flakes. E2E: 41 passed, 18 failed of
+  59, exactly the baseline's 18 race-start specs (R-05 passed this run).
+  Measured budgets:
+  - stage 4 scene: high 14 draws / 18.7k triangles, low 12 / 7.6k.
+  - stage 5 pilots: stage <= 22.3k triangles / 18-25 draws, race-high
+    <= 5.5k / <= 3, race-low <= 2.1k / <= 2.
+  - stage 6 stage kart: 27-40 draws.
+- **Next:** owner review of the pilots' contact sheet; then stage 7 (stage
+  integration on select and garage).
 
 ## Previous task -- 2026-10-27: politicoins, the Politibox, grades, parts, trails, two circuits, stats
 
