@@ -1177,4 +1177,12 @@ describe('the page icons', () => {
     // relative, so the build works at / and under /Politicart/ (base './'); and the bare /favicon.ico a browser asks for exists too
     for (const f of ['favicon.svg', 'favicon-32.png', 'apple-touch-icon.png', 'favicon.ico']) expect(existsSync(resolve(APP, 'public', f)), f).toBe(true);
   });
+
+  it('serve an SVG favicon that parses as XML, since a browser drops an icon that does not', () => {
+    // a "--" inside an XML comment, for one, is a fatal error: the SVG icon then shows nothing at all
+    const doc = new DOMParser().parseFromString(readFileSync(resolve(APP, 'public', 'favicon.svg'), 'utf8'), 'image/svg+xml');
+    expect(doc.getElementsByTagName('parsererror')).toHaveLength(0);
+    expect(doc.documentElement.localName).toBe('svg');
+    expect(doc.documentElement.getAttribute('viewBox')).toBe('0 0 64 64');
+  });
 });
