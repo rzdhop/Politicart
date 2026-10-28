@@ -15,8 +15,8 @@ so: the parody notice is part of the product.
 
 ## Business context
 
-The project is a personal showcase piece, hosted on GitHub Pages at
-`https://rzdhop.github.io/Politicart/`. Its value is in being *immediately
+The project is a personal showcase piece, hosted on Render at
+`https://politikart.onrender.com/` (DEC-041). Its value is in being *immediately
 playable* and *visually distinctive* -- a visitor should be racing within seconds
 of landing, and should recognise the look as deliberate rather than default.
 
@@ -49,14 +49,13 @@ The game itself remains the product. The library serves it, never the reverse.
 Friends can now race each other: Bleu against Rouge, two to six players, AI
 filling the grid, points per finishing place. One small Node server serves
 the game and runs every race on the game's own engine (DEC-014), on a LAN
-today and in a container on a host later. The published GitHub Pages game
-stays the instant single-player experience the showcase is built around.
+and in a container on Render, which is the published game (DEC-041).
 
 ## The cast, the admin and the Garage
 
 One admin account ("rida") owns the cast on the game server: names, colours,
 liveries, posters and each candidate's default kart. Every player sees it,
-on the server's page and on the Pages build (DEC-026, DEC-027). Every player
+on the server's page and on any static build that names it (DEC-026, DEC-027). Every player
 owns their own kart in the Garage -- colours, wheels, spoiler, number,
 sticker. It is kept in their browser and shown to the others in team races.
 
