@@ -2,7 +2,7 @@
 
 Current state only. History lives in git.
 
-## Latest task -- 2026-10-28: the 3D character-select stage
+## Latest task -- closed 2026-10-28: the 3D character-select stage
 
 - **Branch:** `feature/amazing-davinci-af7iw1`, cut from `main` at `b18667a`
   (PR #12, DEC-042: the live screens follow the design system's layout rules).
@@ -75,8 +75,41 @@ Current state only. History lives in git.
     `#s-tracks` shows at once. No launch under reduced motion or on a still
     stage.
   - the tractor driver's bob is fixed.
-- **Next:** stage 10 (docs, real-name scan widened, phone-landscape
-  showcase, design-sync, PR, live check).
+- **Stage 10 done (task closed):** `f840fcc` keeps the phone-landscape
+  showcase pinned and whole at every scroll position: held sideways the
+  heading, the roster or the Garage's form and the button row share the
+  left column (`.select-side`), so the sticky showcase's container is the
+  whole scroll (the heading above and the buttons below had pushed it out
+  of the top at the end, and its power box under the note at rest); the
+  pin inset counts both 8px paddings. `52aa0e2` widens the real-name scan
+  to the people behind all 16 candidates plus the template's donors, over
+  `apps/`, `packages/` and now `e2e/`, and cleans the two comments it
+  caught in `data.test.js`. README (the select screen, the code map),
+  VISION, PLAN (all done), A-036..A-038 confirmed. Tier 1: ui 369 + 8
+  skipped, game 850, server 168, typecheck clean. E2E: full run 56 passed, 18 failed of 74 in 26.4 min, all 18 in the 19-title baseline (the race-start timeouts under software WebGL); R-05 passed; nothing outside the baseline, so no solo re-run; the two new sideways specs passed. Secret
+  scan of `origin/main...HEAD`: nothing found.
+- **Final state:** all stages of `.claude/PLAN.md` done on
+  `feature/amazing-davinci-af7iw1`, pushed; the PR is the dispatcher's
+  next step. The Design System page is re-synced (`3d46ba4`, artifact
+  version 16: `ShowcaseStage`, `Showcase` stage, `CharacterTile pending`,
+  `Roster footer`, `SelectLayout`; the template on the pun names), and its
+  generator scripts now live in `.design-sync/tools/` (recipe in
+  `.design-sync/NOTES.md`). Open there: the template's eleven
+  `screenshots/*.jpg` still show the real names in their pixels (owner's
+  call).
+- **Owner's to-do:** play the select screen on a real phone and a real GPU;
+  judge the launch at full frame rate (here the stage stands still under
+  software GL, DEC-046); judge the race pilots in a real race.
+- **Follow-ups:**
+  - the server's 6-kart headless build takes about 7 ms against the plan's
+    5 ms target (the kart body stays hash-identical; the test asserts
+    under 20 ms);
+  - the low-poly desktop race (Élysée, 6 karts, 1440) draws 529 calls
+    against the plan's 365;
+  - the R-23 portrait budget (all 16 within a minute) is sensitive to CPU
+    load: it failed alone at load 15 and passed at load 4;
+  - the pilot's head is frozen in races (`idle: false`): no head sway on
+    the track yet.
 
 ## Previous task -- 2026-10-27: politicoins, the Politibox, grades, parts, trails, two circuits, stats
 
@@ -261,6 +294,8 @@ The game at `index.html` must keep working. No item here may break.
 | R-22 | Ownership: the server drops any kart part or trail the account does not own before a room sees it; the Garage greys unowned options behind their grade badge and leads to the Boutique; the static build offers every part | `e2e/garage.spec.ts` R-22 + `e2e/multiplayer.spec.ts` (the host buys her gold wheels first) + `apps/server/src/lobby.test.js`, `engine/garage.test.js` | COVERED 2026-10-27 |
 | R-23 | Six new kart part categories and five trails rendered and animated; trails and candidate grades shown in the lobby; kart cards on pause and results | `e2e/multiplayer.spec.ts` (lobby badges), `e2e/game.spec.ts` R-03 and `e2e/mobile.spec.ts` (`#pause-kart`) + `engine/kart.test.js`, `engine/trail.test.js`, `engine/headless.test.js` | COVERED 2026-10-27 |
 | R-24 | Per-account stats and friends' stats on Compte; the admin credits politicoins from the dashboard; a long press on a phone selects nothing | `e2e/dashboard.spec.ts` R-24 + `e2e/mobile.spec.ts` "a long press selects nothing" + `apps/server/src/economy.test.js`, `touch.test.ts` | COVERED 2026-10-27 |
+| R-25 | The 3D select stage: the hemicycle and podium with the candidate's kart and pilot inside the showcase band at 4 viewports, drag and keys, the go launch (tracks within 100 ms, none under reduced motion), the Garage on the podium, the budgets on both tiers, the phone-landscape showcase pinned at every scroll position | `e2e/stage.spec.ts` (headed "R-23" in the file) + `engine/preview.test.js`, `preview-launch.test.js`, `hemicycle.test.js`, `pilot.test.js`, `ui/App.test.tsx` | COVERED 2026-10-28 |
+| R-26 | Progressive portraits: 16 tiles at once on placeholders, each `data-portrait="ready"` as it lands, all within a minute in software GL | `e2e/stage.spec.ts` "hands every tile a placeholder at once" + `ui/App.test.tsx` | COVERED 2026-10-28 (load-sensitive) |
 
 **Stage 7 maps the contract to specs** in `e2e/game.spec.ts`, whose describe
 blocks are named for the items above (R-01 .. R-09, plus R-01b for the results

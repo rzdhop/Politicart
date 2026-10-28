@@ -4,20 +4,6 @@ Marked UNCONFIRMED / confirmed / invalidated.
 
 ## Unconfirmed
 
-- **A-036 -- The stage tint is derived from the kart colour.** UNCONFIRMED.
-  The rim light, sky glow and LED strips take each candidate's `def.kart`
-  hue, lifted to lightness >= 0.55 and saturation >= 0.6; dark karts (odile,
-  martine) override it in `LOOK3D`. Judge on stage 7's visual sheet.
-- **A-037 -- The template-sized pilot fits the game's seat at x1.45.**
-  UNCONFIRMED. The pilot is built in template units and scaled 1.45 into the
-  game kart (about 4.1 long against the template's 2.6), so physics, shields
-  and rings are untouched; the podium is sized to the game kart (top radius
-  about 2.8). Judge on stage 5's contact sheet and against `01-cs3` at stage 7.
-- **A-038 -- The "go" launch drives down the aisle, away from the camera.**
-  UNCONFIRMED. Never into the camera; the circuit screen opens at once and
-  the stage draws the 1.4 s tail behind it, then clears to `--bg` (DEC-042).
-  Off under `prefers-reduced-motion`. Judge at stage 9.
-
 - **A-005 -- Nunito's woff2 subsets are a variable font.** UNCONFIRMED.
   `packages/ui/src/styles/fonts.css` declares Nunito once per subset with
   `font-weight: 400 900`, on the evidence that Google serves the identical file
@@ -135,6 +121,29 @@ Marked UNCONFIRMED / confirmed / invalidated.
   UNCONFIRMED. The sample model has no elevation.
 
 ## Confirmed
+
+- **A-036 -- The stage tint is derived from the kart colour.** CONFIRMED
+  2026-10-28 on stage 7's visual sheet (`stage7/sheet.png` in the session
+  scratchpad, /tmp/claude-0/-home-user-Politicart/587b69f6-3176-5d54-ad88-c4803677af36/scratchpad/stage7/sheet.png): the rim light, sky glow and LED strips
+  follow each candidate's `def.kart` hue (Marine Le Stylo pink, Emmanuel
+  Macaron blue, José Bovin green, Sandrine Ruisseau green, Jean-Luc Mélèche
+  purple, Jordan Mortadella cyan), lifted to lightness >= 0.55 and
+  saturation >= 0.6, the dark karts overridden in `LOOK3D`; the directional
+  rim light is blended halfway to white (stage 7).
+- **A-037 -- The template-sized pilot fits the game's seat at x1.45.**
+  CONFIRMED 2026-10-28 on stage 5's sheets (`stage5/kart-fit.png`,
+  `contact-stage.png`, `portraits.png`, /tmp/claude-0/-home-user-Politicart/587b69f6-3176-5d54-ad88-c4803677af36/scratchpad/stage5/): the pilot built in
+  template units and scaled 1.45 sits in the game kart, tractor and cargo
+  bike with hands on the wheel or handlebars, physics, shields and rings
+  untouched. Stage 7 made it one contract: the 1.45 lives inside the pilot
+  (`pilot.js` MOUNT), and `seatPilot` seats it at scale 1.
+- **A-038 -- The "go" launch drives down the aisle, away from the camera.**
+  CONFIRMED 2026-10-28 on stage 9's filmstrip (`stage9/filmstrip.png`,
+  /tmp/claude-0/-home-user-Politicart/587b69f6-3176-5d54-ad88-c4803677af36/scratchpad/stage9/filmstrip.png): the kart swings round to face world -z, pulls
+  away down the aisle over 1.4 s and the stage fades to `--bg` from 1.0 s,
+  never toward the camera; the circuit screen shows at once, and nothing
+  plays under `prefers-reduced-motion` or on a still stage (E2E in
+  `e2e/stage.spec.ts`).
 
 - **A-006 -- Node 26 is available to `actions/setup-node` on ubuntu-latest.**
   CONFIRMED 2026-10-15 by the first run of `.github/workflows/pages.yml` on

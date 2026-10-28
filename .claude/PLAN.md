@@ -2,6 +2,24 @@
 
 Branch `feature/amazing-davinci-af7iw1`, cut from `main` after PR #12 (DEC-042). Drafted 2026-10-28 from a study of the Design System page's "Character select 3D" template (three r184, 11 entries with real names) against the game, with a throwaway r128 port measured in software GL. **Approved by the human 2026-10-28** ("go with all functions, I want the best product"). Every stage runs in its own worker agent (DEC-039); this session dispatches, merges and reviews.
 
+## Status: all stages done (2026-10-28)
+
+Every stage of this plan is done on `feature/amazing-davinci-af7iw1`; the code tip is `52aa0e2`, the design-sync commit `3d46ba4` follows, and stage 10's record commit sits on top (pushed; the PR follows).
+
+| Stage | Commit | Done |
+|---|---|---|
+| 0 | `5ad0d14` | Plan, DEC-043..045, A-036..A-038, baseline counts. |
+| 1 | `4eb65ca` | Stage look isolated on the shared r128 renderer (`stagelook.js`), procedural fabrics (`fabric.js`), capsules and merging (`geo.js`). |
+| 2 | `2199f54` | `LOOK3D` for the 16 candidates (`looks.js`), shapes only, with the real-name scan. |
+| 3 | `7485372` | Library parts: `ShowcaseStage`, `CharacterTile pending`, `Roster footer`, the short-landscape `SelectLayout`. |
+| 4 | `ec4c7c4` | The hemicycle stage scene (`hemicycle.js`): sky, tiers, podium, fixed light rig, confetti. |
+| 5 | `22d3710` | The caricature pilots at four levels of detail (`pilot.js`, `props.js`). |
+| 6 | `76dd0ae` | The kart's stage profile (`kartstage.js`), race profile hash-identical. |
+| 7 | `da1ea50` | The stage on the select and Garage screens (`preview.js`, `stageinput.js`), progressive portraits, the frame governor (DEC-046). |
+| 8 | `591b541` | The new pilots race (race-high, race-low, headless), race frames cheaper than before. |
+| 9 | `cde5d9f` | The go launch down the aisle behind the circuit cards, off under reduced motion. |
+| 10 | `f840fcc`, `52aa0e2`, `3d46ba4` + record | The phone-landscape showcase pinned at every scroll position, the real-name scan widened to all 16 candidates, the design-system re-sync (the 3D select parts, the pun-name template, the sync tools in `.design-sync/tools/`), README, VISION, records closed. |
+
 ## Decisions fixed by the human (2026-10-28)
 
 | # | Topic | Decision |

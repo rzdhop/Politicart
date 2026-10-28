@@ -155,6 +155,20 @@ The race shows on-screen buttons as soon as the device's main pointer is a finge
 
 Both orientations work: in portrait the camera widens and pulls back. Phones start on the light graphics and render at 1.5× at most, to keep the frame rate. A long press on any button, tile, chip or card selects nothing and opens no callout or context menu; only the text fields keep selection.
 
+## Choosing a candidate
+
+"Jouer" opens the casting on a 3D stage: the Assemblée's hemicycle at night, its red benches climbing away under a sky that glows in the candidate's colour, and in the middle a lit podium on which the chosen candidate's kart turns, its pilot at the wheel. The pilots are caricatures built from each candidate's own look (hair, build, suit fabric, face, glasses, pose and props), and they carry the game's pun names, titles and lines only. The pilot you pick on the podium is the one who races.
+
+- **Turn the podium** by dragging it, with a mouse or a finger (it keeps turning a little when you let go, then spins slowly on its own); a vertical swipe on a phone still scrolls the screen.
+- **On a keyboard**, ← → pick the next candidate, ↑ ↓ the one a row away, and Entrée does what **Choisir le circuit →** does.
+- **The go launch**: on "Choisir le circuit →" the circuits show at once, and behind their cards the kart drives off down the aisle, away from the camera, in a burst of confetti (about 1.4 s). It does not play when the system asks for reduced motion.
+- **The Garage** opens on the same podium: every change shows on the kart at once, the pilot staying seated and the trail streaming behind it.
+- **Portraits** come progressively: the roster shows all sixteen tiles at once on placeholders (the candidate's kart colour and initials), and each tile gets its rendered portrait in the next seconds, one per frame.
+- **Detail follows the graphics setting.** "Détaillés" draws the stage with real-time shadows, physical fabrics (sheen, clearcoat, normal maps) and the full hemicycle; "légers" (the default on phones) keeps the same stage with lighter pilots and materials, 6 tiers of benches instead of 10, a baked contact shadow under the kart and fewer confetti. In a race the same pilots are merged into a few draw calls per kart.
+- **On a GPU that cannot keep up** (software rendering such as SwiftShader or llvmpipe, a blocklisted or very weak GPU), the stage measures its own frame cost and, at 100 ms a frame or more, stands still: it draws only when its picture changes, one frame after the input, and behaves as under reduced motion, so the menus never wait on it (DEC-046). On a GPU that keeps up nothing changes.
+
+Held sideways on a phone, the stage stays pinned beside the roster while the tiles and the buttons scroll past; upright, it sits above the roster.
+
 ## Content
 
 - **16 candidates** parodying real French politicians under pun names (Emmanuel Macaron, Marine Le Stylo, Jean-Luc Mélèche, José Bovin...), each with stats (speed, acceleration, handling, weight) and a signature satirical power matched to the politician's own traits: Grand débat, Grève générale, Rond-point surprise, Déconstruction (Sandrine Ruisseau, l'écoféministe, strips the nearby karts of boost, immunity, shield and item), Amendement de dernière minute, Mégaphone, Lâcher de chatons (Marine Le Stylo drops kittens nobody dares drive over: the karts behind brake hard and swerve), Vol d'audience, Mise en examen, Fauchage volontaire (José Bovin mows 60 m of road: every hazard ahead disappears and the karts caught spin out), Temps de parole, Coup de rabot (Bruno Le Maigre, le technocrate de Bercy), Fake news (Éric Zemmoule, le populiste de plateau télé), Contrôle d'identité (Gérald Darmalin, le ministre de l'Intérieur), Directive européenne (Michel Bananier, le lobbyiste européen), Ralliement (Manuel Valse, le transfuge, who copies the power of the kart ahead).
@@ -192,7 +206,7 @@ The engine never touches the DOM; the UI never touches the simulation. They meet
 | Path | What it holds |
 | --- | --- |
 | `src/engine/data.js` | The cast, the items and their rank-weighted odds, the circuits (spline points and `features`). |
-| `src/engine/kart.js`, `track.js`, `primitives.js`, `textures.js` | Procedural karts, drivers, decor and tracks; cached materials; canvas-painted textures. |
+| `src/engine/kart.js`, `track.js`, `primitives.js`, `textures.js` | Procedural karts (a race profile and a stage profile), decor and tracks; cached materials; canvas-painted textures. |
 | `src/engine/physics.js`, `ai.js`, `items.js`, `powers.js` | Kart physics (drift, jumps, pits, hazards, kart contact), AI with rubber-banding, the 19 items, the 16 powers. |
 | `src/engine/race.js` | Sets up a race, steps it one frame at a time and returns the **frame payload** the HUD shows. |
 | `src/engine/machine.js` | The **state machine**: title, select, tracks, admin, countdown, race, paused, results, lobby, account, garage, dashboard. |
@@ -204,7 +218,13 @@ The engine never touches the DOM; the UI never touches the simulation. They meet
 | `src/engine/banner.js` | The **banner queue**: one toast at a time, held long enough to be read. |
 | `src/engine/godcmd.js` | The admin's **god commands**: what the console divine does to a race, in solo and in the race worker alike. |
 | `src/engine/input.js` | The **input seam**: the engine reads the controls through it. |
-| `src/engine/minimap.js`, `preview.js`, `render.js`, `audio.js` | The minimap, the character showcase and thumbnails, the one renderer and camera, WebAudio. |
+| `src/engine/minimap.js`, `preview.js`, `render.js`, `audio.js` | The minimap, the character showcase (the select stage's facade: the podium, the drag, the go launch, the frame governor, the progressive portraits), the one renderer and camera, WebAudio. |
+| `src/engine/stagelook.js`, `fabric.js`, `geo.js` | The stage's own look on the shared renderer (ACES, sRGB, physical lights, the rim tint; never a race material); procedural fabrics; capsules, merging by material, triangle counts. |
+| `src/engine/looks.js` | `LOOK3D`: each candidate's 3D look by id (hair, build, outfit, face, pose, props, tint), shapes only, no colour or copy. |
+| `src/engine/pilot.js`, `props.js` | The caricature pilots, one builder at four levels of detail (stage, race-high, race-low, headless for the server), and their props. |
+| `src/engine/hemicycle.js` | The stage scene: the sky dome, the hemicycle's tiers and benches, the podium, the fixed light rig, the confetti. |
+| `src/engine/kartstage.js` | What only the kart's stage profile needs: its materials and the shapes borrowed from the design. |
+| `src/engine/stageinput.js` | The podium's pointer input: the drag on the showcase band, the mouse for parallax. |
 | `src/ui/` | The React screens and the HUD, composed from `@politikart/ui`; `store.ts` is what they read. |
 | `src/game.js` | The per-frame HUD writer, the keyboard and the clock. |
 
