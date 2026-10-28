@@ -93,8 +93,17 @@ const LEVELS = {
   'race-low': { k: 0.12, face: 0.12, fine: 0 },
 };
 
+/**
+ * How much of the kart-tinted rim the face takes: skin, eyes, lips and teeth
+ * keep their own colour under any tint (a green kart must not turn the face
+ * green), while clothes and karts keep the design's full rim. Hair takes a
+ * little more than skin, enough to separate it from the backdrop.
+ */
+export const FACE_RIM = 0.22, HAIR_RIM = 0.4;
+
 /** Hair shine per style: the template's slick is glossy (roughness 0.28, clearcoat 0.8), a mane is matte. */
 export const HAIR_SHINE = Object.freeze({
+  neat: { roughness: 0.32, clearcoat: 0.7, clearcoatRoughness: 0.22 },
   slick: { roughness: 0.28, clearcoat: 0.8, clearcoatRoughness: 0.2 },
   quiff: { roughness: 0.24, clearcoat: 0.9, clearcoatRoughness: 0.15 },
   tousled: { roughness: 0.55 },
@@ -103,7 +112,7 @@ export const HAIR_SHINE = Object.freeze({
   sides: { roughness: 0.6 },
   combover: { roughness: 0.32, clearcoat: 0.6, clearcoatRoughness: 0.25 },
   white: { roughness: 0.66 },
-  sidepart: { roughness: 0.36, clearcoat: 0.45, clearcoatRoughness: 0.3 },
+  sidepart: { roughness: 0.3, clearcoat: 0.65, clearcoatRoughness: 0.25 },
   bun: { roughness: 0.38, clearcoat: 0.35, clearcoatRoughness: 0.3 },
   ponytail: { roughness: 0.45, clearcoat: 0.15, clearcoatRoughness: 0.4 },
   cap: { roughness: 0.6 },
@@ -169,7 +178,7 @@ function screen() {
     name: 'phone-screen', uniforms: { uTime: SCREEN_TIME },
     vertexShader: 'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
     fragmentShader: 'uniform float uTime;varying vec2 vUv;void main(){vec2 u=vUv;float w=sin(u.y*9.-uTime*3.)*.5+.5;vec3 a=vec3(.02,.85,.82),b=vec3(1.,.03,.1);vec3 c=mix(a,b,w);'
-      + 'float ring=smoothstep(.02,.0,abs(length((u-vec2(.5,fract(uTime*.35)))*vec2(1.,1.8))-.18));c+=ring*.8;c*=.8+.2*sin(u.y*120.);gl_FragColor=vec4(c*1.6,1.);\n#include <tonemapping_fragment>\n#include <encodings_fragment>\n}',
+      + 'float ring=smoothstep(.02,.0,abs(length((u-vec2(.5,fract(uTime*.35)))*vec2(1.,1.8))-.18));c+=ring*.8;c*=.8+.2*sin(u.y*120.);gl_FragColor=vec4(c*2.4,1.);\n#include <tonemapping_fragment>\n#include <encodings_fragment>\n}',
   });
   return screenMat;
 }
@@ -297,18 +306,18 @@ function context(def, spec, lod, opts, body) {
   c.trim = trim;
   c.trimMat = race ? null : sm({ name: 'trim', color: 0xffffff, vertexColors: true, roughness: 0.32, clearcoat: 0.8, clearcoatRoughness: 0.2 });
   const named = {
-    skin: () => sm(surfaceSpec('skin', L.skin, texTier)),
+    skin: () => sm({ ...surfaceSpec('skin', L.skin, texTier), rim: FACE_RIM }),
     jacket: () => cloth(spec.outfit.fabric, jacketColour),
     shirt: () => sm(surfaceSpec('cotton', L.shirt, texTier)),
     lining: () => cloth('satin', complement(L.suit)),
     trouser: () => sm({ ...surfaceSpec('wool', L.suit, texTier), name: 'trousers' }),
-    hair: () => sm({ ...surfaceSpec('hair', hc, texTier), side: THREE.DoubleSide, ...HAIR_SHINE[hairStyle] }),
+    hair: () => sm({ ...surfaceSpec('hair', hc, texTier), side: THREE.DoubleSide, ...HAIR_SHINE[hairStyle], rim: HAIR_RIM }),
     beard: () => sm({ ...surfaceSpec('hair', hc, texTier), roughness: 0.75, normalScale: 1.2, side: THREE.DoubleSide }),
-    eyeW: () => sm({ name: 'eye-white', color: 0xf7f4ee, roughness: 0.12, clearcoat: 1 }),
-    iris: () => sm({ name: 'iris', color: 0x3b2a1e, roughness: 0.1, clearcoat: 1 }),
-    lips: () => sm({ name: 'lips', color: 0x8a3a36, roughness: 0.35, clearcoat: 0.4 }),
-    mouth: () => sm({ name: 'mouth-dark', color: 0x2a0d10, roughness: 0.6 }),
-    teeth: () => sm({ name: 'teeth', color: 0xfbf8f0, roughness: 0.15, clearcoat: 0.8 }),
+    eyeW: () => sm({ name: 'eye-white', color: 0xf7f4ee, roughness: 0.12, clearcoat: 1, rim: FACE_RIM }),
+    iris: () => sm({ name: 'iris', color: 0x3b2a1e, roughness: 0.1, clearcoat: 1, rim: FACE_RIM }),
+    lips: () => sm({ name: 'lips', color: 0x8a3a36, roughness: 0.35, clearcoat: 0.4, rim: FACE_RIM }),
+    mouth: () => sm({ name: 'mouth-dark', color: 0x2a0d10, roughness: 0.6, rim: FACE_RIM }),
+    teeth: () => sm({ name: 'teeth', color: 0xfbf8f0, roughness: 0.15, clearcoat: 0.8, rim: FACE_RIM }),
     dark: () => sm({ name: 'dark-metal', color: 0x1a1c24, roughness: 0.45, metalness: 0.7 }),
     shoe: () => sm({ name: 'shoe-leather', color: 0x15110f, roughness: 0.35, clearcoat: 0.6 }),
     rubber: () => sm({ name: 'rubber', color: 0x1b1b1f, roughness: 0.9 }),
@@ -343,6 +352,12 @@ function context(def, spec, lod, opts, body) {
     const base = new THREE.Color(color).convertSRGBToLinear(), m = new THREE.MeshBasicMaterial({ color: base.clone().multiplyScalar(k) });
     m.name = 'own-glow'; c.owned.push(m);
     return { material: m, anim: kk => m.color.copy(base).multiplyScalar(kk) };
+  };
+  /** A soft additive glow plane this pilot owns (the ring light's halo); none on race levels. */
+  c.ownHalo = (color, opacity) => {
+    if (race) return null;
+    const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).convertSRGBToLinear(), transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    m.name = 'own-glow'; c.owned.push(m); return m;
   };
   /** A woven look for straw and wicker: the wool twill map, as its albedo (stage only). */
   c.weave = () => (race ? {} : { map: surfaceSpec('wool', 0xffffff, texTier).map });
@@ -696,13 +711,16 @@ function buildHead(c) {
 function buildFace(c, head) {
   const F = c.spec.face, fp = c.fp, br = F.brow, S = c.S, fine = c.fine;
   const jawZ = (F.jaw - 1) * 0.18;
+  // in a selfie the eyes go to the phone, up and to his right
+  const selfie = c.spec.pose === 'selfie', look = selfie ? [0.024, 0.014] : [0, 0];
   for (const s of [-1, 1]) {
     const eye = fp(s * 0.15, 0.04, 0.34);
     c.mk(new THREE.SphereGeometry(0.085, S(40, 8), S(24, 6)), c.mat('eyeW'), 'eye-white', head, eye, null, [1, 1.05, 0.6]);
-    c.mk(new THREE.SphereGeometry(0.05, S(32, 6), S(16, 4)), c.mat('iris'), 'iris', head, fp(s * 0.145, 0.035, 0.388), null, [1, 1, 0.4]);
+    c.mk(new THREE.SphereGeometry(0.05, S(32, 6), S(16, 4)), c.mat('iris'), 'iris', head, fp(s * 0.145 + look[0], 0.035 + look[1], 0.388 - Math.abs(look[0]) * 0.3), null, [1, 1, 0.4]);
     if (fine > 1) c.mk(new THREE.SphereGeometry(0.014, S(12, 4), S(8, 3)), c.mat('eyeW'), 'eye-glint', head, fp(s * 0.13, 0.062, 0.408));
     if (F.lid > 0) c.mk(new THREE.SphereGeometry(0.09, S(32, 6), S(16, 4), 0, TAU, 0, F.lid), c.mat('skin'), 'eyelid', head, eye, [0.9, 0, 0], [1, 1.05, 0.65]);
-    c.limb(fp(s * 0.07, 0.15 - br, 0.372), fp(s * 0.22, 0.16 + br, 0.318), 0.022 * F.browSize, c.mat('hair'), 'eyebrow', head, 12, 6);
+    const up = selfie && s < 0 ? 0.045 : 0, arch = selfie && s < 0 ? 0.035 : 0;   // the selfie's one raised brow, the far one
+    c.limb(fp(s * 0.07, 0.15 - br + up - arch, 0.372), fp(s * 0.22, 0.16 + br + up + arch, 0.318), 0.022 * F.browSize, c.mat('hair'), 'eyebrow', head, 12, 6);
     c.mk(new THREE.SphereGeometry(0.1, S(32, 6), S(16, 4)), c.mat('skin'), 'ear', head, fp(s * 0.41, 0, -0.02), null, [0.42 * F.ears, F.ears, 0.7 * F.ears]);
   }
   const n = F.nose;
@@ -710,7 +728,7 @@ function buildFace(c, head) {
   // the mouth
   const m = F.mouth, lips = c.mat('lips'), at = (x, y, z) => { const p = fp(x, y, z); p[2] += jawZ; return p; };
   if (m === 'smile' || m === 'smirk' || m === 'grin') {
-    c.mk(new THREE.TorusGeometry(0.085, 0.016, S(12, 4), S(40, 8), Math.PI), lips, 'mouth', head, at(m === 'smirk' ? 0.02 : 0, -0.18, 0.35), [0, 0, Math.PI + (m === 'smirk' ? 0.25 : 0)], [1, m === 'grin' ? 0.9 : 0.55, 1]);
+    c.mk(new THREE.TorusGeometry(0.085, 0.016, S(12, 4), S(40, 8), Math.PI), lips, 'mouth', head, at(m === 'smirk' ? 0.02 : 0, -0.18, 0.35), [0, 0, Math.PI + (m === 'smirk' ? (selfie ? 0.38 : 0.25) : 0)], [1, m === 'grin' ? 0.9 : 0.55, 1]);
     if (m === 'grin') c.mk(new THREE.CircleGeometry(0.08, S(40, 8), Math.PI, Math.PI), c.mat('teeth'), 'teeth', head, at(0, -0.18, 0.356), [-0.15, 0, 0], [1, 0.8, 1]);
   } else if (m === 'flat') {
     c.limb(at(-0.07, -0.19, 0.352), at(0.07, -0.19, 0.352), 0.014, lips, 'mouth', head, 12, 4);
@@ -819,6 +837,49 @@ function locks(c, head, H, { seed, n, rad, th = [0, 1.05], skipFace = 0.8, faceA
   }
 }
 
+/**
+ * Glossy combed hair that follows the skull (the template's slick technique,
+ * made volumetric): a cap shell a hair's thickness off the scalp, a back
+ * shell down to the nape stopping behind the ears, the swept front combed
+ * from the parting across to the far temple and lifted `lift` over the brow,
+ * the parting itself (a line of scalp), and sideburns joining the ears.
+ * `part` is the parting's side (-1 his left, +1 his right), `capT` how far
+ * the cap reaches down the forehead (smaller recedes), `sweep` the width of
+ * the combed front.
+ */
+function slicked(c, head, H, { capT, part, sweep, lift, straight = false }) {
+  const f = c.hf, S = c.S, R = 0.452, SC = [1.02, 1.04, 0.98];
+  const angle = (a, b) => { const d = Math.abs(a - b) % TAU; return d > Math.PI ? TAU - d : d; };
+  const azPart = part * (straight ? 0.5 : 0.42);
+  // the cap's thickness, sculpted: fuller on top, the combed front lifted over the far brow, a groove at the parting
+  const thick = (th, az) => {
+    let d = 0.012 + 0.012 * Math.exp(-((th / 0.7) ** 2));
+    d += (0.045 * sweep + lift) * Math.exp(-((angle(az, -part * 0.35) / 0.75) ** 2)) * Math.exp(-(((th - 0.55) / 0.3) ** 2));
+    d += 0.012 * Math.exp(-(((th - 0.95) / 0.25) ** 2)) * Math.exp(-((angle(Math.abs(az), Math.PI / 2) / 0.6) ** 2));   // volume over the temples
+    if (th > 0.2) d -= 0.016 * Math.exp(-((angle(az, azPart) / 0.045) ** 2));                                         // the parting
+    return d;
+  };
+  const geo = new THREE.SphereGeometry(0.42, S(96, 8), S(48 * capT / Math.PI * 1.6, 4), 0, TAU, 0, capT);
+  const pos = geo.attributes.position, v = new V3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const r = v.length(), th = Math.acos(Math.max(-1, Math.min(1, v.y / r))), az = Math.atan2(v.x, v.z);
+    v.multiplyScalar((0.42 + 0.012 + thick(th, az)) / r);
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  geo.computeVertexNormals();
+  c.mk(geo, H, 'hair-cap', head, null, null, [SC[0] * f[0], 1.05 * f[1], 0.95 * f[2]]);
+  c.shell(R, 0, 1.72, ...back(1.62), H, 'hair-back', head, SC);
+  // the parting: a line of scalp at the bottom of its groove, from the hairline back towards the crown
+  if (c.fine > 0) {
+    const on = (th, az) => { const r = 0.42 + 0.012 + thick(th, az) + 0.004; return [Math.sin(th) * Math.sin(az) * r * SC[0] * f[0], Math.cos(th) * r * 1.05 * f[1], Math.sin(th) * Math.cos(az) * r * 0.95 * f[2]]; };
+    const pts = []; for (let k = 0; k <= 6; k++) { const th = capT - 0.06 - k / 6 * (capT - 0.3); pts.push(on(th, azPart)); }
+    c.tube(pts, 0.009, c.mat('skin'), 'parting', head, 6, 4);
+  }
+  // sideburns, trimmed, down to the middle of each ear
+  for (const s of [-1, 1]) c.mk(new THREE.SphereGeometry(0.07, S(20, 5), S(14, 4)), H, 'sideburn', head, c.fp(s * 0.392, 0.03, 0.07), [0, s * 0.25, 0], [0.38, 1.35, 0.8]);
+}
+
 /** A point on the scalp, `lift` above the head's surface, at polar angle th from the crown and azimuth az (0 = front, +x right). */
 function scalp(c, th, az, lift = 0.005) {
   const f = c.hf, r = 0.42 + lift;
@@ -829,10 +890,17 @@ function buildHair(c, head) {
   const st = c.spec.hair, L = c.L, f = c.hf, S = c.S, fine = c.fine;
   const H = c.mat('hair');
   const P = (x, y, z) => [x * f[0], y * f[1], z * f[2]];
-  if (st === 'slick' || st === 'quiff') {
+  if (st === 'neat') {
+    // the young leader: a tidy parting on the left, combed across and lifted a touch over the brow
+    slicked(c, head, H, { capT: 1.05, part: -1, sweep: 1, lift: 0.02 });
+  } else if (st === 'slick') {
+    // the influencer: the same glossy comb-back under a big quiff rolled forward over the brow
+    slicked(c, head, H, { capT: 0.9, part: 1, sweep: 0.6, lift: 0.0 });
+    c.mk(new THREE.SphereGeometry(0.2, S(48, 8), S(32, 6)), H, 'hair-quiff', head, P(-0.02, 0.4, 0.2), [-0.55, 0, 0.12], [1.7, 0.85, 1.35]);
+    c.mk(new THREE.SphereGeometry(0.11, S(32, 6), S(20, 4)), H, 'hair-quiff-curl', head, P(0.06, 0.38, 0.38), [-0.9, 0.3, 0.2], [1.5, 0.6, 1.0]);
+  } else if (st === 'quiff') {
     short(c, head, H, 0.444, 0.86, 2.0, 1.3);
-    if (st === 'slick') c.mk(new THREE.SphereGeometry(0.2, S(48, 8), S(32, 6)), H, 'hair-quiff', head, P(0.04, 0.37, 0.14), [-0.4, 0, -0.15], [1.55, 0.45, 1]);
-    else c.mk(new THREE.SphereGeometry(0.2, S(48, 8), S(32, 6)), H, 'hair-quiff', head, P(0, 0.42, 0.25), [-0.5, 0, -0.06], [1.85, 1.0, 1.25]);
+    c.mk(new THREE.SphereGeometry(0.2, S(48, 8), S(32, 6)), H, 'hair-quiff', head, P(0, 0.42, 0.25), [-0.5, 0, -0.06], [1.85, 1.0, 1.25]);
   } else if (st === 'tousled') {
     short(c, head, H, 0.445, 0.98, 1.85, 1.25);
     locks(c, head, H, { seed: 3, n: 8, rad: [0.13, 0.17], scl: [1.35, 0.55, 1.1], out: 0.4 });
@@ -862,10 +930,8 @@ function buildHair(c, head) {
     c.shell(0.448, 0, 1.9, ...back(1.2), H, 'hair-back', head);
     c.mk(new THREE.SphereGeometry(0.2, S(48, 8), S(24, 6)), H, 'hair-ridge', head, P(0, 0.34, 0.12), [0.35, 0, 0], [1.75, 0.42, 1.0]);
   } else if (st === 'sidepart') {
-    short(c, head, H, 0.444, 0.72, 1.85, 1.2);
-    // a ruler-straight parting on the left, from the front to the crown
-    if (fine > 0) c.limb(scalp(c, 0.68, -0.32, 0.03), scalp(c, 0.3, -0.75, 0.03), 0.012, c.mat('skin'), 'parting', head, 6, 2);
-    c.mk(new THREE.SphereGeometry(0.16, S(40, 8), S(24, 6)), H, 'hair-sweep', head, P(0.08, 0.36, 0.12), [-0.3, 0, -0.25], [1.5, 0.35, 1.1]);
+    // the technocrat: the receding cap, a ruler-straight parting on the left, combed flat across
+    slicked(c, head, H, { capT: 0.82, part: -1, sweep: 0.7, lift: -0.01, straight: true });
   } else if (st === 'bun') {
     short(c, head, H, 0.445, 0.9, 1.85, 1.25);
     c.mk(new THREE.SphereGeometry(0.17, S(40, 8), S(28, 6)), H, 'hair-bun', head, P(0, 0.3, -0.38));
@@ -951,6 +1017,12 @@ export function buildPilot(def, lod = 'stage', opts = {}) {
   if (opts.wheel !== false) buildWheel(c);
   buildHead(c);
   buildProps(c, spec.props, PROPS);
+  // what the right hand holds, often at face height (a megaphone, a mic, a selfie stick), casts no
+  // shadow: the key light would otherwise print it across the cheek; a wide hat brim neither
+  if (!c.race) {
+    c.hand.traverse(o => { if (o.isMesh) o.castShadow = false; });
+    const brim = c.head.getObjectByName('hat-brim'); if (brim) brim.castShadow = false;
+  }
 
   // what moves, per level: the stage keeps every pivot and live part; a race only the head and what spins
   const race = c.race, keepHead = lod !== 'race-low';

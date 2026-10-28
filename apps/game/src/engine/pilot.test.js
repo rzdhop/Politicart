@@ -140,7 +140,7 @@ describe('every vocabulary value is implemented', () => {
   });
 
   const parts = (def, opts) => { const p = buildPilot(def, 'stage', { ...opts, merge: false }); const n = names(p); disposePilot(p); return n; };
-  const HAIR_PART = { slick: 'hair-quiff', quiff: 'hair-quiff', tousled: 'hair-lock', bob: 'hair-bob', wild: 'hair-tuft', sides: 'hair-fringe-ring', combover: 'combover-strand', white: 'hair-ridge', sidepart: 'parting', bun: 'hair-bun', ponytail: 'ponytail-lock', cap: 'cap-peak', strawhat: 'hat-brim', kepi: 'kepi-crown', bikehelmet: 'helmet-vent' };
+  const HAIR_PART = { neat: 'parting', slick: 'hair-quiff', quiff: 'hair-quiff', tousled: 'hair-lock', bob: 'hair-bob', wild: 'hair-tuft', sides: 'hair-fringe-ring', combover: 'combover-strand', white: 'hair-ridge', sidepart: 'parting', bun: 'hair-bun', ponytail: 'ponytail-lock', cap: 'cap-peak', strawhat: 'hat-brim', kepi: 'kepi-crown', bikehelmet: 'helmet-vent' };
   it.each(Object.keys(HAIR_STYLES))('builds the %s hair', hair => {
     expect(parts(victor, withLook(victor, { hair }))).toContain(HAIR_PART[hair]);
   });
