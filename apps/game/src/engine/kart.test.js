@@ -337,22 +337,22 @@ const RACE_GOLDEN = {
 };
 /** Per candidate: each race level's meshes/triangles, and one hash of both pilots' fingerprints. */
 const PILOT_GOLDEN = {
-  aymeric: 'race-high 2/4968 race-low 1/1655 #dc7f883d155948cf',
-  bernadette: 'race-high 2/5549 race-low 1/1698 #c4d09b88863af222',
-  capucine: 'race-high 2/4378 race-low 1/1779 #8af2c18ee3a49135',
-  gaspard: 'race-high 2/4818 race-low 1/1874 #0e31506be2133781',
-  gege: 'race-high 2/4952 race-low 1/2046 #6bec43996a4f9d49',
-  hubert: 'race-high 2/4570 race-low 1/1745 #9d73c45bcae78b1f',
-  jeanmi: 'race-high 2/4348 race-low 1/1601 #30d9a0b95edb97a3',
-  kevin: 'race-high 2/4850 race-low 1/1760 #882aff372b4ee0e6',
-  lucie: 'race-high 2/4496 race-low 1/1755 #0c8f3cfb4590a96e',
-  lulu: 'race-high 2/4496 race-low 1/1582 #1977ad5b9781ddcf',
-  martine: 'race-high 3/4466 race-low 2/1844 #0d6e39783ce51bec',
-  maurice: 'race-high 2/5084 race-low 1/1975 #19db5ed62e47611a',
-  odile: 'race-high 2/4694 race-low 1/1911 #260f57eb8ee5a59c',
-  patrick: 'race-high 2/4700 race-low 1/2088 #10de9f2d199a36b0',
-  thierry: 'race-high 3/4448 race-low 2/1687 #15706804c767e268',
-  victor: 'race-high 2/4350 race-low 1/1623 #e99cac7caa8ed73d',
+  aymeric: 'race-high 2/4968 race-low 1/1655 #f7f5302a70264416',
+  bernadette: 'race-high 2/5549 race-low 1/1698 #7e2729cbdc8d8098',
+  capucine: 'race-high 2/4378 race-low 1/1779 #f5ca7aec9a181d52',
+  gaspard: 'race-high 2/4818 race-low 1/1874 #e4f45e31484de48c',
+  gege: 'race-high 2/4952 race-low 1/2046 #da09c08374479852',
+  hubert: 'race-high 2/4570 race-low 1/1745 #d47228412156e2be',
+  jeanmi: 'race-high 2/4348 race-low 1/1601 #f7bc29333eeb1c28',
+  kevin: 'race-high 2/4850 race-low 1/1760 #3f3aa361791f7137',
+  lucie: 'race-high 2/4496 race-low 1/1755 #4e92304bb21b32ae',
+  lulu: 'race-high 2/4496 race-low 1/1582 #2d607642f6748fe6',
+  martine: 'race-high 3/4466 race-low 2/1844 #37ea36173800e66f',
+  maurice: 'race-high 2/5084 race-low 1/1975 #a604682069f82671',
+  odile: 'race-high 2/4694 race-low 1/1911 #6cff0270be828b99',
+  patrick: 'race-high 2/4700 race-low 1/2088 #764ee1298ae2b82a',
+  thierry: 'race-high 3/4448 race-low 2/1687 #a62a5958eaa3618b',
+  victor: 'race-high 2/4350 race-low 1/1623 #ed755487d03dbce6',
 };
 const LOD_OF = { high: 'race-high', low: 'race-low' };
 /** The race kart as a browser builds it on the current detail level. */
@@ -378,13 +378,16 @@ describe('the race profile', () => {
     const targets = k => { const u = k.userData; return [...u.wheels, ...u.sparks, u.ring, u.rotor, ...u.blades, u.bumpSparks, u.shield, u.driver]; };
     const world = o => [o.type, o.visible, o.rotation.order, ...o.matrixWorld.elements.map(v => Math.round(v * 1e6) / 1e6)];
     const draws = k => countMeshes(k, true) - countMeshes(k.userData.driver, true);
+    const ownAnim = k => k.userData.anim.filter(f => !k.userData.driver.userData.anim?.includes(f));
     const check = (c, s, name, opts = {}) => {
       const [high, low, server] = ['race-high', 'race-low', 'headless'].map(lod => buildKart(c, s, { lod, ...opts }));
       sameLook(look(low), look(high), name);
       expect(Object.keys(low.userData).sort(), name).toEqual(KEYS);
       expect(targets(low).map(world), name).toEqual(targets(high).map(world));
       expect(low.userData.wheels.map(w => w.geometry.parameters), name).toEqual(high.userData.wheels.map(w => w.geometry.parameters));
-      expect(low.userData.anim.length, name).toBe(high.userData.anim.length);
+      // the kart's own anim is the same; the pilots' differ by race-high's head sway alone (pilot.js RACE_SWAY)
+      expect(ownAnim(low).length, name).toBe(ownAnim(high).length);
+      expect(high.userData.anim.length - low.userData.anim.length, name).toBe(opts.pilot === false ? 0 : 1);
       expect(named(low, 'plate'), name).toHaveLength(1);
       expect(named(low, 'sticker').length, name).toBe(named(high, 'sticker').length);
       expect(draws(low), name).toBeLessThanOrEqual(draws(high) / 2);
@@ -652,14 +655,19 @@ describe('the race pilot', () => {
     }
   });
 
-  it('turns martine\'s gyrophare and thierry\'s weathervane with the kart\'s anim, and leaves every other pilot still', () => {
+  it('turns martine\'s gyrophare and thierry\'s weathervane with the kart\'s anim, sways the race-high head a little, and leaves everything else still', () => {
     for (const c of CHARACTERS) for (const lod of ['race-high', 'race-low']) {
-      const k = buildKart(c, defaultStyle(c), { lod }), d = k.userData.driver;
-      const before = poses(d);
-      for (const f of k.userData.anim) { f(1 / 60, 0.7, { boost: 0 }); f(1 / 60, 1.9, { boost: 0 }); }
-      const moved = poses(d).some((p, i) => p !== before[i]);
+      const k = buildKart(c, defaultStyle(c), { lod }), d = k.userData.driver, head = d.userData.head;
+      const butHead = () => { const out = []; d.traverse(o => { if (o !== head) out.push(o.position.toArray().concat(o.quaternion.toArray(), o.scale.toArray()).map(v => v.toFixed(6)).join(',')); }); return out; };
+      const before = butHead(), at = head.position.toArray().concat(head.scale.toArray()), q0 = head.quaternion.clone();
+      for (const f of k.userData.anim) { f(1 / 60, 0.7, { boost: 0, steer: 0 }); f(1 / 60, 1.9, { boost: 0, steer: 0 }); }
+      const moved = butHead().some((p, i) => p !== before[i]);
       expect(moved, c.id + ' ' + lod).toBe(c.id === 'martine' || c.id === 'thierry');
       if (moved) expect(Object.keys(d.userData.live)).toContain(c.id === 'martine' ? 'gyrophare' : 'weathervane');
+      // the head turns on race-high only, by a few degrees about its pivot (pilot.js RACE_SWAY); race-low's is merged and still
+      const turned = head.quaternion.angleTo(q0);
+      if (lod === 'race-high') { expect(turned, c.id).toBeGreaterThan(0); expect(turned, c.id).toBeLessThan(0.1); } else expect(head.quaternion.toArray(), c.id).toEqual(q0.toArray());
+      expect(head.position.toArray().concat(head.scale.toArray()), c.id + ' ' + lod).toEqual(at);
       disposePilot(d);
     }
   });

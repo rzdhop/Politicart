@@ -48,7 +48,9 @@
 // races have always drawn (kart.test.js pins it); only
 // the legacy driver's harness straps go, since they would sit inside the
 // new pilot's chest. The pilot's race animation (the gyrophare's spin, the
-// weathervane's turn) joins the kart's `anim`; everything else on it is still.
+// weathervane's turn, and on race-high the head's subtle sway into the
+// steering, pilot.js RACE_SWAY) joins the kart's `anim`; everything else on
+// it is still.
 //
 // The seat contract (stage 7, one for every body): stage 5's pilot IS the
 // driver. It is built at MOUNT with its per-body seat offset and the 1.45
@@ -707,8 +709,9 @@ function build(def, style, stage, pilot, tier, tex, steering, lod) {
     restageDriver(driver, def, P);
   } else if (pilot) {
     // the race pilot, in the legacy driver's place in the build: it sits at MOUNT and holds its own wheel; its
-    // race animation (a gyrophare, a weathervane) runs with the kart's, everything else on it stays still
-    driver = buildPilot(def, lod, { idle: false });
+    // race animation (a gyrophare, a weathervane, race-high's head sway) runs with the kart's, everything else
+    // on it stays still
+    driver = buildPilot(def, lod);
     anim.push(...driver.userData.anim);
   } else {
     // the seat anchor: an empty group at the driver's hip point (seatPilot), and the steering its hands find
