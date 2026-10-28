@@ -27,7 +27,7 @@ import { setInputSource } from './engine/input.js';
 import { getState, onTransition } from './engine/machine.js';
 import { renderLootbox } from './engine/lootbox.js';
 import { isNetRace, netStep } from './engine/netrace.js';
-import { renderPreview, showsTurntable, stageInfo, warmStage } from './engine/preview.js';
+import { launching, renderPreview, showsTurntable, stageInfo, warmStage } from './engine/preview.js';
 import { endRace, renderRace, stepRace } from './engine/race.js';
 import { clearCanvas } from './engine/render.js';
 import { G } from './engine/state.js';
@@ -174,9 +174,11 @@ function frame(now) {
   if (state === 'title') { titleIdle += dt; if (titleIdle > WARM_AFTER) setTimeout(warmStage, 0); }
   else titleIdle = 0;
   // The Politibox owns the canvas while it opens (DEC-037). The roster and the Garage show the
-  // turntable; every other menu sits on the plain night background, the canvas cleared to it.
+  // turntable; every other menu sits on the plain night background, the canvas cleared to it,
+  // but for the circuits' first 1.4 s after "Choisir le circuit →": the stage draws the kart
+  // driving off behind the cards, then clears to that background itself (preview.js launch, Q3).
   if (state === 'lootbox') { renderLootbox(dt); return; }
-  if (showsTurntable(state)) { renderPreview(dt); return; }
+  if (showsTurntable(state) || (state === 'tracks' && launching())) { renderPreview(dt); return; }
   if (state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'dashboard' || state === 'shop') { clearCanvas(); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
 

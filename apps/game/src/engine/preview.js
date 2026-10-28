@@ -7,8 +7,9 @@
 // the same calls as the old turntable (setPreview, hasPreview, showsTurntable,
 // setPreviewFrame, renderPreview, makeThumbs, frameKart), plus stageDrag()
 // for the band's pointer handlers (stageinput.js), stageInfo() for the
-// test hook, warmStage() for the title screen and a launch() stub that stage
-// 9 fills.
+// test hook, warmStage() for the title screen, and launch() / launching()
+// for the "go" launch, the tail the stage draws behind the circuit screen
+// (Q3, below).
 //
 // One stage scene per detail tier ('high', 'phone' -- "détaillés" on a
 // coarse pointer: half-size fabrics, a 1024 shadow -- and 'low'), built on
@@ -349,7 +350,7 @@ export function disposeRig(rig) {
 const ST = {
   stage: null, tier: null, camera: null, rig: null, outgoing: [], tint: null, want: null, uiFirst: false, job: null, prime: null,
   yaw: 0.35, vel: 0, idle: 0, touched: -1, clock: 0, px: 0, py: 0,
-  drawn: false, view: null, drawnYaw: null, info: { calls: 0, triangles: 0 }, box: null, frame: null, warm: null, ms: null, msSet: null,
+  drawn: false, drewIn: null, view: null, drawnYaw: null, info: { calls: 0, triangles: 0 }, box: null, frame: null, warm: null, ms: null, msSet: null,
 };
 
 /** Build the stage for the current tier, disposing the one before if the tier changed. */
@@ -374,6 +375,7 @@ function ensureStage() {
 /** Dispose the stage and its rigs (a tier change), and let go of its programs. */
 function teardown() {
   if (!ST.stage) return;
+  endLaunch();
   for (const r of ST.outgoing) disposeRig(r);
   ST.outgoing = [];
   if (ST.rig) disposeRig(ST.rig);
@@ -491,16 +493,18 @@ function step(dt) {
   }
   const rig = ST.rig;
   if (rig) {
-    const u = rig.userData;
-    if (u.age < 1) {
+    const u = rig.userData, off = rig === LAUNCH.rig;
+    if (off) { /* driving off: posed below, after its idle life */ }
+    else if (u.age < 1) {
       u.age = Math.min(1, u.age + dt * 1.9);
       rig.scale.setScalar(Math.max(0.001, easeBack(u.age))); rig.rotation.y = -1.2 * Math.pow(1 - u.age, 3);
     } else { rig.scale.setScalar(1); rig.rotation.y = 0; }
     // the idle life: the engine's buzz, the pilot's breath, then their own animations
     u.kart.position.y = Math.abs(Math.sin(t * 22)) * 0.01;
     u.pilot.position.y = MOUNT[1] + Math.sin(t * 2.2) * 0.02;
-    for (const f of u.kart.userData.anim) f(dt, t);
+    for (const f of u.kart.userData.anim) f(dt, t, off ? FLOORED : null);   // a launch floors it: the turbine's heat and the exhaust glows swell
     for (const f of u.pilot.userData.anim) f(dt, t);
+    if (off) poseLaunch(dt);
     // the Garage shows the trail, as if the kart drove (A-032)
     if (u.trail) {
       const on = getState() === 'garage';
@@ -510,6 +514,9 @@ function step(dt) {
   }
   st.update(dt, t);
 }
+
+/** What the kart's animations are told of the kart while it launches (kart.js reads boost). */
+const FLOORED = Object.freeze({ boost: 1, speed: 0 });
 
 /** Stand the camera, with the mouse's parallax (eased; none on a phone, for a player who asked for less motion, or on a still stage). */
 function standCamera(cam) {
@@ -540,12 +547,20 @@ export function renderPreview(dt) {
   dt = dt > 0 ? Math.min(dt, MAX_DT) : 0;   // the stage's own clamp (A.1)
   const t0 = now(), r = getRenderer();
   govern(t0, r);
+  // behind another screen the stage draws only the launch's tail (Q3), and only while it moves
+  if (!showsTurntable(getState())) {
+    if (!launching()) return;
+    if (!moving() || !ST.stage) { endLaunch(); clearCanvas(); return; }
+    if (LAUNCH.armed && !LAUNCH.painted) { LAUNCH.painted = true; return; }   // the press's frame: the circuit screen paints over the last stage frame
+  }
   // a still stage answers a press on screen first: this frame paints the UI's change alone, the stage follows
   if (GOV.still && ST.uiFirst && !stageInput.dragging) { ST.uiFirst = false; if (ST.stage) step(dt); return; }
   ST.uiFirst = false;
   const st = ensureStage();
-  applyWant();
+  if (!LAUNCH.rig) applyWant();   // a swap waits for the tail to end: the rig on its way is the one shown
   if (!ST.rig) showRig(G.charIdx, { animate: true });
+  if (LAUNCH.armed) startLaunch();
+  if (LAUNCH.rig) LAUNCH.t = CAPTURE_MOTION ? captureStep(LAUNCH.t, dt) : (now() - LAUNCH.t0) / 1000;
   const t1 = now(); step(dt);
   // the stage draws once every program it needs is compiled: until then a few a frame, the page free between
   if (!compileStage(r)) { ST.ms = { build: t1 - t0, step: now() - t1, draw: 0 }; return; }
@@ -557,11 +572,13 @@ export function renderPreview(dt) {
     ST.prime = null; ST.warm = ST.tier;
   }
   const t2 = now();
-  const W = window.innerWidth, H = window.innerHeight, f = framer ? framer() : { x: 0, y: 0, w: W, h: H };
+  const W = window.innerWidth, H = window.innerHeight, f = LAUNCH.rig ? LAUNCH.frame : framer ? framer() : { x: 0, y: 0, w: W, h: H };
   const view = f ? [Math.round(f.x), Math.round(f.y), Math.round(f.w), Math.round(f.h), W, H].join() : String([W, H]);
-  const busy = ST.outgoing.length > 0 || (ST.rig && ST.rig.userData.age < 1);
+  const busy = ST.outgoing.length > 0 || (ST.rig && ST.rig.userData.age < 1) || !!LAUNCH.rig;
   if (!GOV.still || !ST.drawn || ST.yaw !== ST.drawnYaw || busy || view !== ST.view) draw(r, st, f, W, H, view);
   ST.ms = { build: t1 - t0, step: t2 - t1, draw: now() - t2 };
+  // the tail's last frame: the canvas is the menus' background from here on (game.js clears it every frame after)
+  if (LAUNCH.rig && LAUNCH.t >= LAUNCH_S) { endLaunch(); clearCanvas(); }
 }
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
@@ -600,10 +617,12 @@ function govern(t, r) {
     const m = [...GOV.costs].sort((a, b) => a - b)[GOV.costs.length >> 1];
     if (m >= SLOW_MS) GOV.still = true; else if (m < FAST_MS) GOV.still = false;
   }
+  if (CAPTURE_MOTION) GOV.still = false;
 }
 
 /** Whether the stage stands still for the GPU's sake: the governor's verdict, or its first guess before it has one. */
 function stillStage(r = getRenderer()) {
+  if (CAPTURE_MOTION) return (GOV.still = false);   // the test-only capture switch (launch section)
   if (GOV.still === null) GOV.still = softwareGpu(r);
   return GOV.still;
 }
@@ -630,6 +649,9 @@ const GARAGE_YAW = 1.05;
 // a new screen starts with a fresh stage frame (the one before cleared the canvas or drew another scene), after its UI
 onTransition(to => {
   ST.drawn = false; ST.uiFirst = true;
+  if (showsTurntable(to)) ST.drewIn = null;   // the screen that launches must have drawn its own podium first (launch)
+  if (to !== 'tracks') endLaunch();   // leaving the circuits during the tail (Retour, a race, an invitation): the kart is back on the podium
+  if (showsTurntable(to) && ST.rig && ST.rig.userData.age < 1 && !moving()) { ST.rig.userData.age = 1; ST.rig.scale.setScalar(1); }   // no pop-in on a stage that stopped moving meanwhile
   if (to === 'garage' && ST.stage && !moving()) { ST.yaw = GARAGE_YAW; ST.vel = 0; }
 });
 
@@ -776,14 +798,16 @@ function draw(r, st, f, W, H, view) {
   r.info.autoReset = false; r.info.reset();
   try { withLook(r, STAGE_LOOK, () => r.render(st.scene, cam)); }
   finally { ST.info = { calls: r.info.render.calls, triangles: r.info.render.triangles }; r.info.autoReset = true; }
+  if (LAUNCH.rig) drawFade(r, launchPose(LAUNCH.t).fade);
+  else if (moving()) compileFade(r);   // ready before any launch: a stage that moves can afford it on its first frame
   st.turntable.visible = true;
-  ST.drawn = true; ST.view = view; ST.drawnYaw = ST.yaw; ST.warm = ST.tier; ST.prime = null;   // a whole frame primes the canvas
+  ST.drawn = true; ST.drewIn = getState(); ST.view = view; ST.drawnYaw = ST.yaw; ST.warm = ST.tier; ST.prime = null;   // a whole frame primes the canvas
   GOV.drew = true;
   if (r.info.programs.length !== programs) GOV.clean = false;   // a compile is no measure of the frame
   pinPrograms(r);
 }
 
-// ---------- Warm-up and launch ----------
+// ---------- Warm-up ----------
 
 /**
  * Get "Jouer" ready while the title screen idles: game.js calls this once a
@@ -817,8 +841,200 @@ export function warmStage() {
   return true;
 }
 
-/** Stage 9's "go" launch (Q3): not built yet; says so. */
-export function launch() { return false; }
+// ---------- The "go" launch (Q3, A-038) ----------
+
+/**
+ * "Choisir le circuit →" (and Enter) sends the chosen candidate off: the
+ * circuit screen opens at once (the store transitions first, then calls
+ * launch()), and behind its cards the stage plays a LAUNCH_S tail. The
+ * kart revs on the podium, wheels spinning up and exhausts flaring, swings
+ * round to face down the hemicycle's aisle (world -z, away from the camera,
+ * which stands on +z) while it already slides that way, drops off the
+ * podium's edge and accelerates towards the benches, a confetti burst
+ * thrown up behind it; from FADE_AT the whole picture fades to the menus'
+ * --bg, and the canvas is cleared to it on the tail's last frame
+ * (DEC-042, extended by Q3). The template drove the kart down +z, into its
+ * camera: here the kart's centre only ever moves away from it, and no part
+ * of it comes nearer than the podium's own turn brings it.
+ *
+ * Off where the stage does not move by itself: under prefers-reduced-motion
+ * and on a still stage (the governor), launch() plays nothing, bursts no
+ * confetti and returns false, and the circuits sit on the plain background
+ * straight away. A launch cannot stack: a second call while one is armed or
+ * playing is ignored. Leaving the circuits during the tail (Retour, a race,
+ * an invitation) ends it there; either way the kart goes back on the
+ * podium, popping in again when the roster next shows it.
+ *
+ * The tail runs on the wall clock, so it lasts LAUNCH_S whatever the frame
+ * rate (a stage that moves draws at least ten frames a second, the
+ * governor's SLOW_MS), and the canvas is --bg 1.5 s after the click at the
+ * latest; its first frame after the press only lets the circuit screen
+ * paint. A test-only capture switch (CAPTURE_MOTION, below) instead steps
+ * it by the stage's clamped frame time, so a software rasteriser can film it.
+ */
+export const LAUNCH_S = 1.4;
+/** When the fade to --bg starts (it ends with the tail). */
+export const LAUNCH_FADE_AT = 1.0;
+/** The rev before the kart moves, the turn to face down the aisle, and how far it gets by the end (world units: its nose stops short of the first bench, R0 x STAGE_SCALE = 11.8). */
+const REV_S = 0.12, TURN_S = 0.5, RUN = 9.2;
+const ACCEL = RUN / ((LAUNCH_S - REV_S) ** 2);
+/** Where the kart's centre leaves the podium's top (its radius plus the rear wheels' reach), and how hard it then drops to the floor. */
+const EDGE = PODIUM.radius + 0.9, DROP_G = 26;
+/** The wheelie: the nose lifts this much as it pulls away, pivoting on the rear axle this far behind the centre. */
+const WHEELIE = 0.09, REAR = 1;
+/** The menus' --bg, sRGB (clearCanvas's colour). */
+const MENU_BG = 0x0c1230;
+
+const smooth = (a, b, x) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+/** `a` wrapped into (-PI, PI]. */
+const wrap = a => a - Math.ceil((a - Math.PI) / (Math.PI * 2)) * Math.PI * 2;
+
+/**
+ * The launch's pose at `t` seconds, plain arithmetic: where the kart is
+ * (x, y, z, world units; the podium's top centre is (0, PODIUM.top, 0)),
+ * its heading (rotation.y from `yaw`, the podium's turn at the press, to the
+ * nearest heading facing -z), its pitch (rotation.x, nose up is negative,
+ * order YXZ), how fast the wheels turn (rad/s), the exhaust flare (0..1),
+ * the fade to --bg (0..1) and whether the tail is over.
+ */
+export function launchPose(t, yaw = 0) {
+  t = Math.max(0, t);
+  const run = Math.max(0, t - REV_S), s = ACCEL * run * run, v = 2 * ACCEL * run;
+  const turn = 1 - (1 - Math.min(1, t / TURN_S)) ** 3;
+  const heading = yaw + wrap(Math.PI - yaw) * turn;
+  // off the edge: the drop, from the moment the centre passes EDGE
+  const tEdge = REV_S + Math.sqrt(EDGE / ACCEL), fall = Math.max(0, t - tEdge);
+  const lift = Math.max(0, PODIUM.top - 0.5 * DROP_G * fall * fall);
+  const pitch = -WHEELIE * smooth(REV_S + 0.05, REV_S + 0.25, t) * (1 - smooth(0.5, 0.85, t));
+  return {
+    x: 0, y: lift + Math.sin(-pitch) * REAR, z: -s, heading, pitch,
+    spin: 14 + v / 0.42,
+    flare: smooth(0, 0.12, t) * (1 - smooth(1.05, LAUNCH_S, t)),
+    fade: smooth(LAUNCH_FADE_AT, LAUNCH_S, t),
+    done: t >= LAUNCH_S,
+  };
+}
+
+/**
+ * The launch in hand: `armed` between the press and its first stage frame
+ * (the press's own frame paints the circuit screen alone), then `rig` (the
+ * kart driving off, out of the turntable, in the scene), `t0` (when it set
+ * off), `t` (how far it is), `yaw` (the podium's turn at the press), `frame`
+ * (the band it was framed in, kept: the circuit screen has none), `glows`
+ * (the exhaust mouths, their scales at rest), `count` (launches played, for
+ * the test hook).
+ */
+const LAUNCH = { armed: false, painted: false, rig: null, t0: 0, t: 0, yaw: 0, frame: null, glows: null, count: 0 };
+
+/**
+ * The test-only capture switch: `?stagecapture=motion` in the page's URL
+ * makes the stage move whatever the governor measures (prefers-reduced-motion
+ * still wins) and steps the launch by the stage's clamped frame time, so a
+ * software rasteriser (a frame a second) can film the stage frame by frame.
+ * Under it alone, a capture script may also set `window.__stageHoldAt` (a
+ * time in the tail): the launch stops there until it is raised, so a
+ * screenshot, which takes several software frames, shows that moment.
+ * Nothing in the game links to it or sets it; it exists for the visual
+ * checks alone.
+ */
+const CAPTURE_MOTION = typeof location !== 'undefined' && /(?:^|[?&])stagecapture=motion(?:&|$)/.test(location.search || '');
+/** The capture switch's launch clock: the stage's frame time, held at window.__stageHoldAt when a capture script set one. */
+function captureStep(t, dt) {
+  const hold = typeof window !== 'undefined' ? Number(window.__stageHoldAt) : NaN;
+  return Number.isFinite(hold) ? Math.min(t + dt, Math.max(t, hold)) : t + dt;
+}
+
+/**
+ * Send the chosen kart off (above): called right after the transition to
+ * the circuits. Returns whether a launch will play: false under
+ * prefers-reduced-motion, on a still stage, before the roster has drawn
+ * its podium since it opened, and while another launch is armed or playing.
+ */
+export function launch() {
+  if (LAUNCH.armed || LAUNCH.rig) return false;
+  if (!ST.stage || !ST.rig || !ST.frame || ST.drewIn !== 'select' || !moving()) return false;
+  LAUNCH.armed = true; LAUNCH.painted = false;
+  return true;
+}
+
+/** Whether a launch is armed or playing: game.js keeps drawing the stage behind the circuits while it is. */
+export const launching = () => LAUNCH.armed || !!LAUNCH.rig;
+
+/** The launch's first stage frame: the rig leaves the turntable for the scene, the confetti flies. */
+function startLaunch() {
+  LAUNCH.armed = false;
+  const rig = ST.rig, st = ST.stage;
+  if (!rig || !ST.frame) return;
+  // the one leaving a swap goes at once (PLAN 1.2 A.6), the one arriving is there in full
+  for (const r of ST.outgoing) disposeRig(r);
+  ST.outgoing = [];
+  rig.userData.age = 1; rig.scale.setScalar(1); rig.rotation.set(0, 0, 0);
+  LAUNCH.yaw = ST.yaw; LAUNCH.frame = { ...ST.frame };
+  st.scene.attach(rig);                      // world transform kept: on the podium's top, turned with it
+  rig.rotation.order = 'YXZ';
+  const glows = [];
+  rig.userData.kart.traverse(o => { if (o.name === 'exhaust-glow') glows.push([o, o.scale.x]); });
+  LAUNCH.glows = glows;
+  LAUNCH.rig = rig; LAUNCH.t = 0; LAUNCH.t0 = now(); LAUNCH.count++;
+  ST.vel = 0;
+  st.burst();
+}
+
+/** Pose the launching rig at LAUNCH.t: the drive, the wheels, the exhausts. Called from step(), after the rig's idle life. */
+function poseLaunch(dt) {
+  const rig = LAUNCH.rig, u = rig.userData, p = launchPose(LAUNCH.t, LAUNCH.yaw);
+  rig.position.set(p.x, p.y, p.z);
+  rig.rotation.set(p.pitch, p.heading, 0);
+  for (const w of u.kart.userData.wheels) w.rotation.x += p.spin * dt;
+  for (const [g, rest] of LAUNCH.glows) g.scale.setScalar(rest * (1 + p.flare * (0.8 + Math.random() * 0.6)));
+}
+
+/**
+ * End the launch, wherever it is: the rig back on the turntable at rest
+ * (popping in when the roster next shows it, if the stage moves), the glows
+ * as they were. A launch only armed is simply dropped.
+ */
+function endLaunch() {
+  LAUNCH.armed = false;
+  const rig = LAUNCH.rig;
+  LAUNCH.rig = null; LAUNCH.frame = null;
+  if (!rig) return;
+  for (const [g, rest] of LAUNCH.glows || []) g.scale.setScalar(rest);
+  LAUNCH.glows = null;
+  rig.position.set(0, 0, 0); rig.rotation.set(0, 0, 0); rig.rotation.order = 'XYZ';
+  if (ST.stage && rig === ST.rig) {
+    ST.stage.turntable.add(rig);
+    rig.userData.age = moving() ? 0 : 1;
+    rig.scale.setScalar(rig.userData.age < 1 ? 0.001 : 1);
+  } else disposeRig(rig);
+  ST.drawn = false;
+}
+
+/** The fade to --bg over the whole canvas: one quad drawn over the stage frame, outside the stage's look (so its colour is clearCanvas's). */
+const FADE = { scene: null, cam: null, mat: null, compiled: null };
+function fadeQuad() {
+  if (FADE.scene) return FADE;
+  FADE.mat = new THREE.MeshBasicMaterial({ color: MENU_BG, transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false, fog: false });
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), FADE.mat);
+  quad.frustumCulled = false;
+  FADE.scene = new THREE.Scene(); FADE.scene.add(quad);
+  FADE.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  return FADE;
+}
+/** Compile the fade's program ahead (once per renderer), so the tail's fade never compiles in its frame. */
+function compileFade(r) {
+  const f = fadeQuad();
+  if (f.compiled === r) return;
+  r.compile(f.scene, f.cam); f.compiled = r;
+  GOV.clean = false; pinPrograms(r);
+}
+function drawFade(r, k) {
+  if (!(k > 0)) return;
+  const f = fadeQuad(), auto = r.autoClear;
+  f.mat.opacity = Math.min(1, k);
+  r.autoClear = false;
+  try { r.render(f.scene, f.cam); } finally { r.autoClear = auto; }
+}
 
 // ---------- What the stage costs, for the test hook ----------
 
@@ -837,7 +1053,7 @@ export function stageInfo() {
   return {
     charId: rig ? rig.userData.id : null,
     yaw: ST.yaw,
-    ready: !!(ST.stage && ST.drawn && ST.want === null && rig && rig.userData.age >= 1 && !ST.outgoing.length),
+    ready: !!(ST.stage && ST.drawn && ST.want === null && rig && rig.userData.age >= 1 && !ST.outgoing.length && !LAUNCH.rig),
     tier: ST.tier,
     info: { calls: ST.info.calls, triangles: ST.info.triangles, programs: r ? r.info.programs.length : 0, geometries: r ? r.info.memory.geometries : 0, textures: r ? r.info.memory.textures : 0 },
     bbox: ST.drawn && rig && ST.frame ? screenBox() : null,
@@ -846,6 +1062,7 @@ export function stageInfo() {
     parts: PARTS.queue.length,
     still: !!GOV.still, frameMs: GOV.costs.length ? Math.round([...GOV.costs].sort((a, b) => a - b)[GOV.costs.length >> 1]) : null,
     ms: ST.ms, msSet: ST.msSet,
+    launch: { on: launching(), t: LAUNCH.rig ? LAUNCH.t : null, count: LAUNCH.count, z: LAUNCH.rig ? LAUNCH.rig.position.z : null, capture: CAPTURE_MOTION },
   };
 }
 

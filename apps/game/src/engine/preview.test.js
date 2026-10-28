@@ -15,7 +15,8 @@ import { PODIUM } from './hemicycle.js';
 import { buildKart, seatPilot } from './kart.js';
 import { defaultStyle, mergeStyle } from './kartstyle.js';
 import { buildPilot, disposePilot, MOUNT, PILOT_SCALE } from './pilot.js';
-import { aimStage, buildRig, disposeRig, frameKart, initials, REF_TOP, rigProfile, showsTurntable, stillCamera } from './preview.js';
+import { buildStageScene } from './hemicycle.js';
+import { AIM, aimStage, buildRig, disposeRig, frameKart, initials, LAUNCH_FADE_AT, LAUNCH_S, launchPose, REF_TOP, rigProfile, showsTurntable, stillCamera } from './preview.js';
 
 /** [what, W, H, the ShowcaseStage band], as the screens measured them. */
 const BANDS = [
@@ -240,5 +241,111 @@ describe('showsTurntable', () => {
     expect(showsTurntable('select')).toBe(true);
     expect(showsTurntable('garage')).toBe(true);
     for (const s of ['title', 'tracks', 'shop', 'admin', 'lobby', 'account', 'dashboard', 'lootbox', 'race', 'paused', 'results']) expect(showsTurntable(s), s).toBe(false);
+  });
+});
+
+describe('the "go" launch: the kart drives off down the aisle, away from the camera (Q3, A-038)', () => {
+  /** The cameras the stage can stand at: the still one, and the mouse's parallax at its four extremes (preview.js PARALLAX). */
+  const CAMERAS = [[0, 0], [-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]].map(([mx, my]) => {
+    const cam = stillCamera();
+    cam.position.x += mx * 0.9 * 1.6; cam.position.y -= my * 0.5 * 1.6;
+    cam.lookAt(AIM[0], AIM[1], AIM[2]); cam.updateMatrixWorld(true);
+    return cam;
+  });
+  /** The frames of a launch at 60 frames a second, the last one exactly at its end. */
+  const FRAMES = [...Array.from({ length: Math.floor(LAUNCH_S * 60) }, (_, i) => i / 60), LAUNCH_S];
+  /** Pose `rig` (alone in a root at the world origin, as preview.js puts it in the stage scene) at `p`. */
+  const pose = (root, rig, p) => { rig.position.set(p.x, p.y, p.z); rig.rotation.order = 'YXZ'; rig.rotation.set(p.pitch, p.heading, 0); root.updateMatrixWorld(true); };
+  /** Every 4th visible vertex of `rig`, in world space. */
+  const vertices = rig => {
+    const out = [], v = new THREE.Vector3();
+    rig.traverse(o => {
+      for (let q = o; q; q = q.parent) if (!q.visible) return;
+      if (!o.isMesh) return;
+      const pos = o.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i += 4) out.push(v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld).clone());
+    });
+    return out;
+  };
+  const nearest = (pts, at) => Math.min(...pts.map(p => p.distanceTo(at)));
+  const RIGS3 = ['victor', 'patrick', 'capucine'].map(id => RIGS[CHARACTERS.findIndex(c => c.id === id)]);
+  const YAWS = [0, 0.35, Math.PI / 2, Math.PI, -2.2, 5];
+
+  it.each(RIGS3.map(r => [r.userData.id, r]))('never puts the camera inside the kart (%s), on any frame and on the last', (_id, rig) => {
+    const root = new THREE.Group(); root.add(rig);
+    for (const yaw of YAWS) {
+      for (const t of FRAMES) {
+        pose(root, rig, launchPose(t, yaw));
+        const box = new THREE.Box3().setFromObject(rig);
+        for (const cam of CAMERAS) expect(box.containsPoint(cam.position), `t ${t} yaw ${yaw}`).toBe(false);
+      }
+      // the last frame: far down the aisle, the camera well clear of the kart's box
+      pose(root, rig, launchPose(LAUNCH_S, yaw));
+      const box = new THREE.Box3().setFromObject(rig);
+      for (const cam of CAMERAS) expect(box.distanceToPoint(cam.position)).toBeGreaterThan(20);
+      expect(box.max.z).toBeLessThan(-PODIUM.foot);       // the whole kart beyond the podium, down the aisle
+      expect(box.min.z).toBeGreaterThan(-11.84);          // short of the first bench (R0 7.4 x 1.6)
+    }
+    root.remove(rig); rig.position.set(0, 0, 0); rig.rotation.set(0, 0, 0); rig.rotation.order = 'XYZ';
+  });
+
+  it.each(RIGS3.map(r => [r.userData.id, r]))('drives the kart away from the camera (%s): its centre ever farther, no part nearer than the podium\'s own turn brings it', (_id, rig) => {
+    const root = new THREE.Group(); root.add(rig);
+    for (const yaw of YAWS) {
+      // the nearest any part comes on the podium at rest, all the way round (what the stage already shows)
+      let rest = Infinity;
+      for (let k = 0; k < 12; k++) {
+        rig.position.set(0, PODIUM.top, 0); rig.rotation.set(0, k / 12 * Math.PI * 2, 0); root.updateMatrixWorld(true);
+        const pts = vertices(rig);
+        for (const cam of CAMERAS) rest = Math.min(rest, nearest(pts, cam.position));
+      }
+      const last = new Map();
+      for (const t of FRAMES) {
+        const p = launchPose(t, yaw);
+        pose(root, rig, p);
+        for (const cam of CAMERAS) {
+          const d = cam.position.distanceTo(rig.position);
+          if (last.has(cam)) expect(d, `t ${t} yaw ${yaw}`).toBeGreaterThanOrEqual(last.get(cam) - 1e-9);
+          last.set(cam, d);
+        }
+        if (Math.round(t * 60) % 6 === 0) { const pts = vertices(rig); for (const cam of CAMERAS) expect(nearest(pts, cam.position), `t ${t} yaw ${yaw}`).toBeGreaterThanOrEqual(rest - 0.05); }
+      }
+      const start = launchPose(0, yaw), end = launchPose(LAUNCH_S, yaw);
+      expect(start.z).toBe(-0); expect(start.y).toBeCloseTo(PODIUM.top, 9);
+      expect(end.z).toBeLessThan(-8);                       // well down the aisle
+      expect(end.y).toBe(0);                                // off the podium, on the floor
+      expect(Math.cos(end.heading)).toBeCloseTo(-1, 6);     // nose down the aisle
+      expect(Math.abs(end.heading - yaw)).toBeLessThanOrEqual(Math.PI + 1e-9);   // the short way round
+    }
+    root.remove(rig); rig.position.set(0, 0, 0); rig.rotation.set(0, 0, 0); rig.rotation.order = 'XYZ';
+  });
+
+  it('spins the wheels up, flares the exhausts, and fades to the background by its end', () => {
+    const a = launchPose(0.05), b = launchPose(0.6), c = launchPose(1.2);
+    expect(b.spin).toBeGreaterThan(a.spin); expect(c.spin).toBeGreaterThan(b.spin);
+    expect(b.flare).toBe(1);
+    for (const t of FRAMES) {
+      const p = launchPose(t);
+      if (t <= LAUNCH_FADE_AT) expect(p.fade).toBe(0);
+      expect(p.done).toBe(t >= LAUNCH_S);
+    }
+    expect(launchPose(LAUNCH_S).fade).toBe(1);
+    expect(launchPose(LAUNCH_S).flare).toBe(0);
+  });
+});
+
+describe('the drifting confetti', () => {
+  it('never falls between the podium and the camera, where it would sit behind the showcase\'s name', () => {
+    for (const tier of ['high', 'low']) {
+      const s = buildStageScene(tier), c = s.scene.getObjectByName('confetti'), m = new THREE.Matrix4(), p = new THREE.Vector3();
+      for (let k = 0; k < 600; k++) {
+        if (k % 40 === 0) {
+          s.scene.updateMatrixWorld(true);
+          for (let i = 0; i < c.count; i++) { c.getMatrixAt(i, m); p.setFromMatrixPosition(m).applyMatrix4(c.matrixWorld); expect(p.z).toBeLessThanOrEqual(PODIUM.foot + 1e-6); }
+        }
+        s.update(0.05);
+      }
+      s.dispose();
+    }
   });
 });
