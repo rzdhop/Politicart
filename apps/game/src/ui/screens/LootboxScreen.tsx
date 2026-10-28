@@ -9,7 +9,7 @@ import {
   Row,
   Screen,
   Subtitle,
-} from '@politikar/ui';
+} from '@politikart/ui';
 
 import { BOX_PRICE } from '../../engine/catalog.js';
 import { CHARACTERS } from '../../engine/data.js';

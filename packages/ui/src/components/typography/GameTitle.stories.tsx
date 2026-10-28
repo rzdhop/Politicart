@@ -18,7 +18,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = { args: { children: 'POLITIKAR' } };
+export const Default: Story = { args: { children: 'POLITIKART' } };
 
 /** The gradient's stops are tuned for a two-word mark; longer strings push the white band off centre. */
 export const LongerMark: Story = { args: { children: 'GRAND PRIX DE L’HÉMICYCLE' } };

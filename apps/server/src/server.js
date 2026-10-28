@@ -123,7 +123,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
     let st; try { st = statSync(file); } catch { st = null; }
     if (!st || !st.isFile()) {
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-      res.end(rel === '/index.html' ? 'The game is not built yet: run `npm run build -w @politikar/game`.' : 'Not found');
+      res.end(rel === '/index.html' ? 'The game is not built yet: run `npm run build -w @politikart/game`.' : 'Not found');
       return;
     }
     res.writeHead(200, { 'content-type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream', 'content-length': st.size });

@@ -22,7 +22,7 @@ import {
   type TextReadoutHandle,
   type ToastHandle,
   type WrongWayHandle,
-} from '@politikar/ui';
+} from '@politikart/ui';
 
 import { attachMinimap } from '../engine/minimap.js';
 import { GodPanel } from './GodConsole';

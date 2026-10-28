@@ -1,7 +1,7 @@
 {
-  "name": "@politikar/ui",
+  "name": "@politikart/ui",
   "version": "0.1.0",
-  "description": "The Politikar design system: the game's own visual language as React components",
+  "description": "The Politikart design system: the game's own visual language as React components",
   "license": "UNLICENSED",
   "type": "module",
   "sideEffects": [

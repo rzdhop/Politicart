@@ -8,7 +8,7 @@
 # in progress when it falls asleep is lost. Render sets PORT itself.
 services:
   - type: web
-    name: kart-republique
+    name: politikart
     runtime: docker
     plan: free
     # The players are in France. Render has no Paris region; Frankfurt is the
@@ -28,9 +28,9 @@ services:
       - key: DATABASE_URL
         sync: false
       # The admin account (it alone edits the cast) and its password hash,
-      # made with `npm run -s admin-hash -w @politikar/server`. Left
+      # made with `npm run -s admin-hash -w @politikart/server`. Left
       # empty, nobody is admin and the Workshop stays off.
-      - key: KR_ADMIN_USER
+      - key: POLITIKART_ADMIN_USER
         value: rida
-      - key: KR_ADMIN_PASSWORD_HASH
+      - key: POLITIKART_ADMIN_PASSWORD_HASH
         sync: false

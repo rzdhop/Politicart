@@ -9,10 +9,10 @@ import { ADMIN_PASSWORD, ADMIN_USER } from './e2e/fixtures/admin';
  * this file again in each worker; the env carries the first value over, so
  * every process agrees on one hash.
  */
-process.env.KR_E2E_ADMIN_HASH ||= hashPasswordSync(ADMIN_PASSWORD);
+process.env.POLITIKART_E2E_ADMIN_HASH ||= hashPasswordSync(ADMIN_PASSWORD);
 
 /**
- * End-to-end suite for Politikar.
+ * End-to-end suite for Politikart.
  *
  * This is the regression net for the React port. It is written against the
  * game as it exists today, before the port begins, so that any failure during
@@ -79,7 +79,7 @@ export default defineConfig({
       // changes how the game is packaged, so a bug that only appears once Vite
       // has bundled and minified it is exactly the kind this net should catch.
       // This static preview also stands in for GitHub Pages: single player only.
-      command: 'npm run build -w @politikar/game && npm run preview -w @politikar/game',
+      command: 'npm run build -w @politikart/game && npm run preview -w @politikart/game',
       url: 'http://127.0.0.1:4173',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
@@ -94,15 +94,15 @@ export default defineConfig({
       // the test-only account above. Locally a server already on 4180 is
       // reused as is: one started without this env has no test admin, so stop
       // it first.
-      command: 'npm start -w @politikar/server',
+      command: 'npm start -w @politikart/server',
       url: 'http://127.0.0.1:4180/api/kr',
       env: {
         PORT: '4180',
         HOST: '127.0.0.1',
-        KR_MAX_RACE_S: '15',
-        KR_DATA: ':memory:',
-        KR_ADMIN_USER: ADMIN_USER,
-        KR_ADMIN_PASSWORD_HASH: process.env.KR_E2E_ADMIN_HASH,
+        POLITIKART_MAX_RACE_S: '15',
+        POLITIKART_DATA: ':memory:',
+        POLITIKART_ADMIN_USER: ADMIN_USER,
+        POLITIKART_ADMIN_PASSWORD_HASH: process.env.POLITIKART_E2E_ADMIN_HASH,
       },
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

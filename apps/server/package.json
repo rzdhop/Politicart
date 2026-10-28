@@ -1,7 +1,7 @@
 {
-  "name": "@politikar/server",
+  "name": "@politikart/server",
   "version": "0.1.0",
-  "description": "Politikar game server: serves the built game and runs team races over WebSocket",
+  "description": "Politikart game server: serves the built game and runs team races over WebSocket",
   "license": "UNLICENSED",
   "private": true,
   "type": "module",

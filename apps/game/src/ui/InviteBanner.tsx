@@ -1,4 +1,4 @@
-import { Button, Panel } from '@politikar/ui';
+import { Button, Panel } from '@politikart/ui';
 
 import { actions, type GameState, type UiSnapshot } from './store';
 

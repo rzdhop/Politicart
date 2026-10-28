@@ -1,8 +1,8 @@
-// Politikar -- the UI layer's imperative half.
+// Politikart -- the UI layer's imperative half.
 //
 // After stage 13 everything the player sees is React (./ui): the six
 // screens, the note banner and the HUD, all composed from
-// @politikar/ui. What stays here is what must not go through React
+// @politikart/ui. What stays here is what must not go through React
 // state: the per-frame HUD writer, which pushes the engine's payload into
 // the HUD components' imperative handles; the keyboard; and the frame clock.
 // The engine lives in ./engine and never touches the DOM: it returns one
@@ -14,7 +14,7 @@
 //
 // Three.js is pinned to 0.128.0 to match the r128 build the CDN served (see
 // .claude/DECISIONS.md DEC-007).
-import '@politikar/ui/styles.css';
+import '@politikart/ui/styles.css';
 import './game.css';
 
 import { updateEngine } from './engine/audio.js';
@@ -39,7 +39,7 @@ import { initTouch, installNoContextMenu, isCoarsePointer, isTouchMode, setTouch
 
 'use strict';
 /* =====================================================================================
-   POLITIKAR v2 — satirical kart racer with a pun-name parody French political cast.
+   POLITIKART v2 — satirical kart racer with a pun-name parody French political cast.
    Single-file Three.js game: spline tracks, kart physics with drift/mini-turbo,
    political items + one special power per candidate, AI opponents with rubber-banding,
    procedural textures, shadow mapping, WebAudio sound.

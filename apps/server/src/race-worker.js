@@ -36,9 +36,9 @@ import { applyCast } from './roster.js';
 
 const STEP = 1 / 60;
 const SNAP_EVERY = 3;            // 60 Hz / 3 = 20 snapshots a second
-// A race nobody can finish still ends. KR_MAX_RACE_S shortens it (the end-to-end suite does).
+// A race nobody can finish still ends. POLITIKART_MAX_RACE_S shortens it (the end-to-end suite does).
 // The cap is for a race of the default length: a race the admin lengthens gets a longer one (DEC-031).
-const MAX_RACE_TIME = Number(process.env.KR_MAX_RACE_S) || 12 * 60;
+const MAX_RACE_TIME = Number(process.env.POLITIKART_MAX_RACE_S) || 12 * 60;
 const raceCap = () => MAX_RACE_TIME * Math.max(1, G.laps / CFG.laps);
 
 const { trackIdx, roster, cast = [], fast, hold = 10_000 } = workerData;

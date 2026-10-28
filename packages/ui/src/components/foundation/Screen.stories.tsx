@@ -35,7 +35,7 @@ export const TitleScreen: Story = {
     children: (
       <>
         <Tricolore />
-        <GameTitle>POLITIKAR</GameTitle>
+        <GameTitle>POLITIKART</GameTitle>
         <Subtitle>Grand Prix de l’Hémicycle</Subtitle>
         <Panel style={{ display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
           <Row>

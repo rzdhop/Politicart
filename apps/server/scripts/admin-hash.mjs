@@ -1,8 +1,8 @@
-// Print the KR_ADMIN_PASSWORD_HASH for a password read from stdin, and
+// Print the POLITIKART_ADMIN_PASSWORD_HASH for a password read from stdin, and
 // nothing else on stdout, so the output can go straight into a secret.
 //
-//   npm run -s admin-hash -w @politikar/server              asks twice, echo off
-//   printf '%s' "$PW" | npm run -s admin-hash -w @politikar/server
+//   npm run -s admin-hash -w @politikart/server              asks twice, echo off
+//   printf '%s' "$PW" | npm run -s admin-hash -w @politikart/server
 //
 // `-s` keeps npm's own banner off stdout. The password never leaves this
 // process: it is not an argument (shell history, process lists) and is

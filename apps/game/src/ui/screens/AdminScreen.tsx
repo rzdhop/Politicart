@@ -16,7 +16,7 @@ import {
   Row,
   Screen,
   TextInput,
-} from '@politikar/ui';
+} from '@politikart/ui';
 
 import { getDraft } from '../../engine/custom.js';
 import { BASE, CHARACTERS } from '../../engine/data.js';

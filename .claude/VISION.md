@@ -2,7 +2,7 @@
 
 ## Purpose
 
-**Politicart / Politikar** is *Grand Prix de l'Hemicycle* -- a satirical 3D
+**Politicart / Politikart** is *Grand Prix de l'Hemicycle* -- a satirical 3D
 kart racer that runs in the browser, starring French politicians under pun
 names (Emmanuel Macaron, Marine Le Stylo, Jean-Luc Mélèche...). It is a
 self-contained piece of playable satire: three laps, five AI opponents,

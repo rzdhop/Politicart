@@ -5,7 +5,7 @@
 //   DATABASE_URL set  -> Postgres (pg). For hosts whose disk does not survive
 //                        a restart, such as Render's free plan: point it at
 //                        any Postgres (a free Neon or Supabase database works).
-//   otherwise         -> one JSON file (KR_DATA), rewritten atomically a
+//   otherwise         -> one JSON file (POLITIKART_DATA), rewritten atomically a
 //                        moment after each change. Fine on a LAN, in Docker
 //                        with a volume, or on Fly.io with a volume.
 //   neither (tests)   -> the same as the file store, kept in memory only.
@@ -52,7 +52,7 @@
 // other key throws), for data the server keeps besides accounts: the admin's
 // cast (roster.js) and the race counters of the admin's dashboard
 // (dashboard.js). The file store keeps each in its own file next to the
-// accounts file, <dir of KR_DATA>/kr-docs/<key>.json, written atomically: the
+// accounts file, <dir of POLITIKART_DATA>/kr-docs/<key>.json, written atomically: the
 // cast can weigh megabytes and must not ride along every account rewrite.
 // Postgres keeps them in kr_docs.
 //

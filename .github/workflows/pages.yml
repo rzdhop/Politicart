@@ -40,15 +40,15 @@ jobs:
       - run: npm ci
       - name: Build the design system, then check and test both workspaces
         run: |
-          npm run build -w @politikar/ui
+          npm run build -w @politikart/ui
           npm run typecheck
           npm run test
       - name: Build the game
-        run: npm run build -w @politikar/game
+        run: npm run build -w @politikart/game
         # The remote game server for team races (DEC-015), from the
-        # KR_SERVER_URL repository variable. Unset: the page stays solo.
+        # POLITIKART_SERVER_URL repository variable. Unset: the page stays solo.
         env:
-          VITE_KR_SERVER: ${{ vars.KR_SERVER_URL }}
+          VITE_POLITIKART_SERVER: ${{ vars.POLITIKART_SERVER_URL }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

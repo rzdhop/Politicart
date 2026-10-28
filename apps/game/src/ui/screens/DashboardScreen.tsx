@@ -13,7 +13,7 @@ import {
   Screen,
   TextInput,
   type ResultsRow,
-} from '@politikar/ui';
+} from '@politikart/ui';
 
 import { CHARACTERS, TRACKS } from '../../engine/data.js';
 import { TEAM_NAMES } from '../../engine/teams.js';

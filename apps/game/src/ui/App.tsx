@@ -1,4 +1,4 @@
-import { NoteBanner } from '@politikar/ui';
+import { NoteBanner } from '@politikart/ui';
 
 import { AccountScreen } from './screens/AccountScreen';
 import { AdminScreen } from './screens/AdminScreen';

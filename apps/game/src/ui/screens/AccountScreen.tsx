@@ -15,7 +15,7 @@ import {
   Subtitle,
   TextInput,
   type ResultsRow,
-} from '@politikar/ui';
+} from '@politikart/ui';
 
 import { collection } from '../../engine/catalog.js';
 import { CHARACTERS, TRACKS } from '../../engine/data.js';

@@ -1,11 +1,11 @@
 {
-  "pkg": "@politikar/ui",
-  "globalName": "PolitikarUI",
+  "pkg": "@politikart/ui",
+  "globalName": "PolitikartUI",
   "projectId": "1db9db24-1aee-4f65-93d7-a58ce488b52d",
   "shape": "storybook",
   "storybookConfigDir": "packages/ui/.storybook",
   "storybookStatic": ".design-sync/sb-reference",
-  "buildCmd": "npm run build -w @politikar/ui",
+  "buildCmd": "npm run build -w @politikart/ui",
   "cssEntry": "dist/styles.css",
   "overrides": {
     "Tricolore": {

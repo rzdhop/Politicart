@@ -376,9 +376,9 @@ function signedIn(token: string, profile: Profile) {
 }
 
 // The game server to use when the page is not served by it: set at build time
-// (the Pages workflow passes the KR_SERVER_URL repository variable). Empty
+// (the Pages workflow passes the POLITIKART_SERVER_URL repository variable). Empty
 // means the page's own origin, as with `npm run serve`.
-const remoteServer: string = import.meta.env.VITE_KR_SERVER ?? '';
+const remoteServer: string = import.meta.env.VITE_POLITIKART_SERVER ?? '';
 const socketUrl = () => net.serverUrl(window.location, remoteServer);
 
 function refreshPreview() {

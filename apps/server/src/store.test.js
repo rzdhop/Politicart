@@ -1,5 +1,5 @@
 // The account store, both backends, against the same contract. The Postgres
-// run needs a scratch database: set KR_TEST_DATABASE_URL (its kr_* tables are
+// run needs a scratch database: set POLITIKART_TEST_DATABASE_URL (its kr_* tables are
 // dropped first). Without it only the file store runs.
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,7 +10,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import { checkPassword, hashPassword } from './accounts.js';
 import { DOC_KEYS, OWNED_KINDS, openFileStore, openPgStore } from './store.js';
 
-const PG = process.env.KR_TEST_DATABASE_URL;
+const PG = process.env.POLITIKART_TEST_DATABASE_URL;
 
 async function freshPg() {
   const { default: pg } = await import('pg');

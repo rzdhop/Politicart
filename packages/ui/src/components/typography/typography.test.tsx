@@ -17,8 +17,8 @@ describe('GameTitle', () => {
   it('renders a level-1 heading', () => {
     // The gradient treatment is bound to the bare h1 selector, so the element
     // itself is the contract here - there is no class to assert.
-    render(<GameTitle>POLITIKAR</GameTitle>);
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('POLITIKAR');
+    render(<GameTitle>POLITIKART</GameTitle>);
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('POLITIKART');
   });
 
   it('carries no class of its own but accepts one', () => {

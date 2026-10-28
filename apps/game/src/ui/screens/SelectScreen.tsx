@@ -11,7 +11,7 @@ import {
   Showcase,
   StatBar,
   StatGrid,
-} from '@politikar/ui';
+} from '@politikart/ui';
 
 import { initAudio } from '../../engine/audio.js';
 import { CHARACTERS } from '../../engine/data.js';

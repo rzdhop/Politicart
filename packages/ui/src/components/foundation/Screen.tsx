@@ -16,7 +16,7 @@ export type ScreenProps = ComponentPropsWithRef<'section'>;
  *
  * ```tsx
  * <Screen>
- *   <GameTitle>POLITIKAR</GameTitle>
+ *   <GameTitle>POLITIKART</GameTitle>
  *   <Panel>
  *     <Row>
  *       <Button>Jouer</Button>

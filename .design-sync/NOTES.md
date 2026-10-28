@@ -5,7 +5,7 @@ were discovered; kept in the repo on purpose.
 
 ## Repo shape
 
-- The design system is `packages/ui` (`@politikar/ui`), an npm workspace.
+- The design system is `packages/ui` (`@politikart/ui`), an npm workspace.
   The repo root holds `package-lock.json`, so the install step is `npm ci`.
 - The library is extracted from the game at `index.html`, whose single `<style>`
   block was the only definition of the look before this work. See
@@ -144,7 +144,7 @@ Learnings from the storybook-shape sync of `packages/ui`, in the order found.
   with `cfg.extraEntries = ["../../.design-sync/preview-root.jsx"]` -- a
   repo-owned component that wraps each story in the system's background,
   foreground and body font, exactly what the decorator supplied. It ships in
-  the bundle as `window.PolitikarUI.PreviewRoot`; a full page does not
+  the bundle as `window.PolitikartUI.PreviewRoot`; a full page does not
   need it (the stylesheet's `body` rule does the same), fragments on a foreign
   page do.
 - **[GENERAL] `[FONT_MISSING] "Arial Black", "Impact"` is the fallback stack,
@@ -262,6 +262,6 @@ files under `project/` in the Design System format: `components/bundle.js`,
 `tokens.css`, `fonts/`, and per component `components/<Name>/README.md`,
 `preview.html`, `<Name>.d.ts` and `stories.js`. `config.json` points at it
 (`projectId` is the artifact id; `artifactUrl` the address). The same day the
-game was renamed Politikar: the package scope is `@politikar/*` and the bundle
-global `PolitikarUI`; the design system's namespace follows. A re-sync must
+game was renamed Politikart: the package scope is `@politikart/*` and the bundle
+global `PolitikartUI`; the design system's namespace follows. A re-sync must
 write that layout, not the storybook-shape one this file describes above.

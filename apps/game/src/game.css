@@ -1,5 +1,5 @@
 /* The two rules that belong to the game shell, not the design system.
-   Everything else the game looks like comes from @politikar/ui, whose
+   Everything else the game looks like comes from @politikart/ui, whose
    stylesheet is imported before this one. Both rules were withheld from the
    library on purpose (see .design-sync/NOTES.md, "CSS extraction"): #c is the
    WebGL canvas, and #s-select is one screen's layout override. Declarations
