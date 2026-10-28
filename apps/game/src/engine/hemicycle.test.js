@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { mat } from './primitives.js';
-import { buildStageScene, MAX_DT, PODIUM, rng, seatPositions, SKY_RADIUS, STAGE_SCALE, STAGE_TIERS } from './hemicycle.js';
+import { buildStageScene, MAX_DT, PODIUM, RIM_LIGHT_WHITE, rng, seatPositions, SKY_RADIUS, STAGE_SCALE, STAGE_TIERS } from './hemicycle.js';
 import { GOLD, linear, RIM } from './stagelook.js';
 
 const TIERS = ['high', 'phone', 'low'];
@@ -200,11 +200,11 @@ describe('the light rig', () => {
 });
 
 describe('setTint', () => {
-  it('jumps on request: the rim term, rim light, sky, strip and pool all take the tint', () => {
+  it('jumps on request: the rim term, sky, strip and pool take the tint, the rim light half of it', () => {
     const s = build('high'), t = linear(0xff4a5e);
     s.setTint(0xff4a5e, true);
     expect(close(RIM.color.value, t)).toBe(true);
-    expect(close(byName(s, 'rim').color, t)).toBe(true);
+    expect(close(byName(s, 'rim').color, t.clone().lerp(new THREE.Color(1, 1, 1), RIM_LIGHT_WHITE))).toBe(true);
     expect(close(byName(s, 'sky').material.uniforms.uTint.value, t)).toBe(true);
     expect(close(byName(s, 'strip').material.color, t.clone().multiplyScalar(2.2))).toBe(true);
     expect(close(byName(s, 'pool').material.color, t.clone().lerp(linear(0xffd9a0), 0.6))).toBe(true);

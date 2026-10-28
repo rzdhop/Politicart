@@ -37,7 +37,10 @@
 // Retinting (setTint) eases the rim light, the rim term every pilot
 // material carries (stagelook RIM), the sky's glow, the podium strip and the
 // pool towards the candidate's tint; all are uniforms or light colours, so
-// it never recompiles either.
+// it never recompiles either. The rim light itself takes the tint only half
+// way (RIM_LIGHT_WHITE): at 2.6 a fully saturated tint (patrick's green)
+// drew a hard coloured line round every face that no material could
+// soften; the floor, the strips and the sky keep the full tint.
 //
 // Scale. The template is built for its own kart (2.6 long); the game's is
 // about 4.1. The whole stage is authored in the template's units and scaled
@@ -65,6 +68,9 @@ import { GOLD, linear, RIM, stageEnvironment, stageMat } from './stagelook.js';
 
 /** Template units to game units: the template's podium (r 1.75) becomes the game kart's (r 2.8). */
 export const STAGE_SCALE = 1.6;
+
+/** How far the rim light's colour is blended from the tint towards white (the rest of the stage takes the full tint). */
+export const RIM_LIGHT_WHITE = 0.5;
 
 /** The longest step update() takes, in seconds; anything above is a hitch, not time to catch up on. */
 export const MAX_DT = 0.05;
@@ -299,7 +305,9 @@ const CONTACT = [0.5, 0.78];
  * - `update(dt, t)`: advance by dt seconds (clamped to [0, MAX_DT]); t is
  *   the caller's stage clock for the periodic effects (sky rays, stars,
  *   confetti flutter), the module's own clamped clock when left out.
- * - `burst()`: throw half the confetti up from the podium (the "go" launch).
+ * - `burst({ share = 0.5, lift = 1 })`: throw `share` of the confetti up
+ *   from the podium, `lift` times as hard (the defaults: the "go" launch; a
+ *   swap puffs a little of it).
  * - `dispose()`: free every geometry, material and texture built here (not
  *   the shared stagelook materials or fabric textures) and the key light's
  *   shadow map. The scene is unusable afterwards.
@@ -322,7 +330,7 @@ export function buildStageScene(tier = 'high', { renderer = null, tint = GOLD, s
   backdrop.name = 'backdrop'; backdrop.scale.setScalar(S); scene.add(backdrop);
 
   // the tint, linear, eased towards `target` by update(); the rim term's uniform is RIM.color
-  const target = linear(tint), cur = target.clone(), warm = linear(COL.warm);
+  const target = linear(tint), cur = target.clone(), warm = linear(COL.warm), white = new THREE.Color(1, 1, 1);
 
   // sky
   const skyU = { uTime: { value: 0 }, uTint: { value: cur.clone() } };
@@ -434,7 +442,7 @@ export function buildStageScene(tier = 'high', { renderer = null, tint = GOLD, s
   /** Write the current tint everywhere it shows. */
   const applyTint = () => {
     RIM.color.value.copy(cur); // stagelook's rim term: every pilot material reads this uniform
-    rim.color.copy(cur);
+    rim.color.copy(cur).lerp(white, RIM_LIGHT_WHITE);
     skyU.uTint.value.copy(cur);
     stripMat.color.copy(cur).multiplyScalar(2.2);
     poolMat.color.copy(cur).lerp(warm, 0.6);
@@ -465,11 +473,12 @@ export function buildStageScene(tier = 'high', { renderer = null, tint = GOLD, s
     placeConfetti();
   }
 
-  function burst() {
+  function burst({ share = 0.5, lift = 1 } = {}) {
+    const every = Math.max(1, Math.round(1 / Math.min(1, Math.max(share, 1e-3))));
     bits.forEach((b, i) => {
-      if (i % 2) return;
+      if (i % every) return;
       b.p.set((rand() - 0.5) * 1.5, 1.2, (rand() - 0.5) * 1.5);
-      b.v.set((rand() - 0.5) * 5, 3 + rand() * 4, (rand() - 0.5) * 5);
+      b.v.set((rand() - 0.5) * 5 * lift, (3 + rand() * 4) * lift, (rand() - 0.5) * 5 * lift);
     });
   }
 
