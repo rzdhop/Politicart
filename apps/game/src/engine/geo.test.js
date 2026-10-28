@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
-import { bakeVertexColours, capsule, capsuleTriangles, countMeshes, countTriangles, geometryTriangles, mergeByMaterial } from './geo.js';
+import { bakeVertexColours, capsule, capsuleTriangles, countMeshes, countTriangles, finishOf, geometryTriangles, mergeByMaterial, mergeInWorld } from './geo.js';
 
 describe('capsule', () => {
   it.each([[4, 8, 1], [12, 32, 1], [1, 3, 1], [6, 16, 3], [12, 24, 2]])('has three\'s triangle count, 2 * radial * (2 * cap + height), for cap %i radial %i height %i', (cap, radial, hs) => {
@@ -210,5 +210,39 @@ describe('bakeVertexColours', () => {
 
   it('needs a vertex-coloured target', () => {
     expect(() => bakeVertexColours(new THREE.Group(), new THREE.MeshStandardMaterial())).toThrow(/vertexColors/);
+  });
+
+  it('picks a target per mesh with finishOf: one per finish, nothing for what is not a plain lit material', () => {
+    const root = new THREE.Group(), geo = new THREE.BoxGeometry();
+    const red = new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 0.85, metalness: 0.05 }), blue = new THREE.MeshStandardMaterial({ color: 0x0000ff, roughness: 0.85, metalness: 0.05 });
+    const glass = new THREE.MeshStandardMaterial({ color: 0x223344, roughness: 0.2, metalness: 0.4 }), map = new THREE.MeshStandardMaterial({ map: new THREE.Texture() });
+    const glow = new THREE.MeshStandardMaterial({ emissive: 0x331100 }), see = new THREE.MeshStandardMaterial({ transparent: true, opacity: 0.5 }), lamp = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const parts = [red, blue, glass, map, glow, see, lamp].map(m => { const o = new THREE.Mesh(geo, m); root.add(o); return o; });
+    bakeVertexColours(root, finishOf);
+    const [a, b, c, ...rest] = parts;
+    expect(a.material).toBe(b.material);                                   // the same finish: one material
+    expect(a.material).toMatchObject({ vertexColors: true, roughness: 0.85, metalness: 0.05 });
+    expect(a.material.color.getHex()).toBe(0xffffff);
+    expect(c.material).not.toBe(a.material); expect(c.material).toMatchObject({ roughness: 0.2, metalness: 0.4 });
+    expect(rest.map(o => o.material)).toEqual([map, glow, see, lamp]);   // a map, a glow, transparency, an unlit light: left alone
+    expect(b.geometry.attributes.color.getZ(0)).toBe(1);
+    expect(finishOf(red)).toBe(a.material);                                 // shared across calls
+    mergeByMaterial(root);
+    expect(countMeshes(root)).toBe(6);
+  });
+});
+
+describe('mergeInWorld', () => {
+  it('merges meshes where they stand, under any parent, non-uniform scales included', () => {
+    const world = new THREE.Group(), decor = new THREE.Group(); decor.scale.set(3, 1, 3); world.add(decor);
+    const m = new THREE.MeshStandardMaterial(), a = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), m), b = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), m);
+    a.position.set(2, 0, 0); a.rotation.x = 0.4; decor.add(a); b.position.set(-5, 1, 2); world.add(b);
+    world.updateMatrixWorld(true);
+    const corners = o => { const p = o.geometry.attributes.position, out = []; for (let i = 0; i < p.count; i++) out.push(new THREE.Vector3().fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld).toArray().map(v => v.toFixed(5)).join()); return out; };
+    const before = [...corners(a), ...corners(b)];
+    const merged = mergeInWorld([a, b]); world.add(merged); world.updateMatrixWorld(true);
+    expect(merged.material).toBe(m);
+    expect(corners(merged)).toEqual(before);
+    expect(countTriangles(merged)).toBe(24);
   });
 });
