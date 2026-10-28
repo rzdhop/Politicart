@@ -1,15 +1,18 @@
 // The kart mesh renders a kart style (kartstyle.js), headless as the server
 // builds it (DEC-014). The userData parts are a contract with physics, which
 // spins every wheel and steers wheels 0 and 1, so every variant must keep them.
+import { createHash } from 'node:crypto';
+
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { CHARACTERS } from './data.js';
 import { buildKart } from './kart.js';
-import { builtinStyle, defaultStyle, EXHAUSTS, MASTS, mergeStyle, NOSES, SKINS, SPOILERS, STICKERS, UNDERGLOWS, WHEELS } from './kartstyle.js';
+import { builtinStyle, defaultStyle, EXHAUSTS, MASTS, mergeStyle, NOSES, SKINS, SPOILERS, STICKERS, TRAILS, UNDERGLOWS, WHEELS } from './kartstyle.js';
 import { resetMachine } from './machine.js';
 import { framePayload } from './payload.js';
+import { mat } from './primitives.js';
 import { startField } from './race.js';
-import { CFG, G } from './state.js';
+import { CFG, G, getPoly, togglePoly } from './state.js';
 
 const victor = CHARACTERS.find(c => c.id === 'victor');
 const style = partial => mergeStyle(builtinStyle(victor), partial);
@@ -170,6 +173,103 @@ describe('buildKart', () => {
       expect(stock).toBeLessThanOrEqual(78 + 26);
       expect(max).toBeLessThanOrEqual(78 + 45);
     });
+  });
+});
+
+// ---------- The race profile is the pre-change kart (stage 6) ----------
+// A fingerprint of everything a race kart is made of, in build order: every
+// object (type, name, visibility, shadow flags, transform, parent), every
+// mesh's geometry (type, parameters, triangle count, a checksum of its
+// positions, shared instances), its material (type, colour, roughness,
+// metalness, blending, opacity, side, map, shared instances, and whether it is
+// the very primitives.mat() instance for its colour and roughness) and what
+// each userData key points at. RACE_GOLDEN holds the hashes taken from
+// kart.js before the stage profile existed, per candidate over a set of
+// Garage styles and both detail levels; the race profile must reproduce them.
+const r5 = v => Math.round(v * 1e5) / 1e5;
+function fingerprint(k) {
+  const index = new Map(), geos = new Map(), mats = new Map(), lines = [];
+  let tris = 0, count = 0;
+  k.traverse(o => {
+    index.set(o, index.size);
+    const t = [o.type, o.name, o.visible ? 1 : 0, o.castShadow ? 1 : 0, o.receiveShadow ? 1 : 0, o.renderOrder, o.rotation.order,
+      ...o.position.toArray().map(r5), ...o.quaternion.toArray().map(r5), ...o.scale.toArray().map(r5), o.parent ? index.get(o.parent) : -1];
+    if (o.isMesh) {
+      count++;
+      const g = o.geometry, p = g.attributes.position.array;
+      if (!geos.has(g)) geos.set(g, geos.size);
+      let sum = 0; for (let i = 0; i < p.length; i++) sum += p[i] * ((i % 3) * 2 + 1);
+      const n = (g.index ? g.index.count : g.attributes.position.count) / 3; tris += n;
+      const m = o.material;
+      if (!mats.has(m)) mats.set(m, mats.size);
+      const isMat = m.type === 'MeshStandardMaterial' && !m.map && m === mat(m.color.getHex(), m.roughness);
+      t.push('geo', geos.get(g), g.type, JSON.stringify(g.parameters ?? null), n, r5(sum),
+        'mat', mats.get(m), m.type, m.color ? m.color.getHex() : '', r5(m.roughness ?? -1), r5(m.metalness ?? -1), m.transparent ? 1 : 0, r5(m.opacity),
+        m.blending, m.side, m.depthWrite ? 1 : 0, m.map ? 'map:' + m.map.name : '', isMat ? 'mat()' : '');
+    }
+    lines.push(t.join(','));
+  });
+  const ref = x => (x && x.isObject3D ? index.get(x) : typeof x === 'function' ? 'fn' : x === null ? 'null' : typeof x);
+  lines.push('userData:' + Object.keys(k.userData).sort().map(key => { const v = k.userData[key]; return key + '=' + (Array.isArray(v) ? '[' + v.map(ref).join(' ') + ']' : ref(v)); }).join(';'));
+  return { meshes: count, tris, text: lines.join('\n') };
+}
+const sha = s => createHash('sha1').update(s).digest('hex').slice(0, 16);
+
+/** The four Garage presets of the visual sheet (over the built-in style). */
+const PRESETS = {
+  stock: {},
+  podium: { wheels: 'chrome', spoiler: 'wing', sticker: 'tricolore', number: 7 },
+  rare: { wheels: 'gold', exhaust: 'quad', nose: 'bull', skin: 'stripes', sticker: 'marianne', mast: 'europe', underglow: 'blue', number: 12, accent: '#f2c14e' },
+  incredible: { wheels: 'offroad', spoiler: 'wing', sticker: 'etoile', exhaust: 'turbine', underglow: 'rainbow', mast: 'pirate', nose: 'ram', skin: 'flames', trail: 'laser', number: 99 },
+};
+/** Every option of every Garage field (colours aside). */
+const OPTIONS = { wheels: WHEELS, spoiler: SPOILERS, sticker: STICKERS, exhaust: EXHAUSTS, underglow: UNDERGLOWS, mast: MASTS, nose: NOSES, skin: SKINS, trail: TRAILS, pods: [true, false], number: [null, 0, 7, 99] };
+/** The styles a candidate is fingerprinted with: the default, the presets, a recolour, and on the three bodies every option of every field. */
+function stylesOf(c) {
+  const base = mergeStyle(builtinStyle(c));
+  const out = [['default', defaultStyle(c)], ...Object.entries(PRESETS).map(([n, p]) => [n, { ...base, ...p }]), ['colours', { ...base, body: '#abcdef', accent: '#123456' }]];
+  if (c.id === 'victor' || c.tractor || c.cargo) for (const [f, vs] of Object.entries(OPTIONS)) for (const v of vs) out.push([f + ':' + v, { ...base, [f]: v }]);
+  return out;
+}
+const withPoly = (level, fn) => { if (getPoly() !== level) togglePoly(); try { return fn(); } finally { if (getPoly() !== 'high') togglePoly(); } };
+/** One hash per candidate (its styles and a livery, on both detail levels), with the default kart's size on 'high' in the clear. */
+function raceFingerprints(build) {
+  const out = {};
+  for (const c of CHARACTERS) {
+    const parts = []; let size = '';
+    for (const level of ['high', 'low']) withPoly(level, () => {
+      for (const [name, s] of stylesOf(c)) {
+        const f = fingerprint(build(c, s)); parts.push(level + '/' + name + '\n' + f.text);
+        if (level === 'high' && name === 'default') size = f.meshes + ' meshes ' + f.tris + ' tris';
+      }
+      parts.push(level + '/livery\n' + fingerprint(build({ ...c, livery: 'data:image/png;base64,AAAA' }, { ...mergeStyle(builtinStyle(c)), spoiler: 'wing' })).text);
+    });
+    out[c.id] = size + ' #' + sha(parts.join('\n\n'));
+  }
+  return out;
+}
+const RACE_GOLDEN = {
+  aymeric: '110 meshes 24186 tris #022841dcb8b6c55a',
+  bernadette: '102 meshes 27110 tris #bcf066e9aa9fdc37',
+  capucine: '83 meshes 26462 tris #25a199b17d98d6dd',
+  gaspard: '114 meshes 27310 tris #ef709feb8d1fe2be',
+  gege: '104 meshes 25726 tris #2401a46c98214a73',
+  hubert: '103 meshes 25630 tris #f6fbd536b0251c3b',
+  jeanmi: '105 meshes 25710 tris #38aaaaea1f126d62',
+  kevin: '103 meshes 27130 tris #a75e5bbe6a044a93',
+  lucie: '101 meshes 24198 tris #ff59baca525135b7',
+  lulu: '110 meshes 40790 tris #003a26a17f5f0956',
+  martine: '105 meshes 25794 tris #284a57cfeced7867',
+  maurice: '107 meshes 28774 tris #e99876ec3a41699e',
+  odile: '105 meshes 28702 tris #48073ff55aad7638',
+  patrick: '94 meshes 22674 tris #017a2984e0a5c022',
+  thierry: '111 meshes 24510 tris #662bf30fa14f98aa',
+  victor: '101 meshes 24042 tris #9cbebc558cc404e5',
+};
+
+describe('the race profile', () => {
+  it('is the pre-change kart: same meshes, geometries, mat() instances and userData, for every candidate and Garage style', () => {
+    expect(raceFingerprints((c, s) => buildKart(c, s))).toEqual(RACE_GOLDEN);
   });
 });
 
