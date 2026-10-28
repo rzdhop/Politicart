@@ -15,8 +15,15 @@ Current state only. History lives in git.
   software WebGL on `main` too (same set), so stages are judged against it.
   Playwright here needs `executablePath` pointed at the installed
   `/opt/pw-browsers/chromium-1243` (the repo's 1.64.1 wants build 1248).
-- **Next:** wave 1 = stage 1 (stage look, fabrics, geometry) || stage 2
-  (look specs x16) || stage 3 (design-system parts).
+- **Wave 1 done:** stage 1 (stage look, fabrics, geometry helpers; merged
+  as `4eb65ca`), stage 2 (3D look specs for the 16 candidates; `2199f54`),
+  stage 3 (design-system parts for the 3D select; `7485372`). Tier 1 on the
+  tip: ui 369 + 8 skipped, game 600, server 166, typecheck clean. E2E: 40
+  passed, 19 failed of 59: the baseline's 18 plus R-05 "still races after
+  switching to light graphics", a countdown-timing flake that passes 1 in 5
+  alone both on the tip and on stage 0 (`5ad0d14`), so not a regression.
+- **Next:** wave 2 = stage 4 (hemicycle scene) || stage 5 (pilot builder) ||
+  stage 6 (kart stage profile).
 
 ## Previous task -- 2026-10-27: politicoins, the Politibox, grades, parts, trails, two circuits, stats
 
