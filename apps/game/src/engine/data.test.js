@@ -42,9 +42,9 @@ describe('the cast', () => {
 
   it('gives each candidate the power of the politician parodied (DEC-028)', () => {
     const power = id => CHARACTERS.find(c => c.id === id).power;
-    expect(power('capucine')).toMatchObject({ id: 'deconstruction', name: 'Déconstruction' });    // Sandrine Rousseau, not a generic ZFE
+    expect(power('capucine')).toMatchObject({ id: 'deconstruction', name: 'Déconstruction' });    // the parodied ecologist's own word, not a generic ZFE
     expect(power('bernadette')).toMatchObject({ id: 'chatons', name: 'Lâcher de chatons' });       // the parodied leader and her cats
-    expect(power('patrick')).toMatchObject({ id: 'fauchage', name: 'Fauchage volontaire' });       // José Bové the GMO mower
+    expect(power('patrick')).toMatchObject({ id: 'fauchage', name: 'Fauchage volontaire' });       // the parodied farmer, the GMO mower
     expect(power('martine').desc).not.toMatch(/\belle\b/);                                        // the parodied minister is a man
     const ids = CHARACTERS.map(c => c.power.id);
     expect(new Set(ids).size).toBe(ids.length);

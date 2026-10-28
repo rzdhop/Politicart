@@ -218,35 +218,57 @@ describe('no name and no copy', () => {
 
 // ---------- The real-name scan (DEC-023, Q11) ----------
 //
-// The design template's cast carries eleven real politicians' names. None may
-// reach the game's or the library's source: not in copy, not in a comment,
-// not as an identifier. Matching is accent- and case-insensitive on whole
-// words, with any spacing, hyphen or underscore (or none) between the parts,
-// so "Mélenchon", "jean_luc_melenchon" and "lePen" all match while the game's
-// pun names ("Gérald Darmalin", "Bruno Le Maigre") do not. A surname that is
-// also a common word or first name ("Philippe", "Bertrand", "le maire") only
-// matches with its first name, or written as one word ("lemaire").
+// Every candidate is a pun on a real politician, and the design template's
+// cast carries real names too: the people behind all sixteen candidates and
+// the template's six donors (Q1). None may reach the game's or the library's
+// source or the end-to-end tests: not in copy, not in a comment, not as an
+// identifier, so a pun name can never slip back to the real one. Matching is
+// accent- and case-insensitive on whole words, with any spacing, hyphen or
+// underscore (or none) between the parts, so "Mélenchon", "jean_luc_melenchon" and "lePen"
+// all match while the pun names ("Gérald Darmalin", "Bruno Le Maigre") do
+// not. A surname that is also a common word, a first name or a pun's stem
+// ("Philippe", "Bertrand", "le maire", "Joly", "Lassalle") only matches with
+// its first name (`alone: false`), or a multi-word one written as one word
+// ("lemaire"). Two puns keep the real name whole and add to it ("Eva
+// Joly-Jumper", "Jean Lassalle-des-Fêtes"): `pun` is that tail, and the full
+// name matches only when the tail does not follow it. Whole words keep
+// "Valls" out of "intervalls" and "Bové" out of "above".
 //
-// This list is the only place the names may appear; the scan skips this file.
+// This list is the only place the names may appear; the scan skips this file,
+// and nothing else.
 const REAL_NAMES = [
-  { first: 'Marine', last: 'Le Pen', alone: true },
-  { first: 'Jordan', last: 'Bardella', alone: true },
+  // the people behind the sixteen candidates, in roster order
+  { first: 'Emmanuel', last: 'Macron', alone: true },          // Emmanuel Macaron
+  { first: 'Philippe', last: 'Martinez', alone: true },        // Philippe Martini
+  { first: 'Jean', last: 'Lassalle', alone: false, pun: 'des-Fêtes' },   // Jean Lassalle-des-Fêtes
+  { first: 'Sandrine', last: 'Rousseau', alone: true },        // Sandrine Ruisseau
+  { first: 'Gérard', last: 'Larcher', alone: true },           // Gérard L'Archiduc
+  { first: 'Jean-Luc', last: 'Mélenchon', alone: true },       // Jean-Luc Mélèche
+  { first: 'Marine', last: 'Le Pen', alone: true },            // Marine Le Stylo
+  { first: 'Jordan', last: 'Bardella', alone: true },          // Jordan Mortadella
+  { first: 'Eva', last: 'Joly', alone: false, pun: 'Jumper' }, // Eva Joly-Jumper
+  { first: 'José', last: 'Bové', alone: true },                // José Bovin
+  { first: 'Nathalie', last: 'Arthaud', alone: true },         // Nathalie Artichaut
+  { first: 'Bruno', last: 'Le Maire', alone: false },          // Bruno Le Maigre
+  { first: 'Éric', last: 'Zemmour', alone: true },             // Éric Zemmoule
+  { first: 'Gérald', last: 'Darmanin', alone: true },          // Gérald Darmalin
+  { first: 'Michel', last: 'Barnier', alone: true },           // Michel Bananier
+  { first: 'Manuel', last: 'Valls', alone: true },             // Manuel Valse
+  // the template's donors, who are no candidate
   { first: 'Édouard', last: 'Philippe', alone: false },
   { first: 'Gabriel', last: 'Attal', alone: true },
-  { first: 'Jean-Luc', last: 'Mélenchon', alone: true },
   { first: 'Raphaël', last: 'Glucksmann', alone: true },
   { first: 'François', last: 'Ruffin', alone: true },
   { first: 'Laurent', last: 'Wauquiez', alone: true },
   { first: 'Xavier', last: 'Bertrand', alone: false },
-  { first: 'Gérald', last: 'Darmanin', alone: true },
-  { first: 'Bruno', last: 'Le Maire', alone: false },
 ];
 
 const fold = s => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 const parts = s => fold(s).split(/[\s-]+/);
-const words = ws => new RegExp(`\\b${ws.join('[\\s_-]*')}\\b`);
-const PATTERNS = REAL_NAMES.flatMap(({ first, last, alone }) => [
-  words([...parts(first), ...parts(last)]),
+const SEP = '[\\s_-]*';
+const words = (ws, pun) => new RegExp(`\\b${ws.join(SEP)}\\b${pun ? `(?!${SEP}${parts(pun).join(SEP)})` : ''}`);
+const PATTERNS = REAL_NAMES.flatMap(({ first, last, alone, pun }) => [
+  words([...parts(first), ...parts(last)], pun),
   ...(alone ? [words(parts(last))] : []),
   ...(parts(last).length > 1 ? [new RegExp(`\\b${parts(last).join('')}\\b`)] : []),
 ]);
@@ -255,6 +277,18 @@ const PATTERNS = REAL_NAMES.flatMap(({ first, last, alone }) => [
 function realNames(text) {
   const t = fold(text);
   return PATTERNS.filter(re => re.test(t)).map(re => re.source);
+}
+
+/** A name in the spellings code and copy use: as written, shouted, unaccented, snake, kebab, camel and joined. */
+function spellings(name) {
+  const ws = name.split(/[\s-]+/);
+  const bare = fold(name);
+  return [
+    name, name.toUpperCase(), name.toLowerCase(), bare,
+    ws.join('_'), fold(ws.join('_')), ws.join('-'), fold(ws.join('-')).toUpperCase(),
+    fold(ws[0]) + ws.slice(1).map(w => fold(w)[0].toUpperCase() + fold(w).slice(1)).join(''),
+    fold(ws.join('')),
+  ];
 }
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -272,30 +306,44 @@ function* sourceFiles(dir) {
 
 describe('the real-name scan', () => {
   it('finds every real name in its plain, accented, joined and shouted forms', () => {
+    for (const { first, last, alone } of REAL_NAMES) {
+      for (const s of spellings(`${first} ${last}`)) expect(realNames(s), s).not.toEqual([]);
+      if (alone) for (const s of spellings(last)) expect(realNames(s), s).not.toEqual([]);
+    }
     const hits = [
       'Marine Le Pen', 'LE PEN', 'lePen', 'Jordan Bardella', 'bardella', 'Édouard Philippe', 'edouard_philippe', 'Gabriel Attal', 'attal',
       'Jean-Luc Mélenchon', 'jean luc melenchon', 'MÉLENCHON', 'Raphaël Glucksmann', 'François Ruffin', 'ruffin', 'Laurent Wauquiez', 'wauquiez',
       'Xavier Bertrand', 'xavierBertrand', 'Gérald Darmanin', 'darmanin', 'Bruno Le Maire', 'brunoLeMaire', 'lemaire',
-      '// the cats of Marine Le Pen', "{id:'melenchon'}",
+      'macron', 'MACRON', 'Philippe Martinez', 'martinez', 'Jean Lassalle', 'jean_lassalle', 'JEAN LASSALLE', 'jeanLassalle',
+      'Sandrine Rousseau', 'rousseau', 'Gérard Larcher', 'Gerard Larcher', 'larcher', 'Eva Joly', 'EVA JOLY', 'eva_joly', 'evaJoly',
+      'José Bové', 'Jose Bove', 'BOVÉ', 'bove', 'Nathalie Arthaud', 'arthaud', 'Éric Zemmour', 'Eric Zemmour', 'zemmour', 'Michel Barnier',
+      'barnier', 'Manuel Valls', 'VALLS', 'valls', 'manuelValls',
+      '// the cats of Marine Le Pen', "{id:'melenchon'}", '/* after Emmanuel Macron */', "'Jean Lassalle, des fêtes'",
+      'Jean Lassalle-des', 'Jean Lassalle or Jean Lassalle-des-Fêtes', 'Eva Joly or Eva Joly-Jumper', 'Eva Joly, Jumper', '(valls)',
     ];
     for (const s of hits) expect(realNames(s), s).not.toEqual([]);
   });
 
   it('lets the game\'s pun names, titles and ordinary words through', () => {
+    for (const c of CHARACTERS) {
+      for (const s of spellings(c.name)) expect(realNames(s), s).toEqual([]);
+      for (const copy of [c.name, c.title, c.quote, c.power.name, c.power.desc]) expect(realNames(copy), copy).toEqual([]);
+    }
     const misses = [
       'Gérald Darmalin', 'Bruno Le Maigre', 'Jean-Luc Mélèche', 'Marine Le Stylo', 'Jordan Mortadella', 'Philippe Martini', 'Le maire de province',
       'Le maire bâtisseur', 'Prend la parole pendant 3 s', 'Bertrand', 'Philippe', 'battalion', 'ruffing', 'repentir', 'la parole penche',
+      'Emmanuel Macaron', 'Jean Lassalle-des-Fêtes', 'jean-lassalle-des-fetes', 'JEAN LASSALLE-DES-FÊTES', 'jeanLassalleDesFetes', 'jean_lassalle_des_fetes',
+      'Lassalle', 'lassalle-des-fetes', 'Sandrine Ruisseau', "Gérard L'Archiduc", 'Gérard L’Archiduc', "l'archer", 'Eva Joly-Jumper', 'eva_joly_jumper',
+      'EVA JOLY JUMPER', 'evaJolyJumper', 'Joly', 'joly-jumper', 'jolie', 'José Bovin', 'above', 'bovine', 'Nathalie Artichaut', 'Éric Zemmoule',
+      'Michel Bananier', 'Manuel Valse', 'valse', 'intervalls', 'vallse', 'martinet', 'macronutrient',
     ];
     for (const s of misses) expect(realNames(s), s).toEqual([]);
-    for (const c of CHARACTERS) {
-      for (const copy of [c.name, c.title, c.quote, c.power.name, c.power.desc]) expect(realNames(copy), copy).toEqual([]);
-    }
   });
 
-  it('finds no real name anywhere in apps/ or packages/', () => {
+  it('finds no real name anywhere in apps/, packages/ or e2e/', () => {
     const found = [];
     let files = 0;
-    for (const top of ['apps', 'packages']) {
+    for (const top of ['apps', 'packages', 'e2e']) {
       for (const file of sourceFiles(join(ROOT, top))) {
         files++;
         readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
