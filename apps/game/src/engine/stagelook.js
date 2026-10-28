@@ -96,19 +96,34 @@ export function setRimTint(c, strength) {
 // r128's physical/standard fragment shader ends with this line where r154+
 // has #include <opaque_fragment>; the rim is added to outgoingLight before it.
 const RIM_ANCHOR = 'gl_FragColor = vec4( outgoingLight, diffuseColor.a );';
-const RIM_TERM = 'float rimF = pow( 1.0 - clamp( dot( normalize( normal ), normalize( vViewPosition ) ), 0.0, 1.0 ), 3.0 );\n\toutgoingLight += uRimC * rimF * uRimS;\n\t';
+const rimTerm = (k = 1) => 'float rimF = pow( 1.0 - clamp( dot( normalize( normal ), normalize( vViewPosition ) ), 0.0, 1.0 ), 3.0 );\n\toutgoingLight += uRimC * rimF * uRimS' + (k === 1 ? '' : ' * ' + k.toFixed(3)) + ';\n\t';
 let rimWarned = false;
-/** The onBeforeCompile hook every rim material shares (one function, one program key). */
+/** The onBeforeCompile hook every rim material shares (one function, one program key). Three passes the renderer second: never read it. */
 export function injectRim(shader) {
+  rimInto(shader, 1);
+}
+/** Add the rim term, `k` times the shared strength, to one program's shader. */
+function rimInto(shader, k) {
   if (!shader.fragmentShader.includes(RIM_ANCHOR)) {
     if (!rimWarned) { rimWarned = true; console.warn('stagelook: rim anchor not found, the rim light is off (three upgraded?)'); }
     return;
   }
   shader.uniforms.uRimC = RIM.color;
   shader.uniforms.uRimS = RIM.strength;
-  shader.fragmentShader = 'uniform vec3 uRimC;\nuniform float uRimS;\n' + shader.fragmentShader.replace(RIM_ANCHOR, RIM_TERM + RIM_ANCHOR);
+  shader.fragmentShader = 'uniform vec3 uRimC;\nuniform float uRimS;\n' + shader.fragmentShader.replace(RIM_ANCHOR, rimTerm(k) + RIM_ANCHOR);
 }
 const rimKey = () => 'stage-rim';
+/**
+ * A partial rim: the hook and program key for a material that takes `k` of
+ * the shared rim (skin, eyes and teeth keep their own colour under a strong
+ * tint). One hook per k, so equal strengths share a program; retinting still
+ * only writes the shared uniforms.
+ */
+const partial = new Map();
+function partialRim(k) {
+  if (!partial.has(k)) partial.set(k, { hook: shader => rimInto(shader, k), key: () => 'stage-rim-' + k.toFixed(3) });
+  return partial.get(k);
+}
 
 // ---------- The material factory ----------
 
@@ -169,7 +184,9 @@ function build(kind, spec) {
     if (spec.sheen) m.sheen = linear(spec.sheenColor == null ? 0xffffff : spec.sheenColor).multiplyScalar(spec.sheen);
   }
   m.envMapIntensity = spec.envMapIntensity != null ? spec.envMapIntensity : ENV_INTENSITY[kind === 'phys' ? 'high' : 'low'];
-  if (spec.rim !== false) { m.onBeforeCompile = injectRim; m.customProgramCacheKey = rimKey; }
+  const rim = spec.rim === undefined || spec.rim === true ? 1 : spec.rim === false ? 0 : Math.max(0, Math.min(1, +spec.rim));
+  if (rim === 1) { m.onBeforeCompile = injectRim; m.customProgramCacheKey = rimKey; }
+  else if (rim > 0) { const p = partialRim(rim); m.onBeforeCompile = p.hook; m.customProgramCacheKey = p.key; }
   m.userData.stage = kind;
   return m;
 }
@@ -188,7 +205,8 @@ function make(kind, spec) {
  * The spec uses the design's vocabulary: colours as authored sRGB hex
  * (converted to linear here), `sheen` as a weight with `sheenColor`,
  * `normalScale` as a number or [x, y], `rim: false` to leave the rim term out
- * (the hemicycle's own surfaces). envMapIntensity defaults to the tier's.
+ * (the hemicycle's own surfaces) or a number in (0, 1) for the share of the
+ * rim this material takes (the pilots' skin). envMapIntensity defaults to the tier's.
  * Equal specs return the same instance, so equal parts merge into one draw;
  * the name does not count (the first one wins).
  */
