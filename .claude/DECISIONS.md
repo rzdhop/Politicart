@@ -983,3 +983,22 @@ sessions.
 
 **Consequence.** The select screen is usable at once and fills in. E2E
 specs that need final portraits wait on `data-portrait`.
+
+## DEC-046 -- The select stage stands still on a GPU that cannot keep up
+
+**Context.** In software GL a stage frame costs 1 to 1.6 s. With software
+compositing the browser reads the canvas back every frame, so every UI
+action waited on the GPU: Garage clicks took 1 to 1.9 s to paint. The same
+holds on real machines whose GPU is blocklisted (SwiftShader, llvmpipe,
+Windows' Basic Render Driver) and on very weak GPUs.
+
+**Decision.** The stage measures its own frame cost. At 100 ms or more per
+frame (the usual threshold for a response to feel instant) it draws only
+when its picture changes, one frame after the input, and behaves like
+reduced motion. The renderer name is only a first guess until three frames
+are measured. Shader programs stay alive while the stage exists and are
+compiled ahead, the Garage parts included.
+
+**Consequence.** The UI answers in 30 to 58 ms even on software GL.
+Animations are skipped on such machines. Nothing changes on a GPU that
+keeps up.
