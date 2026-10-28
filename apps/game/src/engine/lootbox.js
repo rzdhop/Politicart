@@ -190,18 +190,24 @@ function additive(colour, opacity) {
   extraMats.push(m); return m;
 }
 
-/** A candidate: their kart, driver aboard. */
+/** A candidate: their kart, their race pilot aboard, its live props (a gyrophare, a weathervane) and the kart's moving parts turning. */
 function charPrize(drop) {
   const k = buildKart(charDef(drop.id)); S.prize.add(k);
-  return dt => { k.rotation.y += dt * 0.9; };
+  let a = 0;
+  return dt => { a += dt; k.rotation.y += dt * 0.9; for (const f of k.userData.anim) f(dt, a); };
 }
 
-/** A part: a bare kart in the built-in look with that option fitted, and a glowing ring orbiting it. */
+/**
+ * A part: a bare kart in the built-in look with that option fitted, and a
+ * glowing ring orbiting it. No driver, as ever: the kart is built without
+ * its pilot (whose kart-slot props and steering wheel would go with it),
+ * and the empty seat anchor stays hidden like the driver always was.
+ */
 function partPrize(drop, colour) {
   const p = parsePartKey(drop.id) ?? { category: 'wheels', value: 'gold' };
   const def = CHARACTERS[0];
-  const k = buildKart(def, mergeStyle(builtinStyle(def), { [p.category]: p.value }));
-  if (k.userData.driver) k.userData.driver.visible = false;
+  const k = buildKart(def, mergeStyle(builtinStyle(def), { [p.category]: p.value }), { pilot: false, steering: false });
+  k.userData.driver.visible = false;
   const [x, y, z, r] = PART_SPOT[p.category] ?? PART_SPOT.skin;
   const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.05, 8, 40), additive(colour, 0.9)); ring.position.set(x, y, z); k.add(ring);
   const halo = new THREE.Mesh(new THREE.SphereGeometry(r * 0.55, 16, 12), additive(colour, 0.22)); halo.position.set(x, y, z); k.add(halo);

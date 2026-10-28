@@ -9,6 +9,7 @@ import { LINES, setLineRng } from './lines.js';
 import { resetMachine, transition } from './machine.js';
 import { BUMP_TIME, DIRECTIVE_CAP, kartCollisions, updateKart } from './physics.js';
 import { GOD_COOLDOWN, usePower } from './powers.js';
+import { buildKart } from './kart.js';
 import { isFoe } from './teams.js';
 import { startField } from './race.js';
 import { G } from './state.js';
@@ -77,6 +78,34 @@ describe('spin-outs', () => {
     for (let n = 0; n < 20; n++) updateKart(k, STEP);   // mid-spin
     k.item = 'immunite'; k.itemRolling = 0; useItem(k);
     expect(k.stun).toBe(0); expect(roadDot(k)).toBeGreaterThan(0.99);
+  });
+});
+
+describe('the stunned driver\'s bob', () => {
+  beforeEach(() => race({ maurice: 'patrick' }));
+  /** The driver's lowest and highest y over a stun and its end, posed as a race poses it. */
+  function bob(k) {
+    place(k, 200, 0, 0); stunKart(k, 1.0);
+    const ys = [];
+    for (let n = 0; n < 1.2 * 60; n++) { G.time += STEP; updateKart(k, STEP); ys.push(k.mesh.userData.driver.position.y); }
+    return { min: Math.min(...ys), max: Math.max(...ys), end: ys.at(-1) };
+  }
+
+  it('bobs the race pilot up from its rest at MOUNT, on the standard kart and the tractor alike', () => {
+    for (const k of [G.karts[0], G.karts.find(o => o.def.tractor)]) {
+      expect(k.mesh.userData.driver.position.y).toBe(0.75);
+      const b = bob(k);
+      expect(b.min).toBeCloseTo(0.75, 9); expect(b.max).toBeGreaterThan(0.75 + 0.25); expect(b.max).toBeLessThanOrEqual(0.75 + 0.3 + 1e-9);
+      expect(b.end).toBe(0.75);
+    }
+  });
+
+  it('bobs a driver seated higher from its own rest, instead of dropping it to 0.75', () => {
+    const k = G.karts.find(o => o.def.tractor);
+    k.mesh = buildKart(k.def, k.style, { pilot: false });   // the tractor's seat anchor sits at 1.05, as its legacy driver did
+    expect(k.mesh.userData.driver.position.y).toBe(1.05);
+    const b = bob(k);
+    expect(b.min).toBeCloseTo(1.05, 9); expect(b.max).toBeGreaterThan(1.05 + 0.25); expect(b.end).toBe(1.05);
   });
 });
 

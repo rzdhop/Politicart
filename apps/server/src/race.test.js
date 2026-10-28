@@ -1,6 +1,9 @@
 // A whole race through the real worker thread, stepped as fast as possible.
 import { describe, expect, it } from 'vitest';
 
+import { CHARACTERS } from '../../game/src/engine/data.js';
+import { buildKart } from '../../game/src/engine/kart.js';
+import { buildPilot } from '../../game/src/engine/pilot.js';
 import { Room } from './lobby.js';
 import { runRace } from './race.js';
 
@@ -108,3 +111,31 @@ describe('a race in a worker', () => {
     expect(pts.rouge).toBe(bob.points);
   }, 60_000);
 });
+
+// The server builds every kart of a grid in its race worker (DEC-014). The
+// race pilots (stage 8) are 'headless' there: the same userData, no geometry.
+// The budget (PLAN 4.2) is 5 ms for the six drivers; the karts' own parts are
+// the race's, pinned unchanged by kart.test.js, and cost about 7 ms more.
+// Timed as the fastest of a few runs, so a busy machine does not fail it.
+describe('building a grid headless', () => {
+  const grid = ['victor', 'patrick', 'capucine', 'martine', 'thierry', 'kevin'].map(id => CHARACTERS.find(c => c.id === id));
+  const fastest = (fn, runs = 8) => { let best = Infinity; for (let r = 0; r < runs; r++) { const t = performance.now(); fn(); best = Math.min(best, performance.now() - t); } return best; };
+
+  it('seats a headless pilot in every kart: the driver contract, no geometry', () => {
+    for (const def of grid) {
+      const d = buildKart(def).userData.driver;
+      expect(d.userData).toMatchObject({ lod: 'headless', id: def.id, driver: d });
+      let meshes = 0; d.traverse(o => { if (o.isMesh) meshes++; });
+      expect(meshes).toBe(0);
+    }
+  });
+
+  it('builds the six drivers in under 5 ms, and the whole grid well under the legacy drivers\' cost', () => {
+    for (const def of grid) buildKart(def);   // a race worker's first grid pays the JIT; time the steady cost
+    const drivers = fastest(() => { for (const def of grid) buildPilot(def, 'headless'); });
+    const karts = fastest(() => { for (const def of grid) buildKart(def); });
+    expect(drivers).toBeLessThan(5);         // measured ~0.2 ms
+    expect(karts).toBeLessThan(20);          // measured 7 to 11 ms on a busy 4-core box, nearly all of it the kart's own parts; the legacy drivers took it to 25 to 35
+  });
+});
+
