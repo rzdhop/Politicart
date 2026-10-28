@@ -33,8 +33,29 @@ Current state only. History lives in git.
   - stage 5 pilots: stage <= 22.3k triangles / 18-25 draws, race-high
     <= 5.5k / <= 3, race-low <= 2.1k / <= 2.
   - stage 6 stage kart: 27-40 draws.
-- **Next:** owner review of the pilots' contact sheet; then stage 7 (stage
-  integration on select and garage).
+- **Stage 7 done:** the 3D stage on the select and Garage screens, with the
+  owner's pilot refinements (`5ba52ce`); merged as `da1ea50`, DEC-046.
+  Tier 1 on the merge: ui 369 + 8 skipped, game 807, server 166, typecheck
+  clean, no flakes. E2E: 49 passed, 21 failed of 70 in 40.5 min under load
+  from parallel agents (load average 11-15 on 4 cores). The 21 failures are
+  the baseline's 18 race-start specs (R-05 passed this run) plus 3 flakes
+  that pass alone: R-10 "shows the touch controls in a race and accelerates
+  by itself", Multijoueur "each player's Garage edits reach the other
+  player's screen", and R-23 "hands every tile a placeholder at once, then
+  every portrait within a minute". R-23 failed alone at load 15 (8 of 16
+  portraits in 60 s) and passed twice alone at load 4 (36.7 s, 35.7 s).
+  Measured budgets:
+  - high 106 draws, 81.2k triangles, 19 -> 29 programs; the Garage with the
+    laser trail 157 draws.
+  - phone 87 draws / 63k triangles.
+  - low 60 draws / 17.7k triangles / 16 -> 22 programs; the 6 extra are
+    Garage parts compiled ahead, accepted.
+  - portraits: all 16 in 10-32 s.
+  - frame governor (DEC-046): a stage costing at least 100 ms per frame
+    stands still and draws only when its picture changes. It is for really
+    slow GPUs; nothing changes on a GPU that keeps up.
+- **Next:** stage 8 (pilots in the race) || stage 9 (the go launch,
+  transitions, reduced motion); then stage 10.
 
 ## Previous task -- 2026-10-27: politicoins, the Politibox, grades, parts, trails, two circuits, stats
 
