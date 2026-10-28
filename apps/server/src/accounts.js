@@ -143,7 +143,7 @@ export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {},
     res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*', ...headers });
     res.end(JSON.stringify(body));
   };
-  // Per client address; behind a host's proxy (Render, Fly) that is the first X-Forwarded-For hop.
+  // Per client address; behind a host's proxy (Render) that is the first X-Forwarded-For hop.
   const addr = req => String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '?';
   /** Whether this address has used up its tries for now. */
   const blocked = req => { const t = tries.get(addr(req)); return !!t && Date.now() - t.since <= LOGIN_WINDOW_MS && t.n >= maxTries; };
