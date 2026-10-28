@@ -122,6 +122,35 @@ test.describe('R-23 the select stage', () => {
     });
   }
 
+  for (const [w, h] of [[844, 390], [667, 375]] as const) {
+    test.describe(`held sideways at ${w}x${h}`, () => {
+      test.use({ viewport: { width: w, height: h }, hasTouch: true, isMobile: true, reducedMotion: 'reduce' });
+
+      test('keeps the showcase pinned and whole at every scroll position, on the roster and in the Garage', async ({ page }) => {
+        test.setTimeout(150_000);
+        await play(page);
+        for (const [screen, showcase] of [['#s-select', '#showcase'], ['#s-garage', '#g-showcase']] as const) {
+          if (screen === '#s-garage') { await page.locator('#b-garage').click(); await expect(page.locator('#s-garage')).toBeVisible(); }
+          const seen: number[][] = [];
+          for (const at of [0, 0.5, 1]) {
+            const r = await page.evaluate(([s, c, f]) => {
+              const el = document.querySelector(s as string) as HTMLElement;
+              el.scrollTo(0, (el.scrollHeight - el.clientHeight) * (f as number));
+              const b = document.querySelector(c as string)!.getBoundingClientRect(), note = document.getElementById('note')!;
+              return { top: b.top, bottom: b.bottom, floor: note.hidden ? innerHeight : note.getBoundingClientRect().top, scrolls: el.scrollHeight > el.clientHeight };
+            }, [screen, showcase, at]);
+            expect(r.scrolls, `${screen} scrolls`).toBe(true);
+            expect(r.top, `${screen} at ${at}: the showcase's top`).toBeGreaterThanOrEqual(0);
+            expect(r.bottom, `${screen} at ${at}: the showcase's bottom, clear of the note`).toBeLessThanOrEqual(r.floor);
+            seen.push([Math.round(r.top), Math.round(r.bottom)]);
+          }
+          expect(seen[1], `${screen}: pinned mid-scroll`).toEqual(seen[0]);
+          expect(seen[2], `${screen}: pinned at the end`).toEqual(seen[0]);
+        }
+      });
+    });
+  }
+
   test('stays within its budget on "détaillés" and on "légers", and never compiles a program on a swap', async ({ page }) => {
     test.setTimeout(240_000);
     let s = await play(page);

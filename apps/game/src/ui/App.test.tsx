@@ -285,6 +285,31 @@ describe('the React screens', () => {
     expect(container.querySelector('#g-showcase > #g-showcase-stage')?.getAttribute('aria-label')).toBe('Le podium : glissez pour le faire pivoter');
   });
 
+  it('on a phone held sideways, put the heading, the tiles and the buttons in the column beside the pinned showcase, on the roster and in the Garage', () => {
+    // only the short-landscape query matches: not wide, not a coarse pointer
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-height: 520px) and (orientation: landscape)', addEventListener() {}, removeEventListener() {} }));
+    try {
+      const { container } = render(<App />);
+      fireEvent.click(container.querySelector('#b-play')!);
+      // the select layout holds everything, so the sticky showcase's container is the whole scroll
+      const side = container.querySelector('#s-select > .select-layout > .select-side')!;
+      expect(side.nextElementSibling?.id).toBe('showcase');
+      expect(side.querySelector(':scope > .select-head > .tricolore + h2')).not.toBeNull();
+      expect(side.querySelector(':scope > #roster')).not.toBeNull();
+      for (const id of ['b-back1', 'b-garage', 'b-next1']) expect(container.querySelector('#roster .roster-foot #' + id), id).not.toBeNull();
+      expect(container.querySelector('#roster .roster-foot .stage-hint')).not.toBeNull();
+      expect(container.querySelector('#roster .roster-foot .key-legend')).toBeNull();
+      expect([...container.querySelector('#s-select')!.children].map(e => e.className)).toEqual(['select-layout']);
+      const garage = container.querySelector('#s-garage > .select-layout > .select-side')!;
+      expect(garage.nextElementSibling?.id).toBe('g-showcase');
+      expect(garage.firstElementChild?.tagName).toBe('H2');
+      for (const id of ['g-body', 'b-garage-reset', 'b-garage-back']) expect(garage.querySelector('#' + id), id).not.toBeNull();
+      expect([...container.querySelector('#s-garage')!.children].map(e => e.className)).toEqual(['select-layout']);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('show every tile pending on its placeholder, then ready as its portrait lands', () => {
     const { container } = render(<App />);
     fireEvent.click(container.querySelector('#b-play')!);

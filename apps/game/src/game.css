@@ -118,18 +118,25 @@ body{--note-room:calc(8px + 16px + 12px + env(safe-area-inset-bottom,0px));}
 /* On a phone the Garage's chips are tap targets: 44px tall, their grade badge included. */
 .kr-touch #s-garage .chip{min-height:44px;}
 @media (pointer:coarse){#s-garage .chip{min-height:44px;}}
-/* The Garage on a phone held sideways: form left, turntable band right. */
 /* Phones held sideways (the library's short-landscape layout: two columns,
-   the showcase pinned at the top of the scroll while the roster or the form
-   scrolls beside it). The game drops the screens' top padding to 8px here,
-   so the pin inset follows (--select-pin-inset), and the type tightens so
-   the podium's band keeps more than its floor. */
+   the showcase pinned at the top of the scroll while the roster or the
+   Garage's form scrolls beside it). React puts the heading, the roster or
+   the form, and the button row in one left column (.select-side), so the
+   select layout is the whole scroll and the pinned showcase never runs out
+   of container: it starts at the top at rest and ends on the bottom padding
+   at the scroll's end. The game drops the screens' padding to 8px here, and
+   the pin inset counts it at both ends (--select-pin-inset: 8 + 8), so the
+   showcase is exactly the scrollport's height and whole at every scroll
+   position; the type tightens so the podium's band keeps more than its
+   floor. */
 @media (max-height:520px) and (orientation:landscape){
-  #s-select,#s-garage{padding-block:8px;gap:8px;--select-pin-inset:8px;}
-  /* while the note banner shows, the pinned showcase stops above it, or the power box ends under the note */
-  #ui:has(>#note:not([hidden])) #s-select,#ui:has(>#note:not([hidden])) #s-garage{--select-pin-inset:calc(8px + var(--note-room));}
+  #s-select,#s-garage{padding-block:8px;gap:8px;--select-pin-inset:16px;}
+  /* while the note banner shows, the screen's bottom padding is the note's room: the pinned showcase stops above it, or the power box ends under the note */
+  #ui:has(>#note:not([hidden])) #s-select,#ui:has(>#note:not([hidden])) #s-garage,#s-garage.noted{--select-pin-inset:calc(8px + var(--note-room));}
+  .select-side{display:flex;flex-direction:column;gap:8px;min-width:0;}
+  .select-side>h2{margin:0;text-align:center;}
   #s-select .select-head{gap:6px;}
-  #s-select .select-head h2,#s-garage>h2{font-size:22px!important;}
+  #s-select .select-head h2,#s-garage .select-side>h2{font-size:22px!important;}
   #s-select .roster{gap:6px;}
   #s-select .tile .tname{font-size:10px;padding:2px 4px;}
   #s-select .showcase .title{font-size:11px;}
