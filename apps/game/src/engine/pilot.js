@@ -43,9 +43,11 @@
 //   arm     the right shoulder's pivot (the pose's upper arm, forearm, hand)
 //   hand    the right hand's pivot, holding the hand prop
 //   live    { prop name: group } of the props that animate (and the ponytail)
-//   anim    [(dt, t) => void]: the idle animation (head sway, the wave, the
-//           live props); call them every frame with the stage clock, or push
-//           them into the kart's own userData.anim
+//   anim    [(dt, t, kart?) => void]: the idle animation (head sway, the
+//           wave, the live props); call them every frame with the stage
+//           clock, or push them into the kart's own userData.anim. The head
+//           sways on the stage and, subtler and into the steering, on
+//           race-high (RACE_SWAY); race-low's and headless' heads stay still
 //   rest    { head, arm, hand }: their rest rotations [x, y, z], for anyone
 //           animating them from outside (add to rest, never overwrite)
 //   id, lod, tier, body
@@ -994,7 +996,8 @@ const restOf = o => ({ position: o.position.clone(), rotation: o.rotation.clone(
  * are read), `lod` one of LODS. Options: `tier` 'high' | 'low' (the stage on
  * "légers"), `coarse` (a phone: the 'phone' texture tier), `texTier` to force
  * one, `look` to build from another look spec, `wheel: false` to leave the
- * steering wheel to the kart, `idle: false` for no head sway, `trace` (an
+ * steering wheel to the kart, `idle: false` for no head sway (the stage's, or
+ * race-high's subtler one; race-low and headless have none anyway), `trace` (an
  * array that receives every geometry and material made, for leak tests),
  * `merge: false` to leave every part a mesh of its own (inspection only).
  */
@@ -1053,10 +1056,7 @@ export function buildPilot(def, lod = 'stage', opts = {}) {
   const anim = [];
   const phase = [...def.id].reduce((a, ch) => a + ch.charCodeAt(0), 0) % 7;
   if (spec.props.some(n => n === 'phone' || n === 'selfie')) anim.push((dt, t) => { SCREEN_TIME.value = t; });
-  if (opts.idle !== false && keepHead) {
-    const h = ref.head, r = rest.head;
-    anim.push((dt, t) => h.rotation.set(r[0] + Math.sin(t * 1.3 + phase) * 0.05, r[1] + Math.sin(t * 0.8 + phase) * 0.14, r[2] + Math.sin(t * 1.1) * 0.04));
-  }
+  if (opts.idle !== false && keepHead) anim.push(race ? raceSway(ref.head, rest.head, phase) : stageSway(ref.head, rest.head, phase));
   if (spec.pose === 'wave' && !race) { const h = ref.hand, r = rest.hand; anim.push((dt, t) => { h.rotation.z = r[2] + Math.sin(t * TAU * 2) * 0.35; }); }
   for (const m of movers) { const r = restOf(m.obj); anim.push((dt, t) => m.fn(m.obj, r, t, dt)); }
 
@@ -1064,6 +1064,42 @@ export function buildPilot(def, lod = 'stage', opts = {}) {
   if (opts.trace) { opts.trace.push(...before, ...after, ...c.owned); }
   pilot.userData = { id: def.id, lod, tier, body, driver: pilot, head: ref.head, arm: ref.arm, hand: ref.hand, live, anim, rest };
   return pilot;
+}
+
+/** The stage's idle head sway: a slow look round of up to 8 degrees, a nod and a tilt. */
+function stageSway(h, r, phase) {
+  return (dt, t) => h.rotation.set(r[0] + Math.sin(t * 1.3 + phase) * 0.05, r[1] + Math.sin(t * 0.8 + phase) * 0.14, r[2] + Math.sin(t * 1.1) * 0.04);
+}
+
+/**
+ * The race-high head sway, in radians: a slow drift round the rest pose (`yaw`,
+ * `roll`, `nod`, about 2 degrees at most) on the candidate's own phase, and the
+ * head turned and tilted into the kart's steering (`lookYaw`, `lookRoll` at
+ * full lock), following it a little late (`follow`, per second). Six karts on
+ * screen should read as alive, never busy.
+ */
+export const RACE_SWAY = Object.freeze({ yaw: 0.035, roll: 0.025, nod: 0.012, lookYaw: 0.1, lookRoll: 0.05, follow: 4 });
+
+/**
+ * The race-high head sway: one rotation on the head's pivot, which race-high
+ * keeps as a node of its own (its merged mesh), so it costs no draw and no
+ * material. Called as the kart's anim, `(dt, t, kart?)`: with the race's kart
+ * the head looks where the wheels point (`kart.steer`, -1 left to 1 right; the
+ * front wheels turn by -steer) and leans to the inside; without one (a
+ * turntable) it only drifts.
+ */
+function raceSway(h, r, phase) {
+  const S = RACE_SWAY;
+  let look = 0;
+  return (dt, t, kart) => {
+    const steer = kart && Number.isFinite(kart.steer) ? Math.max(-1, Math.min(1, kart.steer)) : 0;
+    look += (steer - look) * (1 - Math.exp(-Math.max(0, dt) * S.follow));
+    h.rotation.set(
+      r[0] + Math.sin(t * 0.9 + phase * 1.3) * S.nod,
+      r[1] + Math.sin(t * 0.6 + phase) * S.yaw - look * S.lookYaw,
+      r[2] + Math.sin(t * 0.75 + phase * 0.7) * S.roll + look * S.lookRoll,
+    );
+  };
 }
 
 /** The game server's pilot: the same userData, empty groups where the parts would be, no geometry. */
