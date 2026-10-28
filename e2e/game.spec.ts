@@ -350,6 +350,42 @@ test.describe('R-07 keyboard controls', () => {
   });
 });
 
+/**
+ * Enter is a screen shortcut ("Jouer" on the title, "Choisir le circuit →" on
+ * the roster), but a button that has the focus keeps Enter for itself: the
+ * shortcut must not also fire. A focused roster tile is the roster's own, so
+ * Enter there still goes on to the circuits. No race is started here.
+ */
+test.describe('R-07b Enter on a focused button', () => {
+  test('presses the focused button on the title, not "Jouer"', async ({ page }) => {
+    const mute = page.locator('#b-mute');
+    await expect(mute).toContainText('activé');
+    await mute.focus();
+    await page.keyboard.press('Enter');
+    await expect(mute).toContainText('coupé');
+    await expect(page.locator('#s-title')).toBeVisible();
+    await expect(page.locator('#s-select')).toBeHidden();
+  });
+
+  test('presses the focused button on the roster, not "Choisir le circuit"', async ({ page }) => {
+    await page.locator('#b-play').click();
+    await expect(page.locator('#s-select')).toBeVisible();
+    await page.locator('#b-back1').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#s-title')).toBeVisible();
+    await expect(page.locator('#s-tracks')).toBeHidden();
+  });
+
+  test('still goes on to the circuits from a focused roster tile', async ({ page }) => {
+    await page.locator('#b-play').click();
+    await expect(page.locator('#s-select')).toBeVisible();
+    await page.locator('#roster .tile').first().focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#s-tracks')).toBeVisible();
+    await expect(page.locator('#s-select')).toBeHidden();
+  });
+});
+
 test.describe('R-08 minimap', () => {
   test('draws something, rather than staying blank', async ({ page }) => {
     await startRace(page);
