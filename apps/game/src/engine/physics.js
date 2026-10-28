@@ -161,6 +161,21 @@ export function updateKart(k, dt) {
 }
 
 /**
+ * Each driver's rest height in its kart, read the first time its kart is
+ * posed, before anything has moved it: wherever kart.js seated it (0.75 for
+ * a race pilot at MOUNT on every body, 1.05 for the tractor's seat anchor).
+ * The stun bob goes up from there; it used to set an absolute 0.75, which
+ * dropped a driver seated higher by 0.3. Keyed by the driver object, so a
+ * pilot swapped into a seat brings its own.
+ */
+const REST_Y = new WeakMap();
+export function driverRest(driver) {
+  let y = REST_Y.get(driver);
+  if (y === undefined) { y = driver.position.y; REST_Y.set(driver, y); }
+  return y;
+}
+
+/**
  * Pose kart k's mesh from its state: position, lean, wheels, drift sparks,
  * shield ring, rotor, the stunned driver's bob, the phantom blink, the parts
  * that move on their own and the trail. `sf` is the speed factor the physics
@@ -180,7 +195,7 @@ export function updateKartVisual(k, dt, sf) {
   u.ring.visible = k.invincible > 0; if (u.ring.visible) u.ring.rotation.z += dt * 4;
   if (u.shield) { u.shield.visible = k.shield > 0; if (u.shield.visible) { u.shield.rotation.z -= dt * 3; u.shield.position.y = 1.1 + Math.sin(G.time * 4) * 0.15; } }
   u.rotor.visible = k.fly > 0; if (u.rotor.visible) u.blades.forEach(b => { b.rotation.y += dt * 40; });
-  u.driver.position.y = 0.75 + (k.stun > 0 ? Math.abs(Math.sin(G.time * 20)) * 0.3 : 0);
+  u.driver.position.y = driverRest(u.driver) + (k.stun > 0 ? Math.abs(Math.sin(G.time * 20)) * 0.3 : 0);
   if (u.bumpSparks) { const on = bump > 0.35; u.bumpSparks.visible = on; if (on) { u.bumpSparks.rotation.y += dt * 25; u.bumpSparks.scale.setScalar(0.6 + (1 - bump) * 1.4); } }
   m.visible = k.phantom > 0 ? (Math.floor(G.time * 14) % 2 === 0) : true;
   // the parts that move on their own (kart.js), then the trail (trail.js), which lives in world space

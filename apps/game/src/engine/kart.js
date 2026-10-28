@@ -22,7 +22,8 @@
 //
 // Two profiles (DEC-043, PLAN 3.4). 'race', the default, is the kart the
 // races have always drawn, from primitives.mat() and per-kart basic
-// materials; kart.test.js pins it to the pre-stage build hash for hash. 'stage'
+// materials; kart.test.js pins every part but the driver to the pre-stage
+// build hash for hash, and the race pilot on its own. 'stage'
 // is the same kart for the select podium: every material from stagelook.js's
 // own factory (never a mat() instance, since r128 bakes tone mapping into a
 // program at first compile), and on the standard body the design template's
@@ -35,6 +36,16 @@
 //
 // `pilot: false` leaves the driver out: userData.driver is then an empty seat
 // anchor at the driver's place, for stage 5's buildPilot (seatPilot below).
+//
+// The race's driver (stage 8, Q4: what you pick is what you race) is stage
+// 5's pilot at its race level of detail: buildPilot(def, 'race-high') on
+// "détaillés", 'race-low' on "légers", and 'headless' where there is no DOM
+// (the game server, DEC-014), which builds no geometry at all. It takes the
+// legacy driver's place in the build order, so every other part of the race
+// kart is the one the races have always drawn (kart.test.js pins it); only
+// the legacy driver's harness straps go, since they would sit inside the
+// new pilot's chest. The pilot's race animation (the gyrophare's spin, the
+// weathervane's turn) joins the kart's `anim`; everything else on it is still.
 //
 // The seat contract (stage 7, one for every body): stage 5's pilot IS the
 // driver. It is built at MOUNT with its per-body seat offset and the 1.45
@@ -51,6 +62,7 @@ import { mergeByMaterial } from './geo.js';
 import { blade, capsuleMesh, hullGeometry, rimParts, roundedBoxGeometry, seat, stagePalette, stageTexture, strut, surfaceHit, tubeBumper, tyreGeometry } from './kartstage.js';
 import { defaultStyle } from './kartstyle.js';
 import { LOOK3D } from './looks.js';
+import { buildPilot } from './pilot.js';
 import { box, canvasTexture, cone, cyl, imgTex, mat, sph, tag, torus } from './primitives.js';
 import { stageMat } from './stagelook.js';
 import { getPoly, SHADOWS, seg } from './state.js';
@@ -165,9 +177,16 @@ function restageDriver(g, def, P) {
 export const PILOT_SCALE = 1.45;
 /** Where a template-unit pilot sits, in its own frame: the base of the template's torso (y 0.45, z -0.3 above the template kart's origin). */
 export const TEMPLATE_HIP = Object.freeze([0, 0.45, -0.3]);
-/** The driver's place per body: the hip point, in kart space. Physics bobs driver.position.y about 0.75 (physics.js updateKartVisual). */
+/** The legacy driver's place per body, the seat anchor's: the hip point, in kart space. Physics bobs the driver about wherever it was built (physics.js updateKartVisual). */
 const SEAT = { kart: [0, 0.75, -0.35], tractor: [0, 1.05, -0.35], cargo: [0, 0.75, -0.35] };
 const bodyOf = def => (def.tractor ? 'tractor' : def.cargo ? 'cargo' : 'kart');
+
+/** No DOM, no renderer: the game server (DEC-014). primitives.js draws the same line. */
+const HEADLESS = typeof document === 'undefined';
+/** The race levels of detail buildKart seats (pilot.js LODS). */
+export const RACE_LODS = Object.freeze(['race-high', 'race-low', 'headless']);
+/** The race pilot's level of detail now: 'headless' without a DOM, else by the game's detail level. */
+export const raceLod = () => (HEADLESS ? 'headless' : getPoly() === 'high' ? 'race-high' : 'race-low');
 
 /**
  * Seat a pilot on a kart built with `pilot: false`.
@@ -472,14 +491,14 @@ function addNose(k, kind, bodyBox, P, S) {
  * `p` gives the positions: `seat` [y, z] of the cushion, `back` [y, z] of
  * the back cushion, `strap` [y, z], `mirror` [x, y, z], `brake` [x, y, z]
  * and `roundel` [x, y, z]; every x is mirrored. On the stage the roundels
- * carry the race number when there is one. Without a `pilot` the harness
- * straps go too: they belong on the legacy driver's chest, and would float
- * in an empty seat or cut through a seated stage-5 pilot.
+ * carry the race number when there is one. The harness straps come with
+ * the `legacy` driver alone: they belong on its chest, and would float in
+ * an empty seat or sit inside a stage-5 pilot's.
  */
-function addDetail(k, p, P, number, pilot = true) {
+function addDetail(k, p, P, number, legacy = true) {
   k.add(pbox(0.84, 0.06, 0.7, P.m('leather', 0x8a2a2a), 0, p.seat[0], p.seat[1]));
   k.add(pbox(0.8, 0.4, 0.06, P.m('leather', 0x8a2a2a), 0, p.back[0], p.back[1]));
-  if (pilot) [-0.17, 0.17].forEach(x => { const st = pbox(0.1, 0.5, 0.04, P.m('strap', 0xc8102e), x, p.strap[0], p.strap[1]); st.rotation.x = 0.12; k.add(st); });   // the harness, on the driver's chest
+  if (legacy) [-0.17, 0.17].forEach(x => { const st = pbox(0.1, 0.5, 0.04, P.m('strap', 0xc8102e), x, p.strap[0], p.strap[1]); st.rotation.x = 0.12; k.add(st); });   // the harness, on the driver's chest
   [-1, 1].forEach(sx => {
     const stalk = pcyl(0.02, 0.02, 0.3, P.m('dark', 0x444444), p.mirror[0] * sx, p.mirror[1], p.mirror[2], 5); stalk.rotation.z = -sx * 0.9; k.add(stalk);
     const head = pbox(0.2, 0.14, 0.05, P.m('dark', 0x222222), (p.mirror[0] + 0.22) * sx, p.mirror[1] + 0.1, p.mirror[2]); head.rotation.y = -sx * 0.3; k.add(head);
@@ -531,14 +550,22 @@ function stageWheel(P, { r, w, x, y, z, rim, tyre, chunky }) {
  * coarse pointer). With `pilot: false`, `steering: false` leaves the
  * kart's own steering out too, for stage 5's pilot, which brings its own
  * (seatPilot; the anchor records `userData.steering`).
+ *
+ * The race profile's driver is stage 5's pilot at `lod`, one of RACE_LODS
+ * (default raceLod(): 'headless' on the server, else 'race-high' or
+ * 'race-low' by the detail level), seated by the stage-7 contract: it is
+ * the driver, at MOUNT, holding its own steering wheel, and the kart has
+ * none of its own. The stage profile's driver is still the legacy one
+ * restaged (stage 6); the podium seats its own pilot (`pilot: false`).
  */
-export function buildKart(def, style = defaultStyle(def), { profile = 'race', pilot = true, tier = getPoly(), tex = textureTier(tier), steering = true } = {}) {
+export function buildKart(def, style = defaultStyle(def), { profile = 'race', pilot = true, tier = getPoly(), tex = textureTier(tier), steering = true, lod = raceLod() } = {}) {
   const stage = profile === 'stage';
+  if (!stage && pilot && !RACE_LODS.includes(lod)) throw new Error('buildKart: unknown race pilot level "' + lod + '"');
   rounding = stage ? tier : null;
-  try { return build(def, style, stage, pilot, tier, tex, steering); } finally { rounding = null; }
+  try { return build(def, style, stage, pilot, tier, tex, steering, lod); } finally { rounding = null; }
 }
 
-function build(def, style, stage, pilot, tier, tex, steering) {
+function build(def, style, stage, pilot, tier, tex, steering, lod) {
   const P = stage ? stagePaletteOf(style, tier, tex) : racePalette(style);
   const k = new THREE.Group(); const S = seg(); const high = getPoly() === 'high';
   const wheels = []; const anim = []; const live = stage ? [] : null;
@@ -549,6 +576,7 @@ function build(def, style, stage, pilot, tier, tex, steering) {
   const addSticker = (size, x, y, z) => { const st = stickerPlane(style.sticker, size, x, y, z, P); if (st) k.add(st); };
   const liveryPlane = (w, h) => new THREE.Mesh(new THREE.PlaneGeometry(w, h), P.livery(def.livery));
   const body = bodyOf(def);
+  const legacy = pilot && stage;   // the legacy driver, whose chest the harness straps belong on
   if (def.tractor) {
     k.add(bodyBox(1.6, 1.0, 2.6, 0, 0.9, 0.2)); k.add(bodyBox(1.3, 0.9, 1.4, 0, 1.6, 0.9)); k.add(pbox(1.5, 0.12, 1.5, P.m('dark', 0x222222), 0, 2.1, 0.9));
     k.add(pcyl(0.12, 0.12, 1.2, P.accent, 0.5, 2.4, 1.4, 8)); k.add(pbox(1.7, 0.3, 0.4, P.accent, 0, 0.4, 2.0));
@@ -558,7 +586,7 @@ function build(def, style, stage, pilot, tier, tex, steering) {
     plate.position.set(0, 0.95, -1.86); plate.rotation.y = Math.PI; k.add(plate);
     if (def.livery) { const hood = liveryPlane(1.1, 1.0); hood.rotation.x = -Math.PI / 2; hood.position.set(0, 2.17, 0.9); k.add(hood); }
     addSticker(0.6, 0, 2.18, 0.9);
-    addDetail(k, { seat: [1.11, -0.42], back: [1.32, -0.74], strap: [1.5, -0.03], mirror: [0.85, 1.55, 1.1], brake: [0.72, 1.12, -1.4], roundel: [0.82, 1.1, 0.3] }, P, style.number, pilot);
+    addDetail(k, { seat: [1.11, -0.42], back: [1.32, -0.74], strap: [1.5, -0.03], mirror: [0.85, 1.55, 1.1], brake: [0.72, 1.12, -1.4], roundel: [0.82, 1.1, 0.3] }, P, style.number, legacy);
     addExhaust(k, style.exhaust, { x: 0.7, y: 0.95, z: -1.5 }, { x: 0.9, y: 1.6, z: 0.3, len: 1.6 }, anim, S, P, live);
     addMast(k, style.mast, -0.7, 1.4, 2.9, -1.2, anim, P, live);
     if (stage) {
@@ -575,7 +603,7 @@ function build(def, style, stage, pilot, tier, tex, steering) {
     plate.position.set(0, 0.7, 2.01); k.add(plate);
     if (def.livery) { const lp = liveryPlane(1.3, 1.2); lp.rotation.x = -Math.PI / 2; lp.position.set(0, 1.38, 1.3); k.add(lp); }
     addSticker(0.6, 0.2, 1.39, 1.5);
-    addDetail(k, { seat: [0.76, -0.45], back: [0.95, -0.79], strap: [1.2, -0.03], mirror: [0.55, 1.0, 0.45], brake: [0.3, 0.55, -1.72], roundel: [0.76, 0.9, 1.3] }, P, style.number, pilot);
+    addDetail(k, { seat: [0.76, -0.45], back: [0.95, -0.79], strap: [1.2, -0.03], mirror: [0.55, 1.0, 0.45], brake: [0.3, 0.55, -1.72], roundel: [0.76, 0.9, 1.3] }, P, style.number, legacy);
     addExhaust(k, style.exhaust, { x: 0.35, y: 0.4, z: -1.75 }, { x: 0.5, y: 0.45, z: -0.5, len: 1.4 }, anim, S, P, live);
     addMast(k, style.mast, -0.65, 1.4, 2.8, 0.7, anim, P, live);
     if (stage) {
@@ -608,7 +636,7 @@ function build(def, style, stage, pilot, tier, tex, steering) {
       if (style.spoiler === 'wing') { const sp = liveryPlane(2.2, 0.65); sp.rotation.x = -Math.PI / 2; sp.position.set(0, 1.66, -1.6); k.add(sp); }
     }
     addSticker(0.55, 0, 0.7, 1.7);                                                 // over the livery, like a real decal
-    addDetail(k, { seat: [0.86, -0.42], back: [1.02, -0.74], strap: [1.22, 0.0], mirror: [0.88, 0.82, 0.95], brake: [0.72, 0.45, -1.62], roundel: [style.pods ? 1.04 : 0.815, 0.52, 0.3] }, P, style.number, pilot);
+    addDetail(k, { seat: [0.86, -0.42], back: [1.02, -0.74], strap: [1.22, 0.0], mirror: [0.88, 0.82, 0.95], brake: [0.72, 0.45, -1.62], roundel: [style.pods ? 1.04 : 0.815, 0.52, 0.3] }, P, style.number, legacy);
     addNose(k, style.nose, bodyBox, P, S);
     addMast(k, style.mast, -0.72, 0.7, 2.3, -1.1, anim, P, live);
     if (high) {
@@ -624,9 +652,14 @@ function build(def, style, stage, pilot, tier, tex, steering) {
     });
   }
   let driver;
-  if (pilot) {
+  if (legacy) {
     driver = buildDriver(def); driver.position.set(0, def.tractor ? 1.05 : 0.75, -0.35); driver.scale.setScalar(0.85);
-    if (stage) restageDriver(driver, def, P);
+    restageDriver(driver, def, P);
+  } else if (pilot) {
+    // the race pilot, in the legacy driver's place in the build: it sits at MOUNT and holds its own wheel; its
+    // race animation (a gyrophare, a weathervane) runs with the kart's, everything else on it stays still
+    driver = buildPilot(def, lod, { idle: false });
+    anim.push(...driver.userData.anim);
   } else {
     // the seat anchor: an empty group at the driver's hip point (seatPilot), and the steering its hands find
     driver = new THREE.Group(); driver.name = 'seat'; driver.position.set(...SEAT[body]);
