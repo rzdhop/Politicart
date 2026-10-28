@@ -1,4 +1,4 @@
-// Entry point: `npm start -w @kart-republique/server`.
+// Entry point: `npm start -w @politikar/server`.
 //
 //   PORT       port to listen on (default 8080; container hosts set it)
 //   HOST       interface to bind (default 0.0.0.0, so the LAN can join)
@@ -40,7 +40,7 @@ await ensureAdmin(store, admin);
 const srv = await startServer({ port, host, staticDir, runRace, store, admin });
 
 const lan = Object.values(networkInterfaces()).flat().filter(a => a && a.family === 'IPv4' && !a.internal).map(a => a.address);
-console.log(`Kart République -- serveur de course en équipe sur le port ${srv.port}`);
+console.log(`Politikar -- serveur de course en équipe sur le port ${srv.port}`);
 console.log(`  ici :        http://127.0.0.1:${srv.port}/`);
 for (const ip of lan) console.log(`  réseau local : http://${ip}:${srv.port}/`);
 console.log(`  comptes :     ${store.kind === 'postgres' ? 'base Postgres (DATABASE_URL)' : store.kind === 'memory' ? 'en mémoire seulement' : 'fichier ' + (process.env.KR_DATA || 'apps/server/data/kr-accounts.json')}`);

@@ -11,7 +11,7 @@ import {
   Showcase,
   StatBar,
   StatGrid,
-} from '@kart-republique/ui';
+} from '@politikar/ui';
 
 import { initAudio } from '../../engine/audio.js';
 import { CHARACTERS } from '../../engine/data.js';

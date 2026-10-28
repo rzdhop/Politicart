@@ -1,7 +1,7 @@
 import type { StorybookConfig } from '@storybook/react-vite';
 
 /**
- * Storybook for @kart-republique/ui.
+ * Storybook for @politikar/ui.
  *
  * Two audiences: a person browsing the system, and the design-sync converter,
  * which screenshots these stories to verify the preview cards it uploads. That

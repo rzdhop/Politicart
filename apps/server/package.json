@@ -1,7 +1,7 @@
 {
-  "name": "@kart-republique/server",
+  "name": "@politikar/server",
   "version": "0.1.0",
-  "description": "Kart Republique game server: serves the built game and runs team races over WebSocket",
+  "description": "Politikar game server: serves the built game and runs team races over WebSocket",
   "license": "UNLICENSED",
   "private": true,
   "type": "module",

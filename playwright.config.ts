@@ -12,7 +12,7 @@ import { ADMIN_PASSWORD, ADMIN_USER } from './e2e/fixtures/admin';
 process.env.KR_E2E_ADMIN_HASH ||= hashPasswordSync(ADMIN_PASSWORD);
 
 /**
- * End-to-end suite for Kart République.
+ * End-to-end suite for Politikar.
  *
  * This is the regression net for the React port. It is written against the
  * game as it exists today, before the port begins, so that any failure during
@@ -79,7 +79,7 @@ export default defineConfig({
       // changes how the game is packaged, so a bug that only appears once Vite
       // has bundled and minified it is exactly the kind this net should catch.
       // This static preview also stands in for GitHub Pages: single player only.
-      command: 'npm run build -w @kart-republique/game && npm run preview -w @kart-republique/game',
+      command: 'npm run build -w @politikar/game && npm run preview -w @politikar/game',
       url: 'http://127.0.0.1:4173',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
@@ -94,7 +94,7 @@ export default defineConfig({
       // the test-only account above. Locally a server already on 4180 is
       // reused as is: one started without this env has no test admin, so stop
       // it first.
-      command: 'npm start -w @kart-republique/server',
+      command: 'npm start -w @politikar/server',
       url: 'http://127.0.0.1:4180/api/kr',
       env: {
         PORT: '4180',

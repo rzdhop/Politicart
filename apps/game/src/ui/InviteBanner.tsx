@@ -1,4 +1,4 @@
-import { Button, Panel } from '@kart-republique/ui';
+import { Button, Panel } from '@politikar/ui';
 
 import { actions, type GameState, type UiSnapshot } from './store';
 

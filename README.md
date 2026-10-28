@@ -1,4 +1,4 @@
-# Kart République
+# Politikar
 
 *Grand Prix de l'Hémicycle* — a satirical 3D kart racer in the browser, starring a cast of French politicians under pun names.
 
@@ -12,11 +12,11 @@ To run it locally you need Node 26 and npm:
 
 ```sh
 npm ci
-npm run build -w @kart-republique/ui   # the design system the game is built from
-npm run dev -w @kart-republique/game   # http://127.0.0.1:5173
+npm run build -w @politikar/ui   # the design system the game is built from
+npm run dev -w @politikar/game   # http://127.0.0.1:5173
 ```
 
-`npm run build` builds everything; `npm run preview -w @kart-republique/game` serves the production build at `http://127.0.0.1:4173`.
+`npm run build` builds everything; `npm run preview -w @politikar/game` serves the production build at `http://127.0.0.1:4173`.
 
 ## Team races (Multijoueur)
 
@@ -97,7 +97,7 @@ The admin has absolute power over every game, solo or team, from inside it or fr
 The admin's password is never stored, only its hash, held in an environment variable. To set it up:
 
 ```sh
-npm run -s admin-hash -w @kart-republique/server     # asks for the password twice (12 characters or more), prints the hash
+npm run -s admin-hash -w @politikar/server     # asks for the password twice (12 characters or more), prints the hash
 ```
 
 Put the printed hash in `.env` at the repo root as `KR_ADMIN_PASSWORD_HASH='scrypt$...'` (single quotes: the hash contains `$`), or in your host's environment settings, and restart the server. At start the server creates the admin account, or resets its password to that hash, and logs whether administration is on. The admin then logs in through **Compte** like any player. Failed logins are limited per address and per account (10 every 15 minutes).
@@ -109,7 +109,7 @@ The free way to play team races over the internet, with no machine of your own l
 1. **Host the server on Render.** On [render.com](https://render.com), choose **New > Blueprint**, pick this repository and apply. `render.yaml` builds the `Dockerfile` on the free plan as a single instance. The game, solo and team races, is then playable at the address Render gives, `https://<name>.onrender.com/`.
 2. **Point the GitHub page at it.** In the repository's **Settings > Secrets and variables > Actions > Variables**, add `KR_SERVER_URL` = `https://<name>.onrender.com` (no trailing path), then re-run the **Deploy to GitHub Pages** workflow. `https://rzdhop.github.io/Politicart/` now shows **Multijoueur** whenever the server answers.
 
-3. **Make yourself admin.** In the Render service's **Environment**, set `KR_ADMIN_PASSWORD_HASH` to the hash printed by `npm run -s admin-hash -w @kart-republique/server` (the Blueprint leaves it for you to fill). Render restarts the service; log in as `rida` through **Compte**.
+3. **Make yourself admin.** In the Render service's **Environment**, set `KR_ADMIN_PASSWORD_HASH` to the hash printed by `npm run -s admin-hash -w @politikar/server` (the Blueprint leaves it for you to fill). Render restarts the service; log in as `rida` through **Compte**.
 
 Render's free disk is wiped whenever the service sleeps, so accounts and the admin's cast need a database there. The game uses the [Neon](https://console.neon.tech) project **Politikart** (`muddy-wave-64148556`, region `aws-eu-central-1`, Frankfurt, database `politikart`): paste its pooled connection string (Neon console > Connect, connection pooling on) into the service's `DATABASE_URL` variable, which the Blueprint leaves for you to fill. Everything targets players in France: neither Render nor Neon has a Paris region, so both sit in Frankfurt, side by side and inside the EU; Fly.io (`fly.toml`) runs the server in Paris (`cdg`). Locally, `neon deploy` writes the same variable into `.env.local`, which `npm start` reads. Without it the server still runs, but every account and every cast edit vanishes at each restart (the admin account itself is recreated from its hash).
 
@@ -120,8 +120,8 @@ The free plan sleeps after 15 minutes with nobody connected. The first visitor a
 The `Dockerfile` packages the server and the built game into one image, and `fly.toml` deploys it to [Fly.io](https://fly.io):
 
 ```sh
-docker build -t kart-republique .
-docker run --rm -p 8080:8080 kart-republique     # the same server, in a container
+docker build -t politikar .
+docker run --rm -p 8080:8080 politikar     # the same server, in a container
 
 fly launch --no-deploy --copy-config             # choose your own app name and region
 fly deploy
@@ -189,7 +189,7 @@ An npm workspace with three packages.
 | --- | --- |
 | `apps/game` | The game: a Vite app. Three.js 0.128 engine, React screens. |
 | `apps/server` | The game server: static files, accounts and friends (`accounts.js`, `store.js`: a JSON file or Postgres via `pg`), the admin's cast (`roster.js`) and dashboard (`dashboard.js`), rooms over WebSocket (`ws`), one worker thread per race running the game's own engine. |
-| `packages/ui` | `@kart-republique/ui`, the design system: the game's look as React components, with Storybook. |
+| `packages/ui` | `@politikar/ui`, the design system: the game's look as React components, with Storybook. |
 | `e2e` | The Playwright suite that drives the game through its screens and HUD. |
 | `.github/workflows/pages.yml` | Builds, checks and publishes the game to GitHub Pages on every push to `main`. |
 
@@ -213,7 +213,7 @@ The engine never touches the DOM; the UI never touches the simulation. They meet
 | `src/engine/godcmd.js` | The admin's **god commands**: what the console divine does to a race, in solo and in the race worker alike. |
 | `src/engine/input.js` | The **input seam**: the engine reads the controls through it. |
 | `src/engine/minimap.js`, `preview.js`, `render.js`, `audio.js` | The minimap, the character showcase and thumbnails, the one renderer and camera, WebAudio. |
-| `src/ui/` | The React screens and the HUD, composed from `@kart-republique/ui`; `store.ts` is what they read. |
+| `src/ui/` | The React screens and the HUD, composed from `@politikar/ui`; `store.ts` is what they read. |
 | `src/game.js` | The per-frame HUD writer, the keyboard and the clock. |
 
 ### The design system (`packages/ui`)
@@ -221,7 +221,7 @@ The engine never touches the DOM; the UI never touches the simulation. They meet
 Tokens, typography, panels and buttons, the roster and showcase, track cards, every HUD readout, the results table and the workshop form, extracted from the original single-file game and typed. The HUD readouts expose imperative handles so a game loop can write them at 60 fps without a React render.
 
 ```sh
-npm run storybook -w @kart-republique/ui   # http://localhost:6006
+npm run storybook -w @politikar/ui   # http://localhost:6006
 ```
 
 ## Checks

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { Button, CardGrid, Heading, Row, Screen, TrackCard } from '@kart-republique/ui';
+import { Button, CardGrid, Heading, Row, Screen, TrackCard } from '@politikar/ui';
 
 import { TRACKS } from '../../engine/data.js';
 import { actions, type UiSnapshot } from '../store';

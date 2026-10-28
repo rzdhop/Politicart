@@ -40,11 +40,11 @@ jobs:
       - run: npm ci
       - name: Build the design system, then check and test both workspaces
         run: |
-          npm run build -w @kart-republique/ui
+          npm run build -w @politikar/ui
           npm run typecheck
           npm run test
       - name: Build the game
-        run: npm run build -w @kart-republique/game
+        run: npm run build -w @politikar/game
         # The remote game server for team races (DEC-015), from the
         # KR_SERVER_URL repository variable. Unset: the page stays solo.
         env:

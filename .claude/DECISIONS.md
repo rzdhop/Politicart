@@ -24,7 +24,7 @@ gains a `packages/ui` workspace and a build step it did not have.
 framework-free web components.
 
 **Decision.** React 19 + TypeScript, Vite library build, emitting
-`dist/index.js` plus `dist/index.css`. Package name `@kart-republique/ui`.
+`dist/index.js` plus `dist/index.css`. Package name `@politikar/ui`.
 
 **Consequence.** TypeScript prop types become the `.d.ts` contracts the design
 agent codes against -- the strongest fidelity signal available. Cost: the repo,
@@ -43,7 +43,7 @@ planning; they chose the port.
 
 **Decision.** Port the DOM overlay layer (title, workshop, character select,
 track select, HUD, pause, results) to React components consuming
-`@kart-republique/ui`. The Three.js engine -- physics, scene building, AI, items,
+`@politikar/ui`. The Three.js engine -- physics, scene building, AI, items,
 audio -- is moved behind a seam, not rewritten.
 
 **Consequence.** No drift: the game and the design system share one definition of
@@ -228,7 +228,7 @@ extra optional props on five components, each documented as what it is for.
 
 ## DEC-013 -- The design-sync ships a `PreviewRoot` provider rather than relying on the page background
 
-**Context.** Stage 15 synced `@kart-republique/ui` to Claude Design. The
+**Context.** Stage 15 synced `@politikar/ui` to Claude Design. The
 system is dark-only: its stylesheet paints `body` and every component assumes
 that canvas. The sync tool's preview cards paint their page white, and the
 Storybook decorator that paints the canvas would not bundle (the preview
@@ -240,7 +240,7 @@ the context through the tool's provider knob.
 added to the bundle through `cfg.extraEntries` and set as `cfg.provider`. It
 wraps each story in the system's background, foreground and body font, with
 horizontal padding only so full-height stories fit the capture viewport. It
-ships as `window.KartRepubliqueUI.PreviewRoot` and the conventions header
+ships as `window.PolitikarUI.PreviewRoot` and the conventions header
 tells the design agent when to use it (fragments on a page that does not
 carry the system's `body` rule).
 
@@ -545,7 +545,7 @@ supersedes `feat/multiplayer`'s cookie admin.
 - **Configuration.** `KR_ADMIN_USER` (default `rida`) and
   `KR_ADMIN_PASSWORD_HASH` in main's own format
   (`scrypt$<32 hex>$<128 hex>`), produced by
-  `npm run -s admin-hash -w @kart-republique/server` from a password read on
+  `npm run -s admin-hash -w @politikar/server` from a password read on
   stdin.
 - **Reserved name.** The name is reserved from sign-up, whether or not a hash
   is set. The check is accent-, case- and width-blind.

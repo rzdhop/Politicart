@@ -10,7 +10,7 @@ import {
   Screen,
   ShopCard,
   Tabs,
-} from '@kart-republique/ui';
+} from '@politikar/ui';
 
 import {
   BOX_ODDS, BOX_PRICE, CHAR_GRADE, CHAR_PRICE, COIN_DROPS, PART_CATEGORIES, PART_GRADE, PART_PRICE, REFUND, TRAIL_GRADE, TRAIL_OPTIONS,

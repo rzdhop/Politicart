@@ -10,7 +10,7 @@ import {
   Screen,
   Subtitle,
   Tricolore,
-} from '@kart-republique/ui';
+} from '@politikar/ui';
 
 import { actions, isAdmin, type UiSnapshot } from '../store';
 import { useTouchMode } from '../TouchControls';
@@ -34,7 +34,7 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
   return (
     <Screen id="s-title" hidden={ui.state !== 'title'}>
       <Tricolore />
-      <GameTitle>KART RÉPUBLIQUE</GameTitle>
+      <GameTitle>POLITIKAR</GameTitle>
       <Subtitle>Grand Prix de l’Hémicycle</Subtitle>
       <Panel style={COLUMN}>
         <Row>

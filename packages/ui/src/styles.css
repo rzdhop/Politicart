@@ -1,4 +1,4 @@
-/* The Kart Republique design system stylesheet.
+/* The Politikar design system stylesheet.
 
    Import order is load-bearing: tokens first (everything references them),
    then base, then the shared layout primitives, then each component group.

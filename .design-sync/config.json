@@ -1,11 +1,11 @@
 {
-  "pkg": "@kart-republique/ui",
-  "globalName": "KartRepubliqueUI",
-  "projectId": "b7586fe5-3495-4448-ab55-58afb71f3c81",
+  "pkg": "@politikar/ui",
+  "globalName": "PolitikarUI",
+  "projectId": "1db9db24-1aee-4f65-93d7-a58ce488b52d",
   "shape": "storybook",
   "storybookConfigDir": "packages/ui/.storybook",
   "storybookStatic": ".design-sync/sb-reference",
-  "buildCmd": "npm run build -w @kart-republique/ui",
+  "buildCmd": "npm run build -w @politikar/ui",
   "cssEntry": "dist/styles.css",
   "overrides": {
     "Tricolore": {
@@ -61,5 +61,6 @@
   "provider": {
     "component": "PreviewRoot"
   },
-  "readmeHeader": ".design-sync/conventions.md"
+  "readmeHeader": ".design-sync/conventions.md",
+  "artifactUrl": "https://claude.ai/code/artifact/1db9db24-1aee-4f65-93d7-a58ce488b52d"
 }

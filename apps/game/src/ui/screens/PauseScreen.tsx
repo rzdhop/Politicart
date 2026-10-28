@@ -1,4 +1,4 @@
-import { Button, Heading, KartCard, Panel, Row, Screen } from '@kart-republique/ui';
+import { Button, Heading, KartCard, Panel, Row, Screen } from '@politikar/ui';
 
 import { CHARACTERS } from '../../engine/data.js';
 import { charGrade, GRADE_LABELS, kartCardOf } from '../kartChoices';

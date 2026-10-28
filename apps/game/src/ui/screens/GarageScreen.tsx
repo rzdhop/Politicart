@@ -16,7 +16,7 @@ import {
   SelectLayout,
   Showcase,
   TextInput,
-} from '@kart-republique/ui';
+} from '@politikar/ui';
 
 import { ownsPart, ownsTrail, PART_GRADE, TRAIL_GRADE } from '../../engine/catalog.js';
 import { CHARACTERS } from '../../engine/data.js';

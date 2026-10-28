@@ -1,7 +1,7 @@
-# The Kart République game server: the built game plus team races, on one port.
+# The Politikar game server: the built game plus team races, on one port.
 #
-#   docker build -t kart-republique .
-#   docker run --rm -p 8080:8080 kart-republique      # http://localhost:8080/
+#   docker build -t politikar .
+#   docker run --rm -p 8080:8080 politikar      # http://localhost:8080/
 #
 # Stage 1 builds the design system and the game. Stage 2 keeps only what the
 # server runs: its own sources, the engine it imports from apps/game/src/engine,
@@ -16,7 +16,7 @@ COPY apps/server/package.json apps/server/
 RUN npm ci --no-audit --no-fund
 COPY packages/ui packages/ui
 COPY apps/game apps/game
-RUN npm run build -w @kart-republique/ui && npm run build -w @kart-republique/game
+RUN npm run build -w @politikar/ui && npm run build -w @politikar/game
 
 FROM node:26.10.0-bookworm-slim
 # Accounts go to a JSON file under /data unless DATABASE_URL names a Postgres
@@ -29,7 +29,7 @@ COPY package.json package-lock.json ./
 COPY packages/ui/package.json packages/ui/
 COPY apps/game/package.json apps/game/
 COPY apps/server/package.json apps/server/
-RUN npm ci --omit=dev --no-audit --no-fund --workspace=@kart-republique/server && npm cache clean --force
+RUN npm ci --omit=dev --no-audit --no-fund --workspace=@politikar/server && npm cache clean --force
 COPY apps/server/src apps/server/src
 COPY apps/game/src/engine apps/game/src/engine
 COPY --from=build /app/apps/game/dist apps/game/dist

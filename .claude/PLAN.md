@@ -98,10 +98,10 @@ Guards in order: `sessionUser` → 401; `isJson` → 415; `readJsonBody(req, 102
 
 ## Stages
 
-Per stage: worker agent → Tier 1 (`npm run typecheck && npm run test && npm audit --omit=dev`; `npm run build -w @kart-republique/ui` first when the library changed) → `npm run test:e2e` (judged against the baseline for this container's known software-WebGL failures) → one commit → a `claude-action.log` line. Two fix attempts, then roll back the stage and report. Worktree stages are merged by the dispatcher in the listed order; after every merge the dispatcher reruns Tier 1 + full E2E on the integrated tip.
+Per stage: worker agent → Tier 1 (`npm run typecheck && npm run test && npm audit --omit=dev`; `npm run build -w @politikar/ui` first when the library changed) → `npm run test:e2e` (judged against the baseline for this container's known software-WebGL failures) → one commit → a `claude-action.log` line. Two fix attempts, then roll back the stage and report. Worktree stages are merged by the dispatcher in the listed order; after every merge the dispatcher reruns Tier 1 + full E2E on the integrated tip.
 
 ### Stage 0: Environment, baseline, artifacts (dispatcher)
-- **Environment:** no `node_modules` in this container (Node v22.22, npm 10.9): `npm ci`, `npm run build -w @kart-republique/ui`, Tier-1 baseline. Playwright browsers are pre-installed under `/opt/pw-browsers` (chromium-1243): run E2E with `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`; if `@playwright/test ^1.64.1` does not find them, set `executablePath: '/opt/pw-browsers/chromium'` (never `playwright install`). Record the E2E baseline on `1bbcd2e` (47 specs) once.
+- **Environment:** no `node_modules` in this container (Node v22.22, npm 10.9): `npm ci`, `npm run build -w @politikar/ui`, Tier-1 baseline. Playwright browsers are pre-installed under `/opt/pw-browsers` (chromium-1243): run E2E with `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`; if `@playwright/test ^1.64.1` does not find them, set `executablePath: '/opt/pw-browsers/chromium'` (never `playwright install`). Record the E2E baseline on `1bbcd2e` (47 specs) once.
 - `.claude/PLAN.md` ← this plan; `DECISIONS.md` DEC-032..039; `ASSUMPTIONS.md` A-026..A-034; `CHECKPOINT.md` current-task block.
 
 ### Wave 1 (parallel worktrees): 1 ∥ 2 ∥ 3a ∥ 3b ∥ 3c — no shared files
@@ -172,6 +172,6 @@ DEC-032 one catalogue module is the shared truth for grades, prices, odds and th
 A-026 option names and grades per category/trail · A-027 uniform pools inside a kind (chars: the 12 non-starters) · A-028 daily bonus day = UTC · A-029 a pre-economy account (`owned` null) is seeded once with what its level had unlocked · A-030 Montmartre's climb is ramps in series + stair decor (no elevation model) · A-031 the admin owns the whole catalogue · A-032 the lobby shows the trail as a named badge, the 3D trail in races and on the turntable · A-033 camera retune values · A-034 per-user stats are read-modify-write (one race at a time per account); only coins are atomic.
 
 ## Verification (end to end)
-1. `npm run build -w @kart-republique/ui && npm run typecheck && npm run test && npm audit --omit=dev` green (ui 241+, game ≥ 254, server ≥ 118, plus new suites: catalog, trail, lines, lootbox, economy, store block).
+1. `npm run build -w @politikar/ui && npm run typecheck && npm run test && npm audit --omit=dev` green (ui 241+, game ≥ 254, server ≥ 118, plus new suites: catalog, trail, lines, lootbox, economy, store block).
 2. `npm run test:e2e`: R-01..R-20 + `shop.spec.ts` + extended game/garage/multiplayer/mobile/dashboard specs; the five-circuit and `#pause-kart` changes are requested behaviour changes.
 3. Manual on `npm run serve`: register → race solo → coins and stats in Compte; admin grants 1000; open 3 boxes (desktop + phone portrait: full sequence, tap-skip); buy a rare part and see it in a race and in a two-browser team race (trail visible to the other player, lobby badge); race Montmartre and Marseille on `low` and `high`; a long press on buttons/tiles/chips on a phone selects nothing.

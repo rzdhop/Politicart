@@ -15,7 +15,7 @@ export default defineConfig({
   build: {
     lib: {
       entry: resolve(import.meta.dirname, 'src/index.ts'),
-      name: 'KartRepubliqueUI',
+      name: 'PolitikarUI',
       formats: ['es', 'cjs'],
       fileName: (format) => (format === 'es' ? 'index.js' : 'index.cjs'),
       cssFileName: 'styles',

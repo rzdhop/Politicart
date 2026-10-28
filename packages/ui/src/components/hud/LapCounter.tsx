@@ -13,7 +13,7 @@ export interface LapCounterProps extends Omit<ComponentPropsWithRef<'div'>, 'ref
  *
  * 22px display type with a hard shadow so it holds up over a bright track.
  * Takes its text as children rather than lap numbers, since the wording is the
- * game's rather than the system's -- Kart République writes `TOUR 2/3` during
+ * game's rather than the system's -- Politikar writes `TOUR 2/3` during
  * a race and `ARRIVÉE` once the player has finished.
  *
  * ```tsx

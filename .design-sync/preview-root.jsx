@@ -1,6 +1,6 @@
 // The context the Storybook decorator provides, as a component.
 //
-// @kart-republique/ui is dark-only: its stylesheet paints `body` with the
+// @politikar/ui is dark-only: its stylesheet paints `body` with the
 // hemicycle-night background and every component assumes it. Storybook's
 // preview decorator paints the canvas the same way. The design-sync preview
 // cards and the designs built from this system do not run that decorator, so

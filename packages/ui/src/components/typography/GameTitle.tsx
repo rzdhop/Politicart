@@ -18,7 +18,7 @@ export type GameTitleProps = ComponentPropsWithRef<'h1'>;
  * long string pushes the white band off centre.
  *
  * ```tsx
- * <GameTitle>KART RÉPUBLIQUE</GameTitle>
+ * <GameTitle>POLITIKAR</GameTitle>
  * ```
  */
 export function GameTitle({ className, ...rest }: GameTitleProps) {

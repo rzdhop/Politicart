@@ -1,4 +1,4 @@
-import { Button, Disclaimer, Heading, Panel, ResultsTable, Row, Screen, Subtitle, type ResultsRow } from '@kart-republique/ui';
+import { Button, Disclaimer, Heading, Panel, ResultsTable, Row, Screen, Subtitle, type ResultsRow } from '@politikar/ui';
 
 import { DAILY_COINS } from '../../engine/catalog.js';
 import { CHARACTERS } from '../../engine/data.js';

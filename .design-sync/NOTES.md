@@ -5,7 +5,7 @@ were discovered; kept in the repo on purpose.
 
 ## Repo shape
 
-- The design system is `packages/ui` (`@kart-republique/ui`), an npm workspace.
+- The design system is `packages/ui` (`@politikar/ui`), an npm workspace.
   The repo root holds `package-lock.json`, so the install step is `npm ci`.
 - The library is extracted from the game at `index.html`, whose single `<style>`
   block was the only definition of the look before this work. See
@@ -144,7 +144,7 @@ Learnings from the storybook-shape sync of `packages/ui`, in the order found.
   with `cfg.extraEntries = ["../../.design-sync/preview-root.jsx"]` -- a
   repo-owned component that wraps each story in the system's background,
   foreground and body font, exactly what the decorator supplied. It ships in
-  the bundle as `window.KartRepubliqueUI.PreviewRoot`; a full page does not
+  the bundle as `window.PolitikarUI.PreviewRoot`; a full page does not
   need it (the stylesheet's `body` rule does the same), fragments on a foreign
   page do.
 - **[GENERAL] `[FONT_MISSING] "Arial Black", "Impact"` is the fallback stack,
@@ -250,3 +250,18 @@ Learnings from the storybook-shape sync of `packages/ui`, in the order found.
   the package's own `dist/components/hud/*.d.ts` and the bundle. The
   conventions header is what tells the design agent about them; keep its
   handle list in step with `packages/ui/src/components/hud/handles.ts`.
+
+## Target moved to a Claude artifact (2026-10-28)
+
+The Claude Design project `b7586fe5-3495-4448-ab55-58afb71f3c81` moved to
+Claude on 2026-10-28: the system is now the Design System artifact
+`https://claude.ai/code/artifact/1db9db24-1aee-4f65-93d7-a58ce488b52d`
+(short link `https://claude.ai/artifact/4fuDJ8382P9nZfdTeiqAhi`), kept in
+files under `project/` in the Design System format: `components/bundle.js`,
+`components/bundle.css`, `components/index.d.ts`, `tokens.json`,
+`tokens.css`, `fonts/`, and per component `components/<Name>/README.md`,
+`preview.html`, `<Name>.d.ts` and `stories.js`. `config.json` points at it
+(`projectId` is the artifact id; `artifactUrl` the address). The same day the
+game was renamed Politikar: the package scope is `@politikar/*` and the bundle
+global `PolitikarUI`; the design system's namespace follows. A re-sync must
+write that layout, not the storybook-shape one this file describes above.

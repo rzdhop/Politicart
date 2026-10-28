@@ -23,7 +23,7 @@ describe.skipIf(!built)('published package contract', () => {
   });
 
   it('ships the declaration that makes its own CSS import resolvable', () => {
-    // Without this, a consumer's `import '@kart-republique/ui'` fails to
+    // Without this, a consumer's `import '@politikar/ui'` fails to
     // typecheck on the package's internal side-effect import.
     const types = readFileSync(join(dist, 'index.d.ts'), 'utf8');
     expect(types).toContain("import './styles.css'");

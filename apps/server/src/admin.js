@@ -3,7 +3,7 @@
 //   KR_ADMIN_USER           the admin's account name (default "rida")
 //   KR_ADMIN_PASSWORD_HASH  its password, hashed as accounts.js hashes every
 //                           password: scrypt$<32 hex salt>$<128 hex key>.
-//                           `npm run -s admin-hash -w @kart-republique/server`
+//                           `npm run -s admin-hash -w @politikar/server`
 //                           prints one.
 //
 // The environment is the truth: at boot ensureAdmin() creates the account, or
