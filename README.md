@@ -164,10 +164,12 @@ Both orientations work: in portrait the camera widens and pulls back. Phones sta
 - **The go launch**: on "Choisir le circuit →" the circuits show at once, and behind their cards the kart drives off down the aisle, away from the camera, in a burst of confetti (about 1.4 s). It does not play when the system asks for reduced motion.
 - **The Garage** opens on the same podium: every change shows on the kart at once, the pilot staying seated and the trail streaming behind it.
 - **Portraits** come progressively: the roster shows all sixteen tiles at once on placeholders (the candidate's kart colour and initials), and each tile gets its rendered portrait in the next seconds, one per frame.
-- **Detail follows the graphics setting.** "Détaillés" draws the stage with real-time shadows, physical fabrics (sheen, clearcoat, normal maps) and the full hemicycle; "légers" (the default on phones) keeps the same stage with lighter pilots and materials, 6 tiers of benches instead of 10, a baked contact shadow under the kart and fewer confetti. In a race the same pilots are merged into a few draw calls per kart.
+- **Detail follows the graphics setting.** "Détaillés" draws the stage with real-time shadows, physical fabrics (sheen, clearcoat, normal maps) and the full hemicycle; "légers" (the default on phones) keeps the same stage with lighter pilots and materials, 6 tiers of benches instead of 10, a baked contact shadow under the kart and fewer confetti. In a race the same pilots are merged into a few draw calls per kart; on "détaillés" their heads sway a little and turn into the bends, and on "légers" the still decor and the kart's parts are folded into a few draws.
 - **On a GPU that cannot keep up** (software rendering such as SwiftShader or llvmpipe, a blocklisted or very weak GPU), the stage measures its own frame cost and, at 100 ms a frame or more, stands still: it draws only when its picture changes, one frame after the input, and behaves as under reduced motion, so the menus never wait on it (DEC-046). On a GPU that keeps up nothing changes.
 
 Held sideways on a phone, the stage stays pinned beside the roster while the tiles and the buttons scroll past; upright, it sits above the roster.
+
+On a phone the note at the bottom ("Tactile : …") sits on a dark glass card with nothing under it; its × closes it until the next load.
 
 ## Content
 
@@ -227,6 +229,7 @@ The engine never touches the DOM; the UI never touches the simulation. They meet
 | `src/engine/stageinput.js` | The podium's pointer input: the drag on the showcase band, the mouse for parallax. |
 | `src/ui/` | The React screens and the HUD, composed from `@politikart/ui`; `store.ts` is what they read. |
 | `src/game.js` | The per-frame HUD writer, the keyboard and the clock. |
+| `public/` | The favicon (SVG, a 32 px PNG, the ICO, the 180 px Apple touch icon), copied to the build's root. |
 
 ### The design system (`packages/ui`)
 
