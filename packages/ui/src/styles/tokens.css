@@ -15,6 +15,15 @@
   --red:#c8102e;
   --gold:#f2c14e;
   --line:rgba(246,241,228,.18);
+  /* Economy (stage 6a): one colour per grade, a second one for the incredible
+     rainbow sweep, and the politicoin gold. Common is the muted lavender on
+     purpose: a common item should read as "nothing special". */
+  --grade-common:#b9b3d8;
+  --grade-rare:#4fa3ff;
+  --grade-mythic:#b14cff;
+  --grade-incredible:#ffb400;
+  --grade-incredible-2:#ff4fd8;
+  --coin:#f2c14e;
   --font-display:'Lilita One','Arial Black',Impact,sans-serif;
   --font-body:'Nunito','Segoe UI',system-ui,sans-serif;
   --font-mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;

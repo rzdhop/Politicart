@@ -2,7 +2,10 @@
 
    Import order is load-bearing: tokens first (everything references them),
    then base, then the shared layout primitives, then each component group.
-   The HUD must load after foundation - see hud.css.
+   The HUD must load after foundation - see hud.css. economy.css comes after
+   the component sheets it borrows from (controls, tracks), and fx.css is last
+   of all: its grade rules must win over every component's own border and
+   background, which they do by source order alone.
 
    fonts.css comes first of all: it only declares @font-face, and the families
    it names are what tokens.css then points --font-display and --font-body at. */
@@ -20,3 +23,5 @@
 @import './styles/results.css';
 @import './styles/workshop.css';
 @import './styles/misc.css';
+@import './styles/economy.css';
+@import './styles/fx.css';

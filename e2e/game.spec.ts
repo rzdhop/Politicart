@@ -78,15 +78,15 @@ test.describe('R-01 title -> select -> tracks -> race', () => {
     await expect(page.locator('#showcase .big')).not.toHaveText(first ?? '');
   });
 
-  test('offers the three circuits', async ({ page }) => {
+  test('offers the five circuits', async ({ page }) => {
     await page.locator('#b-play').click();
     await page.locator('#b-next1').click();
     await expect(page.locator('#s-tracks')).toBeVisible();
-    await expect(page.locator('#trackcards .card')).toHaveCount(3);
+    await expect(page.locator('#trackcards .card')).toHaveCount(5);
     // Each card names its circuit, previews it and describes it.
     await expect(page.locator('#trackcards .card .name').first()).not.toBeEmpty();
-    await expect(page.locator('#trackcards .card canvas')).toHaveCount(3);
-    await expect(page.locator('#trackcards .card .desc')).toHaveCount(3);
+    await expect(page.locator('#trackcards .card canvas')).toHaveCount(5);
+    await expect(page.locator('#trackcards .card .desc')).toHaveCount(5);
 
     await page.locator('#trackcards .card').nth(2).click();
     await expect(page.locator('#trackcards .card').nth(2)).toHaveClass(/sel/);
@@ -226,6 +226,9 @@ test.describe('R-03 pause, resume and quit', () => {
     await startRace(page);
     await page.keyboard.press('Escape');
     await expect(page.locator('#s-pause')).toBeVisible();
+    // The pause menu shows the kart being driven (stage 7): the candidate's card with their grade.
+    await expect(page.locator('#pause-kart')).toBeVisible();
+    await expect(page.locator('#pause-kart .grade')).toHaveCount(1);
 
     // Paused means paused: the clock must not move.
     const held = await clock(page);

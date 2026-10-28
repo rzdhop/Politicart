@@ -1,0 +1,401 @@
+/* Economy: grade badges, coin counts, shop and kart cards, the reveal overlay
+   and shop tabs. Static looks only -- every animation lives in fx.css, which
+   loads after this sheet and layers the motion onto the same class hooks.
+
+   Touch targets: every button and tab here is at least 44px tall, since the
+   shop is the one part of the game played as much on a phone as at a desk. */
+
+/* GradeBadge ---------------------------------------------------------------- */
+
+.grade {
+  --grade-color:var(--grade-common);
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  font-family:var(--font-display);
+  font-size:13px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  line-height:1;
+  color:var(--grade-color);
+  background-color:rgba(12,18,48,.7);
+  border:2px solid var(--grade-color);
+  border-radius:999px;
+  padding:5px 10px;
+  white-space:nowrap;
+  vertical-align:middle;
+}
+
+.grade.grade-sm {
+  font-size:11px;
+  padding:3px 7px;
+  letter-spacing:.05em;
+}
+
+/* Common stays quiet: a muted border, no glow, nothing moving. */
+.grade.grade-common {
+  border-color:rgba(185,179,216,.45);
+  color:var(--muted);
+}
+
+/* The small grade dot on a kart part chip. */
+.grade-dot {
+  --grade-color:var(--grade-common);
+  display:inline-block;
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:var(--grade-color);
+  box-shadow:0 0 6px var(--grade-color);
+  flex:none;
+}
+
+.grade-dot.grade-common { box-shadow:none; opacity:.6; }
+
+/* The grade colours, after every rule that sets the common default at the
+   same specificity (.grade, .grade-dot), so the grade always wins. */
+.grade-rare { --grade-color:var(--grade-rare); }
+.grade-mythic { --grade-color:var(--grade-mythic); }
+.grade-incredible { --grade-color:var(--grade-incredible); }
+
+/* CoinCount ----------------------------------------------------------------- */
+
+.coin-count {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-family:var(--font-display);
+  font-size:18px;
+  color:var(--coin);
+  line-height:1;
+  white-space:nowrap;
+  vertical-align:middle;
+}
+
+.coin-count svg {
+  width:1.15em;
+  height:1.15em;
+  flex:none;
+}
+
+.coin-count .coin-value { font-variant-numeric:tabular-nums; }
+
+.coin-count .coin-label {
+  font-family:var(--font-body);
+  font-size:.7em;
+  font-weight:700;
+  color:var(--muted);
+  letter-spacing:.04em;
+}
+
+.coin-count.coin-count-sm { font-size:14px; gap:4px; }
+.coin-count.coin-count-lg { font-size:26px; gap:8px; }
+
+/* ShopCard ------------------------------------------------------------------ */
+
+.shop-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+  gap:12px;
+  width:100%;
+}
+
+.shop-card {
+  position:relative;
+  width:100%;
+  box-sizing:border-box;
+  cursor:default;
+  gap:10px;
+}
+
+.shop-card:hover { transform:none; }
+
+.shop-card .shop-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+
+.shop-card .shop-image {
+  position:relative;
+  aspect-ratio:4/3;
+  border-radius:8px;
+  background:rgba(0,0,0,.25);
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.shop-card .shop-image img {
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+
+.shop-card .shop-title {
+  font-family:var(--font-display);
+  font-size:19px;
+  line-height:1.05;
+}
+
+.shop-card .shop-subtitle {
+  font-size:12.5px;
+  color:var(--muted);
+  line-height:1.35;
+}
+
+.shop-card .shop-foot {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:auto;
+  flex-wrap:wrap;
+}
+
+.shop-card .shop-foot .btn {
+  min-height:44px;
+  font-size:17px;
+  padding:9px 18px;
+  flex:1 1 auto;
+}
+
+.shop-card .shop-foot .btn[disabled] {
+  cursor:not-allowed;
+  background:rgba(246,241,228,.1);
+  color:var(--muted);
+  box-shadow:none;
+  transform:none;
+}
+
+.shop-card .shop-foot .btn.ghost[disabled] {
+  background:transparent;
+  border-color:var(--line);
+}
+
+/* The owned tick, top-right, clear of the grade badge on the left. */
+.shop-card .shop-ribbon {
+  position:absolute;
+  top:0;
+  right:0;
+  width:36px;
+  height:36px;
+  border-radius:0 10px 0 12px;
+  background:var(--gold);
+  color:#0c1230;
+  font-family:var(--font-display);
+  font-size:20px;
+  line-height:36px;
+  text-align:center;
+  box-shadow:0 2px 0 #a8801c;
+  z-index:2;
+}
+
+.shop-card.owned { border-color:rgba(242,193,78,.6); }
+
+/* KartCard ------------------------------------------------------------------ */
+
+.kart-card {
+  position:relative;
+  cursor:default;
+  gap:8px;
+  width:100%;
+  max-width:340px;
+  box-sizing:border-box;
+}
+
+.kart-card:hover { transform:none; }
+
+.kart-card .kart-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+
+.kart-card .kart-title {
+  font-size:12px;
+  color:var(--gold);
+  text-transform:uppercase;
+  letter-spacing:.12em;
+}
+
+.kart-card .kart-image {
+  border-radius:8px;
+  background:rgba(0,0,0,.25);
+  overflow:hidden;
+}
+
+.kart-card .kart-image img {
+  width:100%;
+  height:auto;
+  display:block;
+}
+
+.kart-card .kart-parts {
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+
+.kart-part {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-size:12.5px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:4px 10px 4px 7px;
+  background:rgba(0,0,0,.2);
+}
+
+.kart-part .kart-part-label { color:var(--muted); }
+
+.kart-part .kart-part-value { font-weight:700; }
+
+.kart-card .kart-trail {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:13px;
+  color:var(--fg);
+  border-top:1px solid var(--line);
+  padding-top:8px;
+}
+
+.kart-card .kart-trail .kart-trail-label { color:var(--muted); }
+
+/* RevealStage --------------------------------------------------------------- */
+
+.kr-reveal {
+  --kr-flash:var(--grade-common);
+  position:fixed;
+  inset:0;
+  z-index:50;
+  pointer-events:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  box-sizing:border-box;
+}
+
+.kr-reveal-common { --kr-flash:var(--grade-common); }
+.kr-reveal-rare { --kr-flash:var(--grade-rare); }
+.kr-reveal-mythic { --kr-flash:var(--grade-mythic); }
+.kr-reveal-incredible { --kr-flash:var(--grade-incredible); }
+
+/* A dim that comes up while the box opens, so the result card has contrast. */
+.kr-reveal-dim {
+  position:absolute;
+  inset:0;
+  background:rgba(12,18,48,.55);
+}
+
+.kr-flash {
+  position:absolute;
+  inset:0;
+}
+
+.kr-flash::before,
+.kr-flash::after {
+  content:'';
+  position:absolute;
+  inset:0;
+  opacity:0;
+}
+
+.kr-flash::before { background:var(--kr-flash); }
+
+.kr-flash::after { background:#fff; }
+
+.kr-reveal-card {
+  position:relative;
+  pointer-events:auto;
+  z-index:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:12px;
+  text-align:center;
+  max-width:min(440px,100%);
+  box-shadow:0 0 48px -8px var(--kr-flash);
+}
+
+/* Tabs ---------------------------------------------------------------------- */
+
+.tabs {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  justify-content:center;
+}
+
+.tab {
+  font-family:var(--font-display);
+  font-size:16px;
+  letter-spacing:.03em;
+  color:var(--fg);
+  background:transparent;
+  border:2px solid var(--line);
+  border-radius:999px;
+  padding:8px 18px;
+  min-height:44px;
+  cursor:pointer;
+}
+
+.tab:hover { border-color:var(--gold); }
+
+.tab[aria-selected=true] {
+  background:var(--gold);
+  border-color:var(--gold);
+  color:#0c1230;
+}
+
+.tab:focus-visible {
+  outline:3px solid #fff;
+  outline-offset:2px;
+}
+
+/* ChoiceGroup additions: a chip can be disabled and carry a badge. ----------- */
+
+.chip {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+
+.chip[disabled],
+.chip[aria-disabled=true] {
+  opacity:.55;
+  cursor:not-allowed;
+}
+
+.chip[disabled]:hover,
+.chip[aria-disabled=true]:hover { border-color:var(--line); }
+
+.chip .chip-badge {
+  display:inline-flex;
+  pointer-events:auto;
+  cursor:pointer;
+}
+
+/* CharacterTile badge: top-right, clear of the game's top-centre lock pill. */
+.tile .tile-badge {
+  position:absolute;
+  top:6px;
+  right:6px;
+  z-index:1;
+}
+
+@media (max-width:480px) {
+  .shop-grid { grid-template-columns:1fr; }
+  .shop-card .shop-foot { flex-direction:column; align-items:stretch; }
+  .shop-card .shop-foot .btn { width:100%; }
+}

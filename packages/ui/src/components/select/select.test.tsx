@@ -61,6 +61,16 @@ describe('CharacterTile', () => {
     screen.getByRole('button').click();
     expect(onClick).toHaveBeenCalledOnce();
   });
+
+  it('pins a badge top-right inside the tile, and none by default', () => {
+    const { container, rerender } = render(<CharacterTile name="Kevin" />);
+    expect(container.querySelector('.tile-badge')).toBeNull();
+    rerender(<CharacterTile name="Kevin" badge={<i data-testid="grade">Rare</i>} />);
+    const badge = container.querySelector('.tile .tile-badge');
+    expect(badge?.textContent).toBe('Rare');
+    // Before the name strip, so it never covers the name.
+    expect(badge?.nextElementSibling?.className).toBe('tname');
+  });
 });
 
 describe('Showcase', () => {

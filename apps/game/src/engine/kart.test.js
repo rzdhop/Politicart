@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { CHARACTERS } from './data.js';
 import { buildKart } from './kart.js';
-import { builtinStyle, defaultStyle, mergeStyle, SPOILERS, STICKERS, WHEELS } from './kartstyle.js';
+import { builtinStyle, defaultStyle, EXHAUSTS, MASTS, mergeStyle, NOSES, SKINS, SPOILERS, STICKERS, UNDERGLOWS, WHEELS } from './kartstyle.js';
 import { resetMachine } from './machine.js';
 import { framePayload } from './payload.js';
 import { startField } from './race.js';
@@ -16,13 +16,18 @@ const style = partial => mergeStyle(builtinStyle(victor), partial);
 const meshes = k => { const out = []; k.traverse(o => { if (o.isMesh) out.push(o); }); return out; };
 const colours = k => new Set(meshes(k).map(m => m.material.color?.getHex()));
 const named = (k, name) => k.children.filter(o => o.name === name);
+/** What a kart is made of: one line per mesh (geometry, size, colour), sorted, so two karts compare by look alone. */
+const signature = k => meshes(k).map(m => m.geometry.type + JSON.stringify(m.geometry.parameters) + (m.material.color?.getHex() ?? '') + (m.material.map ? 'map:' + m.material.map.name : '')).sort().join('|');
+const tractor = CHARACTERS.find(c => c.tractor), cargo = CHARACTERS.find(c => c.cargo);
 
 describe('buildKart', () => {
   it.each(CHARACTERS.map(c => [c.id, c]))('%s keeps the userData contract with its default style', (_id, c) => {
     const k = buildKart(c);
-    expect(Object.keys(k.userData).sort()).toEqual(['blades', 'bumpSparks', 'driver', 'ring', 'rotor', 'shield', 'sparks', 'wheels']);
+    expect(Object.keys(k.userData).sort()).toEqual(['anim', 'blades', 'bumpSparks', 'driver', 'ring', 'rotor', 'shield', 'sparks', 'trail', 'wheels']);
     expect(k.userData.wheels).toHaveLength(c.cargo ? 3 : 4);
     expect(named(k, 'plate')).toHaveLength(1);
+    expect(k.userData.trail).toBeNull();
+    expect(Array.isArray(k.userData.anim)).toBe(true);
   });
 
   it('defaults to the character default style', () => {
@@ -82,6 +87,89 @@ describe('buildKart', () => {
 
   it('builds with a race number without breaking the plate', () => {
     for (const number of [0, 7, 99]) expect(named(buildKart(victor, style({ number })), 'plate')).toHaveLength(1);
+  });
+
+  describe('the parts', () => {
+    const options = { exhaust: EXHAUSTS, underglow: UNDERGLOWS, mast: MASTS, nose: NOSES, skin: SKINS };
+
+    it.each(Object.keys(options))('every %s option builds a different kart', field => {
+      const looks = options[field].map(v => signature(buildKart(victor, style({ [field]: v }))));
+      expect(new Set(looks).size).toBe(options[field].length);
+    });
+
+    it.each(['exhaust', 'underglow', 'mast', 'skin'])('%s options reach the tractor and the cargo bike too', field => {
+      for (const c of [tractor, cargo]) {
+        const looks = options[field].map(v => signature(buildKart(c, mergeStyle(builtinStyle(c), { [field]: v }))));
+        expect(new Set(looks).size).toBe(options[field].length);
+      }
+    });
+
+    it('the nose is the standard kart\'s alone', () => {
+      for (const c of [tractor, cargo]) {
+        const looks = NOSES.map(v => signature(buildKart(c, mergeStyle(builtinStyle(c), { nose: v }))));
+        expect(new Set(looks).size).toBe(1);
+      }
+    });
+
+    it('animates the turbine, the rainbow and the flags, and nothing on a stock kart', () => {
+      expect(buildKart(victor, style({}))).toHaveProperty('userData.anim', []);
+      expect(buildKart(victor, style({ exhaust: 'turbine' })).userData.anim).toHaveLength(1);
+      expect(buildKart(victor, style({ underglow: 'rainbow' })).userData.anim).toHaveLength(1);
+      expect(buildKart(victor, style({ underglow: 'blue', mast: 'antenna' })).userData.anim).toHaveLength(0);
+      for (const mast of ['tricolore', 'europe', 'pirate']) expect(buildKart(victor, style({ mast })).userData.anim).toHaveLength(1);
+      const k = buildKart(victor, style({ exhaust: 'turbine', underglow: 'rainbow', mast: 'pirate' }));
+      expect(k.userData.anim).toHaveLength(3);
+      for (const f of k.userData.anim) { f(1 / 60, 1.5); f(1 / 60, 1.6, { boost: 1 }); }   // with and without a kart, as the turntable and the race call them
+    });
+
+    it('cycles the rainbow underglow', () => {
+      const k = buildKart(victor, style({ underglow: 'rainbow' }));
+      const glow = named(k, 'underglow')[0];
+      const before = glow.material.color.getHex(); k.userData.anim[0](0.016, 1.0);
+      expect(glow.material.color.getHex()).not.toBe(before);
+      expect(glow.material.transparent).toBe(true);
+      expect(named(buildKart(victor, style({ underglow: 'none' })), 'underglow')).toHaveLength(0);
+    });
+
+    const every = { exhaust: EXHAUSTS, underglow: UNDERGLOWS, mast: MASTS, nose: NOSES, skin: SKINS };
+    it.each(Object.entries(every).flatMap(([f, vs]) => vs.map(v => [f, v])))('keeps four wheels, front pair first, with %s %s', (field, v) => {
+      const w = buildKart(victor, style({ [field]: v })).userData.wheels;
+      expect(w).toHaveLength(4);
+      expect(w[0].position.z).toBeGreaterThan(0); expect(w[1].position.z).toBeGreaterThan(0);
+      expect(w[2].position.z).toBeLessThan(0); expect(w[3].position.z).toBeLessThan(0);
+      expect(w[0].position.x).toBeLessThan(0); expect(w[1].position.x).toBeGreaterThan(0);
+    });
+
+    it('keeps the ram spike inside the Langue de bois shield ring', () => {
+      const k = buildKart(victor, style({ nose: 'ram' }));
+      const ring = k.userData.shield.geometry.parameters.radius;
+      const spike = meshes(k).find(m => m.geometry.type === 'ConeGeometry' && m.position.z > 1);
+      expect(spike).toBeDefined();
+      const tip = spike.position.z + spike.geometry.parameters.height / 2;
+      expect(tip).toBeGreaterThan(2);
+      expect(tip).toBeLessThan(ring);
+    });
+
+    it('paints a skin on the body boxes with one textured material, and leaves flat alone', () => {
+      const bodyOf = k => meshes(k).filter(m => m.geometry.parameters?.width === 1.6 && m.geometry.parameters?.depth === 2.8)[0];
+      expect(bodyOf(buildKart(victor, style({ skin: 'flat' }))).material.map).toBeFalsy();
+      for (const skin of SKINS.filter(s => s !== 'flat')) {
+        const k = buildKart(victor, style({ skin, spoiler: 'wing', pods: true }));
+        const body = bodyOf(k);
+        expect(body.material.map).toBeTruthy();
+        const sharing = meshes(k).filter(m => m.material === body.material);
+        expect(sharing.length).toBeGreaterThanOrEqual(5);     // body, nose, cowl, two pods, the wing blade
+        expect(named(k, 'sticker')).toHaveLength(0);
+      }
+      expect(named(buildKart(victor, style({ skin: 'flames', sticker: 'rosette' })), 'sticker')).toHaveLength(1);   // the sticker stays on top
+    });
+
+    it('keeps the detail budget: at most 40 more meshes than the stock kart had, on either detail level', () => {
+      const stock = meshes(buildKart(victor, style({}))).length;
+      const max = meshes(buildKart(victor, style({ exhaust: 'quad', underglow: 'rainbow', mast: 'pirate', nose: 'bull', skin: 'camo', spoiler: 'wing' }))).length;
+      expect(stock).toBeLessThanOrEqual(78 + 26);
+      expect(max).toBeLessThanOrEqual(78 + 45);
+    });
   });
 });
 

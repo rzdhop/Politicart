@@ -1,4 +1,5 @@
-// A kart's look: colours, wheels, spoiler, side pods, race number, sticker.
+// A kart's look: colours, wheels, spoiler, side pods, race number, sticker,
+// exhaust, underglow, mast, nose, body skin, and the trail it leaves behind.
 //
 // Pure and DOM-free, because the server imports it to validate what players
 // send (DEC-014). A style comes in two shapes:
@@ -17,6 +18,13 @@ import { hex } from './util.js';
 export const WHEELS = ['classic', 'chrome', 'offroad', 'gold'];
 export const SPOILERS = ['none', 'standard', 'wing'];
 export const STICKERS = ['none', 'tricolore', 'rosette', 'etoile', 'marianne'];
+export const EXHAUSTS = ['stock', 'double', 'side', 'quad', 'turbine'];
+export const UNDERGLOWS = ['none', 'blue', 'red', 'gold', 'rainbow'];
+export const MASTS = ['none', 'antenna', 'tricolore', 'europe', 'pirate'];
+export const NOSES = ['stock', 'splitter', 'wedge', 'bull', 'ram'];
+export const SKINS = ['flat', 'stripes', 'carbon', 'camo', 'flames'];
+/** What a kart leaves behind it in a race; lootbox-only (catalog.js), but a style field like the rest (DEC-036). */
+export const TRAILS = ['none', 'ribbon', 'smoke', 'sparkles', 'confetti', 'laser'];
 
 /** The bumpers and spoiler struts of the original kart. */
 export const DEFAULT_ACCENT = '#333333';
@@ -36,6 +44,12 @@ const FIELDS = {
   pods: v => typeof v === 'boolean',
   number: isNumber,
   sticker: oneOf(STICKERS),
+  exhaust: oneOf(EXHAUSTS),
+  underglow: oneOf(UNDERGLOWS),
+  mast: oneOf(MASTS),
+  nose: oneOf(NOSES),
+  skin: oneOf(SKINS),
+  trail: oneOf(TRAILS),
 };
 
 /**
@@ -62,7 +76,10 @@ export function mergeStyle(base, ...partials) {
 
 /** The look a character's kart had before styles existed. */
 export function builtinStyle(char) {
-  return { body: hex(char.kart), accent: DEFAULT_ACCENT, wheels: 'classic', spoiler: 'standard', pods: true, number: null, sticker: 'none' };
+  return {
+    body: hex(char.kart), accent: DEFAULT_ACCENT, wheels: 'classic', spoiler: 'standard', pods: true, number: null, sticker: 'none',
+    exhaust: 'stock', underglow: 'none', mast: 'none', nose: 'stock', skin: 'flat', trail: 'none',
+  };
 }
 
 /** A character's full default style: the built-in look, then the admin's defaults. */

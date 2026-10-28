@@ -144,6 +144,40 @@ describe('the lobby', () => {
   });
 });
 
+describe('the lobby badges (DEC-036, A-032)', () => {
+  it('name each player’s candidate grade and trail, "—" for a player without one', async () => {
+    const { container } = render(<App />);
+    await served(true);
+    fireEvent.click(container.querySelector('#b-multi')!);
+    const sock = FakeSocket.last!;
+    act(() => { sock.open(); sock.serve({ t: 'welcome', id: 'me' }); });
+    act(() => sock.serve({ t: 'room', room: ROOM({ players: [
+      { id: 'me', name: 'Alice', team: 'bleu', charId: 'victor', ready: false, style: { wheels: 'gold' } },
+      { id: 'bob', name: 'Bob', team: 'rouge', charId: 'patrick', ready: true, style: { trail: 'confetti', spoiler: 'wing' } },
+      { id: 'cid', name: 'Cid', team: 'rouge', charId: 'gege', ready: true },
+    ] }) }));
+    const rows = [...container.querySelectorAll('#lobby-players tr')];
+    expect(rows).toHaveLength(3);
+    // the candidate's grade badge beside their name
+    const badge = (row: Element) => row.querySelector('.grade[data-grade]');
+    expect(rows[0]!.textContent).toContain('Emmanuel Macaron');
+    expect(badge(rows[0]!)?.getAttribute('data-grade')).toBe('common');
+    expect(badge(rows[0]!)?.textContent).toBe('Commun');
+    expect(badge(rows[1]!)?.getAttribute('data-grade')).toBe('rare');
+    expect(badge(rows[1]!)?.textContent).toBe('Rare');
+    // the trail, named with its grade; a dash for none (a style without a trail, or no style at all)
+    expect(container.querySelector('#lobby-trail-me')?.textContent).toBe('—');
+    expect(container.querySelector('#lobby-trail-me')?.getAttribute('data-trail')).toBe('none');
+    expect(container.querySelector('#lobby-trail-bob')?.textContent).toBe('ConfettisMythique');
+    expect(container.querySelector('#lobby-trail-bob .grade')?.getAttribute('data-grade')).toBe('mythic');
+    expect(container.querySelector('#lobby-trail-bob')?.getAttribute('data-trail')).toBe('confetti');
+    expect(container.querySelector('#lobby-trail-cid')?.textContent).toBe('—');
+    expect(container.querySelectorAll('#lobby-players .grade')).toHaveLength(4);
+    fireEvent.click(container.querySelector('#b-mp-leave')!);
+    fireEvent.click(container.querySelector('#b-mp-back')!);
+  });
+});
+
 describe('invitations', () => {
   it('joins the inviting friend’s room from the title screen', async () => {
     const { container } = render(<App />);
@@ -168,10 +202,16 @@ describe('the roster for a guest', () => {
     act(() => actions.play());
     const tiles = [...container.querySelectorAll('#roster button')] as HTMLButtonElement[];
     expect(tiles).toHaveLength(16);
-    expect(tiles.filter(t => !t.disabled).map(t => t.textContent)).toEqual(['Emmanuel Macaron', 'Philippe Martini', 'Jean Lassalle-des-Fêtes', 'Sandrine Ruisseau']);
-    expect(tiles.find(t => t.disabled)?.dataset.lock).toBe('🔒 Compte requis');
+    expect(tiles.filter(t => !t.classList.contains('locked')).map(t => t.textContent)).toEqual(['Emmanuel Macaron', 'Philippe Martini', 'Jean Lassalle-des-Fêtes', 'Sandrine Ruisseau']);
+    expect(tiles.find(t => t.classList.contains('locked'))?.dataset.lock).toBe('🔒 Compte requis');
     act(() => actions.selectChar(15));
     expect(container.querySelector('#roster button[aria-pressed="true"]')?.textContent).toBe('Emmanuel Macaron');
+    // On the game server a locked tile is a way into the Boutique, not a dead button (DEC-037).
+    act(() => { tiles[15]!.click(); });
+    expect(getState()).toBe('shop');
+    expect(container.querySelector('#roster button[aria-pressed="true"]')?.textContent).toBe('Emmanuel Macaron');
+    act(() => actions.closeShop());
+    expect(getState()).toBe('select');
     act(() => actions.toTitle());
   });
 });

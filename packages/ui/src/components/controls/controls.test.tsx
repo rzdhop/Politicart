@@ -107,4 +107,47 @@ describe('ChoiceGroup', () => {
     render(<ChoiceGroup label="Roues" options={OPTIONS} value="classic" onChange={() => {}} className="wide" />);
     expect(screen.getByRole('group').className).toBe('choice-group wide');
   });
+
+  it('makes a disabled option aria-disabled and not pickable', () => {
+    const onChange = vi.fn();
+    render(
+      <ChoiceGroup
+        label="Roues"
+        options={[OPTIONS[0], { ...OPTIONS[1], disabled: true }]}
+        value="classic"
+        onChange={onChange}
+      />,
+    );
+    const gold = screen.getByRole('button', { name: 'Dorées' });
+    expect(gold.getAttribute('aria-disabled')).toBe('true');
+    // Not the native attribute: a badge inside the chip must still take a tap.
+    expect(gold).toHaveProperty('disabled', false);
+    gold.click();
+    expect(onChange).not.toHaveBeenCalled();
+    screen.getByRole('button', { name: 'Classiques' }).click();
+    expect(onChange).toHaveBeenCalledWith('classic');
+    expect(screen.getByRole('button', { name: 'Classiques' }).getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('renders an option badge inside the chip after the label, and lets it take a click', () => {
+    const onBadge = vi.fn();
+    const onChange = vi.fn();
+    render(
+      <ChoiceGroup
+        label="Roues"
+        options={[
+          OPTIONS[0],
+          { ...OPTIONS[1], disabled: true, badge: <span id="g-buy-wheels-gold" onClick={onBadge}>Mythique</span> },
+        ]}
+        value="classic"
+        onChange={onChange}
+      />,
+    );
+    const gold = document.getElementById('w-gold');
+    expect(gold?.querySelector('.chip-badge')?.textContent).toBe('Mythique');
+    expect(gold?.textContent).toBe('DoréesMythique');
+    document.getElementById('g-buy-wheels-gold')?.click();
+    expect(onBadge).toHaveBeenCalledOnce();
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });

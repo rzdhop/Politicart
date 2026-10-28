@@ -93,6 +93,33 @@ Marked UNCONFIRMED / confirmed / invalidated.
   UNCONFIRMED. Minecraft's reading of "creative"; the god still drives and
   cannot spawn arbitrary hazards or teleport.
 
+- **A-026 -- The option names and grades per kart part category and trail.**
+  UNCONFIRMED (DEC-032). Exhaust stock/double/side/quad/turbine, underglow
+  none/blue/red/gold/rainbow, mast none/antenna/tricolore/europe/pirate, nose
+  stock/splitter/wedge/bull/ram, skin flat/stripes/carbon/camo/flames; trails
+  ribbon/smoke/sparkles/confetti/laser; existing wheels/spoiler/sticker graded
+  too (classic/none/standard/tricolore common). The human may regrade.
+- **A-027 -- Lootbox pools are uniform inside a kind.** UNCONFIRMED. The 2 %
+  candidate draw picks uniformly among the twelve non-starters whatever the
+  level; the 4 % draw among every non-common part option and every trail.
+- **A-028 -- The daily first-race bonus uses the UTC day.** UNCONFIRMED.
+- **A-029 -- An account from before the economy keeps what its level had
+  unlocked.** UNCONFIRMED (DEC-034): `owned` null is seeded once with
+  `unlockedIds(level)` minus the starters, and zero coins.
+- **A-030 -- No transaction around a box open.** UNCONFIRMED (DEC-033). The
+  order spend → roll → grant/refund bounds the loss to one box price on a
+  crash, accepted as "not serious for now" (DEC-019).
+- **A-031 -- The admin owns the whole catalogue.** UNCONFIRMED. Its profile
+  reports everything owned; its styles are never filtered.
+- **A-032 -- The lobby shows a trail as a named badge; the 3D trail shows in
+  races and on the turntable.** UNCONFIRMED.
+- **A-033 -- Camera retune: 10.5 behind, 5.6 up, looking 1.0 high.**
+  UNCONFIRMED (was 12 / 6.2 / 1.2); the portrait terms are unchanged.
+- **A-034 -- Per-user stats are read-modify-write.** UNCONFIRMED. An account
+  is in one race at a time; only coins are updated atomically.
+- **A-035 -- Montmartre's climb is ramps in series plus stair decor.**
+  UNCONFIRMED. The sample model has no elevation.
+
 ## Confirmed
 
 - **A-006 -- Node 26 is available to `actions/setup-node` on ubuntu-latest.**

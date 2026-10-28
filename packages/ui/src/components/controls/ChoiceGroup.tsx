@@ -9,6 +9,15 @@ export interface ChoiceOption<V extends string> {
   label: ReactNode;
   /** An id for the chip's `<button>`, for consumers that address it. */
   id?: string;
+  /**
+   * Greys the chip out and makes picking it a no-op. It stays in the tab
+   * order and reports `aria-disabled` rather than the `disabled` attribute,
+   * so a `badge` inside it still takes a tap -- the Garage puts a grade badge
+   * on an unowned option and a tap on it opens the shop.
+   */
+  disabled?: boolean;
+  /** Something small after the label, inside the chip: a `GradeBadge`, a count. */
+  badge?: ReactNode;
 }
 
 export interface ChoiceGroupProps<V extends string> extends Omit<ComponentPropsWithRef<'div'>, 'onChange'> {
@@ -32,6 +41,10 @@ export interface ChoiceGroupProps<V extends string> extends Omit<ComponentPropsW
  * primary Button. Each chip is a real `<button>` with `aria-pressed`, so the
  * group is fully keyboard-driven, and focus draws the system's white ring.
  *
+ * An option can be `disabled` (muted, `aria-disabled`, picking it does
+ * nothing) and carry a `badge` after its label; together they are how the
+ * Garage shows an option the player does not own yet.
+ *
  * ```tsx
  * <ChoiceGroup
  *   label="Roues"
@@ -53,9 +66,11 @@ export function ChoiceGroup<V extends string>({ label, options, value, onChange,
             type="button"
             className="chip"
             aria-pressed={o.value === value}
-            onClick={() => onChange(o.value)}
+            aria-disabled={o.disabled ? true : undefined}
+            onClick={o.disabled ? undefined : () => onChange(o.value)}
           >
             {o.label}
+            {o.badge === undefined ? null : <span className="chip-badge">{o.badge}</span>}
           </button>
         ))}
       </div>

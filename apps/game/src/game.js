@@ -25,6 +25,7 @@ import { drain, resolveFor } from './engine/events.js';
 import { loadGarage } from './engine/garage.js';
 import { setInputSource } from './engine/input.js';
 import { getState, onTransition } from './engine/machine.js';
+import { renderLootbox } from './engine/lootbox.js';
 import { isNetRace, netStep } from './engine/netrace.js';
 import { hasPreview, renderPreview } from './engine/preview.js';
 import { endRace, renderRace, stepRace } from './engine/race.js';
@@ -34,7 +35,7 @@ import { hud } from './ui/Hud.tsx';
 import { mountUi } from './ui/mount.tsx';
 import { actions } from './ui/store.ts';
 import { touchHud } from './ui/TouchControls.tsx';
-import { initTouch, isCoarsePointer, isTouchMode, setTouchMode, touchHeld } from './touch.ts';
+import { initTouch, installNoContextMenu, isCoarsePointer, isTouchMode, setTouchMode, touchHeld } from './touch.ts';
 
 'use strict';
 /* =====================================================================================
@@ -100,6 +101,8 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Enter' && G.state === 'results') $('b-again').click();
   if (G.state === 'select' && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) actions.stepChar(e.code === 'ArrowRight' ? 1 : -1);
   if (G.state === 'select' && e.code === 'Enter') $('b-next1').click();
+  // The Politibox: the space bar hurries the opening, like a tap on the stage.
+  if (G.state === 'lootbox' && e.code === 'Space') actions.skipOpening();
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
@@ -122,6 +125,8 @@ function inputState() {
 // The engine reads the player's controls through this seam rather than the keys map.
 setInputSource(inputState);
 initTouch();
+// A long press on a menu button is a tap, not a context menu or a selection (the fields keep theirs).
+installNoContextMenu();
 // Phones and tablets start on the light graphics: shadows and round meshes cost frames a phone cannot spare.
 if (isCoarsePointer()) actions.togglePoly();
 
@@ -151,7 +156,9 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
   const state = getState();
-  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'garage' || state === 'dashboard') { if (state === 'select' || state === 'tracks' || state === 'garage' || hasPreview()) renderPreview(dt); return; }
+  // The Politibox owns the canvas while it opens (DEC-037); the Boutique keeps the turntable behind its panels.
+  if (state === 'lootbox') { renderLootbox(dt); return; }
+  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'garage' || state === 'dashboard' || state === 'shop') { if (state === 'select' || state === 'tracks' || state === 'garage' || state === 'shop' || hasPreview()) renderPreview(dt); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
 
   const payload = isNetRace() ? netStep(dt) : stepRace(dt);

@@ -5,7 +5,8 @@
 //   POST /api/login     {name, password}         -> {token, profile}
 //   POST /api/logout    (Authorization: Bearer)  -> {}
 //   GET  /api/me        (Authorization: Bearer)  -> {profile}
-//   POST /api/progress  {rank, field, finished}  -> {profile, gained}   (Bearer)
+//   POST /api/progress  {rank, field, finished, trackId?, charId?, time?, bestLap?}
+//                       -> {profile, gained, coins, bonus: {daily, levelUp, levelUpCoins}}   (Bearer)
 //
 // Errors answer {error} with a 4xx status, in French, ready to show. The
 // token is a random 64-hex string the client keeps; it travels in the
@@ -15,7 +16,11 @@
 // Passwords are hashed with scrypt and a per-user salt; only the hash is
 // stored. The game is "not serious for now" (no anti-cheat): a solo race's
 // result is the client's word, so the only guard is a minimum time between
-// two solo rewards.
+// two solo rewards. A solo race pays like a team race (economy.js
+// settleRace): `gained` is the experience, `coins` the politicoins, `bonus`
+// says which bonuses they include; `trackId` (a circuit id), `charId` (a
+// candidate id), `time` and `bestLap` (seconds, 5 to 3600) feed the stats
+// and are ignored when they are anything else.
 //
 // One name is reserved for the administrator (admin.js): sign-ups under it,
 // or anything that looks like it, are refused. Its profile carries
@@ -26,8 +31,10 @@
 import { randomBytes, scrypt as scryptCb, scryptSync, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
-import { profileOf, xpForRace } from '../../game/src/engine/progress.js';
+import { CHARACTERS, TRACKS } from '../../game/src/engine/data.js';
+import { profileOf } from '../../game/src/engine/progress.js';
 import { adminConfig, isAdminUser, isReservedName } from './admin.js';
+import { ownedOf, seconds, settleRace } from './economy.js';
 import { nameKey } from './store.js';
 
 const scrypt = promisify(scryptCb);
@@ -36,6 +43,9 @@ const LOGIN_WINDOW_MS = 60_000, LOGIN_TRIES = 10;
 // Failed logins per account, whatever address they come from: the per-address
 // limit trusts X-Forwarded-For, which a client can rotate.
 const ACCOUNT_WINDOW_MS = 15 * 60_000, ACCOUNT_TRIES = 10, ACCOUNT_CAP = 10_000;
+const TRACK_IDS = TRACKS.map(t => t.id);
+const CHAR_IDS = CHARACTERS.map(c => c.id);
+const NO_BONUS = Object.freeze({ daily: false, levelUp: false, levelUpCoins: 0 });
 
 /** Why a name cannot be an account name, or null. 3 to 16 letters, digits, - _ . */
 export function badName(name) {
@@ -105,20 +115,26 @@ function readJson(req, limit = 4096) {
  * account (default 10 per 15 minutes), however many addresses they come from.
  *
  * `handle.profile(user)` is the one way to build a profile for the client,
- * admin flag included; `handle.requireAdmin(req)` resolves to the admin's user
- * record for a Bearer session of the admin, else null; `handle.isAdmin(user)`
- * says whether a user record is the admin's. `onSoloRace(user, race)` is told
- * of every solo race rewarded, for the dashboard's counters.
+ * admin flag and inventory included (async: it may seed a pre-economy
+ * inventory); `handle.ownedOf(user)` is that inventory (economy.js ownedOf);
+ * `handle.requireAdmin(req)` resolves to the admin's user record for a
+ * Bearer session of the admin, else null; `handle.isAdmin(user)` says whether
+ * a user record is the admin's. `onSoloRace(user, race)` is told of every
+ * solo race rewarded, for the dashboard's counters. `now` is the clock of
+ * solo rewards (the daily bonus, the gap between two rewards).
  */
-export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {}, tries: maxTries = LOGIN_TRIES, admin, accountLock = {} } = {}) {
+export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {}, tries: maxTries = LOGIN_TRIES, admin, accountLock = {}, now: raceClock = Date.now } = {}) {
   const adminCfg = adminConfig(admin);
+  const isAdmin = user => isAdminUser(adminCfg, user);
+  /** What an account owns: the admin everything, a pre-economy account seeded once. */
+  const owned = user => ownedOf(store, user, { admin: isAdmin(user) });
   /** The client's view of an account: `admin: true` for the admin only, no key otherwise. */
-  const profile = user => profileOf(user, { admin: isAdminUser(adminCfg, user) });
+  const profile = async user => profileOf(user, { admin: isAdmin(user), owned: await owned(user) });
   /** The admin's user record when the request carries a live session of the admin, else null. */
   const requireAdmin = async req => {
     if (!adminCfg.enabled) return null;
     const user = await store.sessionUser(bearer(req));
-    return isAdminUser(adminCfg, user) ? user : null;
+    return isAdmin(user) ? user : null;
   };
   const lastSolo = new Map();       // user id -> time of the last solo reward
   const tries = new Map();          // ip -> { n, since }
@@ -175,7 +191,7 @@ export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {},
       const user = await store.createUser({ name, hash: await hashPassword(b.password) });
       if (!user) return reply(res, 409, { error: 'Ce pseudo est déjà pris.' });
       await store.touchSeen(user.id);
-      reply(res, 200, { token: await store.createSession(user.id), profile: profile(user) });
+      reply(res, 200, { token: await store.createSession(user.id), profile: await profile(user) });
     },
     'POST /api/login': async (req, res) => {
       if (blocked(req)) return reply(res, 429, TOO_MANY);
@@ -194,26 +210,32 @@ export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {},
       failures.delete(key);
       if (user.banned) return reply(res, 403, { error: 'Compte banni' + (user.banned.reason ? ' : ' + user.banned.reason : '') + '.' });
       await store.touchSeen(user.id);
-      reply(res, 200, { token: await store.createSession(user.id), profile: profile(user) });
+      reply(res, 200, { token: await store.createSession(user.id), profile: await profile(user) });
     },
     'POST /api/logout': async (req, res) => { await store.dropSession(bearer(req)); reply(res, 200, {}); },
     'GET /api/me': async (req, res) => {
       const user = await session(req); if (!user) return reply(res, 401, { error: 'Session expirée.' });
-      reply(res, 200, { profile: profile(user) });
+      reply(res, 200, { profile: await profile(user) });
     },
     'POST /api/progress': async (req, res) => {
       const user = await session(req); if (!user) return reply(res, 401, { error: 'Session expirée.' });
       const b = await readJson(req); if (!b) return reply(res, 400, { error: 'Requête illisible.' });
-      const now = Date.now();
-      if (now - (lastSolo.get(user.id) ?? 0) < MIN_SOLO_GAP_MS) return reply(res, 200, { profile: profile(user), gained: 0 });
+      const now = raceClock();
+      if (now - (lastSolo.get(user.id) ?? 0) < MIN_SOLO_GAP_MS) return reply(res, 200, { profile: await profile(user), gained: 0, coins: 0, bonus: NO_BONUS });
       lastSolo.set(user.id, now);
       const field = Number.isInteger(b.field) && b.field > 1 && b.field <= 12 ? b.field : 6;
-      const race = { rank: Number(b.rank) || 0, field, finished: b.finished === true };
-      const gained = xpForRace(race);
-      const after = await store.addXp(user.id, gained);
+      const race = {
+        rank: Math.max(0, Math.floor(Number(b.rank) || 0)), field, finished: b.finished === true,
+        trackId: TRACK_IDS.includes(b.trackId) ? b.trackId : null, charId: CHAR_IDS.includes(b.charId) ? b.charId : null,
+        time: seconds(b.time), bestLap: seconds(b.bestLap), solo: true,
+      };
+      await owned(user);             // a pre-economy account is seeded with the level it had before this race
+      const settled = await settleRace(store, user, race, { now });
+      if (!settled) return reply(res, 401, { error: 'Session expirée.' });
+      const { after, gain } = settled;
       onProfile(after);
       onSoloRace(after, race);
-      reply(res, 200, { profile: profile(after), gained });
+      reply(res, 200, { profile: await profile(after), gained: gain.xp, coins: gain.coins, bonus: { daily: gain.daily, levelUp: gain.levelUp, levelUpCoins: gain.levelUpCoins } });
     },
   };
 
@@ -228,7 +250,8 @@ export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {},
     return true;
   }
   handle.profile = profile;
+  handle.ownedOf = owned;
   handle.requireAdmin = requireAdmin;
-  handle.isAdmin = user => isAdminUser(adminCfg, user);
+  handle.isAdmin = isAdmin;
   return handle;
 }

@@ -144,5 +144,28 @@ export { TextInput, type TextInputProps } from './components/workshop/TextInput'
 // Misc.
 export { NoteBanner, type NoteBannerProps } from './components/misc/NoteBanner';
 
+// Economy: grades, politicoins, the shop and the Politibox reveal. The grade
+// motion is fx.css, keyed on the `grade-<g>` classes these set.
+export { CoinCount, type CoinCountProps } from './components/economy/CoinCount';
+export {
+  GRADES,
+  type Grade,
+  GradeBadge,
+  type GradeBadgeProps,
+} from './components/economy/GradeBadge';
+export {
+  KartCard,
+  type KartCardProps,
+  type KartPart,
+  type KartTrail,
+} from './components/economy/KartCard';
+export {
+  RevealStage,
+  type RevealPhase,
+  type RevealStageProps,
+} from './components/economy/RevealStage';
+export { ShopCard, type ShopCardProps } from './components/economy/ShopCard';
+export { type Tab, Tabs, type TabsProps } from './components/economy/Tabs';
+
 /** Package version, exported so a consumer can confirm which build it loaded. */
 export const version = '0.1.0';

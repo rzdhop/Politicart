@@ -15,24 +15,31 @@ import { useSyncExternalStore } from 'react';
 import * as account from '../engine/account.js';
 import { initAudio, isMuted, toggleMute as toggleAudioMute } from '../engine/audio.js';
 import { beginDraft, clearDraft, getDraft, setRoster } from '../engine/custom.js';
-import { getGarage, resetGarage, setGarage } from '../engine/garage.js';
-import { getState, onTransition, transition } from '../engine/machine.js';
+import { emptyOwned } from '../engine/catalog.js';
+import { getGarage, resetGarage, setGarage, setOwned } from '../engine/garage.js';
+import { playOpening, skipOpening as skipBoxOpening, stopOpening } from '../engine/lootbox.js';
+import { canTransition, getState, onTransition, transition } from '../engine/machine.js';
 import * as net from '../engine/net.js';
 import { isNetRace, onNetResults, pressItem, pressPower } from '../engine/netrace.js';
 import { applyGodCommand } from '../engine/godcmd.js';
 import { useItem as engineUseItem } from '../engine/items.js';
 import { usePower as engineUsePower } from '../engine/powers.js';
-import { CHARACTERS } from '../engine/data.js';
+import { CHARACTERS, TRACKS } from '../engine/data.js';
 import { hasPreview, makeThumbs, setPreview } from '../engine/preview.js';
 import { STARTERS } from '../engine/progress.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
+import type { KartStyle } from './types';
 
-export type GameState = 'title' | 'select' | 'tracks' | 'admin' | 'countdown' | 'race' | 'paused' | 'results' | 'lobby' | 'account' | 'garage' | 'dashboard';
+export type GameState = 'title' | 'select' | 'tracks' | 'admin' | 'countdown' | 'race' | 'paused' | 'results' | 'lobby' | 'account' | 'garage' | 'dashboard' | 'shop' | 'lootbox';
 export type TeamId = 'bleu' | 'rouge';
 
-/** One player in a team-race room, as the game server describes it. A god (the admin, DEC-030) has no team. */
-export interface LobbyPlayer { id: string; name: string; team: TeamId | null; charId: string; ready: boolean; userId?: string | null; level?: number | null; guest?: boolean; god?: boolean }
+/**
+ * One player in a team-race room, as the game server describes it. A god (the
+ * admin, DEC-030) has no team. `style` is their Garage edits as the server
+ * kept them (cleaned, owned), so the lobby can name their trail (DEC-036).
+ */
+export interface LobbyPlayer { id: string; name: string; team: TeamId | null; charId: string; ready: boolean; userId?: string | null; level?: number | null; guest?: boolean; god?: boolean; style?: Partial<KartStyle> }
 /** A team-race room: its code, host, circuit and players (DEC-014). */
 export interface RoomView { code: string; host: string | null; trackIdx: number; phase: 'lobby' | 'race'; players: LobbyPlayer[] }
 /** One line of the friend list: a friend, or a request either way. */
@@ -44,19 +51,80 @@ export interface NetView {
   status: 'idle' | 'connecting' | 'open' | 'closed'; id: string | null; room: RoomView | null; error: string | null;
   friends: Friend[]; invite: Invite | null; notice: string | null;
 }
-/** An account as the server describes it (engine/progress.js profileOf). */
-export interface Profile { id: string; name: string; xp: number; level: number; xpInto: number; xpNext: number; unlocked: string[]; admin?: true }
-/** What the account API answers (engine/account.js). */
-type AuthReply = { ok: boolean; status: number; error?: string; token?: string; profile?: Profile; gained?: number };
+/** What an account holds beyond the commons (engine/catalog.js): candidate ids, part keys ('wheels:gold'), trail ids. */
+export interface Owned { chars: string[]; parts: string[]; trails: string[] }
+/**
+ * An account's race and economy counters, as the server keeps them
+ * (apps/server/src/economy.js normaliseStats). The best lap and time are per
+ * circuit id, in seconds; a profile may carry a partial or empty object, so
+ * read it through statsOf().
+ */
+export interface Stats {
+  races: number; wins: number; podiums: number; finished: number; dnf: number; solo: number; team: number; teamWins: number;
+  boxes: number; coinsEarned: number; coinsSpent: number;
+  bestLap: Record<string, number>; bestTime: Record<string, number>; byChar: Record<string, number>;
+  drops: Record<string, number>; lastDaily: string | null; lastRaceAt: number | null;
+}
+/** How much of the catalogue an account holds (engine/catalog.js collection). */
+export interface Collection { have: number; total: number; pct: number }
+/** A friend's figures, as GET /api/stats/friends lists them. */
+export interface FriendStats { id: string; name: string; level: number; stats: Partial<Stats>; collection: Collection }
+/**
+ * An account as the server describes it (engine/progress.js profileOf):
+ * `unlocked` is what it may drive, `reachable` what its level lets it buy
+ * (DEC-034), `coins` its politicoins, `owned` its inventory, `stats` its counters.
+ */
+export interface Profile {
+  id: string; name: string; xp: number; level: number; xpInto: number; xpNext: number;
+  reachable: string[]; unlocked: string[]; coins: number; owned: Owned; stats: Partial<Stats>; admin?: true;
+}
 
-/** What the last race earned, for the results screen. */
-export interface Gain { gained: number; level: number; levelUp: boolean; unlockedNow: string[] }
+const COUNTERS = ['races', 'wins', 'podiums', 'finished', 'dnf', 'solo', 'team', 'teamWins', 'boxes', 'coinsEarned', 'coinsSpent'] as const;
+const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
+const numbers = (v: unknown): Record<string, number> => {
+  const out: Record<string, number> = {};
+  if (v && typeof v === 'object') for (const [k, n] of Object.entries(v as Record<string, unknown>)) if (typeof n === 'number' && Number.isFinite(n)) out[k] = n;
+  return out;
+};
+
+/** A profile's stats with every counter present: zeros and empty tables for whatever the server left out. */
+export function statsOf(s: Partial<Stats> | null | undefined): Stats {
+  const src = (s ?? {}) as Record<string, unknown>;
+  const out = {} as Record<string, unknown>;
+  for (const k of COUNTERS) out[k] = count(src[k]);
+  out.bestLap = numbers(src.bestLap); out.bestTime = numbers(src.bestTime); out.byChar = numbers(src.byChar); out.drops = numbers(src.drops);
+  out.lastDaily = typeof src.lastDaily === 'string' ? src.lastDaily : null;
+  out.lastRaceAt = typeof src.lastRaceAt === 'number' ? src.lastRaceAt : null;
+  return out as unknown as Stats;
+}
+/** The bonuses a race paid on top (economy.js settleRace). */
+export interface Bonus { daily: boolean; levelUp: boolean; levelUpCoins: number }
+/** What the account API answers (engine/account.js). */
+type AuthReply = { ok: boolean; status: number; error?: string; token?: string; profile?: Profile; gained?: number; coins?: number; bonus?: Bonus };
+
+/** What the last race earned, for the results screen: experience, politicoins (daily and level-up bonuses included), a level, candidates. */
+export interface Gain { gained: number; coins: number; daily: boolean; levelUpCoins: number; level: number; levelUp: boolean; unlockedNow: string[] }
+
+/** The kart this screen drives in the race on screen (or the last one): its candidate and the full style it was built with. */
+export interface RaceKart { charId: string; style: KartStyle }
+
+export type Grade = 'common' | 'rare' | 'mythic' | 'incredible';
+/** What a Politibox held (engine/catalog.js rollBox): politicoins, or an item, refunded when it was already owned. */
+export type Drop =
+  | { kind: 'coins'; amount: number }
+  | { kind: 'char' | 'part' | 'trail'; id: string; grade: Grade; duplicate: boolean; refund: number };
+/** Where the opening is, for the DOM half (the library's RevealStage). */
+export type RevealPhase = 'idle' | 'opening' | 'burst' | 'reveal';
+export type ShopTab = 'box' | 'chars' | 'parts';
+/** The Boutique: where it was opened from, the tab on show, the last call's outcome, and the Politibox being opened. */
+export interface ShopView { from: 'title' | 'select'; tab: ShopTab; busy: boolean; error: string | null; notice: string | null; drop: Drop | null; phase: RevealPhase }
+type ShopReply = { ok: boolean; status: number; error?: string; profile?: Profile; drop?: Drop };
 export type AdminStatus = 'idle' | 'saved';
 /** What the roster API answers (engine/account.js fetchRoster / saveRoster). */
 type RosterReply = { ok: boolean; status: number; error?: string; field?: string; roster?: unknown };
 
 // ---- The admin's dashboard (DEC-030), as the server describes it (dashboard.js) ----
-export interface DashUser { id: string; name: string; xp: number; level: number; created: number; seen: number | null; banned: { at: number; reason: string } | null; online: boolean; room: string | null }
+export interface DashUser { id: string; name: string; xp: number; level: number; coins: number; created: number; seen: number | null; banned: { at: number; reason: string } | null; online: boolean; room: string | null }
 export interface DashConn { id: string; name: string; userId: string | null; guest: boolean; admin: boolean; room: string | null }
 /** A kart of a race in progress, as the dashboard lists it (DEC-031). */
 export interface DashKart { slot: number; name: string; charId: string; isAI: boolean; god: boolean }
@@ -111,12 +179,22 @@ export interface UiSnapshot {
   accountError: string | null;
   /** What the last race earned the account, until the next race starts. */
   lastGain: Gain | null;
+  /** The local kart of the race on screen, for the kart card on the pause and results screens; null before the first race. */
+  raceKart: RaceKart | null;
   /** The admin's dashboard (DEC-030). */
   dashboard: DashboardView;
   /** The admin's god console is open over the race (DEC-031). */
   godConsole: boolean;
   /** What the last god command in a solo race said (team races answer through net.notice / net.error). */
   godReply: string | null;
+  /** The Boutique and the Politibox (DEC-037). */
+  shop: ShopView;
+  /** The friends' figures, once Compte asked for them; null until then and for a guest. */
+  friendStats: FriendStats[] | null;
+  /** The friend whose figures Compte shows, by id. */
+  friendShown: string | null;
+  /** Why the friends' figures could not be shown. */
+  friendStatsError: string | null;
 }
 
 export interface NetRankRow { slot: number; name: string; charId: string; team: TeamId | null; isAI: boolean; god?: boolean; rank: number; finished: boolean; time: number | null; bestLap: number | null; points: number }
@@ -134,6 +212,16 @@ function saveToken(token: string | null) { try { if (token) localStorage.setItem
 /** Whether this session is the administrator's: only then is the Workshop offered (the server checks again on save). */
 export function isAdmin(ui: Pick<UiSnapshot, 'account'>): boolean {
   return ui.account?.profile?.admin === true;
+}
+
+/**
+ * What this player owns, for drawing and racing their kart (DEC-035): null
+ * without a game server (no economy: everything goes), the account's
+ * inventory, or a guest's -- the commons only.
+ */
+export function ownedOf(ui: Pick<UiSnapshot, 'netAvailable' | 'account'>): Owned | null {
+  if (!ui.netAvailable) return null;
+  return ui.account ? ui.account.profile.owned : emptyOwned();
 }
 
 /** The candidate ids this player may drive: the account's unlocks, or the starters for a guest. */
@@ -163,9 +251,14 @@ let snapshot: UiSnapshot = {
   accountBusy: false,
   accountError: null,
   lastGain: null,
+  raceKart: null,
   dashboard: { stats: null, users: [], connections: [], rooms: [], query: '', busy: false, error: null, notice: null, updatedAt: null },
   godConsole: false,
   godReply: null,
+  shop: { from: 'title', tab: 'box', busy: false, error: null, notice: null, drop: null, phase: 'idle' },
+  friendStats: null,
+  friendShown: null,
+  friendStatsError: null,
 };
 
 const listeners = new Set<() => void>();
@@ -191,9 +284,21 @@ export function useUi(): UiSnapshot {
 /** Whether the race on screen was started solo (actions.start), not by the game server. */
 let soloRace = false;
 
+/**
+ * The kart this screen follows, captured from the engine when a race starts
+ * (solo or team: either way the grid is built before the countdown), so the
+ * screens read it from the snapshot like everything else.
+ */
+function captureRaceKart(): RaceKart | null {
+  const k = G.player as unknown as { def?: { id: string }; style?: KartStyle } | null;
+  return k?.def && k.style ? { charId: k.def.id, style: k.style } : snapshot.raceKart;
+}
+
 onTransition((to: string, from: string) => {
   const patch: Partial<UiSnapshot> = { state: to as GameState };
   if (to === 'countdown' && from !== 'paused') { patch.noteHidden = true; patch.lastGain = null; patch.godReply = null; }
+  // A grid is on the track (a god entering a race mid-way joins it during the countdown, netrace.js).
+  if ((to === 'countdown' || to === 'race') && from !== 'paused') patch.raceKart = captureRaceKart();
   set(patch);
   // A solo race just ended: the account earns its experience (a team race's comes from the server).
   if (to === 'lobby') soloRace = false;
@@ -203,30 +308,56 @@ onTransition((to: string, from: string) => {
 net.onNet((view: NetView) => set({ net: view }));
 onNetResults((r: NetResults) => set({ netResults: r }));
 
-/** A new profile from the server: keep it, and note what the race it follows earned. */
-function takeProfile(profile: Profile, gained: number) {
+/**
+ * Tell the Garage what the player owns (DEC-035), and redraw what shows
+ * their kart if that changed: the turntable and the Garage form.
+ */
+let ownedKey = 'null';
+function applyOwned(owned: Owned | null) {
+  const key = JSON.stringify(owned);
+  if (key === ownedKey) return;
+  ownedKey = key;
+  setOwned(owned);
+  refreshPreview();
+  set({ garageVersion: snapshot.garageVersion + 1 });
+}
+
+/** A new profile from the server: keep it, put its inventory in force, and note what the race it follows earned. */
+function takeProfile(profile: Profile, gained = 0, coins = 0, bonus: Bonus | null = null) {
   const before = snapshot.account?.profile;
   if (!snapshot.account) return;
   const patch: Partial<UiSnapshot> = { account: { token: snapshot.account.token, profile } };
-  if (gained > 0) {
+  if (gained > 0 || coins > 0) {
     const had = new Set(before?.unlocked ?? []);
-    patch.lastGain = { gained, level: profile.level, levelUp: !!before && profile.level > before.level, unlockedNow: profile.unlocked.filter(id => !had.has(id)) };
+    patch.lastGain = {
+      gained, coins, daily: !!bonus?.daily, levelUpCoins: bonus?.levelUpCoins ?? 0,
+      level: profile.level, levelUp: !!before && profile.level > before.level, unlockedNow: profile.unlocked.filter(id => !had.has(id)),
+    };
   }
   set(patch);
+  applyOwned(profile.owned ?? null);
 }
 
 // The server says who this connection is: a fresh profile, or nobody (the session expired).
-net.onProfile((profile: Profile | null, gained: number) => {
+net.onProfile((profile: Profile | null, gained: number, coins: number, bonus: Bonus | null) => {
   if (!snapshot.account) return;
-  if (!profile) { saveToken(null); set({ account: null }); keepCharUnlocked(); leaveWorkshopUnlessAdmin(); return; }
-  takeProfile(profile, gained);
+  if (!profile) { saveToken(null); set({ account: null, friendStats: null, friendShown: null }); applyOwned(emptyOwned()); keepCharUnlocked(); leaveWorkshopUnlessAdmin(); return; }
+  takeProfile(profile, gained, coins, bonus);
   leaveWorkshopUnlessAdmin();
 });
 
+/** A solo race just ended: tell the server how it went (rank, circuit, candidate, times) and keep what it paid. */
 function reportSoloRace() {
-  const acc = snapshot.account; const k = G.player as unknown as { rank: number; finished: boolean } | null; if (!acc || !k) return;
-  account.reportRace(acc.token, { rank: k.rank, field: G.karts.length, finished: !!k.finished }, { base: remoteServer })
-    .then((r: AuthReply) => { if (r.ok && r.profile) takeProfile(r.profile, r.gained ?? 0); });
+  const acc = snapshot.account; const k = G.player as unknown as { rank: number; finished: boolean; finishTime: number; bestLap: number; def?: { id: string } } | null; if (!acc || !k) return;
+  const race = {
+    rank: k.rank, field: G.karts.length, finished: !!k.finished,
+    trackId: (TRACKS as { id: string }[])[G.trackIdx]?.id ?? null,
+    charId: k.def?.id ?? (CHARACTERS as { id: string }[])[G.charIdx]?.id ?? null,
+    time: k.finished && Number.isFinite(k.finishTime) ? k.finishTime : null,
+    bestLap: Number.isFinite(k.bestLap) ? k.bestLap : null,
+  };
+  account.reportRace(acc.token, race, { base: remoteServer })
+    .then((r: AuthReply) => { if (r.ok && r.profile) takeProfile(r.profile, r.gained ?? 0, r.coins ?? 0, r.bonus ?? null); });
 }
 
 /** After logging out (or a lost session), fall back to a candidate a guest may drive. */
@@ -236,10 +367,11 @@ function keepCharUnlocked() {
   if (!cur || !allowed.includes(cur.id)) { G.charIdx = 0; set({ charIdx: 0 }); }
 }
 
-/** Logged in: keep the account, remember the token, and say hello on the socket so friends see us. */
+/** Logged in: keep the account, remember the token, put its inventory in force, and say hello on the socket so friends see us. */
 function signedIn(token: string, profile: Profile) {
   saveToken(token);
   set({ account: { token, profile }, accountBusy: false, accountError: null, netName: profile.name });
+  applyOwned(profile.owned ?? null);
   net.connect(socketUrl(), profile.name, token);
 }
 
@@ -312,10 +444,37 @@ async function dashCall(fn: (token: string) => Promise<DashReply>): Promise<Dash
 /** The server no longer knows this token (a 401): forget it here too, as a logout would, without calling the server. */
 function sessionExpired() {
   saveToken(null);
-  set({ account: null, lastGain: null, netName: '' });
+  set({ account: null, lastGain: null, netName: '', friendStats: null, friendShown: null });
+  applyOwned(emptyOwned());
   net.disconnect();
   keepCharUnlocked();
   leaveWorkshopUnlessAdmin();
+}
+
+// ---- The Boutique and the Politibox (DEC-032..037) ----
+/** Change the shop's view. */
+function shop(patch: Partial<ShopView>) { set({ shop: { ...snapshot.shop, ...patch } }); }
+
+/** The engine's opening phases, as the DOM half shows them. */
+const REVEAL_OF: Record<string, RevealPhase> = { drop: 'opening', spin: 'opening', shake: 'opening', burst: 'burst', reveal: 'reveal', hold: 'reveal' };
+const onBoxPhase = (name: string) => { if (getState() === 'lootbox') shop({ phase: REVEAL_OF[name] ?? 'opening' }); };
+
+/**
+ * One shop call with the account's token: busy while it runs, and on an
+ * answer the new profile put in force -- or the server's sentence shown, a
+ * 401 forgetting the session as everywhere else. Resolves to the answer
+ * when it succeeded.
+ */
+async function shopCall(fn: (token: string) => Promise<ShopReply>): Promise<ShopReply | null> {
+  const acc = snapshot.account;
+  if (!acc || snapshot.shop.busy) return null;
+  shop({ busy: true, error: null, notice: null });
+  const r = await fn(acc.token);
+  shop({ busy: false });
+  if (r.ok && r.profile) { takeProfile(r.profile); return r; }
+  if (r.status === 401) { sessionExpired(); shop({ error: 'Session expirée : reconnectez-vous dans Compte.' }); return null; }
+  shop({ error: r.error ?? 'Erreur du serveur.' });
+  return null;
 }
 
 export const actions = {
@@ -463,6 +622,15 @@ export const actions = {
     const r = await dashCall(t => account.dashboard.kick(t, id, { base: remoteServer }));
     if (r) { dash({ notice: 'Connexion fermée.', error: null }); await actions.refreshDashboard(); }
   },
+  /** Give account `id` `amount` politicoins (the server caps it at 100 000); the list then shows the new balance. */
+  async grantCoins(id: string, amount: number) {
+    if (!Number.isSafeInteger(amount) || amount < 0) { dash({ error: 'Un nombre entier de politicoins.', notice: null }); return; }
+    const r = await dashCall(t => account.dashboard.grantCoins(t, id, amount, { base: remoteServer }));
+    if (!r) return;
+    const u = r.user as { name?: string; coins?: number } | undefined;
+    dash({ notice: amount.toLocaleString('fr-FR') + ' politicoins crédités' + (u?.name ? ' à ' + u.name : '') + (typeof u?.coins === 'number' ? ' (solde ' + u.coins.toLocaleString('fr-FR') + ').' : '.'), error: null });
+    await actions.refreshDashboard();
+  },
   /**
    * Any command on room `code`, from the dashboard (DEC-031): start, track,
    * kick, team, char in the lobby; every god command in a race.
@@ -534,7 +702,8 @@ export const actions = {
   async detectServer() {
     const ok: boolean = await net.probeServer(globalThis.fetch, remoteServer);
     set({ netAvailable: ok });
-    if (!ok) return;                                             // the static build: the default cast, no accounts
+    if (!ok) { applyOwned(null); return; }                       // the static build: the default cast, no accounts, no economy
+    if (!snapshot.account) applyOwned(emptyOwned());             // a guest until a saved session says otherwise
     const token = loadToken();
     await Promise.all([
       refreshRoster(),
@@ -585,11 +754,29 @@ export const actions = {
     account.logout(acc.token, { base: remoteServer });
     saveToken(null);
     resumeDraft = false;
-    set({ account: null, lastGain: null, netName: '' });
+    set({ account: null, lastGain: null, netName: '', friendStats: null, friendShown: null });
+    applyOwned(emptyOwned());                                   // a guest on a server owns the commons
     net.disconnect();
     keepCharUnlocked();
     leaveWorkshopUnlessAdmin();
   },
+  /** Ask the server for the friends' figures (GET /api/stats/friends); a guest has none. Resolves to what it answered. */
+  async loadFriendStats(): Promise<FriendStats[] | null> {
+    const acc = snapshot.account; if (!acc) return null;
+    const r = await account.shop.friendStats(acc.token, { base: remoteServer }) as { ok: boolean; status: number; error?: string; friends?: FriendStats[] };
+    if (r.ok) { const list = Array.isArray(r.friends) ? r.friends : []; set({ friendStats: list }); return list; }
+    if (r.status === 401) { sessionExpired(); set({ accountError: 'Session expirée : reconnectez-vous.' }); return null; }
+    set({ friendStats: null, friendStatsError: r.error ?? 'Statistiques indisponibles.' });
+    return null;
+  },
+  /** "Stats" on a friend's row: show their figures, fetched afresh so a race just run counts. */
+  async showFriendStats(id: string) {
+    if (!snapshot.account) return;
+    set({ friendShown: id, friendStatsError: null });
+    const list = await actions.loadFriendStats();
+    if (list && !list.some(f => f.id === id)) set({ friendShown: null, friendStatsError: 'Cette personne n’est plus dans vos ami·es.' });
+  },
+  hideFriendStats() { set({ friendShown: null, friendStatsError: null }); },
   addFriend(name: string) { if (name.trim()) net.addFriend(name.trim()); },
   acceptFriend(id: string) { net.acceptFriend(id); },
   removeFriend(id: string) { net.removeFriend(id); },
@@ -600,6 +787,8 @@ export const actions = {
     net.clearInvite();
     const st = getState();
     if (st === 'tracks') transition('select');
+    if (st === 'lootbox') actions.boxDone();
+    if (getState() === 'shop') transition('title');
     if (getState() === 'select' || getState() === 'admin' || (getState() === 'results' && !isNetRace())) transition('title');
     if (getState() === 'title' || getState() === 'account' || getState() === 'dashboard') transition('lobby');
     if (getState() !== 'lobby') return;
@@ -607,4 +796,62 @@ export const actions = {
     net.joinRoom(inv.code, getGarage());
   },
   dismissInvite() { net.clearInvite(); },
+
+  // ---- The Boutique and the Politibox (DEC-032..037) ----
+  /** "Boutique", from the title or the roster, optionally on a tab. Only where a game server runs the economy. */
+  openShop(from: 'title' | 'select', tab?: ShopTab) {
+    if (!snapshot.netAvailable || !canTransition('shop')) return;
+    initAudio();
+    // The candidates' cards show the roster portraits, rendered once per detail level.
+    const thumbs = makeThumbs() as Record<string, string>;
+    shop({ from, error: null, notice: null, ...(tab ? { tab } : {}) });
+    set({ thumbs });
+    transition('shop');
+    setPreview(G.charIdx);
+  },
+  /**
+   * A locked chip's badge in the Garage (DEC-035): back to the roster, then
+   * the Boutique on `tab`, so its "Retour" lands on the roster (the machine
+   * has no garage → shop edge; the player reopens the Garage from there).
+   */
+  shopFromGarage(tab: ShopTab) {
+    if (!snapshot.netAvailable) return;
+    if (getState() === 'garage') transition('select');
+    actions.openShop('select', tab);
+  },
+  /** "Retour": back where the shop was opened from. */
+  closeShop() {
+    if (getState() !== 'shop') return;
+    shop({ error: null, notice: null });
+    transition(snapshot.shop.from);
+    if (snapshot.shop.from === 'select') { keepCharUnlocked(); setPreview(G.charIdx); }
+  },
+  shopTab(tab: ShopTab) { shop({ tab, error: null, notice: null }); },
+  /** Buy candidate `id`. The price is the server's (catalog.js): the request names the candidate only. */
+  async buyChar(id: string) {
+    if (await shopCall(t => account.shop.buyChar(t, id, { base: remoteServer }))) shop({ notice: 'Acquis !' });
+  },
+  /** Buy option `value` of part `category`; the server prices it. */
+  async buyPart(category: string, value: string) {
+    if (await shopCall(t => account.shop.buyPart(t, category, value, { base: remoteServer }))) shop({ notice: 'Acquis !' });
+  },
+  /** Open a Politibox: the server charges and rolls; the opening plays on the canvas, from the shop or again from the result. */
+  async openBox() {
+    const r = await shopCall(t => account.shop.openBox(t, { base: remoteServer }));
+    if (!r?.drop) return;
+    const st = getState();
+    if (st !== 'shop' && st !== 'lootbox') return;          // left the shop while the server answered
+    shop({ drop: r.drop, phase: 'opening' });
+    if (st === 'shop') transition('lootbox');
+    playOpening(r.drop, { onPhase: onBoxPhase });
+  },
+  /** A tap on the stage: hurry the opening along (to the burst, then to the prize). */
+  skipOpening() { if (getState() === 'lootbox') skipBoxOpening(); },
+  /** "Retour à la boutique". */
+  boxDone() {
+    stopOpening();
+    if (getState() === 'lootbox') transition('shop');
+    shop({ phase: 'idle', drop: null, error: null, notice: null });
+    setPreview(G.charIdx);
+  },
 };

@@ -728,3 +728,130 @@ is refused during the countdown, which has no path to the results. A god
 who leaves turns into an ordinary AI kart. A-022 is resolved: the god joins
 the running race. The worker's safety cap (KR_MAX_RACE_S, 12 min by
 default) is for three laps and scales with the laps the admin sets.
+
+## DEC-032 -- One catalogue module is the shared truth for grades, prices, odds and the Politibox roll
+
+**Context.** The human asked for a currency (politicoins), a lootbox (the
+Politibox: 120 coins; 2 % candidate, 4 % part or trail, 94 % coins split
+5/10/50/100/500), grades (common, rare, mythic, incredible) on candidates,
+kart part options and trails, with prices by grade and refunds for
+duplicates. The client renders the shop and the server charges, so both need
+the same tables, and the server must never trust a client price or roll.
+
+**Decision.** `apps/game/src/engine/catalog.js`, pure and DOM-free like
+`progress.js`, holds every grade, price, refund, odds table, the part
+options per category with their grade, the trails, `rollBox(rng, owned)`,
+`ownedStyle`, `drivableIds`, `canBuyChar/canBuyPart` and `collection`. The
+game and the server both import it. The box roll takes its random source as
+an argument, so tests fix the sequence.
+
+**Consequence.** One edit retunes the economy on both sides. The server
+charges `priceOf()` whatever the body says; the body carries no amount. The
+option names and grades are an assumption (A-026) the human may retune.
+
+## DEC-033 -- The economy lives on `kr_users`: coins, owned, stats; one conditional update, no transactions
+
+**Context.** Coins and an inventory must be spent and granted safely on a
+public server, on both store backends (JSON file, Postgres). The store has
+never used a transaction; documents (`getDoc/putDoc`) are read-modify-write
+and keyed by a fixed allowlist, so a per-user document would not do.
+
+**Decision.** Three columns on `kr_users`: `coins integer not null default
+0`, `owned jsonb` (`{chars, parts, trails}` of item ids; null means the
+account predates the economy), `stats jsonb not null default '{}'`. A
+purchase is one statement: `coins = coins - price` and `owned` appended,
+`where coins >= price and not already owned`; a box open is `spendCoins`
+(conditional) then the roll then `grant` or a refund. The file store does
+the same checks synchronously. Per-user stats are read-modify-write, one
+race at a time per account (A-034).
+
+**Consequence.** Postgres gets three `alter table ... add column if not
+exists` on boot, as DEC-030 did. A crash between a spend and its grant
+loses at most one box price (A-030). Commons are never stored: owning a
+common option is implicit.
+
+## DEC-034 -- `profile.unlocked` means drivable; `profile.reachable` is the level gate
+
+**Context.** The human chose "level gate AND price": a candidate is bought
+with coins once its level is reached, and a Politibox win bypasses the
+level. Every consumer of `unlocked` (roster locks, the lobby's `allowed`,
+the Compte counter) wants "what can I drive".
+
+**Decision.** `profileOf` returns `unlocked = STARTERS ∪ owned.chars` and
+`reachable = unlockedIds(level)`. The shop buys only what is reachable;
+the Politibox grants into `owned.chars` regardless. An account from before
+the economy (`owned` null) is seeded once with the candidates its level had
+unlocked (A-029).
+
+**Consequence.** Levels alone no longer unlock a candidate; they unlock the
+right to buy it. Existing players keep what they had.
+
+## DEC-035 -- Ownership is enforced wherever an economy exists
+
+**Context.** A player's kart style is a partial object sent from the
+browser (`kr-kart`); anyone can send `wheels: 'gold'`.
+
+**Decision.** The server filters every style a player sends on
+`lobby.join`, `joinGod` and `set` through `ownedStyle(cleanStyle(style),
+owned)`: an unowned field is dropped, so it falls back to the admin's
+character default, which is exempt by construction. The client's
+`myStyle()` filters the same way when the account is known. Without a game
+server (the Pages build) there is no economy and the Garage offers every
+option as before; a guest on a server owns commons only. The admin owns the
+whole catalogue (A-031).
+
+**Consequence.** No unowned part reaches a room or a race, on any client. A
+stale `kr-kart` from the static build is harmless on a server.
+
+## DEC-036 -- The trail is a kart style field
+
+**Context.** Five trails (lootbox-only) must show behind a kart in races and
+be visible to everyone in the lobby.
+
+**Decision.** `trail` joins `kartstyle.js FIELDS`, so it rides the style
+through `view()`, the race grid, `netrace.js` and `kartJoin` with no wire
+change, and is validated and ownership-filtered like any other field.
+`engine/trail.js` draws it from `updateKartVisual`, in every mode.
+
+**Consequence.** No protocol change. The admin may set a trail as a
+character default. The lobby shows the trail as a named badge (A-032).
+
+## DEC-037 -- Two machine states, `shop` and `lootbox`; the Politibox scene owns the canvas in `lootbox`
+
+**Context.** The shop needs a screen; the Politibox opening is a 3D sequence
+on the shared canvas like the turntable (`preview.js`).
+
+**Decision.** `title → shop`, `select → shop`, `shop → title | select |
+lootbox`, `lootbox → shop`. `game.js` draws the turntable in `shop` and
+calls `renderLootbox` in `lootbox`. The opening is a timed phase machine
+(`drop, spin, shake, burst, reveal, hold`), skippable by a tap.
+
+**Consequence.** The frame loop stays a one-line switch per state; the E2E
+never waits on an animation.
+
+## DEC-038 -- Banner lines come from one LINES table
+
+**Context.** Every item, power and hazard had one hard-coded line.
+
+**Decision.** `engine/lines.js` holds 4-6 variants per line, `line(path,
+vars)` picks one at use time with the engine's `pick`, and `items.js`,
+`powers.js` and the cortège in `race.js` read it. A victim's text is chosen
+once per call so every victim reads the same sentence.
+
+**Consequence.** Tests that pinned a literal now check membership.
+
+## DEC-039 -- Stages run in worker agents dispatched by the session, in parallel worktrees, merged in a fixed order
+
+**Context.** The human asked that every stage run in a separate agent, with
+the session as the dispatcher, Tier 1 and E2E after every stage, no stop
+between stages. Playwright binds fixed ports (4173/4180), so two suites
+cannot run at once on one machine (a lesson logged on 2026-10-20).
+
+**Decision.** Stages with disjoint files run in parallel in git worktrees;
+each worker runs Tier 1 (and E2E only when it is alone); the dispatcher
+merges the worktree branches in the listed order and reruns Tier 1 and the
+full E2E on the integrated tip after each merge. Money and auth stages run
+on Opus agents.
+
+**Consequence.** Every stage's green run is meaningful; the integrated tip
+is verified after every merge.

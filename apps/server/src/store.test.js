@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { checkPassword, hashPassword } from './accounts.js';
-import { DOC_KEYS, openFileStore, openPgStore } from './store.js';
+import { DOC_KEYS, OWNED_KINDS, openFileStore, openPgStore } from './store.js';
 
 const PG = process.env.KR_TEST_DATABASE_URL;
 
@@ -23,7 +23,7 @@ async function freshPg() {
 const backends = [['file', async () => openFileStore(join(mkdtempSync(join(tmpdir(), 'kr-store-')), 'accounts.json'))]];
 if (PG) backends.push(['postgres', freshPg]);
 
-describe.each(backends)('%s store', (_kind, open) => {
+describe.each(backends)('%s store', (kind, open) => {
   let store;
   afterAll(() => store?.close());
 
@@ -114,6 +114,116 @@ describe.each(backends)('%s store', (_kind, open) => {
       await expect(store.putDoc(key, {})).rejects.toThrow(/Unknown document key/);
       await expect(store.getDoc(key)).rejects.toThrow(/Unknown document key/);
     }
+  });
+
+  describe('coins and ownership', () => {
+    const buyer = async name => (await store.createUser({ name, hash: 'h' })).id;
+
+    it('starts an account with no coins, owned null and no stats, and lists its coins', async () => {
+      const id = await buyer('Coin0');
+      expect(await store.user(id)).toMatchObject({ coins: 0, owned: null, stats: {} });
+      await store.addCoins(id, 42);
+      expect((await store.listUsers()).find(u => u.id === id)).toMatchObject({ coins: 42 });
+      expect((await store.listUsers()).every(u => !('owned' in u) && !('stats' in u))).toBe(true);
+    });
+
+    it('adds coins, floored, never taking any away', async () => {
+      const id = await buyer('Coin1');
+      expect((await store.addCoins(id, 10.9)).coins).toBe(10);
+      expect((await store.addCoins(id, -5)).coins).toBe(10);
+      expect((await store.user(id)).coins).toBe(10);
+      expect(await store.addCoins('nobody', 5)).toBeNull();
+      await expect(store.addCoins(id, NaN)).rejects.toThrow(TypeError);
+    });
+
+    it('spends coins only when the balance covers it', async () => {
+      const id = await buyer('Coin2');
+      await store.addCoins(id, 50);
+      expect(await store.spendCoins(id, 51)).toBeNull();
+      expect((await store.user(id)).coins).toBe(50);                  // a short spend takes nothing
+      expect((await store.spendCoins(id, 20.7)).coins).toBe(30);
+      expect((await store.spendCoins(id, 30)).coins).toBe(0);         // the exact amount: nothing left
+      expect(await store.spendCoins(id, 1)).toBeNull();
+      expect(await store.spendCoins('nobody', 0)).toBeNull();
+    });
+
+    it('buys an item once: charged once, appended, then owned', async () => {
+      const id = await buyer('Coin3');
+      await store.addCoins(id, 250);
+      const after = await store.buy(id, { kind: 'chars', item: 'victor', price: 100 });
+      expect(after.coins).toBe(150);
+      expect(after.owned).toEqual({ chars: ['victor'], parts: [], trails: [] });
+      expect(await store.buy(id, { kind: 'chars', item: 'victor', price: 100 })).toBe('owned');
+      expect((await store.user(id)).coins).toBe(150);                 // no second charge
+      expect((await store.buy(id, { kind: 'parts', item: 'exhaust:twin', price: 150 })).owned).toEqual({ chars: ['victor'], parts: ['exhaust:twin'], trails: [] });
+      expect(await store.buy(id, { kind: 'trails', item: 'flames', price: 1 })).toBe('poor');
+      expect(await store.user(id)).toMatchObject({ coins: 0, owned: { trails: [] } });
+      expect(await store.buy('nobody', { kind: 'chars', item: 'victor', price: 0 })).toBeNull();
+      await expect(store.buy(id, { kind: 'hats', item: 'x', price: 0 })).rejects.toThrow(TypeError);
+    });
+
+    it('never overspends when purchases and spends race each other', async () => {
+      const id = await buyer('Coin6');
+      await store.addCoins(id, 250);
+      const out = await Promise.all(['a', 'b', 'c', 'd', 'e'].map(item => store.buy(id, { kind: 'parts', item, price: 100 })));
+      expect(out.filter(r => typeof r === 'object')).toHaveLength(2);
+      expect(out.filter(r => r === 'poor')).toHaveLength(3);
+      expect(await store.user(id)).toMatchObject({ coins: 50 });
+      expect((await store.user(id)).owned.parts).toHaveLength(2);
+      const spends = await Promise.all([30, 30, 30].map(n => store.spendCoins(id, n)));
+      expect(spends.filter(Boolean)).toHaveLength(1);
+      expect((await store.user(id)).coins).toBe(20);
+    });
+
+    it('grants an item idempotently, starting owned from null', async () => {
+      const id = await buyer('Coin4');
+      const once = await store.grant(id, { kind: 'trails', item: 'flames' });
+      expect(once.owned).toEqual({ chars: [], parts: [], trails: ['flames'] });
+      expect(once.coins).toBe(0);
+      expect((await store.grant(id, { kind: 'trails', item: 'flames' })).owned).toEqual({ chars: [], parts: [], trails: ['flames'] });
+      expect((await store.grant(id, { kind: 'chars', item: 'marine' })).owned.chars).toEqual(['marine']);
+      expect(await store.grant('nobody', { kind: 'chars', item: 'marine' })).toBeNull();
+      await expect(store.grant(id, { kind: 'owned', item: 'x' })).rejects.toThrow(TypeError);
+    });
+
+    it('replaces owned and stats, never sharing an object with the caller', async () => {
+      const id = await buyer('Coin5');
+      const owned = { chars: ['victor'], parts: [], trails: [] }, stats = { races: 3, bestLap: { elysee: 41.5 } };
+      const o = await store.setOwned(id, owned);
+      expect(o.owned).toEqual({ chars: ['victor'], parts: [], trails: [] });
+      owned.chars.push('marine'); o.owned.chars.push('mutated');
+      expect((await store.user(id)).owned.chars).toEqual(['victor']);
+      const s = await store.setStats(id, stats);
+      expect(s.stats).toEqual({ races: 3, bestLap: { elysee: 41.5 } });
+      stats.races = 99; s.stats.bestLap.elysee = 1;
+      const read = await store.user(id);
+      expect(read.stats).toEqual({ races: 3, bestLap: { elysee: 41.5 } });
+      read.stats.races = 7; read.owned.chars.length = 0;
+      expect(await store.user(id)).toMatchObject({ stats: { races: 3 }, owned: { chars: ['victor'] } });
+      expect((await store.setOwned(id, null)).owned).toBeNull();
+      expect(await store.setStats('nobody', {})).toBeNull();
+      expect(await store.setOwned('nobody', owned)).toBeNull();
+    });
+
+    it('reads an account from before the economy as no coins, owned null and no stats', async () => {
+      const old = { id: 'old-' + kind, name: 'Ancien', hash: 'h', xp: 40, created: 1 };
+      let s = store;
+      if (kind === 'postgres') {
+        const { default: pg } = await import('pg');
+        const pool = new pg.Pool({ connectionString: PG });
+        await pool.query('insert into kr_users (id, name, name_key, hash, xp, created) values ($1, $2, $3, $4, $5, $6)', [old.id, old.name, 'ancien', old.hash, old.xp, old.created]);
+        await pool.end();
+      } else {
+        const file = join(mkdtempSync(join(tmpdir(), 'kr-store-')), 'accounts.json');
+        writeFileSync(file, JSON.stringify({ users: { [old.id]: old }, sessions: {}, links: [] }));
+        s = openFileStore(file);
+      }
+      expect(await s.user(old.id)).toMatchObject({ xp: 40, seen: null, banned: null, coins: 0, owned: null, stats: {} });
+      expect((await s.listUsers()).find(u => u.id === old.id).coins).toBe(0);
+      expect((await s.buy(old.id, { kind: 'chars', item: 'victor', price: 1 }))).toBe('poor');
+      expect((await s.grant(old.id, { kind: 'chars', item: 'victor' })).owned).toEqual({ chars: ['victor'], parts: [], trails: [] });
+      if (s !== store) await s.close();
+    });
   });
 });
 
@@ -271,7 +381,7 @@ describe('setHash on Postgres (a fake Pool)', () => {
     const { Pool, calls } = fakePool([{ id: 'u1', name: 'Pg', hash: 'new', xp: '12', created: '5' }]);
     const store = await openPgStore('postgres://fake', { Pool });
     calls.length = 0;                                  // drop the schema query
-    expect(await store.setHash('u1', 'new')).toEqual({ id: 'u1', name: 'Pg', hash: 'new', xp: 12, created: 5, seen: null, banned: null });
+    expect(await store.setHash('u1', 'new')).toEqual({ id: 'u1', name: 'Pg', hash: 'new', xp: 12, created: 5, seen: null, banned: null, coins: 0, owned: null, stats: {} });
     expect(calls).toHaveLength(2);
     expect(calls[0][0]).toMatch(/^delete from kr_sessions where user_id = \$1$/);
     expect(calls[0][1]).toEqual(['u1']);
@@ -283,6 +393,94 @@ describe('setHash on Postgres (a fake Pool)', () => {
     const { Pool } = fakePool([]);
     const store = await openPgStore('postgres://fake', { Pool });
     expect(await store.setHash('nobody', 'x')).toBeNull();
+  });
+});
+
+describe('the economy on Postgres (a fake Pool)', () => {
+  /** Records every query; `answer(text, values)` gives the rows of each one. */
+  function fakePool(answer = () => []) {
+    const calls = [];
+    class Pool {
+      async query(text, values) { calls.push([text, values]); const rows = answer(text, values); return { rows, rowCount: rows.length }; }
+      async end() {}
+    }
+    return { Pool, calls };
+  }
+  const open = async answer => { const { Pool, calls } = fakePool(answer); const store = await openPgStore('postgres://fake', { Pool }); calls.length = 0; return { store, calls }; };
+  const pgRow = (more = {}) => ({ id: 'u1', name: 'Pg', hash: 'h', xp: '0', created: '5', seen: null, banned: null, coins: 70, owned: null, stats: {}, ...more });
+
+  it('adds the three columns on boot, and maps a row without them to the defaults', async () => {
+    const { Pool, calls } = fakePool();
+    await openPgStore('postgres://fake', { Pool });
+    expect(calls[0][0]).toContain('alter table kr_users add column if not exists coins integer not null default 0;');
+    expect(calls[0][0]).toContain('alter table kr_users add column if not exists owned jsonb;');
+    expect(calls[0][0]).toContain("alter table kr_users add column if not exists stats jsonb not null default '{}'::jsonb;");
+    const { store } = await open(() => [{ id: 'u1', name: 'Pg', hash: 'h', xp: '3', created: '5' }]);
+    expect(await store.user('u1')).toMatchObject({ coins: 0, owned: null, stats: {} });
+  });
+
+  it('adds and spends coins in one statement each, the spend conditional on the balance', async () => {
+    const { store, calls } = await open(text => (/coins >= \$2/.test(text) ? [] : [pgRow()]));
+    expect((await store.addCoins('u1', 20.9)).coins).toBe(70);
+    expect(calls[0]).toEqual(['update kr_users set coins = coins + $2 where id = $1 returning *', ['u1', 20]]);
+    expect(await store.spendCoins('u1', 30.5)).toBeNull();
+    expect(calls).toHaveLength(2);
+    expect(calls[1][0]).toBe('update kr_users set coins = coins - $2 where id = $1 and coins >= $2 returning *');
+    expect(calls[1][0]).toContain('coins >= $2');
+    expect(calls[1][1]).toEqual(['u1', 30]);
+    await expect(store.addCoins('u1', 'lots')).rejects.toThrow(TypeError);
+    expect(calls).toHaveLength(2);
+  });
+
+  it('buys in one statement: charge, append and both guards together', async () => {
+    const { store, calls } = await open(() => [pgRow({ coins: 30, owned: { chars: ['victor'], parts: [], trails: [] } })]);
+    expect(await store.buy('u1', { kind: 'chars', item: 'victor', price: 40 })).toMatchObject({ coins: 30, owned: { chars: ['victor'] } });
+    expect(calls).toHaveLength(1);
+    const [text, values] = calls[0];
+    expect(text).toMatch(/^update kr_users set coins = coins - \$4, owned = jsonb_set\(/);
+    expect(text).toContain(`jsonb_set(coalesce(owned, '{"chars":[],"parts":[],"trails":[]}'::jsonb), $2::text[], coalesce(owned #> $2, '[]'::jsonb) || to_jsonb($3::text))`);
+    expect(text).toContain("where id = $1 and coins >= $4 and not (coalesce(owned #> $2, '[]'::jsonb) ? $3) returning *");
+    expect(values).toEqual(['u1', ['chars'], 'victor', 40]);
+  });
+
+  it('asks why when a purchase is refused: owned, poor, or no such account', async () => {
+    const refused = now => open(text => (/^update/.test(text) ? [] : now));
+    const owned = await refused([{ coins: 500, owned: { chars: ['victor'], parts: [], trails: [] } }]);
+    expect(await owned.store.buy('u1', { kind: 'chars', item: 'victor', price: 40 })).toBe('owned');
+    expect(owned.calls).toHaveLength(2);
+    expect(owned.calls[1]).toEqual(['select coins, owned from kr_users where id = $1', ['u1']]);
+    const poor = await refused([{ coins: 10, owned: { chars: ['marine'], parts: [], trails: [] } }]);
+    expect(await poor.store.buy('u1', { kind: 'chars', item: 'victor', price: 40 })).toBe('poor');
+    const before = await refused([{ coins: 10, owned: null }]);
+    expect(await before.store.buy('u1', { kind: 'trails', item: 'flames', price: 40 })).toBe('poor');
+    const nobody = await refused([]);
+    expect(await nobody.store.buy('nobody', { kind: 'chars', item: 'victor', price: 40 })).toBeNull();
+    await expect(nobody.store.buy('u1', { kind: 'karts', item: 'x', price: 1 })).rejects.toThrow(TypeError);
+    expect(nobody.calls).toHaveLength(2);                              // the unknown list never reached the database
+  });
+
+  it('grants in one guarded statement, and answers the account unchanged when it already owns the item', async () => {
+    const { store, calls } = await open(text => (/^update/.test(text) ? [] : [pgRow({ owned: { chars: [], parts: [], trails: ['flames'] } })]));
+    expect((await store.grant('u1', { kind: 'trails', item: 'flames' })).owned.trails).toEqual(['flames']);
+    expect(calls[0][0]).toMatch(/^update kr_users set owned = jsonb_set\(/);
+    expect(calls[0][0]).toContain("where id = $1 and not (coalesce(owned #> $2, '[]'::jsonb) ? $3) returning *");
+    expect(calls[0][0]).not.toContain('coins');
+    expect(calls[0][1]).toEqual(['u1', ['trails'], 'flames']);
+    expect(calls[1]).toEqual(['select * from kr_users where id = $1', ['u1']]);
+  });
+
+  it('stores owned and stats as JSON text', async () => {
+    const { store, calls } = await open(() => [pgRow()]);
+    await store.setOwned('u1', { chars: ['victor'], parts: [], trails: [] });
+    await store.setOwned('u1', null);
+    await store.setStats('u1', { races: 1 });
+    expect(calls).toEqual([
+      ['update kr_users set owned = $2::jsonb where id = $1 returning *', ['u1', '{"chars":["victor"],"parts":[],"trails":[]}']],
+      ['update kr_users set owned = $2::jsonb where id = $1 returning *', ['u1', null]],
+      ['update kr_users set stats = $2::jsonb where id = $1 returning *', ['u1', '{"races":1}']],
+    ]);
+    await expect(store.setStats('u1', null)).rejects.toThrow(TypeError);
+    expect(OWNED_KINDS).toEqual(['chars', 'parts', 'trails']);
   });
 });
 

@@ -8,6 +8,15 @@
 // with storage disabled or full still plays, it just forgets the edits. The
 // game server imports this module through race.js, where there is no
 // localStorage at all, so every access is guarded.
+//
+// The edits are stored as typed, owned or not (the Garage's locks are the
+// UI's business), but the kart is drawn and raced through what the account
+// owns (DEC-035): setOwned() says what that is, and myStyle() drops any
+// edited part or trail it does not own, so a stale `kr-kart` from the static
+// build never shows an unowned part on a server. `null` means no economy
+// (the static build, and the game server's own headless races): everything
+// renders.
+import { cleanOwned, ownedStyle } from './catalog.js';
 import { cleanStyle, playerStyle } from './kartstyle.js';
 
 const KEY = 'kr-kart';
@@ -50,5 +59,17 @@ export function resetGarage() {
   try { localStorage.removeItem(KEY); } catch (e) { /* in-memory reset is enough */ }
 }
 
-/** The full style the player's kart renders with when driving `char`. */
-export const myStyle = char => playerStyle(char, EDITS);
+let OWNED = null;
+
+/**
+ * What the player owns ({chars, parts, trails}, catalog.js), or null when
+ * there is no economy. The store calls it on every profile, sign-out and
+ * server probe.
+ */
+export function setOwned(owned) { OWNED = owned === null || owned === undefined ? null : cleanOwned(owned); }
+
+/** What setOwned() last said, cleaned; null without an economy. */
+export const getOwned = () => OWNED;
+
+/** The full style the player's kart renders with when driving `char`: the owned edits over the character default. */
+export const myStyle = char => playerStyle(char, ownedStyle(EDITS, OWNED));

@@ -37,9 +37,32 @@ export const logout = (token, { fetchImpl = globalThis.fetch, base = '' } = {}) 
 export const me = (token, { fetchImpl = globalThis.fetch, base = '' } = {}) =>
   call(fetchImpl, base, 'GET', '/api/me', { token });
 
-/** Report a finished solo race: { ok, profile, gained }. */
-export const reportRace = (token, { rank, field, finished }, { fetchImpl = globalThis.fetch, base = '' } = {}) =>
-  call(fetchImpl, base, 'POST', '/api/progress', { token, body: { rank, field, finished } });
+/**
+ * Report a finished solo race: { ok, profile, gained, coins, bonus }, where
+ * `gained` is the experience, `coins` the politicoins and `bonus`
+ * { daily, levelUp, levelUpCoins } what they include. `trackId`, `charId`,
+ * `time` and `bestLap` (seconds) feed the account's stats.
+ *
+ * @param {string} token
+ * @param {{ rank: number, field: number, finished: boolean, trackId?: string | null, charId?: string | null, time?: number | null, bestLap?: number | null }} race
+ */
+export const reportRace = (token, { rank, field, finished, trackId = null, charId = null, time = null, bestLap = null }, { fetchImpl = globalThis.fetch, base = '' } = {}) =>
+  call(fetchImpl, base, 'POST', '/api/progress', { token, body: { rank, field, finished, trackId, charId, time, bestLap } });
+
+// ---------- The politicoins economy (DEC-032..035) ----------
+// Every call is the account's own. The server prices and rolls everything;
+// a refusal carries its sentence: 402 short of coins, 403 below the level,
+// 409 already owned, 429 too many calls in a minute.
+export const shop = {
+  /** Buy candidate `id`: { ok, profile, bought: { kind: 'char', id, price } }. */
+  buyChar: (token, id, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/shop/char', { token, body: { id } }),
+  /** Buy option `value` of part `category`: { ok, profile, bought: { kind: 'part', key, price } }. */
+  buyPart: (token, category, value, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/shop/part', { token, body: { category, value } }),
+  /** Open a Politibox: { ok, profile, drop } (catalog.js rollBox). */
+  openBox: (token, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/box/open', { token, body: {} }),
+  /** The friends' stats: { ok, friends: [{ id, name, level, stats, collection }] }. */
+  friendStats: (token, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'GET', '/api/stats/friends', { token }),
+};
 
 /** What a failed roster call says when the server gave no sentence of its own. */
 const ROSTER_FALLBACK = {
@@ -78,6 +101,8 @@ export const dashboard = {
   kick: (token, id, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/admin/connections/kick', { token, body: { id } }),
   /** Any command on room `code`, lobby or race (DEC-031): { ok, text }. */
   command: (token, code, cmd, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/admin/rooms/command', { token, body: { code, cmd } }),
+  /** Give account `id` `amount` politicoins (0 to 100 000): { ok, user: { id, name, coins } }. */
+  grantCoins: (token, id, amount, { fetchImpl = globalThis.fetch, base = '' } = {}) => call(fetchImpl, base, 'POST', '/api/admin/coins', { token, body: { id, amount } }),
 };
 
 /** The cast the admin set, the same for every player: { ok, roster } or { ok: false, error }. Public. */

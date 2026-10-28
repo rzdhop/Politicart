@@ -124,6 +124,15 @@ describe('validateRoster', () => {
     ko({ chars: { kevin: { style: [] } } }, 'chars.kevin.style');
   });
 
+  it('takes the new parts and a trail as kart defaults, and round-trips them', () => {
+    const style = { trail: 'laser', exhaust: 'quad', underglow: 'rainbow', mast: 'pirate', nose: 'ram', skin: 'flames' };
+    const stored = ok({ chars: { thierry: { style } } });
+    expect(stored.chars.thierry.style).toEqual(style);
+    expect(ok(JSON.parse(JSON.stringify(stored)))).toEqual(stored);
+    ko({ chars: { thierry: { style: { trail: 'rainbow' } } } }, 'chars.thierry.style.trail');
+    ko({ chars: { thierry: { style: { exhaust: 'none' } } } }, 'chars.thierry.style.exhaust');
+  });
+
   it('takes a livery only as a JPEG, PNG or WebP whose bytes match', () => {
     expect(ok({ chars: { lulu: { livery: null } } })).toEqual({ chars: {}, ads: [] });
     ko({ chars: { lulu: { livery: img('png', 64, MAGIC.jpeg) } } }, 'chars.lulu.livery');       // mime says png, bytes are jpeg

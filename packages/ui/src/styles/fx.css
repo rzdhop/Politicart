@@ -1,0 +1,196 @@
+/* Motion: the library's first keyframes, for the economy's grades and the
+   Politibox reveal.
+
+   Loads last so its grade rules beat any component's own border or
+   background by source order. Every effect is a pseudo-element or a
+   background layer on the element that carries a `.grade-<g>` class, so a
+   badge, a shop card or a kart card gets the same treatment from the one
+   class, and nothing here changes layout: transforms and opacity drive the
+   sweeps, flashes and pops; the sparkle drifts a background layer, which is
+   paint-only. `will-change` is set on the one sweep that runs continuously.
+
+   Common has no motion by design. Everything else switches off under
+   `prefers-reduced-motion: reduce`, keeping the static colours. */
+
+@property --kr-angle {
+  syntax:'<angle>';
+  inherits:false;
+  initial-value:0deg;
+}
+
+@keyframes kr-shimmer {
+  from { transform:translateX(-100%) skewX(-18deg); }
+  to { transform:translateX(100%) skewX(-18deg); }
+}
+
+@keyframes kr-pulse {
+  0%,100% { opacity:.35; }
+  50% { opacity:1; }
+}
+
+@keyframes kr-rainbow {
+  to { --kr-angle:360deg; }
+}
+
+/* The fallback where `@property` is unsupported: the ring cycles its hues
+   instead of rotating. See the @supports block at the end. */
+@keyframes kr-rainbow-hue {
+  to { filter:hue-rotate(360deg); }
+}
+
+@keyframes kr-sparkle {
+  from { background-position:0 0,0 0; }
+  to { background-position:120px -80px,-90px 110px; }
+}
+
+@keyframes kr-flash {
+  from { opacity:1; }
+  to { opacity:0; }
+}
+
+@keyframes kr-rise {
+  from { transform:translateY(28px); opacity:0; }
+  to { transform:translateY(0); opacity:1; }
+}
+
+@keyframes kr-pop {
+  0% { transform:scale(.6); opacity:0; }
+  60% { transform:scale(1.08); opacity:1; }
+  100% { transform:scale(1); opacity:1; }
+}
+
+/* Grades ------------------------------------------------------------------- */
+
+.grade-rare,
+.grade-mythic,
+.grade-incredible {
+  position:relative;
+  isolation:isolate;
+}
+
+.grade-rare,
+.grade-incredible { overflow:hidden; }
+
+/* Rare: a diagonal light sweep across the surface. */
+.grade-rare::before {
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.28) 50%,transparent 65%);
+  animation:kr-shimmer 2.8s ease-in-out infinite;
+  will-change:transform;
+  pointer-events:none;
+  z-index:-1;
+}
+
+/* Mythic: a glow that breathes, over twinkling dots. */
+.grade-mythic::before {
+  content:'';
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  box-shadow:0 0 16px 2px var(--grade-mythic),inset 0 0 14px rgba(177,76,255,.45);
+  animation:kr-pulse 2.4s ease-in-out infinite;
+  pointer-events:none;
+  z-index:-1;
+}
+
+.grade-mythic,
+.grade-incredible {
+  background-image:
+    radial-gradient(circle,rgba(255,255,255,.9) 1px,transparent 1.6px),
+    radial-gradient(circle,rgba(255,255,255,.6) 1px,transparent 1.6px);
+  background-size:64px 64px,96px 96px;
+  background-position:0 0,0 0;
+  animation:kr-sparkle 9s linear infinite;
+}
+
+/* Incredible: a conic rainbow ring that rotates, plus a brighter, faster
+   sweep. The ring is a masked pseudo-element sitting where the border is,
+   so the element's own border goes transparent. */
+.grade-incredible { border-color:transparent; }
+
+.grade-incredible::before {
+  content:'';
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  padding:2px;
+  background:conic-gradient(from var(--kr-angle),var(--grade-incredible),var(--grade-incredible-2),var(--grade-rare),var(--grade-incredible));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;
+  animation:kr-rainbow 3s linear infinite;
+  pointer-events:none;
+}
+
+.grade-incredible::after {
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.45) 50%,transparent 65%);
+  animation:kr-shimmer 1.8s ease-in-out infinite;
+  will-change:transform;
+  pointer-events:none;
+  z-index:-1;
+}
+
+/* A part dot is too small for any of this: colour only. */
+.grade-dot {
+  animation:none;
+  background-image:none;
+  overflow:visible;
+}
+
+.grade-dot::before,
+.grade-dot::after { content:none; }
+
+/* Reveal -------------------------------------------------------------------- */
+
+/* White on top goes first and fast; the grade colour under it lingers. */
+.kr-flash::before { animation:kr-flash 1.2s ease-out both; }
+
+.kr-flash::after { animation:kr-flash .45s ease-out both; }
+
+.kr-rise { animation:kr-rise .55s cubic-bezier(.2,.9,.3,1.2) both; }
+
+.kr-pop { animation:kr-pop .5s cubic-bezier(.2,.9,.3,1.2) both; }
+
+/* The badge the game puts in the result card pops in after the card rises. */
+.kr-reveal-card .grade {
+  animation-name:kr-pop;
+  animation-duration:.5s;
+  animation-timing-function:cubic-bezier(.2,.9,.3,1.2);
+  animation-delay:.35s;
+  animation-fill-mode:both;
+}
+
+/* Where `@property` is missing, a custom property cannot interpolate and the
+   ring would snap at the halfway point. Relative colour syntax shipped in the
+   same releases as `@property` in every engine that has both (Chrome 119,
+   Safari 16.4, Firefox 128), so it stands in as the feature test. */
+@supports not (color:rgb(from red r g b)) {
+  .grade-incredible::before { animation-name:kr-rainbow-hue; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .grade-rare::before,
+  .grade-mythic,
+  .grade-mythic::before,
+  .grade-incredible,
+  .grade-incredible::before,
+  .grade-incredible::after,
+  .kr-flash::before,
+  .kr-flash::after,
+  .kr-rise,
+  .kr-pop,
+  .kr-reveal-card .grade {
+    animation:none;
+  }
+  .grade-rare::before,
+  .grade-incredible::after { will-change:auto; }
+  .grade-mythic::before { opacity:.7; }
+  .kr-rise,
+  .kr-pop { transform:none; opacity:1; }
+}

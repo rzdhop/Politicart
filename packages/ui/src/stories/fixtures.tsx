@@ -167,3 +167,28 @@ export function HudStage({
     </div>
   );
 }
+
+/** The French grade names, as the game's catalogue prints them. */
+export const GRADE_LABELS = {
+  common: 'Commun',
+  rare: 'Rare',
+  mythic: 'Mythique',
+  incredible: 'Incroyable',
+} as const;
+
+/** A few items from the shop, one per grade and state. */
+export const SHOP_ITEMS = [
+  { id: 'lucie', title: 'Lucie Vasseur', subtitle: "L'outsider", grade: 'common', price: 300 },
+  { id: 'kevin', title: 'Kévin Brasseur', subtitle: 'Le candidat viral', grade: 'rare', price: 800 },
+  { id: 'hubert', title: 'Hubert de Vaulx', subtitle: 'Le notable', grade: 'mythic', price: 2000 },
+  { id: 'aymeric', title: 'Aymeric de Castelbon', subtitle: "L'héritier", grade: 'incredible', price: 5000 },
+] as const;
+
+/** A fully fitted kart, for the kart card. */
+export const KART_PARTS = [
+  { id: 'wheels', label: 'Roues', value: 'Dorées', grade: 'mythic' },
+  { id: 'spoiler', label: 'Aileron', value: 'Grand aileron', grade: 'rare' },
+  { id: 'exhaust', label: 'Échappement', value: 'Turbine', grade: 'incredible' },
+  { id: 'underglow', label: 'Néons', value: 'Aucun', grade: 'common' },
+  { id: 'sticker', label: 'Autocollant', value: 'Tricolore', grade: 'common' },
+] as const;

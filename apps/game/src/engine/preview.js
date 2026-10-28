@@ -44,6 +44,8 @@ export function setPreview(i) {
 export const hasPreview = () => !!G.previewScene;
 
 let framer = null;
+/** The turntable's own clock, for the parts that wave and cycle (kart.js anim). */
+let clock = 0;
 
 /**
  * Register the function that says where the kart goes on small screens:
@@ -56,6 +58,7 @@ export function setPreviewFrame(fn) { framer = typeof fn === 'function' ? fn : n
 export function renderPreview(dt) {
   if (!G.previewKart) setPreview(G.charIdx);
   G.previewKart.rotation.y += dt * 0.7;
+  clock += dt; for (const f of G.previewKart.userData.anim) f(dt, clock);   // flags wave, the rainbow cycles; no kart, so no boost and no trail
   const r = getRenderer(); const W = window.innerWidth, H = window.innerHeight;
   // The Garage keeps the roster's turntable, framing included.
   const select = G.state === 'select' || G.state === 'garage'; const wide = W > 760 && H > 520 && select;
