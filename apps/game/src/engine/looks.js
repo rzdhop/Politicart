@@ -36,7 +36,8 @@
 
 /** Hair, hats and helmets: built on the head group, coloured by `look.hairColor` unless stated. */
 export const HAIR_STYLES = Object.freeze({
-  slick: 'Short glossy hair: a cap shell (r 0.444, theta 0 to 0.86) and a back shell, clearcoat 0.8, plus a flattened ellipsoid quiff (r 0.2, scale 1.55 x 0.45 x 1) lifted at the front-top and tilted back 0.4 rad (the template slick).',
+  neat: 'The young leader\'s short neat hair: the slick technique (a cap shell a hair\'s thickness off the scalp, a back shell to the nape, sideburns to the ears) with a tidy parting on the left and the front combed across, lifted a touch over the brow; glossy but less than the slick.',
+  slick: 'Glossy combed-back hair that follows the skull: a cap shell (r 0.462, theta 0 to 0.9) and a back shell to the nape, clearcoat 0.8, the front combed from a parting on the right, sideburns joining the ears, under a big rolled quiff (r 0.2, scale 1.7 x 0.85 x 1.35, a curl at its tip) lifted over the brow (the template slick, made the influencer\'s).',
   quiff: 'The slick base with its quiff scaled to 1.9 x 0.9 x 1.4 and pushed forward over the brow (centre at y 0.42, z 0.24): a glossy banana pompadour, the tallest hair on the grid.',
   tousled: 'Short cap and back shells under 10 big soft locks (r 0.12 to 0.17, seeded) tumbling forward over the brow, no clearcoat (the template tousled technique, blond here).',
   bob: 'Chin-length bob: a widened cap shell, a back shell flaring to the jaw line (theta 0 to 2.3) and a side-swept fringe shell over the forehead (the template bob).',
@@ -44,7 +45,7 @@ export const HAIR_STYLES = Object.freeze({
   sides: 'Bald crown: only a fringe-ring shell round the back from ear to ear (the template fringe), thicker over each ear.',
   combover: 'Bald crown with the sides fringe ring, plus 4 long flat strands (capsules r 0.02) laid across the crown from a low parting above the right ear to the left ear: a comb-over that has visibly changed sides.',
   white: 'Thick senatorial hair swept back: cap shell (theta 0 to 0.95) and back shell with a low volume ridge along the hairline, matte, made for white.',
-  sidepart: 'Receding cap shell (theta 0 to 0.72, the template receding) with a ruler-straight parting groove on the left (a thin skin-coloured capsule set into the cap from front to crown).',
+  sidepart: 'Receding cap shell (theta 0 to 0.74, the template receding) in the slick technique, combed flat across from a ruler-straight parting on the left (a thin line of scalp from the hairline to the crown), sideburns to the ears.',
   bun: 'Hair pulled back tight (cap and back shells, no fringe) into a round bun (sphere r 0.17) high at the back of the head, a thin dark band round its base.',
   ponytail: 'Cap and back shells with a high ponytail: a chain of 4 capsules tapering from r 0.07 to 0.04 from the crown down to the nape, a scrunchie torus at its root; it sways in the idle animation.',
   cap: 'Worker\'s cap: a flattened crown dome (shell r 0.47) and a curved peak at the front in the suit colour darkened 40%, a button on top; about 12 tight curls (the template curly technique, r 0.07 to 0.09) escape at the nape and over the ears.',
@@ -265,13 +266,13 @@ const build = (b = {}) => ({ tall: 1, shoulders: 1, belly: false, ...b });
 const outfit = (cut, fabric, layers = []) => ({ cut, fabric, layers });
 
 const CAST = {
-  // victor: the template's young-leader donor. The game's slick, a grin with
+  // victor: the template's young-leader donor. Neat short hair with a parting (the game's slick, kept tidy: the big quiff is the influencer's), a grin with
   // teeth, and the raised index of a man asking for the floor (finger). Ears up
   // a notch: the friendliest caricature lever on a smooth young face. The power
   // prop is a lectern mic on the dashboard; the game's phone goes in the breast
   // pocket, always on.
   victor: {
-    hair: 'slick', build: build(), outfit: outfit('suit', 'wool'),
+    hair: 'neat', build: build(), outfit: outfit('suit', 'wool'),
     face: face({ shape: [0.96, 1, 1], nose: [0.9, 0.95, 0.95], ears: 1.3, brow: -0.03, mouth: 'grin' }),
     pose: 'finger', props: ['tie', 'phone', 'debatemic'], tint: null,
   },

@@ -15,12 +15,27 @@
 //
 // DOM-free: the game server runs it headless (DEC-014), and a mesh needs no
 // renderer to exist.
+//
+// The stage variant (`{ stage: true }`, the Garage's podium, A-032) is the
+// same trail for the select stage's look (stagelook.js, DEC-043): the race
+// draws in linear output with no tone mapping, so an authored hex shows as
+// itself; under the stage's ACES and sRGB output the same basic materials
+// read washed out (the laser came out white-pink). There every colour is
+// converted to linear and the materials skip tone mapping, so each one
+// shows on the podium as it does on the track. It also keeps a smaller pool
+// (STAGE_POOL), spawned just often enough to fill it over a particle's
+// life, and a shorter laser (STAGE_REACH): a trail on a podium is a few
+// draw calls, not a race's worth, and stays on the podium.
 import * as THREE from 'three';
 
 import { clamp } from './util.js';
 
 /** Particles per trail: enough for a dense ribbon at race distance (stage 7 raised it from 24). */
 export const POOL = 36;
+/** Particles per stage trail (the podium's), which spawns one every life / STAGE_POOL seconds. */
+export const STAGE_POOL = 10;
+/** How far a stage particle may stretch (the laser's beam, 1.6 long, to 2.4): the podium is 2.8 across its radius. */
+const STAGE_REACH = 1.5;
 /** No trail below this speed (a kart idling on the grid leaves nothing). */
 export const MIN_SPEED = 4;
 /** Seconds between two spawns, at MIN_SPEED and at top speed. */
@@ -62,40 +77,50 @@ function geo() {
   return GEO;
 }
 const basic = (color, extra) => new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false, ...extra });
+/**
+ * The stage's: the colour converted to linear and no tone mapping, so it
+ * shows as authored under the stage look, and blended normally: a pool of
+ * additive beams overlapping on a podium sums to white, where the race's,
+ * strung out along the road, never overlap enough to.
+ */
+const stageBasic = (color, extra) => new THREE.MeshBasicMaterial({ color: new THREE.Color(color).convertSRGBToLinear(), transparent: true, depthWrite: false, toneMapped: false, ...extra, blending: THREE.NormalBlending });
+stageBasic.stage = true;
+/** The stage laser's core: a hot red, not white, which over a red beam would read pink on the podium. */
+const STAGE_LASER_CORE = 0xff6a4a;
 const fade = (p, f) => { for (const m of p.mats) m.opacity = p.alpha * (1 - f); };
 const pick = list => list[Math.floor(Math.random() * list.length)];
 
 const KINDS = {
   ribbon: {
     life: 0.9, alpha: 0.9,
-    build: () => { const g = new THREE.Group(); const mats = TRICOLORE.map((c, i) => { const m = basic(c); const b = new THREE.Mesh(geo().ribbon, m); b.position.x = (i - 1) * 0.24; g.add(b); return m; }); return { obj: g, mats }; },
+    build: mk => { const g = new THREE.Group(); const mats = TRICOLORE.map((c, i) => { const m = mk(c); const b = new THREE.Mesh(geo().ribbon, m); b.position.x = (i - 1) * 0.24; g.add(b); return m; }); return { obj: g, mats }; },
     spawn: (p, k) => { p.obj.rotation.set(0, k.heading, 0); p.obj.scale.setScalar(1); },
     move: (p, dt, f) => { fade(p, f); },
   },
   smoke: {
     life: 1.0, alpha: 0.45,
-    build: () => { const m = basic(0x9a9a9a); return { obj: new THREE.Mesh(geo().smoke, m), mats: [m] }; },
+    build: mk => { const m = mk(0x9a9a9a); return { obj: new THREE.Mesh(geo().smoke, m), mats: [m] }; },
     spawn: (p, k) => { p.vel.set((Math.random() - 0.5) * 0.6, 0.9 + Math.random() * 0.5, (Math.random() - 0.5) * 0.6); p.obj.rotation.set(0, 0, 0); },
     move: (p, dt, f) => { p.obj.position.addScaledVector(p.vel, dt); p.obj.scale.setScalar(0.5 + f * 2.4); fade(p, f); },
   },
   sparkles: {
     life: 0.7, alpha: 1,
-    build: () => { const m = basic(0xf2c14e); return { obj: new THREE.Mesh(geo().sparkle, m), mats: [m] }; },
+    build: mk => { const m = mk(0xf2c14e); return { obj: new THREE.Mesh(geo().sparkle, m), mats: [m] }; },
     spawn: (p, k) => { p.vel.set((Math.random() - 0.5) * 4, 2 + Math.random() * 3, (Math.random() - 0.5) * 4); p.spin.set(Math.random() * 10, Math.random() * 10, Math.random() * 10); p.obj.scale.setScalar(1); },
     move: (p, dt, f) => { p.vel.y -= 9 * dt; p.obj.position.addScaledVector(p.vel, dt); p.obj.rotation.x += p.spin.x * dt; p.obj.rotation.y += p.spin.y * dt; p.obj.rotation.z += p.spin.z * dt; fade(p, f); },
   },
   confetti: {
     life: 1.1, alpha: 1,
-    build: () => { const m = basic(0xffffff, { side: THREE.DoubleSide }); return { obj: new THREE.Mesh(geo().confetti, m), mats: [m] }; },
-    spawn: (p, k) => { p.mats[0].color.setHex(pick(CONFETTI)); p.vel.set((Math.random() - 0.5) * 3, 1.5 + Math.random() * 2, (Math.random() - 0.5) * 3); p.spin.set(Math.random() * 8, Math.random() * 8, Math.random() * 8); p.obj.scale.setScalar(1); },
+    build: mk => { const m = mk(0xffffff, { side: THREE.DoubleSide }); return { obj: new THREE.Mesh(geo().confetti, m), mats: [m] }; },
+    spawn: (p, k) => { p.paint(p.mats[0], pick(CONFETTI)); p.vel.set((Math.random() - 0.5) * 3, 1.5 + Math.random() * 2, (Math.random() - 0.5) * 3); p.spin.set(Math.random() * 8, Math.random() * 8, Math.random() * 8); p.obj.scale.setScalar(1); },
     move: (p, dt, f) => { p.vel.y -= 3 * dt; p.vel.x += Math.sin(p.age * 9) * 2 * dt; p.obj.position.addScaledVector(p.vel, dt); p.obj.rotation.x += p.spin.x * dt; p.obj.rotation.y += p.spin.y * dt; p.obj.rotation.z += p.spin.z * dt; fade(p, f); },
   },
   laser: {
     life: 0.45, alpha: 0.85,
-    build: () => {
+    build: mk => {
       const g = new THREE.Group(); const mats = [];
       for (const x of [-0.35, 0.35]) {
-        const beam = basic(0xff2a2a, { blending: THREE.AdditiveBlending }); const core = basic(0xffffff, { blending: THREE.AdditiveBlending });
+        const beam = mk(0xff2a2a, { blending: THREE.AdditiveBlending }); const core = mk(mk.stage ? STAGE_LASER_CORE : 0xffffff, { blending: THREE.AdditiveBlending });
         const b = new THREE.Mesh(geo().beam, beam); b.position.x = x; g.add(b); const c = new THREE.Mesh(geo().core, core); c.position.x = x; g.add(c); mats.push(beam, core);
       }
       return { obj: g, mats };
@@ -108,20 +133,23 @@ const KINDS = {
 /**
  * Build the trail of one kart: `{ group, update(k, dt), dispose() }`, or
  * null for 'none' and anything unknown. `group` holds the POOL particle
- * objects, all hidden until spawned; each carries `userData.age` and
- * `userData.life` for anyone who wants to look.
+ * objects (STAGE_POOL with `stage`), all hidden until spawned; each
+ * carries `userData.age` and `userData.life` for anyone who wants to look.
+ * `stage: true` builds the variant for the select stage's look (see the
+ * header).
  */
-export function buildTrail(kind) {
+export function buildTrail(kind, { stage = false } = {}) {
   const K = KINDS[kind]; if (!K) return null;
   const group = new THREE.Group(); group.name = 'trail:' + kind;
-  const parts = [];
-  for (let i = 0; i < POOL; i++) {
-    const built = K.build(); const obj = built.obj; obj.visible = false; obj.userData.age = 0; obj.userData.life = K.life;
-    group.add(obj); parts.push({ obj, mats: built.mats, vel: new THREE.Vector3(), spin: new THREE.Vector3(), age: 0, live: false, alpha: K.alpha });
+  const parts = [], n = stage ? STAGE_POOL : POOL, mk = stage ? stageBasic : basic;
+  const paint = stage ? (m, hex) => m.color.setHex(hex).convertSRGBToLinear() : (m, hex) => m.color.setHex(hex);
+  for (let i = 0; i < n; i++) {
+    const built = K.build(mk); const obj = built.obj; obj.visible = false; obj.userData.age = 0; obj.userData.life = K.life;
+    group.add(obj); parts.push({ obj, mats: built.mats, vel: new THREE.Vector3(), spin: new THREE.Vector3(), age: 0, live: false, alpha: K.alpha, paint });
   }
   let next = 0, acc = 0; const at = new THREE.Vector3();
   const spawn = k => {
-    const p = parts[next]; next = (next + 1) % POOL;             // the oldest, when every slot is taken
+    const p = parts[next]; next = (next + 1) % n;             // the oldest, when every slot is taken
     rearOf(k, at); p.obj.position.copy(at); p.obj.visible = true; p.age = 0; p.live = true; p.obj.userData.age = 0;
     K.spawn(p, k); K.move(p, 0, 0);
   };
@@ -133,9 +161,10 @@ export function buildTrail(kind) {
         p.age += dt; p.obj.userData.age = p.age;
         if (p.age >= K.life) { p.live = false; p.obj.visible = false; continue; }
         K.move(p, dt, p.age / K.life);
+        if (stage && p.obj.scale.z > STAGE_REACH) p.obj.scale.z = STAGE_REACH;   // a laser on a podium stays on it
       }
       if (!(k.speed > MIN_SPEED)) { acc = 0; return; }
-      const every = SPAWN_SLOW + (SPAWN_FAST - SPAWN_SLOW) * clamp((k.speed - MIN_SPEED) / (TOP_SPEED - MIN_SPEED), 0, 1);
+      const every = stage ? K.life / n : SPAWN_SLOW + (SPAWN_FAST - SPAWN_SLOW) * clamp((k.speed - MIN_SPEED) / (TOP_SPEED - MIN_SPEED), 0, 1);
       acc = Math.min(acc + dt, 0.2);           // a long frame spawns a burst, never a whole pool
       while (acc >= every) { acc -= every; spawn(k); }
     },

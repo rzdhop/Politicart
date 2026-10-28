@@ -419,7 +419,10 @@ B.mic = (c, host) => {
 
 B.ringlight = (c, host) => {
   const g = c.grp('ringlight', host);
-  c.mk(new THREE.TorusGeometry(0.2, 0.018, c.S(10, 4), c.S(64, 12)), c.glow(0xffffff, 2.2), 'ringlight', g, [0, 0, 0.004]);
+  c.mk(new THREE.TorusGeometry(0.2, 0.024, c.S(10, 4), c.S(64, 12)), c.glow(0xffffff, 4), 'ringlight', g, [0, 0, 0.004]);
+  // the light it throws: a soft additive halo round the ring, never a real light (A.4)
+  const halo = c.ownHalo(0xfff4e8, 0.5);
+  if (halo) c.mk(new THREE.RingGeometry(0.12, 0.34, c.S(48, 12)), halo, 'ringlight-halo', g, [0, 0, -0.01]);
   return g;
 };
 

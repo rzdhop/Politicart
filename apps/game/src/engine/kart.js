@@ -35,6 +35,15 @@
 //
 // `pilot: false` leaves the driver out: userData.driver is then an empty seat
 // anchor at the driver's place, for stage 5's buildPilot (seatPilot below).
+//
+// The seat contract (stage 7, one for every body): stage 5's pilot IS the
+// driver. It is built at MOUNT with its per-body seat offset and the 1.45
+// scale inside it, and it carries the steering wheel (the cargo bike's
+// handlebar) its hands are posed on. So a kart that takes one is built with
+// `pilot: false, steering: false` and seatPilot() puts the pilot in the
+// anchor's place as it is: one wheel, the hands on it, scaled once. The
+// kart's own template steering (`steering: true`, the default) is only for a
+// kart shown without any pilot.
 import * as THREE from 'three';
 
 import { surfaceSpec, textureTier } from './fabric.js';
@@ -161,15 +170,31 @@ const SEAT = { kart: [0, 0.75, -0.35], tractor: [0, 1.05, -0.35], cargo: [0, 0.7
 const bodyOf = def => (def.tractor ? 'tractor' : def.cargo ? 'cargo' : 'kart');
 
 /**
- * Seat a pilot built in template units (stage 5's buildPilot) on a kart
- * built with `pilot: false`: it goes under userData.driver, the seat anchor,
+ * Seat a pilot on a kart built with `pilot: false`.
+ *
+ * Stage 5's pilot (buildPilot: its userData.driver is itself) is already
+ * the driver: placed at MOUNT, scaled and seated per body, holding its own
+ * steering. It takes the seat anchor's place in the kart as it is, no
+ * scale and no offset, and becomes userData.driver, so physics' bob and the
+ * Politibox's hiding reach it unchanged; a pilot seated before is replaced
+ * (the caller disposes it). The kart must have been built with
+ * `steering: false`: its own wheel would be a second one, 0.14 below the
+ * pilot's hands, so that combination throws. Returns the pilot.
+ *
+ * Anything else is taken as a template-unit model whose origin is the
+ * template kart's (a bare group, a test rig): it goes under the anchor,
  * scaled PILOT_SCALE and offset so its `hip` (TEMPLATE_HIP by default) lands
- * on the anchor's origin, the driver's hip point. Physics and the Politibox
- * keep moving and hiding userData.driver, so the pilot bobs and hides with
- * it. Anything seated before is removed. Returns the fitting group.
+ * on the anchor's origin. Returns the fitting group.
  */
 export function seatPilot(kart, pilot, { scale = PILOT_SCALE, hip = TEMPLATE_HIP } = {}) {
   const anchor = kart.userData.driver;
+  if (pilot.userData && pilot.userData.driver === pilot) {
+    if (anchor.userData.steering) throw new Error('seatPilot: this kart carries its own steering; build it with steering: false, the pilot brings the wheel its hands hold');
+    const parent = anchor.parent || kart;
+    parent.remove(anchor); parent.add(pilot);
+    kart.userData.driver = pilot;
+    return pilot;
+  }
   for (const c of [...anchor.children]) anchor.remove(c);
   const fit = new THREE.Group(); fit.name = 'pilot-fit';
   fit.scale.setScalar(scale); fit.position.set(-hip[0] * scale, -hip[1] * scale, -hip[2] * scale);
@@ -421,7 +446,13 @@ function addMast(k, kind, x, yBase, yTop, z, anim, P, live) {
   if (live) live.push(...strips);
   if (kind === 'europe') strips.forEach(s => s.add(psph(0.035, P.m('gloss', 0xffcc00), 0, 0, 0.02, 6)));
   if (kind === 'pirate') { strips[1].add(psph(0.07, P.m('gloss', 0xffffff), 0, 0.08, 0.02, 8)); [0.7, -0.7].forEach(rz => { const b = pbox(0.22, 0.025, 0.02, P.m('gloss', 0xffffff), 0, -0.08, 0.02); b.rotation.z = rz; strips[1].add(b); }); }
-  anim.push((dt, t) => strips.forEach((s, i) => { const w = Math.sin(t * 6 + i); s.rotation.y = w * 0.25; s.position.z = w * 0.04; }));
+  // the wave, on top of each strip's rest pose, read on the first frame: the stage profile's merge lifts the strips
+  // out of the flag group with its turn baked in, so the strip's own z (its thickness) is the way it flutters
+  let rest = null;
+  anim.push((dt, t) => {
+    if (!rest) rest = strips.map(s => ({ pos: s.position.clone(), ry: s.rotation.y, z: new THREE.Vector3(0, 0, 1).applyQuaternion(s.quaternion) }));
+    strips.forEach((s, i) => { const w = Math.sin(t * 6 + i), r = rest[i]; s.rotation.y = r.ry + w * 0.25; s.position.copy(r.pos).addScaledVector(r.z, w * 0.04); });
+  });
 }
 
 /** The front end of the standard kart. `bodyBox` builds a box in the body material; `P.accent` is the accent colour's. */
@@ -497,15 +528,17 @@ function stageWheel(P, { r, w, x, y, z, rim, tyre, chunky }) {
  * out (userData.driver is then an empty seat anchor, see seatPilot); for
  * the stage, `tier` ('high' | 'low', default the game's detail level) and
  * `tex`, the texture tier (fabric.textureTier: 'phone' for "détaillés" on a
- * coarse pointer).
+ * coarse pointer). With `pilot: false`, `steering: false` leaves the
+ * kart's own steering out too, for stage 5's pilot, which brings its own
+ * (seatPilot; the anchor records `userData.steering`).
  */
-export function buildKart(def, style = defaultStyle(def), { profile = 'race', pilot = true, tier = getPoly(), tex = textureTier(tier) } = {}) {
+export function buildKart(def, style = defaultStyle(def), { profile = 'race', pilot = true, tier = getPoly(), tex = textureTier(tier), steering = true } = {}) {
   const stage = profile === 'stage';
   rounding = stage ? tier : null;
-  try { return build(def, style, stage, pilot, tier, tex); } finally { rounding = null; }
+  try { return build(def, style, stage, pilot, tier, tex, steering); } finally { rounding = null; }
 }
 
-function build(def, style, stage, pilot, tier, tex) {
+function build(def, style, stage, pilot, tier, tex, steering) {
   const P = stage ? stagePaletteOf(style, tier, tex) : racePalette(style);
   const k = new THREE.Group(); const S = seg(); const high = getPoly() === 'high';
   const wheels = []; const anim = []; const live = stage ? [] : null;
@@ -552,7 +585,7 @@ function build(def, style, stage, pilot, tier, tex) {
       [[-0.95, 1.0], [0.95, 1.0], [0, -1.4]].forEach(p => { const w = tag(new THREE.Mesh(wg, P.m('rubber', 0x222222))); w.position.set(p[0], 0.45, p[1]); w.rotation.order = 'YXZ'; k.add(w); wheels.push(w); });
     }
   } else if (stage) {
-    standardStage(k, def, style, P, { anim, live, wheels, plate, pilot });
+    standardStage(k, def, style, P, { anim, live, wheels, plate, pilot, steering });
   } else {
     k.add(bodyBox(1.6, 0.5, 2.8, 0, 0.5, 0)); k.add(bodyBox(1.2, 0.35, 0.9, 0, 0.5, 1.7));
     k.add(bodyBox(1.3, 0.14, 0.6, 0, 0.8, 1.0));                                                   // the cowl in front of the driver
@@ -598,7 +631,8 @@ function build(def, style, stage, pilot, tier, tex) {
     // the seat anchor: an empty group at the driver's hip point (seatPilot), and the steering its hands find
     driver = new THREE.Group(); driver.name = 'seat'; driver.position.set(...SEAT[body]);
     driver.userData.seat = { body, pilotScale: PILOT_SCALE, hip: TEMPLATE_HIP };
-    if (body !== 'kart' || !stage) addSteering(k, P, body);
+    driver.userData.steering = steering;
+    if (steering && (body !== 'kart' || !stage)) addSteering(k, P, body);
   }
   k.add(driver);
   const sh = new THREE.Mesh(stage ? new THREE.PlaneGeometry(def.cargo ? 2.6 : 3.0, def.cargo ? 4.6 : 4.4) : new THREE.CircleGeometry(1.7, 16), P.shadow());
@@ -643,7 +677,7 @@ function finishStage(k, tier, live) {
  * plate are seated on the hull's surface by raycasts.
  */
 const REARWARD = [0, 0, -1];   // a decal on the hood reads from the front, its top towards the driver, as the race's do
-function standardStage(k, def, style, P, { anim, live, wheels, plate, pilot }) {
+function standardStage(k, def, style, P, { anim, live, wheels, plate, pilot, steering = true }) {
   const T = P.tier, high = T !== 'low';
   const hull = tag(new THREE.Mesh(hullGeometry(T), P.body)); hull.name = 'hull'; k.add(hull);
   const hit = (from, dir) => surfaceHit(hull, from, dir);
@@ -711,7 +745,7 @@ function standardStage(k, def, style, P, { anim, live, wheels, plate, pilot }) {
   addNoseStage(k, style.nose, P, T);
   addMast(k, style.mast, -0.72, 0.9, 2.3, -1.1, anim, P, live);
   if (high) [-0.45, 0.45].forEach(x => [0.95, 1.25].forEach(z => { const at = onTop(x, z); if (at) k.add(seat(new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), P.chrome), at, -0.012)); }));   // rivets on the cowl
-  if (!pilot) addSteering(k, P, 'kart');
+  if (!pilot && steering) addSteering(k, P, 'kart');
   // wheels: the race's positions and sizes, lathed tyres and the style's rims
   const wl = WHEEL_LOOK[style.wheels];
   [[-0.95, 1.0], [0.95, 1.0], [-0.95, -1.0], [0.95, -1.0]].forEach(([x, z]) => {

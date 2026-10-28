@@ -187,6 +187,19 @@ describe('the rim light', () => {
     setRimTint(GOLD, 0.55);
   });
 
+  it('takes a partial strength per material, with the full rim still the default', () => {
+    const full = phys({ color: 0x334455 }), soft = phys({ color: 0x334455, rim: 0.3 }), softer = std({ color: 0x667788, rim: 0.3 });
+    expect(soft).not.toBe(full);
+    expect(full.onBeforeCompile).toBe(injectRim);
+    const s = compile(soft);
+    expect(s.fragmentShader).toMatch(/outgoingLight \+= uRimC \* rimF \* uRimS \* 0\.300;\s*gl_FragColor/);
+    expect(s.uniforms.uRimC).toBe(RIM.color);
+    expect(s.uniforms.uRimS).toBe(RIM.strength);
+    expect(soft.customProgramCacheKey()).toBe('stage-rim-0.300');
+    expect(softer.onBeforeCompile).toBe(soft.onBeforeCompile);       // equal strengths share one hook and one program key
+    expect(phys({ color: 0x334455, rim: 0 }).onBeforeCompile).not.toBe(injectRim);
+  });
+
   it('can be left out', () => {
     const m = phys({ color: 0x334455, rim: false });
     expect(m.onBeforeCompile).not.toBe(injectRim);

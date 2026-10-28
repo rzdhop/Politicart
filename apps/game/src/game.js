@@ -27,7 +27,7 @@ import { setInputSource } from './engine/input.js';
 import { getState, onTransition } from './engine/machine.js';
 import { renderLootbox } from './engine/lootbox.js';
 import { isNetRace, netStep } from './engine/netrace.js';
-import { renderPreview, showsTurntable } from './engine/preview.js';
+import { renderPreview, showsTurntable, stageInfo, warmStage } from './engine/preview.js';
 import { endRace, renderRace, stepRace } from './engine/race.js';
 import { clearCanvas } from './engine/render.js';
 import { G } from './engine/state.js';
@@ -100,12 +100,16 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyG' && ['race', 'countdown', 'paused'].includes(G.state)) actions.toggleGodConsole();
   if (e.code === 'Enter' && G.state === 'title') $('b-play').click();
   if (e.code === 'Enter' && G.state === 'results') $('b-again').click();
-  if (G.state === 'select' && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) actions.stepChar(e.code === 'ArrowRight' ? 1 : -1);
+  // The roster: ← → the next candidate, ↑ ↓ the one a row (four tiles) away, wrapping; Enter does what "Choisir le circuit →" does.
+  const roster = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -4, ArrowDown: 4 }[e.code];
+  if (G.state === 'select' && roster) actions.stepChar(roster);
   if (G.state === 'select' && e.code === 'Enter') $('b-next1').click();
   // The Politibox: the space bar hurries the opening, like a tap on the stage.
   if (G.state === 'lootbox' && e.code === 'Space') actions.skipOpening();
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
+// Any input on the title screen means the player is about to act: the stage's warm-up waits for a quiet moment.
+for (const ev of ['keydown', 'pointerdown']) window.addEventListener(ev, () => { titleIdle = 0; }, { passive: true });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 const DRIVE_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space'];
 /**
@@ -153,10 +157,22 @@ actions.detectServer();
 // The UI owns the clock. The engine steps only while the race is live; while
 // paused or on the results the scene is redrawn but not advanced.
 let lastFrame = performance.now();
+/**
+ * Seconds the title screen has sat untouched. Past WARM_AFTER the select
+ * stage takes a frame's share of its warm-up behind the title each frame
+ * (preview.js warmStage: build it and compile its programs a few at a time,
+ * draw it once, then the portraits and the Garage's parts; a no-op once warm
+ * for the detail level), so "Jouer" opens the stage without a hitch.
+ */
+let titleIdle = 0;
+const WARM_AFTER = 0.8;
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
+  // clamped both ways: the first rAF timestamp can predate lastFrame, and a negative step would run time backwards (PLAN 1.2 A.1)
+  const dt = Math.max(0, Math.min(0.05, (now - lastFrame) / 1000)); lastFrame = now;
   const state = getState();
+  if (state === 'title') { titleIdle += dt; if (titleIdle > WARM_AFTER) setTimeout(warmStage, 0); }
+  else titleIdle = 0;
   // The Politibox owns the canvas while it opens (DEC-037). The roster and the Garage show the
   // turntable; every other menu sits on the plain night background, the canvas cleared to it.
   if (state === 'lootbox') { renderLootbox(dt); return; }
@@ -181,4 +197,6 @@ requestAnimationFrame(frame);
 // karts() is read-only: which candidate and kart style each grid slot is drawn
 // with, so the team-race spec can check that another player's Garage edits
 // reached this screen (nothing in the DOM shows a kart's style).
-window.__kr = { endRace, karts: () => (G.karts || []).map(k => ({ charId: k.def.id, style: { ...k.style } })) };
+// stage() is read-only too: the select stage as its last frame drew it (preview.js stageInfo): the candidate,
+// the podium's yaw, the frame's draw calls, triangles and programs, the model's box on screen, the portraits.
+window.__kr = { endRace, karts: () => (G.karts || []).map(k => ({ charId: k.def.id, style: { ...k.style } })), stage: () => stageInfo() };

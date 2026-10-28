@@ -138,6 +138,37 @@ test.describe('R-10 phones', () => {
   });
 });
 
+test.describe('R-10c the select stage under a finger', () => {
+  /** Drag one finger from (x, y) by (dx, dy) in small steps, the way a thumb swipes. */
+  async function swipe(page: Page, x: number, y: number, dx: number, dy: number) {
+    let cdp = sessions.get(page);
+    if (!cdp) { cdp = await page.context().newCDPSession(page); sessions.set(page, cdp); }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+    for (let i = 1; i <= 12; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + dx * i / 12, y: y + dy * i / 12 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  }
+  const yaw = (page: Page) => page.evaluate(() => (window as unknown as { __kr: { stage: () => { yaw: number } } }).__kr.stage().yaw);
+
+  test('turns the podium under a sideways swipe and scrolls the screen under an upright one', async ({ page }) => {
+    test.setTimeout(150_000);
+    await page.goto('/');
+    await page.locator('#b-play').tap();
+    await page.waitForFunction(() => (window as unknown as { __kr: { stage: () => { ready: boolean } } }).__kr.stage().ready, null, { timeout: 120_000 });
+    const band = page.locator('#showcase-stage');
+    expect(await band.evaluate((el) => getComputedStyle(el).touchAction)).toBe('pan-y');
+    const box = (await band.boundingBox())!, cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+    // sideways: the podium turns with the thumb
+    const before = await yaw(page);
+    await swipe(page, cx - 100, cy, 200, 0);
+    await expect.poll(async () => Math.abs((await yaw(page)) - before), { timeout: 30_000 }).toBeGreaterThan(1);
+    // upright: the page scrolls on to the roster, the band does not hold it
+    const screen = page.locator('#s-select');
+    const top = await screen.evaluate((el) => el.scrollTop);
+    await swipe(page, cx, cy + 40, 0, -220);
+    await expect.poll(() => screen.evaluate((el) => el.scrollTop), { timeout: 30_000 }).toBeGreaterThan(top + 40);
+  });
+});
+
 test.describe('R-10b computers', () => {
   test.use({ viewport: { width: 1280, height: 800 }, hasTouch: false, isMobile: false });
 
