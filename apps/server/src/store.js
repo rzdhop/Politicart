@@ -7,7 +7,7 @@
 //                        any Postgres (a free Neon or Supabase database works).
 //   otherwise         -> one JSON file (POLITIKART_DATA), rewritten atomically a
 //                        moment after each change. Fine on a LAN, in Docker
-//                        with a volume, or on Fly.io with a volume.
+//                        with a volume on /data.
 //   neither (tests)   -> the same as the file store, kept in memory only.
 //
 // The interface (every method async):

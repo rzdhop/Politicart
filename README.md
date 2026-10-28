@@ -111,26 +111,20 @@ The free way to play team races over the internet, with no machine of your own l
 
 3. **Make yourself admin.** In the Render service's **Environment**, set `POLITIKART_ADMIN_PASSWORD_HASH` to the hash printed by `npm run -s admin-hash -w @politikart/server` (the Blueprint leaves it for you to fill). Render restarts the service; log in as `rida` through **Compte**.
 
-Render's free disk is wiped whenever the service sleeps, so accounts and the admin's cast need a database there. The game uses the [Neon](https://console.neon.tech) project **Politikart** (`muddy-wave-64148556`, region `aws-eu-central-1`, Frankfurt, database `politikart`): paste its pooled connection string (Neon console > Connect, connection pooling on) into the service's `DATABASE_URL` variable, which the Blueprint leaves for you to fill. Everything targets players in France: neither Render nor Neon has a Paris region, so both sit in Frankfurt, side by side and inside the EU; Fly.io (`fly.toml`) runs the server in Paris (`cdg`). Locally, `neon deploy` writes the same variable into `.env.local`, which `npm start` reads. Without it the server still runs, but every account and every cast edit vanishes at each restart (the admin account itself is recreated from its hash).
+Render's free disk is wiped whenever the service sleeps, so accounts and the admin's cast need a database there. The game uses the [Neon](https://console.neon.tech) project **Politikart** (`muddy-wave-64148556`, region `aws-eu-central-1`, Frankfurt, database `politikart`): paste its pooled connection string (Neon console > Connect, connection pooling on) into the service's `DATABASE_URL` variable, which the Blueprint leaves for you to fill. Everything targets players in France: neither Render nor Neon has a Paris region, so both sit in Frankfurt, side by side and inside the EU. Locally, `neon deploy` writes the same variable into `.env.local`, which `npm start` reads. Without it the server still runs, but every account and every cast edit vanishes at each restart (the admin account itself is recreated from its hash).
 
 The free plan sleeps after 15 minutes with nobody connected. The first visitor after that waits about a minute before the Multijoueur button appears, and a race in progress when it falls asleep is lost. Delete the variable and re-run the workflow to make the page solo again.
 
 ### Hosting a team race online
 
-The `Dockerfile` packages the server and the built game into one image, and `fly.toml` deploys it to [Fly.io](https://fly.io):
+The `Dockerfile` packages the server and the built game into one image. Render builds it from `render.yaml`; any other host that runs a container and passes WebSockets through works the same way (Railway, a VPS behind Caddy):
 
 ```sh
 docker build -t politikart .
 docker run --rm -p 8080:8080 politikart     # the same server, in a container
-
-fly launch --no-deploy --copy-config             # choose your own app name and region
-fly deploy
-fly volumes create kr_data --size 1              # once: the accounts file and the cast live on it (/data)
-fly secrets set POLITIKART_ADMIN_PASSWORD_HASH='scrypt$...'   # the admin's hash, in single quotes
-fly scale count 1                                # rooms live in memory: exactly one machine
 ```
 
-Any host that runs a container and passes WebSockets through works the same way (Render, Railway, a VPS behind Caddy). Two cautions. Rooms are kept in memory, so run a single instance. A free tier that sleeps when idle drops every open race when it does.
+Two cautions. Rooms are kept in memory, so run a single instance. A free tier that sleeps when idle drops every open race when it does. Without a `DATABASE_URL`, accounts and the cast live in a JSON file under `/data`: mount a volume there or they vanish with the container.
 
 ## Controls
 

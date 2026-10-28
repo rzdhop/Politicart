@@ -18,7 +18,7 @@ afterEach(() => { disconnect(); });
 describe('net client', () => {
   it('derives the socket URL from the page origin', () => {
     expect(serverUrl({ protocol: 'http:', host: '192.168.1.20:8080' })).toBe('ws://192.168.1.20:8080/ws');
-    expect(serverUrl({ protocol: 'https:', host: 'kr.fly.dev' })).toBe('wss://kr.fly.dev/ws');
+    expect(serverUrl({ protocol: 'https:', host: 'politikart.onrender.com' })).toBe('wss://politikart.onrender.com/ws');
   });
 
   it('points at a remote server when the build names one', () => {

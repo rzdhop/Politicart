@@ -855,3 +855,17 @@ on Opus agents.
 
 **Consequence.** Every stage's green run is meaningful; the integrated tip
 is verified after every merge.
+
+## DEC-040 -- Render is the only host; the Fly.io configuration is gone
+
+**Context.** `fly.toml` dated from before DEC-015, when the server was meant
+to run on Fly.io in Paris. Fly needs a payment card, nothing was ever
+deployed there, and the Render Blueprint has carried the live server since.
+After the Politikart rename the human asked whether Fly still mattered.
+
+**Decision.** Delete `fly.toml` and every Fly mention in the README, the
+Dockerfile and the server comments; keep the generic Docker instructions, as
+any container host still works. `render.yaml` alone describes the deployment.
+
+**Consequence.** One host to keep in sync with the code. Running the server
+in Paris again means writing a new host config, not reviving this one.

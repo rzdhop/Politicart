@@ -2,7 +2,7 @@
 #
 #   Render dashboard > New > Blueprint > pick this repository > Apply
 #
-# It builds the same Dockerfile as Fly.io. Rooms live in memory, so it runs
+# It builds the repository's Dockerfile. Rooms live in memory, so it runs
 # exactly one instance. The free plan sleeps after 15 minutes with nobody
 # connected: the next visitor waits about a minute while it wakes, and a race
 # in progress when it falls asleep is lost. Render sets PORT itself.
