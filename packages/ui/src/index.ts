@@ -55,6 +55,10 @@ export {
   type SelectLayoutProps,
 } from './components/select/SelectLayout';
 export { Showcase, type ShowcaseProps } from './components/select/Showcase';
+export {
+  ShowcaseStage,
+  type ShowcaseStageProps,
+} from './components/select/ShowcaseStage';
 export { StatBar, type StatBarProps } from './components/select/StatBar';
 export { StatGrid, type StatGridProps } from './components/select/StatGrid';
 

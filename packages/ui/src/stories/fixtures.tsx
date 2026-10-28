@@ -27,6 +27,79 @@ export const PORTRAIT =
      </svg>`,
   );
 
+/**
+ * The placeholder a roster tile shows while its real portrait renders: the
+ * candidate's kart colour and their initials, as the game draws it on a 2D
+ * canvas before the 3D portrait is ready. Pair it with `pending` on the tile.
+ */
+export function placeholderPortrait(name: string, colour: string): string {
+  const initials = name
+    .split(/[\s-]+/)
+    .filter((w) => /^\p{Lu}/u.test(w))
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('');
+  return (
+    'data:image/svg+xml;utf8,' +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120">
+         <defs><linearGradient id="p" x1="0" y1="0" x2="0" y2="1">
+           <stop offset="0" stop-color="${colour}"/><stop offset="1" stop-color="#0c1230"/>
+         </linearGradient></defs>
+         <rect width="120" height="120" fill="url(#p)"/>
+         <text x="60" y="46" text-anchor="middle" dominant-baseline="middle"
+           font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="34"
+           fill="#fffaf0" fill-opacity="0.85">${initials}</text>
+       </svg>`,
+    )
+  );
+}
+
+/**
+ * A stand-in for the 3D podium, for `ShowcaseStage` stories.
+ *
+ * In the game the stage band is empty and the scene is drawn behind it on the
+ * WebGL canvas; a story has no canvas, and an empty band would preview as
+ * nothing. This fills the band with a still sketch of what goes there -- a
+ * spotlit podium and a kart, bottom-centred as the scene frames them -- so
+ * the band's size and place read at a glance. Static, so screenshots of it
+ * are reproducible.
+ */
+export function StagePreview() {
+  return (
+    <svg
+      viewBox="0 0 320 180"
+      width="100%"
+      height="100%"
+      preserveAspectRatio="xMidYMax meet"
+      style={{ display: 'block', position: 'absolute', inset: 0 }}
+      aria-hidden="true"
+    >
+      <defs>
+        <radialGradient id="stage-spot" cx="0.5" cy="0.55" r="0.5">
+          <stop offset="0" stopColor="#2f55c7" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#2f55c7" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <ellipse cx="160" cy="100" rx="150" ry="80" fill="url(#stage-spot)" />
+      <ellipse cx="160" cy="152" rx="118" ry="22" fill="#0c1230" />
+      <ellipse cx="160" cy="148" rx="112" ry="20" fill="#1a2a5e" stroke="#f2c14e" strokeWidth="3" />
+      <ellipse cx="160" cy="148" rx="78" ry="13" fill="none" stroke="#f6f1e4" strokeOpacity="0.18" strokeWidth="2" />
+      <g>
+        <rect x="104" y="112" width="112" height="26" rx="10" fill="#2f55c7" />
+        <rect x="196" y="100" width="30" height="8" rx="3" fill="#f2c14e" />
+        <rect x="150" y="112" width="10" height="26" fill="#fffaf0" />
+        <rect x="160" y="112" width="10" height="26" fill="#e63946" />
+        <circle cx="118" cy="140" r="12" fill="#0c1230" stroke="#3b4574" strokeWidth="3" />
+        <circle cx="202" cy="140" r="12" fill="#0c1230" stroke="#3b4574" strokeWidth="3" />
+        <rect x="146" y="88" width="28" height="26" rx="8" fill="#1a2a5e" />
+        <circle cx="160" cy="76" r="16" fill="#f1c27d" />
+        <path d="M144 74 a16 16 0 0 1 32 0 z" fill="#3b2a1e" />
+      </g>
+    </svg>
+  );
+}
+
 /** A stand-in circuit preview for track cards: the game draws the real spline. */
 export function TrackPreview() {
   return (
