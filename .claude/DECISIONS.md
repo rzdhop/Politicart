@@ -893,3 +893,30 @@ repository variable. Supersedes DEC-008; DEC-015's remote-server option
 idle, so the first visitor after that waits about a minute even to play solo;
 Pages never slept. The CI run still gates nothing Render ships (Render deploys
 on push regardless), but a red run on `main` flags a broken deploy at once.
+
+## DEC-042 -- The live screens follow the design system's layout rules
+
+**Context.** A check of the live game against the Design System page found
+the tokens, fonts and every component rule in place, but six screens broke
+the system's layout rules: two primary buttons in one row (title, lobby),
+the lock pill on locked candidates cut off and greyed with the tile, the
+fixed bottom note covering content on phones, the turntable kart drawn
+through the showcase text on wide screens, the turntable showing behind the
+circuits, the Boutique and (once it existed) every other menu, and the guest
+lobby's "Se connecter" inline in a sentence above an empty gap.
+
+**Decision.** One primary per button row: only "Jouer" on the title; in the
+lobby the action the player can take (create when signed in, join as a
+guest); the admin's force start is a ghost beside the ready toggle. The lock
+pill keeps its gold and wraps inside the tile; the grey goes on the portrait
+and the name. While the note shows, every screen but the Politibox stage
+reserves its measured height at the bottom (`--note-room`, via `:has`, with
+the old `noted` class kept for browsers without it). The turntable is framed
+on every layout in the showcase's free band above the name, as phones
+already were, and is drawn only on select and garage; every other menu
+clears the canvas to `--bg`. The empty lobby status line is hidden.
+
+**Consequence.** The menus read as the design system draws them. The 3D
+character-select design on the Design System page (a hemicycle stage,
+podium and richer pilots) is a separate, larger piece of work, planned on
+its own.

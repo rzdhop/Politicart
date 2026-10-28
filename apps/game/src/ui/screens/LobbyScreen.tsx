@@ -83,16 +83,21 @@ function JoinPanel({ ui }: { ui: UiSnapshot }) {
           <TextInput id="lobby-code" maxLength={4} value={code} placeholder="ABCD" onChange={e => setCode(e.target.value.toUpperCase())} />
         </Field>
       </AdminGrid>
+      {/* One primary: creating a room needs an account, so a guest's way forward is joining one. */}
       <Row>
-        <Button id="b-mp-create" disabled={!open || !acc} title={acc ? undefined : 'Connectez-vous pour créer une salle'} onClick={actions.createRoom}>Créer une salle</Button>
-        <Button id="b-mp-join" disabled={!open || code.trim().length !== 4} onClick={() => actions.joinRoom(code)}>Rejoindre</Button>
+        <Button id="b-mp-create" variant={acc ? 'primary' : 'ghost'} disabled={!open || !acc} title={acc ? undefined : 'Connectez-vous pour créer une salle'} onClick={actions.createRoom}>Créer une salle</Button>
+        <Button id="b-mp-join" variant={acc ? 'ghost' : 'primary'} disabled={!open || code.trim().length !== 4} onClick={() => actions.joinRoom(code)}>Rejoindre</Button>
         <Button id="b-mp-back" variant="ghost" onClick={actions.lobbyBack}>Retour</Button>
       </Row>
       {!acc && (
-        <Disclaimer id="lobby-guest">
-          {'En invité·e, vous rejoignez une salle avec son code (ou sur invitation) et jouez les quatre candidat·es de départ. '}
-          <Button variant="ghost" id="b-mp-account" onClick={() => { actions.lobbyBack(); actions.openAccount(); }}>Se connecter</Button>
-        </Disclaimer>
+        <>
+          <Disclaimer id="lobby-guest">
+            {'En invité·e, vous rejoignez une salle avec son code (ou sur invitation) et jouez les quatre candidat·es de départ.'}
+          </Disclaimer>
+          <Row>
+            <Button variant="ghost" id="b-mp-account" onClick={() => { actions.lobbyBack(); actions.openAccount(); }}>Se connecter</Button>
+          </Row>
+        </>
       )}
     </>
   );
@@ -177,7 +182,8 @@ function RoomPanel({ ui, room }: { ui: UiSnapshot; room: RoomView }) {
         {isHost
           ? <Button id="b-mp-start" disabled={!canStart} onClick={actions.startNetRace}>{canStart ? 'Lancer la course' : 'En attente des joueur·ses…'}</Button>
           : <Button id="b-mp-ready" variant={me?.ready ? 'primary' : 'ghost'} aria-pressed={!!me?.ready} onClick={() => actions.setReady(!me?.ready)}>{me?.ready ? 'Prêt·e !' : 'Je suis prêt·e'}</Button>}
-        {admin && !isHost && room.phase === 'lobby' && <Button id="b-mp-force" onClick={actions.startNetRace}>Lancer maintenant (admin)</Button>}
+        {/* A ghost: the ready toggle beside it already holds the row's one primary. */}
+        {admin && !isHost && room.phase === 'lobby' && <Button id="b-mp-force" variant="ghost" onClick={actions.startNetRace}>Lancer maintenant (admin)</Button>}
         <Button id="b-mp-leave" variant="ghost" onClick={actions.leaveRoom}>Quitter la salle</Button>
       </Row>
       <InvitePanel ui={ui} room={room} />
@@ -188,13 +194,15 @@ function RoomPanel({ ui, room }: { ui: UiSnapshot; room: RoomView }) {
 /** The team race's waiting room. Shown only when the page is served by the game server. */
 export function LobbyScreen({ ui }: { ui: UiSnapshot }) {
   const room = ui.net.room;
+  const message = ui.net.error ?? ui.net.notice ?? '';
   return (
     <Screen id="s-lobby" hidden={ui.state !== 'lobby'}>
       <Panel style={COLUMN}>
         <Heading>Course en équipe</Heading>
         <Disclaimer id="lobby-status">{STATUS[ui.net.status]}</Disclaimer>
         {room ? <RoomPanel ui={ui} room={room} /> : <JoinPanel ui={ui} />}
-        <Disclaimer id="lobby-error" role="status" style={{ color: ui.net.error ? 'var(--red)' : 'var(--gold)', minHeight: '1.2em' }}>{ui.net.error ?? ui.net.notice ?? ''}</Disclaimer>
+        {/* Hidden while empty: a blank line kept in reserve here, with its margins and the column's gaps, left a hole in the panel. */}
+        <Disclaimer id="lobby-error" role="status" hidden={!message} style={{ color: ui.net.error ? 'var(--red)' : 'var(--gold)' }}>{message}</Disclaimer>
         <Disclaimer>
           Bleu contre Rouge : chaque arrivée rapporte des points (10, 8, 6, 4, 2, 1) à son équipe. Vos objets épargnent vos coéquipier·es. L’IA complète la grille.
         </Disclaimer>

@@ -27,8 +27,9 @@ import { setInputSource } from './engine/input.js';
 import { getState, onTransition } from './engine/machine.js';
 import { renderLootbox } from './engine/lootbox.js';
 import { isNetRace, netStep } from './engine/netrace.js';
-import { hasPreview, renderPreview } from './engine/preview.js';
+import { renderPreview, showsTurntable } from './engine/preview.js';
 import { endRace, renderRace, stepRace } from './engine/race.js';
+import { clearCanvas } from './engine/render.js';
 import { G } from './engine/state.js';
 import { $, clamp, fmtTime } from './engine/util.js';
 import { hud } from './ui/Hud.tsx';
@@ -156,9 +157,11 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
   const state = getState();
-  // The Politibox owns the canvas while it opens (DEC-037); the Boutique keeps the turntable behind its panels.
+  // The Politibox owns the canvas while it opens (DEC-037). The roster and the Garage show the
+  // turntable; every other menu sits on the plain night background, the canvas cleared to it.
   if (state === 'lootbox') { renderLootbox(dt); return; }
-  if (state === 'select' || state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'garage' || state === 'dashboard' || state === 'shop') { if (state === 'select' || state === 'tracks' || state === 'garage' || state === 'shop' || hasPreview()) renderPreview(dt); return; }
+  if (showsTurntable(state)) { renderPreview(dt); return; }
+  if (state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'dashboard' || state === 'shop') { clearCanvas(); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
 
   const payload = isNetRace() ? netStep(dt) : stepRace(dt);

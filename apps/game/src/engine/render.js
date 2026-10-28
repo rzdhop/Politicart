@@ -31,4 +31,17 @@ export function getRenderer() {
   return renderer;
 }
 
+/**
+ * Paint the canvas the menus' plain night background (the design system's
+ * --bg). Once the renderer exists the canvas is an opaque WebGL surface that
+ * keeps whatever was drawn last -- a race, the turntable, a roster portrait
+ * -- until something draws over it, so a menu without a scene of its own
+ * clears it every frame (resizing the canvas also wipes it). Before that the
+ * canvas is transparent over the page's own --bg, and is left alone.
+ */
+export function clearCanvas() {
+  if (!renderer) return;
+  renderer.setScissorTest(false); renderer.setViewport(0, 0, window.innerWidth, window.innerHeight); renderer.setClearColor(0x0c1230, 1); renderer.clear();
+}
+
 export function resize() { const r = getRenderer(); r.setSize(window.innerWidth, window.innerHeight, false); camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); }
