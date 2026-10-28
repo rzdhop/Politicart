@@ -54,8 +54,29 @@ Current state only. History lives in git.
   - frame governor (DEC-046): a stage costing at least 100 ms per frame
     stands still and draws only when its picture changes. It is for really
     slow GPUs; nothing changes on a GPU that keeps up.
-- **Next:** stage 8 (pilots in the race) || stage 9 (the go launch,
-  transitions, reduced motion); then stage 10.
+- **Stages 8 and 9 done:** stage 8 (the caricature pilots race; `kart.js`,
+  `physics.js`, `lootbox.js`) merged as `591b541`, stage 9 (the go launch
+  down the aisle; `preview.js`, `game.js`, `store.ts`, confetti in
+  `hemicycle.js`) merged as `cde5d9f`; both merges clean. Tier 1 on
+  `cde5d9f`: ui 369 + 8 skipped, game 849, server 168 (stage 8 added 2
+  server tests), typecheck clean, no flakes. E2E: 55 passed, 17 failed of
+  72 in 24.0 min on an idle machine. All 17 are in the baseline's 18
+  race-start specs; R-20 "the admin enters a race already running" and
+  R-05 passed this run; nothing failed outside the baseline. Measured:
+  - race frames before -> after, Élysée with 6 karts: high grid 1,703 /
+    502k -> 1,259 / 319k draws / triangles; low (1440) grid 663 / 77k ->
+    529 / 72k; phone "légers" race 250-290 / 53-56k -> 160-210 / 49-53k.
+  - race pilots: race-high 2-3 meshes / 4.3-5.5k triangles; race-low 1-2 /
+    1.6-2.1k.
+  - the server builds 6 karts in about 7 ms (was 25-35 ms). The plan's 5 ms
+    target is not met, because the kart body must stay hash-identical;
+    accepted, and the test asserts under 20 ms.
+  - the launch: 1.4 s down the aisle, fading to `--bg` from 1.0 s;
+    `#s-tracks` shows at once. No launch under reduced motion or on a still
+    stage.
+  - the tractor driver's bob is fixed.
+- **Next:** stage 10 (docs, real-name scan widened, phone-landscape
+  showcase, design-sync, PR, live check).
 
 ## Previous task -- 2026-10-27: politicoins, the Politibox, grades, parts, trails, two circuits, stats
 
