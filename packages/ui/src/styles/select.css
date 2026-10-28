@@ -1,13 +1,17 @@
-/* Character select: roster tiles, the showcase, stat bars, the power box. */
+/* Character select: roster tiles, the showcase and its stage band, stat bars,
+   the power box. */
 
+/* Fills the screen's free height and never shrinks below its content: when
+   the two do not fit, the screen scrolls. Shrinking (the old `flex:1;
+   min-height:0`) squeezed a grid row down to the showcase's min-height, so a
+   showcase with a stage band overflowed out of its own top on a phone. */
 .select-layout {
   display:grid;
   grid-template-columns:minmax(260px,400px) 1fr;
   gap:24px;
   width:min(1180px,100%);
   align-items:stretch;
-  flex:1;
-  min-height:0;
+  flex:1 0 auto;
 }
 
 .roster {
@@ -16,6 +20,25 @@
   gap:10px;
   align-content:start;
 }
+
+/* Under the tiles, across every column: the button row and the keyboard
+   legend on wide screens. Rows centre by default; here they line up with the
+   tiles' left edge, and loose text reads as a muted legend line. The gap
+   alone spaces the lines: a Disclaimer's paragraph margins are dropped. */
+.roster-foot {
+  grid-column:1/-1;
+  display:grid;
+  justify-items:start;
+  gap:10px;
+  margin-top:8px;
+  font-size:13px;
+  color:var(--muted);
+  text-align:left;
+}
+
+.roster-foot > * { margin:0; }
+
+.roster-foot .row { justify-content:flex-start; }
 
 .tile {
   aspect-ratio:1;
@@ -59,6 +82,27 @@
 
 .tile:focus-visible { outline:3px solid #fff; }
 
+/* A portrait still rendering: a light sweeps across the placeholder. Drawn
+   over the image but under the name strip and the badge, which are
+   positioned too and come later in the tile. On ::before because the game
+   pins its lock pill on ::after. Staggered by column, so a pending roster
+   reads as one wave crossing the grid rather than sixteen blinks. */
+.tile.pending::before {
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(105deg,transparent 28%,rgba(255,255,255,.32) 50%,transparent 72%);
+  animation:kr-shimmer 1.6s ease-in-out infinite;
+  will-change:transform;
+  pointer-events:none;
+}
+
+.tile.pending:nth-child(4n+2)::before { animation-delay:.12s; }
+
+.tile.pending:nth-child(4n+3)::before { animation-delay:.24s; }
+
+.tile.pending:nth-child(4n+4)::before { animation-delay:.36s; }
+
 .showcase {
   display:flex;
   flex-direction:column;
@@ -69,6 +113,25 @@
   pointer-events:none;
   gap:8px;
 }
+
+/* The stage band: the free height above the name, where the 3D scene frames
+   its model, and the drag surface that turns it. The one part of a showcase
+   that takes the pointer; vertical swipes still scroll the page. Positioned,
+   so a fallback picture inside can fill it without giving it a height. */
+.showcase-stage {
+  position:relative;
+  flex:1;
+  min-height:140px;
+  align-self:stretch;
+  pointer-events:auto;
+  touch-action:pan-y;
+  cursor:grab;
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+
+.showcase-stage:active { cursor:grabbing; }
 
 .showcase .big {
   font-family:var(--font-display);
@@ -141,5 +204,55 @@
   }
   .showcase .stats {
     grid-template-columns:repeat(3,1fr);
+  }
+}
+
+/* A phone held sideways: too short to stack, too short for the showcase to
+   share the screen's scroll. Two columns stay; the showcase is pinned to the
+   top of the scroll container and the roster scrolls past beside it.
+   A sticky box comes to rest inside the container's top padding, not at the
+   viewport's edge, so the showcase is limited to the viewport (100vh where
+   dvh is missing) less that padding: `--select-pin-inset`, 24px by default,
+   which is a Screen's own. A screen that changes its top padding sets the
+   property to match, or the bottom of the power box is cut off while pinned.
+   As tall as the roster when the roster is shorter. (A sticky box only
+   travels inside its container, which is why the layout above grows to its
+   content rather than shrinking into the screen.) Comes after the 760px rule
+   so a narrow landscape phone keeps two columns too. */
+@media (max-height:520px) and (orientation:landscape) {
+  .select-layout {
+    grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);
+    gap:14px;
+  }
+  .select-layout > .showcase {
+    order:0;
+    position:sticky;
+    top:0;
+    align-self:start;
+    min-height:min(100%,calc(100vh - var(--select-pin-inset,24px)));
+    min-height:min(100%,calc(100dvh - var(--select-pin-inset,24px)));
+    max-height:calc(100vh - var(--select-pin-inset,24px));
+    max-height:calc(100dvh - var(--select-pin-inset,24px));
+    align-items:flex-start;
+    text-align:left;
+    gap:6px;
+  }
+  /* Tighter type, so the stage band keeps more than its floor. */
+  .select-layout > .showcase .big {
+    font-size:clamp(26px,4vw,36px);
+  }
+  .select-layout > .showcase .stats {
+    grid-template-columns:repeat(3,minmax(0,1fr));
+  }
+}
+
+/* The portrait sweep is decoration: off, with its layer, for anyone who asks
+   for less motion. The placeholder itself still says the portrait is coming,
+   and the tile says so to assistive technology with aria-busy. */
+@media (prefers-reduced-motion:reduce) {
+  .tile.pending::before {
+    content:none;
+    animation:none;
+    will-change:auto;
   }
 }

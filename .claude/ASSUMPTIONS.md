@@ -122,6 +122,29 @@ Marked UNCONFIRMED / confirmed / invalidated.
 
 ## Confirmed
 
+- **A-036 -- The stage tint is derived from the kart colour.** CONFIRMED
+  2026-10-28 on stage 7's visual sheet (`stage7/sheet.png` in the session
+  scratchpad, /tmp/claude-0/-home-user-Politicart/587b69f6-3176-5d54-ad88-c4803677af36/scratchpad/stage7/sheet.png): the rim light, sky glow and LED strips
+  follow each candidate's `def.kart` hue (Marine Le Stylo pink, Emmanuel
+  Macaron blue, José Bovin green, Sandrine Ruisseau green, Jean-Luc Mélèche
+  purple, Jordan Mortadella cyan), lifted to lightness >= 0.55 and
+  saturation >= 0.6, the dark karts overridden in `LOOK3D`; the directional
+  rim light is blended halfway to white (stage 7).
+- **A-037 -- The template-sized pilot fits the game's seat at x1.45.**
+  CONFIRMED 2026-10-28 on stage 5's sheets (`stage5/kart-fit.png`,
+  `contact-stage.png`, `portraits.png`, /tmp/claude-0/-home-user-Politicart/587b69f6-3176-5d54-ad88-c4803677af36/scratchpad/stage5/): the pilot built in
+  template units and scaled 1.45 sits in the game kart, tractor and cargo
+  bike with hands on the wheel or handlebars, physics, shields and rings
+  untouched. Stage 7 made it one contract: the 1.45 lives inside the pilot
+  (`pilot.js` MOUNT), and `seatPilot` seats it at scale 1.
+- **A-038 -- The "go" launch drives down the aisle, away from the camera.**
+  CONFIRMED 2026-10-28 on stage 9's filmstrip (`stage9/filmstrip.png`,
+  /tmp/claude-0/-home-user-Politicart/587b69f6-3176-5d54-ad88-c4803677af36/scratchpad/stage9/filmstrip.png): the kart swings round to face world -z, pulls
+  away down the aisle over 1.4 s and the stage fades to `--bg` from 1.0 s,
+  never toward the camera; the circuit screen shows at once, and nothing
+  plays under `prefers-reduced-motion` or on a still stage (E2E in
+  `e2e/stage.spec.ts`).
+
 - **A-006 -- Node 26 is available to `actions/setup-node` on ubuntu-latest.**
   CONFIRMED 2026-10-15 by the first run of `.github/workflows/pages.yml` on
   `main` (run 38699287498: build, typecheck, both unit suites, game build and

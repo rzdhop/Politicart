@@ -1,7 +1,13 @@
-/* Brand: the tricolore rule. */
+/* Brand: the tricolore rule.
+
+   It never shrinks: it has no content to set a minimum height, so in a
+   Screen whose content overflows (a phone, a long roster) the flex column
+   would otherwise squeeze it to nothing and the screen would scroll without
+   its rule. */
 
 .tricolore {
   display:flex;
+  flex-shrink:0;
   height:6px;
   width:min(420px,80vw);
   border-radius:3px;

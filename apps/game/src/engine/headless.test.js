@@ -28,8 +28,18 @@ describe('headless engine', () => {
     startRace();
     expect(getState()).toBe('countdown');
     expect(G.karts).toHaveLength(6);
+    // the race pilots are headless here (stage 8): the driver contract, no geometry
+    for (const k of G.karts) {
+      const d = k.mesh.userData.driver;
+      expect(d.userData).toMatchObject({ lod: 'headless', id: k.def.id, driver: d });
+      let meshes = 0; d.traverse(o => { if (o.isMesh) meshes++; });
+      expect(meshes).toBe(0);
+    }
     const start = G.karts.map(k => k.progress);
-    for (let n = 0; n < 30 * 60; n++) simStep(STEP);
+    let low = Infinity, high = -Infinity;
+    for (let n = 0; n < 30 * 60; n++) { simStep(STEP); for (const k of G.karts) { const y = k.mesh.userData.driver.position.y; low = Math.min(low, y); high = Math.max(high, y); } }
+    // the stun bob goes up from the pilots' rest at MOUNT, never below it
+    expect(low).toBe(0.75); expect(high).toBeLessThanOrEqual(0.75 + 0.3 + 1e-9);
     expect(getState()).toBe('race');
     const ai = G.karts.filter(k => k.isAI);
     // Every AI kart has moved forward along the circuit (a lap is about 3 km now), and the ranks are a permutation.

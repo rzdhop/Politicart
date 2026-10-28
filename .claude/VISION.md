@@ -71,3 +71,14 @@ trails nobody can buy, and now and then a candidate whatever the level
 never shows another player a part its owner did not earn (DEC-035). Five
 circuits now, with Montmartre and Marseille beside the three Paris ones,
 and each account keeps its stats, visible to its friends.
+
+## The 3D select: the showcase's first impression
+
+"Jouer" is the first thing a visitor does, so the casting is where the look
+has to land. It is a 3D stage: the hemicycle at night, a lit podium, and the
+chosen candidate's kart turning on it with a caricature pilot at the wheel,
+built from that candidate's own look, under their pun name, and the same
+pilot who then races (DEC-043..046). It has to feel deliberate on a desktop
+GPU and stay instant everywhere else: phones draw it light, portraits arrive
+progressively, and a GPU that cannot keep up gets a still stage rather than a
+slow menu.

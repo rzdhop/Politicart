@@ -25,7 +25,7 @@ import { applyGodCommand } from '../engine/godcmd.js';
 import { useItem as engineUseItem } from '../engine/items.js';
 import { usePower as engineUsePower } from '../engine/powers.js';
 import { CHARACTERS, TRACKS } from '../engine/data.js';
-import { hasPreview, makeThumbs, setPreview } from '../engine/preview.js';
+import { hasPreview, launch, makeThumbs, setPreview } from '../engine/preview.js';
 import { STARTERS } from '../engine/progress.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
@@ -146,8 +146,14 @@ export interface UiSnapshot {
   state: GameState;
   charIdx: number;
   trackIdx: number;
-  /** Roster portraits by character id, rendered by the engine on entering the roster. */
+  /**
+   * Roster portraits by character id (data URLs): a placeholder at once (the
+   * kart's colour and the initials), then the engine's portrait as it lands
+   * (DEC-045). The Boutique's candidate cards show the same.
+   */
   thumbs: Record<string, string>;
+  /** Which of `thumbs` are final portraits; a tile shows `pending` until then. */
+  thumbsReady: Record<string, boolean>;
   poly: 'high' | 'low';
   muted: boolean;
   /** What the title screen's workshop button says after a save. */
@@ -249,6 +255,7 @@ let snapshot: UiSnapshot = {
   charIdx: G.charIdx,
   trackIdx: G.trackIdx,
   thumbs: {},
+  thumbsReady: {},
   poly: getPoly() as 'high' | 'low',
   muted: isMuted(),
   adminStatus: 'idle',
@@ -400,6 +407,17 @@ function refreshPreview() {
   if (hasPreview()) setPreview(G.charIdx);
 }
 
+/** The engine's portraits as they land (preview.js makeThumbs patches every few). */
+function onThumbs(thumbs: Record<string, string>, ready: Record<string, boolean>) {
+  set({ thumbs: { ...thumbs }, thumbsReady: { ...ready } });
+}
+
+/** The roster portraits: placeholders and finished ones at once, the rest on their way to onThumbs. */
+function refreshThumbs() {
+  const thumbs = makeThumbs(onThumbs) as Record<string, string>;
+  set({ thumbs: { ...snapshot.thumbs, ...thumbs } });
+}
+
 /**
  * Put the server's roster in force, then redraw what shows the cast: the
  * roster portraits (rendered again if the roster is on screen, else on the
@@ -409,7 +427,7 @@ function refreshPreview() {
 function applyRoster(roster: unknown) {
   setRoster(roster);
   const patch: Partial<UiSnapshot> = { garageVersion: snapshot.garageVersion + 1 };
-  if (snapshot.state === 'select' || snapshot.state === 'garage') patch.thumbs = makeThumbs() as Record<string, string>;
+  if (snapshot.state === 'select' || snapshot.state === 'garage' || snapshot.state === 'shop') refreshThumbs();   // only the candidates whose look changed are rendered again
   if (snapshot.state !== 'admin') { patch.formVersion = snapshot.formVersion + 1; patch.adsVersion = snapshot.adsVersion + 1; }
   refreshPreview();
   set(patch);
@@ -493,13 +511,12 @@ async function shopCall(fn: (token: string) => Promise<ShopReply>): Promise<Shop
 }
 
 export const actions = {
-  /** "Jouer": render the portraits, open the roster, put the chosen kart on the turntable. */
+  /** "Jouer": the portraits (placeholders at once, then rendered a frame at a time), the roster, the chosen kart on the podium. */
   play() {
     initAudio();
     keepCharUnlocked();
     set({ netResults: null });
-    const thumbs = makeThumbs() as Record<string, string>;
-    set({ thumbs });
+    refreshThumbs();
     transition('select');
     setPreview(G.charIdx);
   },
@@ -510,11 +527,19 @@ export const actions = {
     setPreview(i);
     set({ charIdx: i });
   },
-  /** The arrow keys on the roster: the next candidate this way that the player may drive. */
-  stepChar(dir: 1 | -1) {
-    const ids = (CHARACTERS as { id: string }[]).map(c => c.id); const allowed = unlockedOf(snapshot);
-    for (let n = 1; n <= ids.length; n++) {
-      const i = (G.charIdx + dir * n + ids.length * 2) % ids.length;
+  /**
+   * The arrow keys on the roster: `step` tiles on (±1 across, ±4 a row down
+   * or up, the same column), wrapping round the roster. A locked tile cannot
+   * be driven, as a tap on it cannot select it, so the step repeats past it
+   * the same way (the next tile across, the next row down the column) to the
+   * first candidate the player may drive, or stays put if there is none.
+   */
+  stepChar(step: number) {
+    const ids = (CHARACTERS as { id: string }[]).map(c => c.id); const allowed = unlockedOf(snapshot), n = ids.length;
+    if (!step || !n) return;
+    for (let k = 1; k <= n; k++) {
+      const i = (((G.charIdx + step * k) % n) + n) % n;
+      if (i === G.charIdx) return;                      // all the way round: nothing else to drive this way
       if (allowed.includes(ids[i]!)) { actions.selectChar(i); return; }
     }
   },
@@ -522,10 +547,12 @@ export const actions = {
     G.trackIdx = i;
     set({ trackIdx: i });
   },
+  /** "Graphismes": the stage is rebuilt at the new tier (the old one disposed), and the portraits with it. */
   togglePoly() {
     const poly = toggleEnginePoly() as 'high' | 'low';
     refreshPreview();
     set({ poly });
+    if (hasPreview()) refreshThumbs();
   },
   /** The title button initialises audio first; the M key, as in the original, does not. */
   toggleMute(fromButton: boolean) {
@@ -684,15 +711,24 @@ export const actions = {
   /** Change one field of the player's kart; an invalid value is ignored. */
   setGarage(key: string, value: unknown) {
     if (!setGarage(key, value)) return;
-    setPreview(G.charIdx);
+    setPreview(G.charIdx, { keepPilot: true });   // the kart alone is rebuilt
     set({ garageVersion: snapshot.garageVersion + 1 });
   },
   resetGarage() {
     resetGarage();
-    setPreview(G.charIdx);
+    setPreview(G.charIdx, { keepPilot: true });
     set({ garageVersion: snapshot.garageVersion + 1 });
   },
-  toTracks() { transition('tracks'); },
+  /**
+   * "Choisir le circuit →" and Enter: the circuit screen at once, then the
+   * kart's launch behind it (preview.js; nothing under reduced motion or on a
+   * still stage). A second press finds the roster gone and does nothing.
+   */
+  toTracks() {
+    if (getState() !== 'select') return;
+    transition('tracks');
+    launch();
+  },
   start() {
     initAudio();
     soloRace = true;
@@ -817,10 +853,9 @@ export const actions = {
   openShop(from: 'title' | 'select', tab?: ShopTab) {
     if (!snapshot.netAvailable || !canTransition('shop')) return;
     initAudio();
-    // The candidates' cards show the roster portraits, rendered once per detail level.
-    const thumbs = makeThumbs() as Record<string, string>;
+    // The candidates' cards show the roster portraits (placeholders until each is rendered).
     shop({ from, error: null, notice: null, ...(tab ? { tab } : {}) });
-    set({ thumbs });
+    refreshThumbs();
     transition('shop');
     setPreview(G.charIdx);
   },

@@ -2,7 +2,116 @@
 
 Current state only. History lives in git.
 
-## Latest task -- 2026-10-27: politicoins, the Politibox, grades, parts, trails, two circuits, stats
+## Latest task -- closed 2026-10-28: the 3D character-select stage
+
+- **Branch:** `feature/amazing-davinci-af7iw1`, cut from `main` at `b18667a`
+  (PR #12, DEC-042: the live screens follow the design system's layout rules).
+- **Plan:** `.claude/PLAN.md`, approved 2026-10-28 (owner answers Q1-Q11 at
+  its top). DEC-043 (r128 port, stage look isolation), DEC-044 (one pilot,
+  four levels, `LOOK3D`), DEC-045 (progressive portraits); A-036..A-038.
+- **Stage 0 done:** plan, decisions, baseline. Baseline counts in PLAN.md
+  (select 164/78 draws, race about 1,400/330, high/low). E2E in this
+  container: 41 of 59 on `main`; the 18 race-start specs time out under
+  software WebGL on `main` too (same set), so stages are judged against it.
+  Playwright here needs `executablePath` pointed at the installed
+  `/opt/pw-browsers/chromium-1243` (the repo's 1.64.1 wants build 1248).
+- **Wave 1 done:** stage 1 (stage look, fabrics, geometry helpers; merged
+  as `4eb65ca`), stage 2 (3D look specs for the 16 candidates; `2199f54`),
+  stage 3 (design-system parts for the 3D select; `7485372`). Tier 1 on the
+  tip: ui 369 + 8 skipped, game 600, server 166, typecheck clean. E2E: 40
+  passed, 19 failed of 59: the baseline's 18 plus R-05 "still races after
+  switching to light graphics", a countdown-timing flake that passes 1 in 5
+  alone both on the tip and on stage 0 (`5ad0d14`), so not a regression.
+- **Wave 2 done:** stage 4 (hemicycle stage scene; merged as `ec4c7c4`),
+  stage 5 (pilot builder at four levels of detail, props; `22d3710`),
+  stage 6 (kart stage profile, `kartstage.js`, race profile pinned
+  hash-identical; `76dd0ae`). Tier 1 on the tip: ui 369 + 8 skipped, game
+  786, server 166, typecheck clean, no flakes. E2E: 41 passed, 18 failed of
+  59, exactly the baseline's 18 race-start specs (R-05 passed this run).
+  Measured budgets:
+  - stage 4 scene: high 14 draws / 18.7k triangles, low 12 / 7.6k.
+  - stage 5 pilots: stage <= 22.3k triangles / 18-25 draws, race-high
+    <= 5.5k / <= 3, race-low <= 2.1k / <= 2.
+  - stage 6 stage kart: 27-40 draws.
+- **Stage 7 done:** the 3D stage on the select and Garage screens, with the
+  owner's pilot refinements (`5ba52ce`); merged as `da1ea50`, DEC-046.
+  Tier 1 on the merge: ui 369 + 8 skipped, game 807, server 166, typecheck
+  clean, no flakes. E2E: 49 passed, 21 failed of 70 in 40.5 min under load
+  from parallel agents (load average 11-15 on 4 cores). The 21 failures are
+  the baseline's 18 race-start specs (R-05 passed this run) plus 3 flakes
+  that pass alone: R-10 "shows the touch controls in a race and accelerates
+  by itself", Multijoueur "each player's Garage edits reach the other
+  player's screen", and R-23 "hands every tile a placeholder at once, then
+  every portrait within a minute". R-23 failed alone at load 15 (8 of 16
+  portraits in 60 s) and passed twice alone at load 4 (36.7 s, 35.7 s).
+  Measured budgets:
+  - high 106 draws, 81.2k triangles, 19 -> 29 programs; the Garage with the
+    laser trail 157 draws.
+  - phone 87 draws / 63k triangles.
+  - low 60 draws / 17.7k triangles / 16 -> 22 programs; the 6 extra are
+    Garage parts compiled ahead, accepted.
+  - portraits: all 16 in 10-32 s.
+  - frame governor (DEC-046): a stage costing at least 100 ms per frame
+    stands still and draws only when its picture changes. It is for really
+    slow GPUs; nothing changes on a GPU that keeps up.
+- **Stages 8 and 9 done:** stage 8 (the caricature pilots race; `kart.js`,
+  `physics.js`, `lootbox.js`) merged as `591b541`, stage 9 (the go launch
+  down the aisle; `preview.js`, `game.js`, `store.ts`, confetti in
+  `hemicycle.js`) merged as `cde5d9f`; both merges clean. Tier 1 on
+  `cde5d9f`: ui 369 + 8 skipped, game 849, server 168 (stage 8 added 2
+  server tests), typecheck clean, no flakes. E2E: 55 passed, 17 failed of
+  72 in 24.0 min on an idle machine. All 17 are in the baseline's 18
+  race-start specs; R-20 "the admin enters a race already running" and
+  R-05 passed this run; nothing failed outside the baseline. Measured:
+  - race frames before -> after, Élysée with 6 karts: high grid 1,703 /
+    502k -> 1,259 / 319k draws / triangles; low (1440) grid 663 / 77k ->
+    529 / 72k; phone "légers" race 250-290 / 53-56k -> 160-210 / 49-53k.
+  - race pilots: race-high 2-3 meshes / 4.3-5.5k triangles; race-low 1-2 /
+    1.6-2.1k.
+  - the server builds 6 karts in about 7 ms (was 25-35 ms). The plan's 5 ms
+    target is not met, because the kart body must stay hash-identical;
+    accepted, and the test asserts under 20 ms.
+  - the launch: 1.4 s down the aisle, fading to `--bg` from 1.0 s;
+    `#s-tracks` shows at once. No launch under reduced motion or on a still
+    stage.
+  - the tractor driver's bob is fixed.
+- **Stage 10 done (task closed):** `f840fcc` keeps the phone-landscape
+  showcase pinned and whole at every scroll position: held sideways the
+  heading, the roster or the Garage's form and the button row share the
+  left column (`.select-side`), so the sticky showcase's container is the
+  whole scroll (the heading above and the buttons below had pushed it out
+  of the top at the end, and its power box under the note at rest); the
+  pin inset counts both 8px paddings. `52aa0e2` widens the real-name scan
+  to the people behind all 16 candidates plus the template's donors, over
+  `apps/`, `packages/` and now `e2e/`, and cleans the two comments it
+  caught in `data.test.js`. README (the select screen, the code map),
+  VISION, PLAN (all done), A-036..A-038 confirmed. Tier 1: ui 369 + 8
+  skipped, game 850, server 168, typecheck clean. E2E: full run 56 passed, 18 failed of 74 in 26.4 min, all 18 in the 19-title baseline (the race-start timeouts under software WebGL); R-05 passed; nothing outside the baseline, so no solo re-run; the two new sideways specs passed. Secret
+  scan of `origin/main...HEAD`: nothing found.
+- **Final state:** all stages of `.claude/PLAN.md` done on
+  `feature/amazing-davinci-af7iw1`, pushed; the PR is the dispatcher's
+  next step. The Design System page is re-synced (`3d46ba4`, artifact
+  version 16: `ShowcaseStage`, `Showcase` stage, `CharacterTile pending`,
+  `Roster footer`, `SelectLayout`; the template on the pun names), and its
+  generator scripts now live in `.design-sync/tools/` (recipe in
+  `.design-sync/NOTES.md`). Open there: the template's eleven
+  `screenshots/*.jpg` still show the real names in their pixels (owner's
+  call).
+- **Owner's to-do:** play the select screen on a real phone and a real GPU;
+  judge the launch at full frame rate (here the stage stands still under
+  software GL, DEC-046); judge the race pilots in a real race.
+- **Follow-ups:**
+  - the server's 6-kart headless build takes about 7 ms against the plan's
+    5 ms target (the kart body stays hash-identical; the test asserts
+    under 20 ms);
+  - the low-poly desktop race (Élysée, 6 karts, 1440) draws 529 calls
+    against the plan's 365;
+  - the R-23 portrait budget (all 16 within a minute) is sensitive to CPU
+    load: it failed alone at load 15 and passed at load 4;
+  - the pilot's head is frozen in races (`idle: false`): no head sway on
+    the track yet.
+
+## Previous task -- 2026-10-27: politicoins, the Politibox, grades, parts, trails, two circuits, stats
 
 - **Branch:** `feature/epic-turing-clj1rj`, cut from `main` at `1bbcd2e`, pushed.
 - **Plan:** `.claude/PLAN.md`, all stages **done** (DEC-032..039, A-026..A-035).
@@ -40,7 +149,7 @@ Current state only. History lives in git.
   (A-034); the two flaky timing tests deserve a looser budget; the
   `/design-sync` re-sync for the economy components and ChoiceGroup.
 
-## Previous task -- 2026-10-27: cast review, quieter HUD, admin dashboard and god seat
+## Earlier task -- 2026-10-27: cast review, quieter HUD, admin dashboard and god seat
 
 - **Branch:** `feature/relaxed-pascal-rlbpu6`, cut from `main` at `fd118b5`.
 - **Shipped on the branch:** DEC-028 (three powers retuned: Déconstruction,
@@ -185,6 +294,8 @@ The game at `index.html` must keep working. No item here may break.
 | R-22 | Ownership: the server drops any kart part or trail the account does not own before a room sees it; the Garage greys unowned options behind their grade badge and leads to the Boutique; the static build offers every part | `e2e/garage.spec.ts` R-22 + `e2e/multiplayer.spec.ts` (the host buys her gold wheels first) + `apps/server/src/lobby.test.js`, `engine/garage.test.js` | COVERED 2026-10-27 |
 | R-23 | Six new kart part categories and five trails rendered and animated; trails and candidate grades shown in the lobby; kart cards on pause and results | `e2e/multiplayer.spec.ts` (lobby badges), `e2e/game.spec.ts` R-03 and `e2e/mobile.spec.ts` (`#pause-kart`) + `engine/kart.test.js`, `engine/trail.test.js`, `engine/headless.test.js` | COVERED 2026-10-27 |
 | R-24 | Per-account stats and friends' stats on Compte; the admin credits politicoins from the dashboard; a long press on a phone selects nothing | `e2e/dashboard.spec.ts` R-24 + `e2e/mobile.spec.ts` "a long press selects nothing" + `apps/server/src/economy.test.js`, `touch.test.ts` | COVERED 2026-10-27 |
+| R-25 | The 3D select stage: the hemicycle and podium with the candidate's kart and pilot inside the showcase band at 4 viewports, drag and keys, the go launch (tracks within 100 ms, none under reduced motion), the Garage on the podium, the budgets on both tiers, the phone-landscape showcase pinned at every scroll position | `e2e/stage.spec.ts` (headed "R-23" in the file) + `engine/preview.test.js`, `preview-launch.test.js`, `hemicycle.test.js`, `pilot.test.js`, `ui/App.test.tsx` | COVERED 2026-10-28 |
+| R-26 | Progressive portraits: 16 tiles at once on placeholders, each `data-portrait="ready"` as it lands, all within a minute in software GL | `e2e/stage.spec.ts` "hands every tile a placeholder at once" + `ui/App.test.tsx` | COVERED 2026-10-28 (load-sensitive) |
 
 **Stage 7 maps the contract to specs** in `e2e/game.spec.ts`, whose describe
 blocks are named for the items above (R-01 .. R-09, plus R-01b for the results

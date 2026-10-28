@@ -66,6 +66,7 @@ describe.skipIf(!built)('published package contract', () => {
       'components/select/Roster.d.ts',
       'components/select/CharacterTile.d.ts',
       'components/select/Showcase.d.ts',
+      'components/select/ShowcaseStage.d.ts',
       'components/select/StatGrid.d.ts',
       'components/select/StatBar.d.ts',
       'components/select/PowerBox.d.ts',
@@ -128,6 +129,7 @@ describe.skipIf(!built)('published package contract', () => {
       'RosterProps',
       'CharacterTileProps',
       'ShowcaseProps',
+      'ShowcaseStageProps',
       'StatGridProps',
       'StatBarProps',
       'PowerBoxProps',
@@ -190,6 +192,49 @@ describe.skipIf(!built)('published package contract', () => {
     // source order alone, and the reduced-motion switch-off must follow them.
     expect(css.indexOf('.shop-card')).toBeLessThan(css.indexOf('@keyframes kr-shimmer'));
     expect(css).toMatch(/prefers-reduced-motion:\s*reduce/);
+  });
+
+  it('carries the 3D select parts through minification', () => {
+    // The game frames its scene into `.showcase-stage` and drags on it; the
+    // minifier reorders declarations and could fold the viewport fallback,
+    // so the shipped sheet is checked, not just the source.
+    const css = readFileSync(join(dist, 'styles.css'), 'utf8');
+    const block = (selector: string, from = 0) => {
+      const at = css.indexOf(`${selector}{`, from);
+      expect(at, `${selector} is missing`).toBeGreaterThan(-1);
+      return css.slice(at, css.indexOf('}', at));
+    };
+    const stage = block('.showcase-stage');
+    for (const d of ['flex:1', 'min-height:140px', 'pointer-events:auto', 'touch-action:pan-y', 'cursor:grab']) {
+      expect(stage).toContain(d);
+    }
+    expect(block('.showcase-stage:active')).toContain('cursor:grabbing');
+    expect(block('.roster-foot')).toContain('grid-column:1/-1');
+    // The select layout no longer shrinks into the screen, so an overflowing
+    // screen shrinks its other children instead: the contentless tricolore
+    // above the heading must not be one of them.
+    expect(block('.tricolore')).toContain('flex-shrink:0');
+
+    const short = css.indexOf('@media (max-height:520px) and (orientation:landscape)');
+    expect(short).toBeGreaterThan(-1);
+    const pinned = block('.select-layout>.showcase', short);
+    expect(pinned).toContain('position:sticky');
+    expect(pinned).toContain('top:0');
+    // Both the 100vh fallback and the 100dvh value survive, in that order.
+    const vh = pinned.indexOf('max-height:calc(100vh ');
+    expect(vh).toBeGreaterThan(-1);
+    expect(vh).toBeLessThan(pinned.indexOf('max-height:calc(100dvh '));
+
+    // The pending sweep runs, and a reduced-motion block after it stops it.
+    expect(block('.tile.pending:before')).toContain('kr-shimmer');
+    const reduced = [...css.matchAll(/@media \(prefers-reduced-motion:reduce\)\{/g)].map((m) => m.index);
+    expect(
+      reduced.some((at) => {
+        const off = css.indexOf('.tile.pending:before{', at);
+        return off > -1 && /^[^}]*animation:none/.test(css.slice(off)) && off < css.indexOf('}}', at);
+      }),
+      'no reduced-motion rule stops the pending sweep',
+    ).toBe(true);
   });
 
   it('exports an imperative handle for every live HUD readout', () => {

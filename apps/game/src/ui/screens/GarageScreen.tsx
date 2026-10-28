@@ -15,15 +15,18 @@ import {
   Screen,
   SelectLayout,
   Showcase,
+  ShowcaseStage,
   TextInput,
 } from '@politikart/ui';
 
 import { ownsPart, ownsTrail, PART_GRADE, TRAIL_GRADE } from '../../engine/catalog.js';
 import { CHARACTERS } from '../../engine/data.js';
 import { myStyle } from '../../engine/garage.js';
+import { stageDrag } from '../../engine/stageinput.js';
 import { chips, GRADE_LABELS, parseRaceNumber, PART_CHOICES, PODS, TRAILS, type PartCategory } from '../kartChoices';
 import { actions, ownedOf, type Grade, type Owned, type UiSnapshot } from '../store';
 import type { Character, KartStyle } from '../types';
+import { STAGE_LABEL, useSideways } from './SelectScreen';
 
 /** One column: the workshop's input styling, without its card grid. */
 const ONE_COLUMN = { gridTemplateColumns: '1fr', width: '100%' } as const;
@@ -86,7 +89,8 @@ function trailChips(owned: Owned | null): ChoiceOption<string>[] {
 
 /**
  * The Garage: the player styles their own kart. Every change applies at once
- * and shows on the turntable; whatever the player leaves alone stays the
+ * and shows on the stage's podium (the kart alone is rebuilt, the pilot kept,
+ * the trail streaming behind it); whatever the player leaves alone stays the
  * chosen candidate's default, so the same edits follow them to any candidate.
  * Where a game server runs the economy, an option the player does not own is
  * locked behind its grade badge, which leads to the Boutique; the pressed chip
@@ -98,38 +102,47 @@ export function GarageScreen({ ui }: { ui: UiSnapshot }) {
   const chosen = characters[ui.charIdx] ?? characters[0]!;
   const style = myStyle(chosen) as KartStyle;
   const owned = ownedOf(ui);
+  // Sideways, the heading, the form and the buttons share the left column, so the pinned showcase's container spans the whole scroll (SelectScreen's layouts).
+  const sideways = useSideways();
+  const heading = <Heading size="screen">Garage</Heading>;
+  const buttons = (
+    <Row>
+      <Button id="b-garage-reset" variant="ghost" onClick={actions.resetGarage}>Par défaut</Button>
+      <Button id="b-garage-back" onClick={actions.toSelect}>Retour au casting</Button>
+    </Row>
+  );
+  const form = (
+    <Panel style={PANEL} key={ui.garageVersion}>
+      <AdminGrid style={ONE_COLUMN}><ColorsRow>
+        <Field label="Carrosserie"><ColorSwatch id="g-body" value={style.body} onChange={e => actions.setGarage('body', e.currentTarget.value)} /></Field>
+        <Field label="Accents"><ColorSwatch id="g-accent" value={style.accent} onChange={e => actions.setGarage('accent', e.currentTarget.value)} /></Field>
+        <Field label="Numéro (0-99)">
+          <TextInput id="g-number" inputMode="numeric" pattern="[0-9]*" maxLength={2} size={4} placeholder="aucun" defaultValue={style.number ?? ''} onChange={onNumber} />
+        </Field>
+      </ColorsRow></AdminGrid>
+      {GROUPS.slice(0, 2).map(([cat, label]) => (
+        <ChoiceGroup key={cat} label={label} options={partChips(owned, cat)} value={style[cat]} onChange={v => actions.setGarage(cat, v)} />
+      ))}
+      <ChoiceGroup label="Pontons latéraux" options={chips('g-pods-', PODS)} value={style.pods ? 'on' : 'off'} onChange={v => actions.setGarage('pods', v === 'on')} />
+      {GROUPS.slice(2).map(([cat, label]) => (
+        <ChoiceGroup key={cat} label={label} options={partChips(owned, cat)} value={style[cat]} onChange={v => actions.setGarage(cat, v)} />
+      ))}
+      <ChoiceGroup label="Traînée" options={trailChips(owned)} value={style.trail} onChange={v => actions.setGarage('trail', v)} />
+      <Disclaimer id="g-trail-note" style={NOTE}>Les traînées se gagnent dans la Politibox.</Disclaimer>
+      <Disclaimer>
+        Ce que vous ne changez pas reste le réglage du candidat ou de la candidate. Vos choix suivent n’importe quel candidat et sont gardés dans ce navigateur. Les roues, l’aileron et le nez ne changent que le kart classique ; l’échappement, les néons, le mât, la carrosserie et la traînée s’appliquent aussi au tracteur et au vélo-cargo.
+        {owned === null ? '' : ' Une pièce grisée s’achète à la Boutique : touchez son badge.'}
+      </Disclaimer>
+    </Panel>
+  );
   return (
     <Screen id="s-garage" hidden={ui.state !== 'garage'} className={ui.noteHidden ? undefined : 'noted'}>
-      <Heading size="screen">Garage</Heading>
+      {sideways ? null : heading}
       <SelectLayout style={LAYOUT}>
-        <Panel style={PANEL} key={ui.garageVersion}>
-          <AdminGrid style={ONE_COLUMN}><ColorsRow>
-            <Field label="Carrosserie"><ColorSwatch id="g-body" value={style.body} onChange={e => actions.setGarage('body', e.currentTarget.value)} /></Field>
-            <Field label="Accents"><ColorSwatch id="g-accent" value={style.accent} onChange={e => actions.setGarage('accent', e.currentTarget.value)} /></Field>
-            <Field label="Numéro (0-99)">
-              <TextInput id="g-number" inputMode="numeric" pattern="[0-9]*" maxLength={2} size={4} placeholder="aucun" defaultValue={style.number ?? ''} onChange={onNumber} />
-            </Field>
-          </ColorsRow></AdminGrid>
-          {GROUPS.slice(0, 2).map(([cat, label]) => (
-            <ChoiceGroup key={cat} label={label} options={partChips(owned, cat)} value={style[cat]} onChange={v => actions.setGarage(cat, v)} />
-          ))}
-          <ChoiceGroup label="Pontons latéraux" options={chips('g-pods-', PODS)} value={style.pods ? 'on' : 'off'} onChange={v => actions.setGarage('pods', v === 'on')} />
-          {GROUPS.slice(2).map(([cat, label]) => (
-            <ChoiceGroup key={cat} label={label} options={partChips(owned, cat)} value={style[cat]} onChange={v => actions.setGarage(cat, v)} />
-          ))}
-          <ChoiceGroup label="Traînée" options={trailChips(owned)} value={style.trail} onChange={v => actions.setGarage('trail', v)} />
-          <Disclaimer id="g-trail-note" style={NOTE}>Les traînées se gagnent dans la Politibox.</Disclaimer>
-          <Disclaimer>
-            Ce que vous ne changez pas reste le réglage du candidat ou de la candidate. Vos choix suivent n’importe quel candidat et sont gardés dans ce navigateur. Les roues, l’aileron et le nez ne changent que le kart classique ; l’échappement, les néons, le mât, la carrosserie et la traînée s’appliquent aussi au tracteur et au vélo-cargo.
-            {owned === null ? '' : ' Une pièce grisée s’achète à la Boutique : touchez son badge.'}
-          </Disclaimer>
-        </Panel>
-        <Showcase id="g-showcase" name={chosen.name} title="Votre kart" quote="" />
+        {sideways ? <div className="select-side">{heading}{form}{buttons}</div> : form}
+        <Showcase id="g-showcase" name={chosen.name} title="Votre kart" quote="" stage={<ShowcaseStage id="g-showcase-stage" aria-label={STAGE_LABEL} {...stageDrag()} />} />
       </SelectLayout>
-      <Row>
-        <Button id="b-garage-reset" variant="ghost" onClick={actions.resetGarage}>Par défaut</Button>
-        <Button id="b-garage-back" onClick={actions.toSelect}>Retour au casting</Button>
-      </Row>
+      {sideways ? null : buttons}
     </Screen>
   );
 }
