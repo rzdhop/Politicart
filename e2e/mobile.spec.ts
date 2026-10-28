@@ -169,6 +169,82 @@ test.describe('R-10c the select stage under a finger', () => {
   });
 });
 
+test.describe('R-10d the note banner on a phone', () => {
+  type Rect = { top: number; bottom: number; left: number; right: number };
+  /** The note, the roster screen and what a finger would touch under the note. */
+  const look = (page: Page) => page.evaluate(() => {
+    const note = document.getElementById('note')!, screen = document.getElementById('s-select')!, close = document.getElementById('note-close')!;
+    const box = (el: Element) => { const r = el.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }; };
+    const n = box(note), c = box(close), s = box(screen);
+    // a grid of points over the note, its × left out: none may land on the screen (a tile, a button, anything under the note)
+    const under: string[] = [];
+    for (let x = n.left + 2; x < n.right - 1; x += 12) for (let y = n.top + 2; y < n.bottom - 1; y += 6) {
+      if (x >= c.left && x <= c.right && y >= c.top && y <= c.bottom) continue;
+      const el = document.elementFromPoint(x, y);
+      if (el && el.closest('.screen')) under.push(`${el.tagName}.${el.className} at ${Math.round(x)},${Math.round(y)}`);
+    }
+    const tiles = [...document.querySelectorAll('#roster .tile')].map(box);
+    return { note: n, screen: s, bg: getComputedStyle(note).backgroundColor, under, tiles, next: box(document.getElementById('b-next1')!),
+      scrolls: screen.scrollHeight > screen.clientHeight };
+  });
+  /** Whether the part of tile `t` the screen shows (its scrollport `clip` cuts it) meets the note `n`. */
+  const meets = (t: Rect, clip: Rect, n: Rect) => {
+    const top = Math.max(t.top, clip.top), bottom = Math.min(t.bottom, clip.bottom);
+    return bottom > top && t.left < n.right && t.right > n.left && top < n.bottom && bottom > n.top;
+  };
+
+  for (const [w, h] of [[390, 844], [844, 390]] as const) {
+    test(`sits on night glass at ${w}x${h} with nothing tappable under it, at rest and at the scroll end`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: h });
+      await page.goto('/');
+      await page.locator('#b-play').tap();
+      await expect(page.locator('#s-select')).toBeVisible();
+      await expect(page.locator('#note')).toBeVisible();
+      let r = await look(page);
+      // a backing, not bare text over the tiles
+      const alpha = Number(/rgba?\(([^)]+)\)/.exec(r.bg)![1]!.split(',')[3] ?? 1);
+      expect(alpha, `the note's background is ${r.bg}`).toBeGreaterThan(0.5);
+      // the screen ends above the note, by the room it reserves (DEC-042): the note's measured height, 8px under it and a 6px gap
+      expect(r.screen.bottom).toBeLessThanOrEqual(r.note.top);
+      expect(Math.abs(r.note.top - 6 - r.screen.bottom), 'the reserve matches the note').toBeLessThanOrEqual(1);
+      expect(r.scrolls, 'the roster scrolls').toBe(true);
+      // at rest: no tile shows under the note, and nothing on the screen catches a finger there
+      expect(r.tiles.filter(t => meets(t, r.screen, r.note)), 'tiles under the note at rest').toEqual([]);
+      expect(r.under, 'what a finger on the note would touch').toEqual([]);
+      // at the scroll's end the last tile and the button row clear the note
+      await page.locator('#s-select').evaluate((el) => el.scrollTo(0, el.scrollHeight));
+      r = await look(page);
+      expect(r.tiles.at(-1)!.bottom, 'the last tile, clear of the note').toBeLessThanOrEqual(r.note.top);
+      expect(r.next.bottom, '"Choisir le circuit", clear of the note').toBeLessThanOrEqual(r.note.top);
+      expect(r.under).toEqual([]);
+    });
+  }
+
+  test('closes from its × button, by touch or keyboard, and gives the screen its room back', async ({ page }) => {
+    await page.goto('/');
+    const close = page.locator('#note-close');
+    await expect(close).toHaveAttribute('aria-label', 'Masquer la note');
+    await expect(close).toHaveJSProperty('tagName', 'BUTTON');
+    // the keyboard: Enter closes the note, and does not also play (game.js reads Enter on the title as "Jouer")
+    await close.focus();
+    await expect(close).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#note')).toBeHidden();
+    await expect(page.locator('#s-title')).toBeVisible();
+    // by touch, after a reload: the roster's screen then reaches the bottom of the window
+    await page.reload();
+    await page.locator('#b-play').tap();
+    await expect(page.locator('#s-select')).toBeVisible();
+    const box = (await close.boundingBox())!;
+    expect(Math.min(box.width, box.height), 'the × is at least 24px').toBeGreaterThanOrEqual(24);
+    await close.tap();
+    await expect(page.locator('#note')).toBeHidden();
+    await expect(page.locator('#s-select')).toBeVisible();
+    const bottom = await page.locator('#s-select').evaluate((el) => el.getBoundingClientRect().bottom);
+    expect(bottom).toBe(await page.evaluate(() => innerHeight));
+  });
+});
+
 test.describe('R-10b computers', () => {
   test.use({ viewport: { width: 1280, height: 800 }, hasTouch: false, isMobile: false });
 

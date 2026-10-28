@@ -706,6 +706,9 @@ export const actions = {
     net.godJoin(code.toUpperCase().trim(), getGarage());
   },
 
+  /** Close the note banner (its × button); the first race's countdown would have hidden it anyway. */
+  hideNote() { set({ noteHidden: true }); },
+
   // ---- Garage: the player's own kart ----
   openGarage() { transition('garage'); setPreview(G.charIdx); },
   /** Change one field of the player's kart; an invalid value is ignored. */

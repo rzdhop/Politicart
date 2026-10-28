@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { NoteBanner } from '@politikart/ui';
 
 import { AccountScreen } from './screens/AccountScreen';
@@ -14,7 +15,7 @@ import { TitleScreen } from './screens/TitleScreen';
 import { TracksScreen } from './screens/TracksScreen';
 import { Hud } from './Hud';
 import { InviteBanner } from './InviteBanner';
-import { isAdmin, useUi } from './store';
+import { actions, isAdmin, useUi } from './store';
 import { useTouchMode } from './TouchControls';
 
 /**
@@ -27,10 +28,12 @@ import { useTouchMode } from './TouchControls';
  * so the E2E suite's visibility checks mean the same thing they always did.
  * The HUD sits where the original markup put it, between the circuits and the
  * pause menu; it is rendered once and then written imperatively (see Hud).
+ * The note's × closes it until the next load; the first race hides it anyway.
  */
 export function App() {
   const ui = useUi();
   const touch = useTouchMode();
+  useNoteRoom();
   return (
     <>
       <TitleScreen ui={ui} />
@@ -50,8 +53,26 @@ export function App() {
       {ui.netAvailable && <LootboxScreen ui={ui} />}
       <InviteBanner ui={ui} />
       <NoteBanner id="note" hidden={ui.noteHidden}>
-        {touch ? 'Tactile : le kart accélère tout seul, ◀ ▶ pour tourner. Jouable en paysage comme en portrait.' : 'Au clavier sur ordinateur, au doigt sur téléphone.'}
+        <span>{touch ? 'Tactile : le kart accélère tout seul, ◀ ▶ pour tourner. Jouable en paysage comme en portrait.' : 'Au clavier sur ordinateur, au doigt sur téléphone.'}</span>
+        {/* Enter and Space stay with the button: game.js reads Enter on the title and the roster as "Jouer" and "Choisir le circuit". */}
+        <button type="button" id="note-close" className="note-close" aria-label="Masquer la note" onClick={actions.hideNote} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); }}>×</button>
       </NoteBanner>
     </>
   );
+}
+
+/**
+ * Keep the screens' reserve for the note (game.css, --note-room) at the
+ * note's measured height: its copy wraps to one, two or three lines with the
+ * width, the touch mode and the font. The stylesheet's values cover the first
+ * paint, and jsdom, which has no ResizeObserver.
+ */
+function useNoteRoom() {
+  useEffect(() => {
+    const note = document.getElementById('note');
+    if (!note || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => { if (!note.hidden) document.body.style.setProperty('--note-h', note.getBoundingClientRect().height + 'px'); });
+    ro.observe(note);
+    return () => ro.disconnect();
+  }, []);
 }

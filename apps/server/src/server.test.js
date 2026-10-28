@@ -42,6 +42,7 @@ beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), 'kr-static-'));
   writeFileSync(join(dir, 'index.html'), '<!doctype html><title>kr</title>');
   writeFileSync(join(dir, 'app.js'), 'console.log(1)');
+  for (const f of ['favicon.ico', 'favicon.svg', 'favicon-32.png', 'apple-touch-icon.png']) writeFileSync(join(dir, f), 'icon');
   srv = await startServer({ port: 0, host: '127.0.0.1', staticDir: dir, runRace: fakeRace, loginTries: 1000 });
 });
 afterAll(() => srv.close());
@@ -81,6 +82,14 @@ describe('http', () => {
     expect(await page.text()).toContain('<title>kr</title>');
     expect((await fetch(url('/app.js'))).headers.get('content-type')).toMatch(/javascript/);
     expect((await fetch(url('/nope.js'))).status).toBe(404);
+  });
+
+  it('serves the icons the game links, the bare /favicon.ico a browser asks for included', async () => {
+    for (const [f, type] of [['favicon.ico', 'image/x-icon'], ['favicon.svg', 'image/svg+xml'], ['favicon-32.png', 'image/png'], ['apple-touch-icon.png', 'image/png']]) {
+      const r = await fetch(url('/' + f));
+      expect(r.status, f).toBe(200);
+      expect(r.headers.get('content-type'), f).toBe(type);
+    }
   });
 
   it('never serves a file outside the game build', async () => {
