@@ -9,7 +9,19 @@ Current state only. History lives in git.
   (DEC-039), merged in order: `wt/kart` (`da1ff93`), `wt/ui` (`42e57c7`),
   `wt/pilot` (`4ed2da3`), then the race sway hook-up (`5883c6b`).
   DEC-047, DEC-048; DEC-044's consequence amended.
-- **PR:** #14 (`feature/polish-after-3d-select` into `main`), merged once CI passed. After the merge, check the live site (politikart.onrender.com) against a local build of `main`: the bundle names must match; screenshot the select screen upright and sideways and the favicon.
+- **PR:** #14 (`feature/polish-after-3d-select` into `main`), CI green,
+  merged as `2324b02`.
+- **Live check after the merge (politikart.onrender.com):** the deploy
+  serves `index-DBnMCFOm.js` and `index-z4kFYSxv.css`, the names a local
+  build of `main` at `2324b02` produces. `/favicon.ico`, `/favicon.svg`,
+  `/favicon-32.png` and `/apple-touch-icon.png` answer 200 with their
+  types. Select screen upright (390x844) and sideways (844x390): all 16
+  portraits, the note on glass, the screen ending 6px above it.
+  **Found there:** the live `favicon.svg` did not parse as XML (its
+  comment held `--bg, --gold`; XML forbids `--` in a comment), so browsers
+  dropped the SVG icon and used the PNG. Fixed on
+  `fix/favicon-svg-xml` (PR #15), with a test in `ui/App.test.tsx` that
+  parses the SVG; Tier 1 there: ui 369 + 8 skipped, game 879, server 169.
 - **The seven tasks:**
   1. Design System: the template's eleven old `screenshots/*.jpg` (real
      names in their pixels) removed from the artifact in one publish
