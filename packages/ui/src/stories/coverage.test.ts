@@ -62,6 +62,33 @@ describe('story coverage', () => {
     },
   );
 
+  it.each(components.map((c) => [`${c.group}/${c.name}`, c] as const))(
+    '%s is exported from the entry point, with its props type',
+    (_label, component) => {
+      // A component with a story but no export would preview in Storybook and
+      // then be missing from the package and the Design System page.
+      const entry = readFileSync(join(componentsDir, '..', 'index.ts'), 'utf8');
+      const from = `from './components/${component.group}/${component.name}'`;
+      const statement = entry
+        .split(/;\s*/)
+        .find((s) => s.includes(from));
+      expect(statement, `index.ts does not export ${from}`).toBeDefined();
+      expect(statement).toMatch(new RegExp(`\\b${component.name}\\b`));
+      expect(statement).toMatch(new RegExp(`\\btype ${component.name}Props\\b`));
+    },
+  );
+
+  it('documents every story file for the docs page', () => {
+    // The converter lifts this description onto the Design System card; a
+    // story file without one ships a card with no explanation.
+    for (const c of components) {
+      const source = readFileSync(join(c.dir, `${c.name}.stories.tsx`), 'utf8');
+      expect(source, `${c.group}/${c.name} has no docs description`).toMatch(
+        /docs:\s*\{\s*description:\s*\{\s*component:/,
+      );
+    }
+  });
+
   it('has a test file for every component group', () => {
     const groups = new Set(components.map((c) => c.group));
     for (const group of groups) {
