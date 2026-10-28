@@ -262,6 +262,24 @@ describe('the React screens', () => {
     expect((container.querySelector('#note') as HTMLElement).hidden).toBe(false);
   });
 
+  it('close the note from its × button, which keeps Enter from reaching the game\'s keys', () => {
+    const { container } = render(<App />);
+    const close = container.querySelector('#note #note-close') as HTMLButtonElement;
+    expect(close.tagName).toBe('BUTTON');
+    expect(close.type).toBe('button');
+    expect(close.getAttribute('aria-label')).toBe('Masquer la note');
+    const seen: string[] = [];
+    const spy = (e: KeyboardEvent) => seen.push(e.key);
+    window.addEventListener('keydown', spy);
+    fireEvent.keyDown(close, { key: 'Enter', code: 'Enter' });
+    fireEvent.keyDown(close, { key: ' ', code: 'Space' });
+    window.removeEventListener('keydown', spy);
+    expect(seen, 'game.js listens on window').toEqual([]);
+    fireEvent.click(close);
+    expect((container.querySelector('#note') as HTMLElement).hidden).toBe(true);
+    expect(getState()).toBe('title');
+  });
+
   it('follow the machine: play opens the roster with eleven tiles and the chosen candidate in the showcase', () => {
     const { container } = render(<App />);
     fireEvent.click(container.querySelector('#b-play')!);

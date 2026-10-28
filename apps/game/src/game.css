@@ -102,19 +102,32 @@ html,body{overscroll-behavior:none;}
 /* Compte's figure cards (stage 6c): small enough for two to a row on a phone. */
 #acc-stats,#acc-friend-stats .admin{grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;}
 /* ---------- The fixed note banner (#note, NoteBanner) ----------
-   It sits 8px above the safe area (the library's .note) in 16px lines,
-   pinned here so the reserve is exact: one line for the keyboard copy, two
-   for the touch copy below 600px (it is 492px long). While it shows, every
-   screen keeps that height plus a 12px gap free at its bottom, so its last
-   row scrolls clear of the note. `:has` follows the note's `hidden`; the
-   per-screen `noted` class (Garage, Boutique, Compte) stays as a separate
-   rule for browsers without `:has`. The Politibox's full-bleed stage clears
-   the note itself. */
-#note{line-height:16px;}
-body{--note-room:calc(8px + 16px + 12px + env(safe-area-inset-bottom,0px));}
-@media (max-width:600px){.kr-touch{--note-room:calc(8px + 32px + 12px + env(safe-area-inset-bottom,0px));}}
-#ui .screen.noted{padding-bottom:var(--note-room);}
-#ui:has(>#note:not([hidden])) .screen:not(#s-lootbox){padding-bottom:var(--note-room);}
+   The library's note is bare muted text; over the select stage on a phone
+   it read over the roster's tiles. The game gives it the night glass of the
+   HUD and the panels (--panel, the hairline, a 6px blur), rounded, inside
+   the screens' 16px gutter, as wide as its copy, with a close button (App).
+   It sits 8px above the safe area (the library's .note) in 16px lines.
+   While it shows, every screen but the Politibox's full-bleed stage (which
+   clears the note itself) ends --note-room above the viewport's bottom: the
+   note, the 8px under it, a 6px gap and the safe area. So nothing a finger
+   can tap ever sits under the note, at rest or scrolled, and the screen's
+   own bottom padding is the scroll end's reserve (DEC-042). The note's
+   height is measured (App sets --note-h on the body: the copy wraps to two
+   lines on a phone, three below 340px); the values here are the first
+   paint's, one line with the 24px button, two for the touch copy below
+   600px. `:has` follows the note's `hidden`; the per-screen `noted` class
+   (Garage, Boutique, Compte) stays as a separate rule for browsers without
+   `:has`. */
+#note{line-height:16px;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));width:fit-content;margin-inline:auto;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:4px 4px 4px 12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);text-wrap:balance;}
+#note[hidden]{display:none;}
+#note .note-close{pointer-events:auto;position:relative;flex-shrink:0;width:24px;height:24px;padding:0;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--fg);font:16px/1 var(--font-body);cursor:pointer;}
+#note .note-close:hover{background:rgba(255,255,255,.08);}
+#note .note-close:focus-visible{outline:3px solid #fff;outline-offset:2px;}
+#note .note-close::after{content:'';position:absolute;inset:-10px;}   /* a finger's 44px target around the 24px circle */
+body{--note-h:34px;--note-room:calc(8px + var(--note-h) + 6px + env(safe-area-inset-bottom,0px));}
+@media (max-width:600px){.kr-touch{--note-h:42px;}}
+#ui .screen.noted{bottom:var(--note-room);}
+#ui:has(>#note:not([hidden])) .screen:not(#s-lootbox){bottom:var(--note-room);}
 /* On a phone the Garage's chips are tap targets: 44px tall, their grade badge included. */
 .kr-touch #s-garage .chip{min-height:44px;}
 @media (pointer:coarse){#s-garage .chip{min-height:44px;}}
@@ -127,12 +140,13 @@ body{--note-room:calc(8px + 16px + 12px + env(safe-area-inset-bottom,0px));}
    at the scroll's end. The game drops the screens' padding to 8px here, and
    the pin inset counts it at both ends (--select-pin-inset: 8 + 8), so the
    showcase is exactly the scrollport's height and whole at every scroll
-   position; the type tightens so the podium's band keeps more than its
-   floor. */
+   position (the pin is sized on the viewport, so while the note shows the
+   inset adds the note's room, by which the screen ends short of it); the
+   type tightens so the podium's band keeps more than its floor. */
 @media (max-height:520px) and (orientation:landscape){
   #s-select,#s-garage{padding-block:8px;gap:8px;--select-pin-inset:16px;}
-  /* while the note banner shows, the screen's bottom padding is the note's room: the pinned showcase stops above it, or the power box ends under the note */
-  #ui:has(>#note:not([hidden])) #s-select,#ui:has(>#note:not([hidden])) #s-garage,#s-garage.noted{--select-pin-inset:calc(8px + var(--note-room));}
+  /* while the note banner shows, the screen ends the note's room short of the viewport: the pinned showcase stops above it, or the power box ends under the note */
+  #ui:has(>#note:not([hidden])) #s-select,#ui:has(>#note:not([hidden])) #s-garage,#s-garage.noted{--select-pin-inset:calc(16px + var(--note-room));}
   .select-side{display:flex;flex-direction:column;gap:8px;min-width:0;}
   .select-side>h2{margin:0;text-align:center;}
   #s-select .select-head{gap:6px;}
