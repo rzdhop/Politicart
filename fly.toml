@@ -4,7 +4,7 @@
 #   fly deploy
 #   fly scale count 1                      # rooms live in memory: run exactly one machine
 #
-# Accounts are kept in /data/kr-accounts.json, on the volume mounted below:
+# Accounts are kept in /data/politikart-accounts.json, on the volume mounted below:
 #   fly volumes create kr_data --size 1     # once, in the app's region
 # (or set a DATABASE_URL secret to keep them in Postgres instead).
 #

@@ -1,5 +1,5 @@
 // The account store, both backends, against the same contract. The Postgres
-// run needs a scratch database: set POLITIKART_TEST_DATABASE_URL (its kr_* tables are
+// run needs a scratch database: set POLITIKART_TEST_DATABASE_URL (its politikart_* tables are
 // dropped first). Without it only the file store runs.
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,7 +15,7 @@ const PG = process.env.POLITIKART_TEST_DATABASE_URL;
 async function freshPg() {
   const { default: pg } = await import('pg');
   const pool = new pg.Pool({ connectionString: PG });
-  await pool.query('drop table if exists kr_docs, kr_friends, kr_sessions, kr_users');
+  await pool.query('drop table if exists politikart_docs, politikart_friends, politikart_sessions, politikart_users');
   await pool.end();
   return openPgStore(PG);
 }
@@ -211,7 +211,7 @@ describe.each(backends)('%s store', (kind, open) => {
       if (kind === 'postgres') {
         const { default: pg } = await import('pg');
         const pool = new pg.Pool({ connectionString: PG });
-        await pool.query('insert into kr_users (id, name, name_key, hash, xp, created) values ($1, $2, $3, $4, $5, $6)', [old.id, old.name, 'ancien', old.hash, old.xp, old.created]);
+        await pool.query('insert into politikart_users (id, name, name_key, hash, xp, created) values ($1, $2, $3, $4, $5, $6)', [old.id, old.name, 'ancien', old.hash, old.xp, old.created]);
         await pool.end();
       } else {
         const file = join(mkdtempSync(join(tmpdir(), 'kr-store-')), 'accounts.json');
@@ -251,12 +251,12 @@ describe('documents', () => {
 
   it('go to their own file next to the accounts file, and survive a reopen', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'kr-store-'));
-    const file = join(dir, 'kr-accounts.json');
+    const file = join(dir, 'politikart-accounts.json');
     const s1 = openFileStore(file);
     await s1.createUser({ name: 'Voisine', hash: 'h' });
     await s1.putDoc('roster', doc('Manu'));
-    expect(readdirSync(join(dir, 'kr-docs'))).toEqual(['roster.json']);       // written at once, no temp file left
-    expect(JSON.parse(readFileSync(join(dir, 'kr-docs', 'roster.json'), 'utf8'))).toEqual(doc('Manu'));
+    expect(readdirSync(join(dir, 'politikart-docs'))).toEqual(['roster.json']);       // written at once, no temp file left
+    expect(JSON.parse(readFileSync(join(dir, 'politikart-docs', 'roster.json'), 'utf8'))).toEqual(doc('Manu'));
     await s1.close();
     const accounts = JSON.parse(readFileSync(file, 'utf8'));
     expect(Object.keys(accounts).sort()).toEqual(['links', 'sessions', 'users']);
@@ -270,21 +270,21 @@ describe('documents', () => {
 
   it('are written one at a time, in call order, the last one winning', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'kr-store-'));
-    const store = openFileStore(join(dir, 'kr-accounts.json'));
+    const store = openFileStore(join(dir, 'politikart-accounts.json'));
     const names = ['A', 'B', 'C', 'D', 'E', 'F'];
     const order = [];
     await Promise.all(names.map(n => store.putDoc('roster', doc(n)).then(() => order.push(n))));
     expect(order).toEqual(names);
     expect(await store.getDoc('roster')).toEqual(doc('F'));
-    expect(JSON.parse(readFileSync(join(dir, 'kr-docs', 'roster.json'), 'utf8'))).toEqual(doc('F'));
-    expect(readdirSync(join(dir, 'kr-docs'))).toEqual(['roster.json']);
+    expect(JSON.parse(readFileSync(join(dir, 'politikart-docs', 'roster.json'), 'utf8'))).toEqual(doc('F'));
+    expect(readdirSync(join(dir, 'politikart-docs'))).toEqual(['roster.json']);
   });
 
   it('keep the previous document when a write fails, and the next write still goes through', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'kr-store-'));
-    const store = openFileStore(join(dir, 'kr-accounts.json'));
+    const store = openFileStore(join(dir, 'politikart-accounts.json'));
     await store.putDoc('roster', doc('Avant'));
-    const docs = join(dir, 'kr-docs'), target = join(docs, 'roster.json');
+    const docs = join(dir, 'politikart-docs'), target = join(docs, 'roster.json');
     // a non-empty directory where the file must go: the rename fails
     renameSync(target, target + '.bak'); mkdirSync(target); writeFileSync(join(target, 'x'), 'x');
     await expect(store.putDoc('roster', doc('Raté'))).rejects.toThrow();
@@ -297,17 +297,17 @@ describe('documents', () => {
 
   it('ignore a document that is not JSON, with a warning, and clear temp files a crash left', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'kr-store-'));
-    mkdirSync(join(dir, 'kr-docs'));
-    writeFileSync(join(dir, 'kr-docs', 'roster.json'), '{ half a fi');
-    writeFileSync(join(dir, 'kr-docs', 'roster.json.abc123.tmp'), '{');
+    mkdirSync(join(dir, 'politikart-docs'));
+    writeFileSync(join(dir, 'politikart-docs', 'roster.json'), '{ half a fi');
+    writeFileSync(join(dir, 'politikart-docs', 'roster.json.abc123.tmp'), '{');
     const warn = vi.fn();
-    const store = openFileStore(join(dir, 'kr-accounts.json'), { log: { warn } });
+    const store = openFileStore(join(dir, 'politikart-accounts.json'), { log: { warn } });
     expect(await store.getDoc('roster')).toBeNull();
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0][0]).toMatch(/roster\.json is not JSON/);
-    expect(existsSync(join(dir, 'kr-docs', 'roster.json.abc123.tmp'))).toBe(false);
+    expect(existsSync(join(dir, 'politikart-docs', 'roster.json.abc123.tmp'))).toBe(false);
     await store.putDoc('roster', doc('Réparé'));
-    expect(await openFileStore(join(dir, 'kr-accounts.json')).getDoc('roster')).toEqual(doc('Réparé'));
+    expect(await openFileStore(join(dir, 'politikart-accounts.json')).getDoc('roster')).toEqual(doc('Réparé'));
   });
 });
 
@@ -315,16 +315,16 @@ describe('documents on Postgres (a fake Pool)', () => {
   function fakePool(rows = []) {
     const calls = [];
     class Pool {
-      async query(text, values) { calls.push([text, values]); return /^select value from kr_docs/.test(text) ? { rows, rowCount: rows.length } : { rows: [], rowCount: 1 }; }
+      async query(text, values) { calls.push([text, values]); return /^select value from politikart_docs/.test(text) ? { rows, rowCount: rows.length } : { rows: [], rowCount: 1 }; }
       async end() {}
     }
     return { Pool, calls };
   }
 
-  it('creates kr_docs with the schema', async () => {
+  it('creates politikart_docs with the schema', async () => {
     const { Pool, calls } = fakePool();
     await openPgStore('postgres://fake', { Pool });
-    expect(calls[0][0]).toContain('create table if not exists kr_docs (key text primary key, value jsonb not null, updated bigint not null)');
+    expect(calls[0][0]).toContain('create table if not exists politikart_docs (key text primary key, value jsonb not null, updated bigint not null)');
   });
 
   it('upserts a document as JSON text, and reads it back', async () => {
@@ -334,12 +334,12 @@ describe('documents on Postgres (a fake Pool)', () => {
     const before = Date.now();
     await store.putDoc('roster', { chars: { victor: { name: 'Manu' } }, ads: [] });
     expect(calls).toHaveLength(1);
-    expect(calls[0][0]).toBe('insert into kr_docs (key, value, updated) values ($1, $2::jsonb, $3) on conflict (key) do update set value = excluded.value, updated = excluded.updated');
+    expect(calls[0][0]).toBe('insert into politikart_docs (key, value, updated) values ($1, $2::jsonb, $3) on conflict (key) do update set value = excluded.value, updated = excluded.updated');
     expect(calls[0][1][0]).toBe('roster');
     expect(calls[0][1][1]).toBe('{"chars":{"victor":{"name":"Manu"}},"ads":[]}');
     expect(calls[0][1][2]).toBeGreaterThanOrEqual(before);
     expect(await store.getDoc('roster')).toEqual({ chars: {}, ads: [] });
-    expect(calls[1]).toEqual(['select value from kr_docs where key = $1', ['roster']]);
+    expect(calls[1]).toEqual(['select value from politikart_docs where key = $1', ['roster']]);
   });
 
   it('answers null for a missing document, and refuses unknown keys without a query', async () => {
@@ -371,7 +371,7 @@ describe('setHash on Postgres (a fake Pool)', () => {
   function fakePool(rows) {
     const calls = [];
     class Pool {
-      async query(text, values) { calls.push([text, values]); return /^update kr_users set hash/.test(text) ? { rows, rowCount: rows.length } : { rows: [], rowCount: 0 }; }
+      async query(text, values) { calls.push([text, values]); return /^update politikart_users set hash/.test(text) ? { rows, rowCount: rows.length } : { rows: [], rowCount: 0 }; }
       async end() {}
     }
     return { Pool, calls };
@@ -383,9 +383,9 @@ describe('setHash on Postgres (a fake Pool)', () => {
     calls.length = 0;                                  // drop the schema query
     expect(await store.setHash('u1', 'new')).toEqual({ id: 'u1', name: 'Pg', hash: 'new', xp: 12, created: 5, seen: null, banned: null, coins: 0, owned: null, stats: {} });
     expect(calls).toHaveLength(2);
-    expect(calls[0][0]).toMatch(/^delete from kr_sessions where user_id = \$1$/);
+    expect(calls[0][0]).toMatch(/^delete from politikart_sessions where user_id = \$1$/);
     expect(calls[0][1]).toEqual(['u1']);
-    expect(calls[1][0]).toMatch(/^update kr_users set hash = \$2 where id = \$1 returning \*$/);
+    expect(calls[1][0]).toMatch(/^update politikart_users set hash = \$2 where id = \$1 returning \*$/);
     expect(calls[1][1]).toEqual(['u1', 'new']);
   });
 
@@ -412,9 +412,9 @@ describe('the economy on Postgres (a fake Pool)', () => {
   it('adds the three columns on boot, and maps a row without them to the defaults', async () => {
     const { Pool, calls } = fakePool();
     await openPgStore('postgres://fake', { Pool });
-    expect(calls[0][0]).toContain('alter table kr_users add column if not exists coins integer not null default 0;');
-    expect(calls[0][0]).toContain('alter table kr_users add column if not exists owned jsonb;');
-    expect(calls[0][0]).toContain("alter table kr_users add column if not exists stats jsonb not null default '{}'::jsonb;");
+    expect(calls[0][0]).toContain('alter table politikart_users add column if not exists coins integer not null default 0;');
+    expect(calls[0][0]).toContain('alter table politikart_users add column if not exists owned jsonb;');
+    expect(calls[0][0]).toContain("alter table politikart_users add column if not exists stats jsonb not null default '{}'::jsonb;");
     const { store } = await open(() => [{ id: 'u1', name: 'Pg', hash: 'h', xp: '3', created: '5' }]);
     expect(await store.user('u1')).toMatchObject({ coins: 0, owned: null, stats: {} });
   });
@@ -422,10 +422,10 @@ describe('the economy on Postgres (a fake Pool)', () => {
   it('adds and spends coins in one statement each, the spend conditional on the balance', async () => {
     const { store, calls } = await open(text => (/coins >= \$2/.test(text) ? [] : [pgRow()]));
     expect((await store.addCoins('u1', 20.9)).coins).toBe(70);
-    expect(calls[0]).toEqual(['update kr_users set coins = coins + $2 where id = $1 returning *', ['u1', 20]]);
+    expect(calls[0]).toEqual(['update politikart_users set coins = coins + $2 where id = $1 returning *', ['u1', 20]]);
     expect(await store.spendCoins('u1', 30.5)).toBeNull();
     expect(calls).toHaveLength(2);
-    expect(calls[1][0]).toBe('update kr_users set coins = coins - $2 where id = $1 and coins >= $2 returning *');
+    expect(calls[1][0]).toBe('update politikart_users set coins = coins - $2 where id = $1 and coins >= $2 returning *');
     expect(calls[1][0]).toContain('coins >= $2');
     expect(calls[1][1]).toEqual(['u1', 30]);
     await expect(store.addCoins('u1', 'lots')).rejects.toThrow(TypeError);
@@ -437,7 +437,7 @@ describe('the economy on Postgres (a fake Pool)', () => {
     expect(await store.buy('u1', { kind: 'chars', item: 'victor', price: 40 })).toMatchObject({ coins: 30, owned: { chars: ['victor'] } });
     expect(calls).toHaveLength(1);
     const [text, values] = calls[0];
-    expect(text).toMatch(/^update kr_users set coins = coins - \$4, owned = jsonb_set\(/);
+    expect(text).toMatch(/^update politikart_users set coins = coins - \$4, owned = jsonb_set\(/);
     expect(text).toContain(`jsonb_set(coalesce(owned, '{"chars":[],"parts":[],"trails":[]}'::jsonb), $2::text[], coalesce(owned #> $2, '[]'::jsonb) || to_jsonb($3::text))`);
     expect(text).toContain("where id = $1 and coins >= $4 and not (coalesce(owned #> $2, '[]'::jsonb) ? $3) returning *");
     expect(values).toEqual(['u1', ['chars'], 'victor', 40]);
@@ -448,7 +448,7 @@ describe('the economy on Postgres (a fake Pool)', () => {
     const owned = await refused([{ coins: 500, owned: { chars: ['victor'], parts: [], trails: [] } }]);
     expect(await owned.store.buy('u1', { kind: 'chars', item: 'victor', price: 40 })).toBe('owned');
     expect(owned.calls).toHaveLength(2);
-    expect(owned.calls[1]).toEqual(['select coins, owned from kr_users where id = $1', ['u1']]);
+    expect(owned.calls[1]).toEqual(['select coins, owned from politikart_users where id = $1', ['u1']]);
     const poor = await refused([{ coins: 10, owned: { chars: ['marine'], parts: [], trails: [] } }]);
     expect(await poor.store.buy('u1', { kind: 'chars', item: 'victor', price: 40 })).toBe('poor');
     const before = await refused([{ coins: 10, owned: null }]);
@@ -462,11 +462,11 @@ describe('the economy on Postgres (a fake Pool)', () => {
   it('grants in one guarded statement, and answers the account unchanged when it already owns the item', async () => {
     const { store, calls } = await open(text => (/^update/.test(text) ? [] : [pgRow({ owned: { chars: [], parts: [], trails: ['flames'] } })]));
     expect((await store.grant('u1', { kind: 'trails', item: 'flames' })).owned.trails).toEqual(['flames']);
-    expect(calls[0][0]).toMatch(/^update kr_users set owned = jsonb_set\(/);
+    expect(calls[0][0]).toMatch(/^update politikart_users set owned = jsonb_set\(/);
     expect(calls[0][0]).toContain("where id = $1 and not (coalesce(owned #> $2, '[]'::jsonb) ? $3) returning *");
     expect(calls[0][0]).not.toContain('coins');
     expect(calls[0][1]).toEqual(['u1', ['trails'], 'flames']);
-    expect(calls[1]).toEqual(['select * from kr_users where id = $1', ['u1']]);
+    expect(calls[1]).toEqual(['select * from politikart_users where id = $1', ['u1']]);
   });
 
   it('stores owned and stats as JSON text', async () => {
@@ -475,9 +475,9 @@ describe('the economy on Postgres (a fake Pool)', () => {
     await store.setOwned('u1', null);
     await store.setStats('u1', { races: 1 });
     expect(calls).toEqual([
-      ['update kr_users set owned = $2::jsonb where id = $1 returning *', ['u1', '{"chars":["victor"],"parts":[],"trails":[]}']],
-      ['update kr_users set owned = $2::jsonb where id = $1 returning *', ['u1', null]],
-      ['update kr_users set stats = $2::jsonb where id = $1 returning *', ['u1', '{"races":1}']],
+      ['update politikart_users set owned = $2::jsonb where id = $1 returning *', ['u1', '{"chars":["victor"],"parts":[],"trails":[]}']],
+      ['update politikart_users set owned = $2::jsonb where id = $1 returning *', ['u1', null]],
+      ['update politikart_users set stats = $2::jsonb where id = $1 returning *', ['u1', '{"races":1}']],
     ]);
     await expect(store.setStats('u1', null)).rejects.toThrow(TypeError);
     expect(OWNED_KINDS).toEqual(['chars', 'parts', 'trails']);
@@ -505,5 +505,31 @@ describe('passwords', () => {
     expect(await checkPassword('république', h1)).toBe(true);
     expect(await checkPassword('monarchie', h1)).toBe(false);
     expect(await checkPassword('x', 'garbage')).toBe(false);
+  });
+});
+
+describe('a data folder from before the rename', () => {
+  it('has its accounts file and docs folder renamed, once, and keeps its data', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'politikart-store-'));
+    writeFileSync(join(dir, 'kr-accounts.json'), JSON.stringify({ users: { u1: { id: 'u1', name: 'Ancien', hash: 'h', xp: 12, created: 1 } }, sessions: {}, links: [] }));
+    mkdirSync(join(dir, 'kr-docs'));
+    writeFileSync(join(dir, 'kr-docs', 'roster.json'), JSON.stringify({ chars: {}, ads: [] }));
+    const warn = vi.fn();
+    const store = openFileStore(join(dir, 'politikart-accounts.json'), { log: { warn } });
+    expect((await store.user('u1'))?.name).toBe('Ancien');
+    expect(await store.getDoc('roster')).toEqual({ chars: {}, ads: [] });
+    expect(existsSync(join(dir, 'kr-accounts.json'))).toBe(false);
+    expect(existsSync(join(dir, 'kr-docs'))).toBe(false);
+    expect(readdirSync(join(dir, 'politikart-docs'))).toEqual(['roster.json']);
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves the old files alone once the new ones exist', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'politikart-store-'));
+    writeFileSync(join(dir, 'kr-accounts.json'), JSON.stringify({ users: { old: { id: 'old', name: 'Vieux', hash: 'h', xp: 0, created: 1 } }, sessions: {}, links: [] }));
+    writeFileSync(join(dir, 'politikart-accounts.json'), JSON.stringify({ users: {}, sessions: {}, links: [] }));
+    const store = openFileStore(join(dir, 'politikart-accounts.json'), { log: { warn: vi.fn() } });
+    expect(store.kind).toBe('file');
+    expect(existsSync(join(dir, 'kr-accounts.json'))).toBe(true);
   });
 });

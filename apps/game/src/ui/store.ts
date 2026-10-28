@@ -202,12 +202,27 @@ export interface NetTeamRow { team: TeamId; name: string; points: number; driver
 /** What the server reports when a team race ends, and which slot was ours. */
 export interface NetResults { ranking: NetRankRow[]; teams: NetTeamRow[]; you: number; error?: boolean }
 
+/**
+ * A localStorage key, with the value a browser saved under the key's name from
+ * before the game was renamed (`kr-…`) moved under the new one on first read.
+ */
+function stored(key: string): string | null {
+  try {
+    const value = localStorage.getItem(key);
+    if (value !== null) return value;
+    const legacy = key.replace(/^politikart-/, 'kr-');
+    const old = localStorage.getItem(legacy);
+    if (old !== null) { localStorage.setItem(key, old); localStorage.removeItem(legacy); }
+    return old;
+  } catch { return null; }
+}
+
 // The lobby name lives under its own key, so resetting the workshop keeps it.
-function loadName(): string { try { return JSON.parse(localStorage.getItem('kr-net') || '{}').name || ''; } catch { return ''; } }
-function saveName(name: string) { try { localStorage.setItem('kr-net', JSON.stringify({ name })); } catch { /* storage full or blocked: the name is just not remembered */ } }
+function loadName(): string { try { return JSON.parse(stored('politikart-net') || '{}').name || ''; } catch { return ''; } }
+function saveName(name: string) { try { localStorage.setItem('politikart-net', JSON.stringify({ name })); } catch { /* storage full or blocked: the name is just not remembered */ } }
 // The session token, so a returning player is still logged in. Nothing else about the account is kept here.
-function loadToken(): string | null { try { return JSON.parse(localStorage.getItem('kr-account') || '{}').token || null; } catch { return null; } }
-function saveToken(token: string | null) { try { if (token) localStorage.setItem('kr-account', JSON.stringify({ token })); else localStorage.removeItem('kr-account'); } catch { /* blocked: the session lasts for this page only */ } }
+function loadToken(): string | null { try { return JSON.parse(stored('politikart-account') || '{}').token || null; } catch { return null; } }
+function saveToken(token: string | null) { try { if (token) localStorage.setItem('politikart-account', JSON.stringify({ token })); else localStorage.removeItem('politikart-account'); } catch { /* blocked: the session lasts for this page only */ } }
 
 /** Whether this session is the administrator's: only then is the Workshop offered (the server checks again on save). */
 export function isAdmin(ui: Pick<UiSnapshot, 'account'>): boolean {

@@ -209,7 +209,7 @@ async function settle() {
 async function renderServed(o: FakeOptions) {
   const server = fakeServer(o);
   vi.stubGlobal('fetch', server.fetch);
-  if (o.who) localStorage.setItem('kr-account', JSON.stringify({ token: 'tok-' + o.who }));
+  if (o.who) localStorage.setItem('politikart-account', JSON.stringify({ token: 'tok-' + o.who }));
   const view = render(<App />);
   await act(async () => { await actions.detectServer(); });
   await settle();
@@ -347,10 +347,10 @@ describe('the React screens', () => {
     fireEvent.click(container.querySelector('#g-wheels-gold')!);
     expect(container.querySelector('#g-wheels-gold')?.getAttribute('aria-pressed')).toBe('true');
     expect(container.querySelector('#g-wheels-classic')?.getAttribute('aria-pressed')).toBe('false');
-    expect(JSON.parse(localStorage.getItem('kr-kart')!)).toEqual({ wheels: 'gold' });
+    expect(JSON.parse(localStorage.getItem('politikart-kart')!)).toEqual({ wheels: 'gold' });
     fireEvent.click(container.querySelector('#b-garage-reset')!);
     expect(container.querySelector('#g-wheels-classic')?.getAttribute('aria-pressed')).toBe('true');
-    expect(localStorage.getItem('kr-kart')).toBeNull();
+    expect(localStorage.getItem('politikart-kart')).toBeNull();
     fireEvent.click(container.querySelector('#b-garage-back')!);
     expect(getState()).toBe('select');
   });
@@ -464,14 +464,14 @@ describe('the Workshop (admin profile)', () => {
     await settle();
     expect(getState()).toBe('account');
     expect(getSnapshot().account).toBeNull();
-    expect(localStorage.getItem('kr-account')).toBeNull();
+    expect(localStorage.getItem('politikart-account')).toBeNull();
     expect($(container, 'acc-error')?.textContent).toContain('Session expirée');
     expect($(container, 's-admin')).toBeNull();
     expect($(container, 'b-admin')).toBeNull();
 
     // Logged in again (a fresh token restored), the Workshop reopens on the same draft.
     server.state.sessions.set('tok-admin', 'admin');
-    localStorage.setItem('kr-account', JSON.stringify({ token: 'tok-admin' }));
+    localStorage.setItem('politikart-account', JSON.stringify({ token: 'tok-admin' }));
     act(() => { actions.closeAccount(); });
     await act(async () => { await actions.detectServer(); });
     await settle();
@@ -798,7 +798,7 @@ describe('the Garage locks (DEC-035)', () => {
     fireEvent.click($(container, 'g-trail-laser')!);
     fireEvent.click($(container, 'g-skin-flames')!);
     expect(pressed(container, 'g-trail-laser')).toBe('true');
-    expect(JSON.parse(localStorage.getItem('kr-kart')!)).toEqual({ trail: 'laser', skin: 'flames' });
+    expect(JSON.parse(localStorage.getItem('politikart-kart')!)).toEqual({ trail: 'laser', skin: 'flames' });
     expect($(container, 'g-trail-note')?.textContent).toBe('Les traînées se gagnent dans la Politibox.');
     resetGarage();
   });
@@ -822,18 +822,18 @@ describe('the Garage locks (DEC-035)', () => {
     // A tap on the locked chip itself changes nothing.
     fireEvent.click($(container, 'g-wheels-gold')!);
     expect(pressed(container, 'g-wheels-classic')).toBe('true');
-    expect(localStorage.getItem('kr-kart')).toBeNull();
+    expect(localStorage.getItem('politikart-kart')).toBeNull();
     // An owned rare option is picked like any common.
     fireEvent.click($(container, 'g-wheels-chrome')!);
     expect(pressed(container, 'g-wheels-chrome')).toBe('true');
-    expect(JSON.parse(localStorage.getItem('kr-kart')!)).toEqual({ wheels: 'chrome' });
+    expect(JSON.parse(localStorage.getItem('politikart-kart')!)).toEqual({ wheels: 'chrome' });
 
     // The badge leads to the Boutique's parts, and "Retour" to the roster.
     fireEvent.click($(container, 'g-buy-wheels-gold')!);
     expect(getState()).toBe('shop');
     expect(getSnapshot().shop.tab).toBe('parts');
     expect($(container, 'shop-panel-parts')!.hidden).toBe(false);
-    expect(JSON.parse(localStorage.getItem('kr-kart')!)).toEqual({ wheels: 'chrome' });
+    expect(JSON.parse(localStorage.getItem('politikart-kart')!)).toEqual({ wheels: 'chrome' });
     fireEvent.click($(container, 'b-shop-back')!);
     expect(getState()).toBe('select');
 
@@ -845,7 +845,7 @@ describe('the Garage locks (DEC-035)', () => {
   });
 
   it('show a stale edit the account does not own as the candidate default, and an owned one as picked', async () => {
-    localStorage.setItem('kr-kart', JSON.stringify({ wheels: 'gold', skin: 'flames' }));
+    localStorage.setItem('politikart-kart', JSON.stringify({ wheels: 'gold', skin: 'flames' }));
     loadGarage();
     const { container } = await renderServed({ server: true, who: 'player', owned: { chars: [], parts: ['wheels:gold'], trails: [] } });
     fireEvent.click($(container, 'b-play')!);
@@ -854,7 +854,7 @@ describe('the Garage locks (DEC-035)', () => {
     expect(pressed(container, 'g-wheels-gold')).toBe('true');
     expect(pressed(container, 'g-skin-flames')).toBe('false');
     expect(pressed(container, 'g-skin-flat')).toBe('true');
-    expect(JSON.parse(localStorage.getItem('kr-kart')!)).toEqual({ wheels: 'gold', skin: 'flames' });   // the edit is kept, just not worn
+    expect(JSON.parse(localStorage.getItem('politikart-kart')!)).toEqual({ wheels: 'gold', skin: 'flames' });   // the edit is kept, just not worn
     resetGarage();
   });
 
@@ -951,7 +951,7 @@ describe('ownedOf (DEC-035)', () => {
   });
 
   it('is what the Garage draws with: a guest on a server sees an unowned edit dropped, the static build does not', async () => {
-    localStorage.setItem('kr-kart', JSON.stringify({ wheels: 'gold' }));
+    localStorage.setItem('politikart-kart', JSON.stringify({ wheels: 'gold' }));
     loadGarage();
     await renderServed({ server: true });
     expect(myStyle(CHARACTERS[0]!).wheels).toBe('classic');

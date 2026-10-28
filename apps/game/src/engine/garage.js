@@ -12,14 +12,15 @@
 // The edits are stored as typed, owned or not (the Garage's locks are the
 // UI's business), but the kart is drawn and raced through what the account
 // owns (DEC-035): setOwned() says what that is, and myStyle() drops any
-// edited part or trail it does not own, so a stale `kr-kart` from the static
+// edited part or trail it does not own, so a stale `politikart-kart` from the static
 // build never shows an unowned part on a server. `null` means no economy
 // (the static build, and the game server's own headless races): everything
 // renders.
 import { cleanOwned, ownedStyle } from './catalog.js';
 import { cleanStyle, playerStyle } from './kartstyle.js';
 
-const KEY = 'kr-kart';
+const KEY = 'politikart-kart';
+const LEGACY_KEY = 'kr-kart';   // the key from before the game was renamed, moved under KEY on first load
 
 let EDITS = {};
 
@@ -29,7 +30,11 @@ export const getGarage = () => EDITS;
 /** Read the edits from storage, dropping anything invalid. */
 export function loadGarage() {
   try {
-    const j = localStorage.getItem(KEY);
+    let j = localStorage.getItem(KEY);
+    if (j === null) {
+      j = localStorage.getItem(LEGACY_KEY);
+      if (j !== null) { localStorage.setItem(KEY, j); localStorage.removeItem(LEGACY_KEY); }
+    }
     EDITS = j ? cleanStyle(JSON.parse(j)) : {};
   } catch (e) {
     EDITS = {};       /* storage unavailable or corrupt: no edits */

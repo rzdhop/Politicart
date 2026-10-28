@@ -387,9 +387,9 @@ but never creating them. Render's free disk does not survive a restart.
 
 **Decision.** `apps/server/src/store.js` is one async interface with two
 backends: a JSON file rewritten atomically (POLITIKART_DATA, default
-`apps/server/data/kr-accounts.json`, `:memory:` for tests) and Postgres
-through `pg` 8.23.1 when `DATABASE_URL` is set (tables `kr_users`,
-`kr_sessions`, `kr_friends`, created on start). `accounts.js` serves
+`apps/server/data/politikart-accounts.json`, `:memory:` for tests) and Postgres
+through `pg` 8.23.1 when `DATABASE_URL` is set (tables `politikart_users`,
+`politikart_sessions`, `politikart_friends`, created on start). `accounts.js` serves
 `/api/register|login|logout|me|progress` open to every origin with bearer
 tokens (no cookies), scrypt hashes, and a per-address limit on sign-ups
 and failed logins. The WebSocket `hello` carries the token: an
@@ -584,8 +584,8 @@ when the service sleeps, so durable storage there means Postgres.
 **Decision.**
 - **Storage.** The store gains `getDoc`/`putDoc` for an allowlist of keys
   (`roster`).
-  - Postgres keeps them in a `kr_docs` table (jsonb).
-  - The file backend writes each doc to its own file, `kr-docs/<key>.json`
+  - Postgres keeps them in a `politikart_docs` table (jsonb).
+  - The file backend writes each doc to its own file, `politikart-docs/<key>.json`
     next to `POLITIKART_DATA`, atomically. It does not sit inside the accounts file,
     because that file is rewritten after every race's XP and the roster can
     weigh megabytes.
@@ -749,14 +749,14 @@ an argument, so tests fix the sequence.
 charges `priceOf()` whatever the body says; the body carries no amount. The
 option names and grades are an assumption (A-026) the human may retune.
 
-## DEC-033 -- The economy lives on `kr_users`: coins, owned, stats; one conditional update, no transactions
+## DEC-033 -- The economy lives on `politikart_users`: coins, owned, stats; one conditional update, no transactions
 
 **Context.** Coins and an inventory must be spent and granted safely on a
 public server, on both store backends (JSON file, Postgres). The store has
 never used a transaction; documents (`getDoc/putDoc`) are read-modify-write
 and keyed by a fixed allowlist, so a per-user document would not do.
 
-**Decision.** Three columns on `kr_users`: `coins integer not null default
+**Decision.** Three columns on `politikart_users`: `coins integer not null default
 0`, `owned jsonb` (`{chars, parts, trails}` of item ids; null means the
 account predates the economy), `stats jsonb not null default '{}'`. A
 purchase is one statement: `coins = coins - price` and `owned` appended,
@@ -789,7 +789,7 @@ right to buy it. Existing players keep what they had.
 ## DEC-035 -- Ownership is enforced wherever an economy exists
 
 **Context.** A player's kart style is a partial object sent from the
-browser (`kr-kart`); anyone can send `wheels: 'gold'`.
+browser (`politikart-kart`); anyone can send `wheels: 'gold'`.
 
 **Decision.** The server filters every style a player sends on
 `lobby.join`, `joinGod` and `set` through `ownedStyle(cleanStyle(style),
@@ -801,7 +801,7 @@ option as before; a guest on a server owns commons only. The admin owns the
 whole catalogue (A-031).
 
 **Consequence.** No unowned part reaches a room or a race, on any client. A
-stale `kr-kart` from the static build is harmless on a server.
+stale `politikart-kart` from the static build is harmless on a server.
 
 ## DEC-036 -- The trail is a kart style field
 

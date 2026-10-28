@@ -22,7 +22,7 @@ FROM node:26.10.0-bookworm-slim
 # Accounts go to a JSON file under /data unless DATABASE_URL names a Postgres
 # database. Mount a volume on /data (Fly.io: see fly.toml) or they are lost
 # with the container.
-ENV NODE_ENV=production PORT=8080 HOST=0.0.0.0 POLITIKART_DATA=/data/kr-accounts.json
+ENV NODE_ENV=production PORT=8080 HOST=0.0.0.0 POLITIKART_DATA=/data/politikart-accounts.json
 RUN mkdir -p /data && chown node:node /data
 WORKDIR /app
 COPY package.json package-lock.json ./

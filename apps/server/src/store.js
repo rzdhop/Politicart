@@ -52,9 +52,9 @@
 // other key throws), for data the server keeps besides accounts: the admin's
 // cast (roster.js) and the race counters of the admin's dashboard
 // (dashboard.js). The file store keeps each in its own file next to the
-// accounts file, <dir of POLITIKART_DATA>/kr-docs/<key>.json, written atomically: the
+// accounts file, <dir of POLITIKART_DATA>/politikart-docs/<key>.json, written atomically: the
 // cast can weigh megabytes and must not ride along every account rewrite.
-// Postgres keeps them in kr_docs.
+// Postgres keeps them in politikart_docs.
 //
 // A user is { id, name, hash, xp, created, seen, banned, coins, owned, stats }:
 // `seen` is when the account last logged in or said hello (null until it
@@ -67,7 +67,7 @@
 // A purchase is one conditional update, never a read then a write (DEC-033).
 // Passwords arrive here already hashed (accounts.js); this module never sees one.
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync, existsSync } from 'node:fs';
 import { open, rename, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
@@ -96,13 +96,26 @@ export async function openStore({ databaseUrl, file } = {}) {
 
 // ---------- JSON file (or memory) ----------
 
+// The accounts file and the docs folder were kr-accounts.json and kr-docs/
+// before the game was renamed. A deployment that still has them, and nothing
+// yet under the new names, keeps its data: both are renamed in place, once.
+function adoptLegacyFiles(file, log) {
+  const dir = dirname(file);
+  for (const [from, to] of [[join(dir, 'kr-accounts.json'), file], [join(dir, 'kr-docs'), join(dir, 'politikart-docs')]]) {
+    if (from === to || !existsSync(from) || existsSync(to)) continue;
+    try { renameSync(from, to); log.warn?.(`accounts: ${from} renamed to ${to}`); }
+    catch (e) { log.warn?.(`accounts: cannot rename ${from} to ${to}: ${e.message}`); }
+  }
+}
+
 export function openFileStore(file, { log = console } = {}) {
   let data = { users: {}, sessions: {}, links: [] };
   if (file) {
+    adoptLegacyFiles(file, log);
     try { data = { ...data, ...JSON.parse(readFileSync(file, 'utf8')) }; }
     catch (e) { if (e.code !== 'ENOENT') throw new Error('Cannot read the accounts file ' + file + ': ' + e.message); }
   }
-  const docs = openDocFiles(file ? join(dirname(file), 'kr-docs') : null, log);
+  const docs = openDocFiles(file ? join(dirname(file), 'politikart-docs') : null, log);
   let timer = null;
   const flush = () => {
     timer = null; if (!file) return;
@@ -265,21 +278,27 @@ function openDocFiles(dir, log) {
 
 // ---------- Postgres ----------
 
+// An older database keeps its data: the kr_* tables of the Kart République days
+// are renamed before the politikart_* ones are created (a no-op on a new base).
 const SCHEMA = `
-create table if not exists kr_users (
+alter table if exists kr_users rename to politikart_users;
+alter table if exists kr_sessions rename to politikart_sessions;
+alter table if exists kr_friends rename to politikart_friends;
+alter table if exists kr_docs rename to politikart_docs;
+create table if not exists politikart_users (
   id text primary key, name text not null, name_key text not null unique,
   hash text not null, xp integer not null default 0, created bigint not null);
-create table if not exists kr_sessions (
-  token text primary key, user_id text not null references kr_users(id) on delete cascade, created bigint not null);
-create table if not exists kr_friends (
-  a text not null references kr_users(id) on delete cascade, b text not null references kr_users(id) on delete cascade,
+create table if not exists politikart_sessions (
+  token text primary key, user_id text not null references politikart_users(id) on delete cascade, created bigint not null);
+create table if not exists politikart_friends (
+  a text not null references politikart_users(id) on delete cascade, b text not null references politikart_users(id) on delete cascade,
   status text not null, primary key (a, b));
-create table if not exists kr_docs (key text primary key, value jsonb not null, updated bigint not null);
-alter table kr_users add column if not exists seen bigint;
-alter table kr_users add column if not exists banned jsonb;
-alter table kr_users add column if not exists coins integer not null default 0;
-alter table kr_users add column if not exists owned jsonb;
-alter table kr_users add column if not exists stats jsonb not null default '{}'::jsonb;`;
+create table if not exists politikart_docs (key text primary key, value jsonb not null, updated bigint not null);
+alter table politikart_users add column if not exists seen bigint;
+alter table politikart_users add column if not exists banned jsonb;
+alter table politikart_users add column if not exists coins integer not null default 0;
+alter table politikart_users add column if not exists owned jsonb;
+alter table politikart_users add column if not exists stats jsonb not null default '{}'::jsonb;`;
 
 const row = r => (r ? {
   id: r.id, name: r.name, hash: r.hash, xp: Number(r.xp), created: Number(r.created), seen: r.seen == null ? null : Number(r.seen), banned: r.banned ?? null,
@@ -302,84 +321,84 @@ export async function openPgStore(databaseUrl, { Pool } = {}) {
   return {
     kind: 'postgres',
     async createUser({ name, hash }) {
-      const r = await q('insert into kr_users (id, name, name_key, hash, xp, created) values ($1, $2, $3, $4, 0, $5) on conflict (name_key) do nothing returning *',
+      const r = await q('insert into politikart_users (id, name, name_key, hash, xp, created) values ($1, $2, $3, $4, 0, $5) on conflict (name_key) do nothing returning *',
         [randomUUID(), name, nameKey(name), hash, Date.now()]);
       return row(r.rows[0]);
     },
-    user: id => one('select * from kr_users where id = $1', [id]),
-    userByName: name => one('select * from kr_users where name_key = $1', [nameKey(name)]),
-    addXp: (id, xp) => one('update kr_users set xp = xp + $2 where id = $1 returning *', [id, Math.max(0, Math.floor(xp))]),
+    user: id => one('select * from politikart_users where id = $1', [id]),
+    userByName: name => one('select * from politikart_users where name_key = $1', [nameKey(name)]),
+    addXp: (id, xp) => one('update politikart_users set xp = xp + $2 where id = $1 returning *', [id, Math.max(0, Math.floor(xp))]),
     async setHash(id, hash) {
       // Sessions first: if the update then fails, the next boot retries both,
       // and no session opened under the old password survives a reset.
-      await q('delete from kr_sessions where user_id = $1', [id]);
-      return one('update kr_users set hash = $2 where id = $1 returning *', [id, hash]);
+      await q('delete from politikart_sessions where user_id = $1', [id]);
+      return one('update politikart_users set hash = $2 where id = $1 returning *', [id, hash]);
     },
     async listUsers({ limit = 500 } = {}) {
-      const r = await q('select id, name, xp, created, seen, banned, coins from kr_users order by created desc limit $1', [limit]);
+      const r = await q('select id, name, xp, created, seen, banned, coins from politikart_users order by created desc limit $1', [limit]);
       return r.rows.map(x => { const { hash: _hash, owned: _owned, stats: _stats, ...u } = row(x); return u; });
     },
     async setBanned(id, reason) {
-      if (reason == null) return one('update kr_users set banned = null where id = $1 returning *', [id]);
-      await q('delete from kr_sessions where user_id = $1', [id]);
-      return one('update kr_users set banned = $2::jsonb where id = $1 returning *', [id, JSON.stringify({ at: Date.now(), reason: String(reason) })]);
+      if (reason == null) return one('update politikart_users set banned = null where id = $1 returning *', [id]);
+      await q('delete from politikart_sessions where user_id = $1', [id]);
+      return one('update politikart_users set banned = $2::jsonb where id = $1 returning *', [id, JSON.stringify({ at: Date.now(), reason: String(reason) })]);
     },
-    touchSeen: id => one('update kr_users set seen = $2 where id = $1 returning *', [id, Date.now()]),
-    async addCoins(id, n) { return one('update kr_users set coins = coins + $2 where id = $1 returning *', [id, coinsOf(n)]); },
-    async spendCoins(id, n) { return one('update kr_users set coins = coins - $2 where id = $1 and coins >= $2 returning *', [id, coinsOf(n)]); },
+    touchSeen: id => one('update politikart_users set seen = $2 where id = $1 returning *', [id, Date.now()]),
+    async addCoins(id, n) { return one('update politikart_users set coins = coins + $2 where id = $1 returning *', [id, coinsOf(n)]); },
+    async spendCoins(id, n) { return one('update politikart_users set coins = coins - $2 where id = $1 and coins >= $2 returning *', [id, coinsOf(n)]); },
     async buy(id, { kind, item, price }) {
       const values = [id, [ownedKind(kind)], String(item), coinsOf(price)];
-      const r = await q(`update kr_users set coins = coins - $4, ${OWN} where id = $1 and coins >= $4 and ${NOT_OWNED} returning *`, values);
+      const r = await q(`update politikart_users set coins = coins - $4, ${OWN} where id = $1 and coins >= $4 and ${NOT_OWNED} returning *`, values);
       if (r.rows[0]) return row(r.rows[0]);
       // Refused: say why. Coins credited between the two statements read as
       // 'poor' all the same; the purchase was refused, the player retries.
-      const now = (await q('select coins, owned from kr_users where id = $1', [id])).rows[0];
+      const now = (await q('select coins, owned from politikart_users where id = $1', [id])).rows[0];
       if (!now) return null;
       return now.owned?.[values[1][0]]?.includes(values[2]) ? 'owned' : 'poor';
     },
     async grant(id, { kind, item }) {
       const values = [id, [ownedKind(kind)], String(item)];
-      const r = await q(`update kr_users set ${OWN} where id = $1 and ${NOT_OWNED} returning *`, values);
-      return r.rows[0] ? row(r.rows[0]) : one('select * from kr_users where id = $1', [id]);   // already owned: unchanged
+      const r = await q(`update politikart_users set ${OWN} where id = $1 and ${NOT_OWNED} returning *`, values);
+      return r.rows[0] ? row(r.rows[0]) : one('select * from politikart_users where id = $1', [id]);   // already owned: unchanged
     },
     async setOwned(id, owned) {
-      return one('update kr_users set owned = $2::jsonb where id = $1 returning *', [id, owned == null ? null : JSON.stringify(objectOf(owned, 'owned'))]);
+      return one('update politikart_users set owned = $2::jsonb where id = $1 returning *', [id, owned == null ? null : JSON.stringify(objectOf(owned, 'owned'))]);
     },
-    async setStats(id, stats) { return one('update kr_users set stats = $2::jsonb where id = $1 returning *', [id, JSON.stringify(objectOf(stats, 'stats'))]); },
-    async createSession(userId) { const t = newToken(); await q('insert into kr_sessions (token, user_id, created) values ($1, $2, $3)', [t, userId, Date.now()]); return t; },
+    async setStats(id, stats) { return one('update politikart_users set stats = $2::jsonb where id = $1 returning *', [id, JSON.stringify(objectOf(stats, 'stats'))]); },
+    async createSession(userId) { const t = newToken(); await q('insert into politikart_sessions (token, user_id, created) values ($1, $2, $3)', [t, userId, Date.now()]); return t; },
     async sessionUser(token) {
       if (typeof token !== 'string') return null;
-      return one('select u.* from kr_sessions s join kr_users u on u.id = s.user_id where s.token = $1 and s.created > $2 and u.banned is null', [token, Date.now() - SESSION_MS]);
+      return one('select u.* from politikart_sessions s join politikart_users u on u.id = s.user_id where s.token = $1 and s.created > $2 and u.banned is null', [token, Date.now() - SESSION_MS]);
     },
-    async dropSession(token) { if (typeof token === 'string') await q('delete from kr_sessions where token = $1', [token]); },
-    async dropSessionsOf(userId) { await q('delete from kr_sessions where user_id = $1', [userId]); },
+    async dropSession(token) { if (typeof token === 'string') await q('delete from politikart_sessions where token = $1', [token]); },
+    async dropSessionsOf(userId) { await q('delete from politikart_sessions where user_id = $1', [userId]); },
     async links(id) {
-      const r = await q(`select u.id, u.name, u.xp, f.status, f.a from kr_friends f join kr_users u on u.id = case when f.a = $1 then f.b else f.a end
+      const r = await q(`select u.id, u.name, u.xp, f.status, f.a from politikart_friends f join politikart_users u on u.id = case when f.a = $1 then f.b else f.a end
                          where f.a = $1 or f.b = $1`, [id]);
       return r.rows.map(x => ({ id: x.id, name: x.name, xp: Number(x.xp), status: x.status === 'friend' ? 'friend' : x.a === id ? 'outgoing' : 'incoming' }));
     },
     async requestFriend(from, to) {
-      const r = await q('select a, b, status from kr_friends where (a = $1 and b = $2) or (a = $2 and b = $1)', [from, to]);
+      const r = await q('select a, b, status from politikart_friends where (a = $1 and b = $2) or (a = $2 and b = $1)', [from, to]);
       const mine = r.rows.find(x => x.a === from), back = r.rows.find(x => x.a === to);
       if (mine || back?.status === 'friend') return 'already';
-      if (back) { await q('update kr_friends set status = $3 where a = $1 and b = $2', [to, from, 'friend']); return 'accepted'; }
-      await q('insert into kr_friends (a, b, status) values ($1, $2, $3) on conflict do nothing', [from, to, 'pending']);
+      if (back) { await q('update politikart_friends set status = $3 where a = $1 and b = $2', [to, from, 'friend']); return 'accepted'; }
+      await q('insert into politikart_friends (a, b, status) values ($1, $2, $3) on conflict do nothing', [from, to, 'pending']);
       return 'requested';
     },
     async acceptFriend(me, other) {
-      const r = await q('update kr_friends set status = $3 where a = $1 and b = $2 and status = $4', [other, me, 'friend', 'pending']);
+      const r = await q('update politikart_friends set status = $3 where a = $1 and b = $2 and status = $4', [other, me, 'friend', 'pending']);
       return r.rowCount > 0;
     },
-    async removeFriend(me, other) { await q('delete from kr_friends where (a = $1 and b = $2) or (a = $2 and b = $1)', [me, other]); },
+    async removeFriend(me, other) { await q('delete from politikart_friends where (a = $1 and b = $2) or (a = $2 and b = $1)', [me, other]); },
     async getDoc(key) {
-      const r = await q('select value from kr_docs where key = $1', [docKey(key)]);
+      const r = await q('select value from politikart_docs where key = $1', [docKey(key)]);
       return r.rows[0]?.value ?? null;
     },
     async putDoc(key, value) {
       // Stringified here: pg would turn a top-level array into a Postgres array.
       const json = JSON.stringify(value);
       if (json === undefined) throw new TypeError('A document must be a JSON value');
-      await q('insert into kr_docs (key, value, updated) values ($1, $2::jsonb, $3) on conflict (key) do update set value = excluded.value, updated = excluded.updated',
+      await q('insert into politikart_docs (key, value, updated) values ($1, $2::jsonb, $3) on conflict (key) do update set value = excluded.value, updated = excluded.updated',
         [docKey(key), json, Date.now()]);
     },
     close: () => pool.end(),

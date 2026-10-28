@@ -33,7 +33,7 @@ Current state only. History lives in git.
 - **Owed by the human:** play a race on each new circuit and open a few
   Politibox on a phone; judge the grades of the parts and candidates
   (A-026, A-027) and the camera (A-033); say whether trails should also be
-  sold; the first Render boot against Neon adds the three `kr_users`
+  sold; the first Render boot against Neon adds the three `politikart_users`
   columns (A-029: existing accounts keep what their level had unlocked).
 - **Follow-ups:** the long straights of the circuits still read a little
   thin (a densification pass); per-user stats are read-modify-write

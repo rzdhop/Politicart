@@ -24,7 +24,7 @@ test.describe('R-17 garage', () => {
     errors.length = 0;
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto('/');
-    await page.evaluate(() => localStorage.removeItem('kr-kart'));
+    await page.evaluate(() => localStorage.removeItem('politikart-kart'));
     await page.reload();
     await page.locator('#b-play').click();
     await expect(page.locator('#s-select')).toBeVisible();
@@ -54,7 +54,7 @@ test.describe('R-17 garage', () => {
     await page.locator('#g-body').fill('#ff0000');
     await expect(page.locator('#g-wheels-gold')).toHaveAttribute('aria-pressed', 'true');
 
-    const stored = JSON.parse((await page.evaluate(() => localStorage.getItem('kr-kart'))) ?? '{}');
+    const stored = JSON.parse((await page.evaluate(() => localStorage.getItem('politikart-kart'))) ?? '{}');
     expect(stored).toEqual({ wheels: 'gold', spoiler: 'wing', pods: false, sticker: 'rosette', number: 42, body: '#ff0000' });
 
     await page.reload();
@@ -67,7 +67,7 @@ test.describe('R-17 garage', () => {
     await page.locator('#b-garage-reset').click();
     await expect(page.locator('#g-wheels-classic')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#g-number')).toHaveValue('');
-    expect(await page.evaluate(() => localStorage.getItem('kr-kart'))).toBeNull();
+    expect(await page.evaluate(() => localStorage.getItem('politikart-kart'))).toBeNull();
   });
 
   test('offers every new part and trail without a server, and keeps a trail and a skin across a reload', async ({ page }) => {
@@ -81,7 +81,7 @@ test.describe('R-17 garage', () => {
     await page.locator('#g-skin-flames').click();
     await expect(page.locator('#g-trail-laser')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#g-trail-none')).toHaveAttribute('aria-pressed', 'false');
-    const stored = JSON.parse((await page.evaluate(() => localStorage.getItem('kr-kart'))) ?? '{}');
+    const stored = JSON.parse((await page.evaluate(() => localStorage.getItem('politikart-kart'))) ?? '{}');
     expect(stored).toEqual({ trail: 'laser', skin: 'flames' });
 
     await page.reload();
@@ -89,14 +89,14 @@ test.describe('R-17 garage', () => {
     await page.locator('#b-garage').click();
     await expect(page.locator('#g-trail-laser')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#g-skin-flames')).toHaveAttribute('aria-pressed', 'true');
-    expect(JSON.parse((await page.evaluate(() => localStorage.getItem('kr-kart'))) ?? '{}')).toEqual({ trail: 'laser', skin: 'flames' });
+    expect(JSON.parse((await page.evaluate(() => localStorage.getItem('politikart-kart'))) ?? '{}')).toEqual({ trail: 'laser', skin: 'flames' });
   });
 
   test('ignores a race number that is not 0-99', async ({ page }) => {
     await page.locator('#b-garage').click();
     await page.locator('#g-number').fill('7');
     await page.locator('#g-number').fill('7a');
-    const stored = JSON.parse((await page.evaluate(() => localStorage.getItem('kr-kart'))) ?? '{}');
+    const stored = JSON.parse((await page.evaluate(() => localStorage.getItem('politikart-kart'))) ?? '{}');
     expect(stored).toEqual({ number: 7 });
   });
 
@@ -159,14 +159,14 @@ test.describe('R-22 garage ownership', () => {
     await page.locator('#g-wheels-gold').click({ position: { x: 8, y: 8 }, force: true });
     await expect(page.locator('#g-wheels-classic')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#g-wheels-gold')).toHaveAttribute('aria-pressed', 'false');
-    expect(await page.evaluate(() => localStorage.getItem('kr-kart'))).toBeNull();
+    expect(await page.evaluate(() => localStorage.getItem('politikart-kart'))).toBeNull();
 
     // The badge opens the Boutique on the parts; "Retour" lands on the roster, from which the Garage reopens.
     await page.locator('#g-buy-wheels-gold').click({ force: true });
     await expect(page.locator('#s-shop')).toBeVisible();
     await expect(page.locator('#shop-panel-parts')).toBeVisible();
     await expect(page.locator('#b-buy-part-wheels-gold')).toBeVisible();
-    expect(await page.evaluate(() => localStorage.getItem('kr-kart'))).toBeNull();
+    expect(await page.evaluate(() => localStorage.getItem('politikart-kart'))).toBeNull();
     await page.locator('#b-shop-back').click();
     await expect(page.locator('#s-select')).toBeVisible();
     await page.locator('#b-garage').click();

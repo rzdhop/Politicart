@@ -4,9 +4,9 @@
 //   HOST       interface to bind (default 0.0.0.0, so the LAN can join)
 //   POLITIKART_STATIC  the built game to serve (default ../../game/dist)
 //   DATABASE_URL  keep accounts in this Postgres database (store.js)
-//   POLITIKART_DATA    otherwise, keep them in this JSON file (default ../data/kr-accounts.json);
+//   POLITIKART_DATA    otherwise, keep them in this JSON file (default ../data/politikart-accounts.json);
 //              ':memory:' keeps them in memory only (the end-to-end suite).
-//              The admin's cast goes next to it, in kr-docs/roster.json;
+//              The admin's cast goes next to it, in politikart-docs/roster.json;
 //              startServer loads and applies it before listening.
 //   POLITIKART_ADMIN_USER           the administrator's account name (default rida),
 //                           reserved: nobody else can sign up under it
@@ -31,7 +31,7 @@ const staticDir = process.env.POLITIKART_STATIC || fileURLToPath(new URL('../../
 
 const store = await openStore({
   databaseUrl: process.env.DATABASE_URL || '',
-  file: process.env.POLITIKART_DATA === ':memory:' ? null : process.env.POLITIKART_DATA || fileURLToPath(new URL('../data/kr-accounts.json', import.meta.url)),
+  file: process.env.POLITIKART_DATA === ':memory:' ? null : process.env.POLITIKART_DATA || fileURLToPath(new URL('../data/politikart-accounts.json', import.meta.url)),
 });
 // Never log the hash itself: only whether admin is on, and why not.
 const admin = adminConfig({ user: process.env.POLITIKART_ADMIN_USER, hash: process.env.POLITIKART_ADMIN_PASSWORD_HASH });
@@ -43,7 +43,7 @@ const lan = Object.values(networkInterfaces()).flat().filter(a => a && a.family 
 console.log(`Politikart -- serveur de course en équipe sur le port ${srv.port}`);
 console.log(`  ici :        http://127.0.0.1:${srv.port}/`);
 for (const ip of lan) console.log(`  réseau local : http://${ip}:${srv.port}/`);
-console.log(`  comptes :     ${store.kind === 'postgres' ? 'base Postgres (DATABASE_URL)' : store.kind === 'memory' ? 'en mémoire seulement' : 'fichier ' + (process.env.POLITIKART_DATA || 'apps/server/data/kr-accounts.json')}`);
+console.log(`  comptes :     ${store.kind === 'postgres' ? 'base Postgres (DATABASE_URL)' : store.kind === 'memory' ? 'en mémoire seulement' : 'fichier ' + (process.env.POLITIKART_DATA || 'apps/server/data/politikart-accounts.json')}`);
 
 const stop = () => { srv.close().then(() => store.close()).then(() => process.exit(0)); };
 process.on('SIGINT', stop);
