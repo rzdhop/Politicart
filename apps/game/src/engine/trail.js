@@ -77,8 +77,16 @@ function geo() {
   return GEO;
 }
 const basic = (color, extra) => new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false, ...extra });
-/** The stage's: the colour converted to linear and no tone mapping, so it shows as authored under the stage look. */
-const stageBasic = (color, extra) => new THREE.MeshBasicMaterial({ color: new THREE.Color(color).convertSRGBToLinear(), transparent: true, depthWrite: false, toneMapped: false, ...extra });
+/**
+ * The stage's: the colour converted to linear and no tone mapping, so it
+ * shows as authored under the stage look, and blended normally: a pool of
+ * additive beams overlapping on a podium sums to white, where the race's,
+ * strung out along the road, never overlap enough to.
+ */
+const stageBasic = (color, extra) => new THREE.MeshBasicMaterial({ color: new THREE.Color(color).convertSRGBToLinear(), transparent: true, depthWrite: false, toneMapped: false, ...extra, blending: THREE.NormalBlending });
+stageBasic.stage = true;
+/** The stage laser's core: a hot red, not white, which over a red beam would read pink on the podium. */
+const STAGE_LASER_CORE = 0xff6a4a;
 const fade = (p, f) => { for (const m of p.mats) m.opacity = p.alpha * (1 - f); };
 const pick = list => list[Math.floor(Math.random() * list.length)];
 
@@ -112,7 +120,7 @@ const KINDS = {
     build: mk => {
       const g = new THREE.Group(); const mats = [];
       for (const x of [-0.35, 0.35]) {
-        const beam = mk(0xff2a2a, { blending: THREE.AdditiveBlending }); const core = mk(0xffffff, { blending: THREE.AdditiveBlending });
+        const beam = mk(0xff2a2a, { blending: THREE.AdditiveBlending }); const core = mk(mk.stage ? STAGE_LASER_CORE : 0xffffff, { blending: THREE.AdditiveBlending });
         const b = new THREE.Mesh(geo().beam, beam); b.position.x = x; g.add(b); const c = new THREE.Mesh(geo().core, core); c.position.x = x; g.add(c); mats.push(beam, core);
       }
       return { obj: g, mats };

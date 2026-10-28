@@ -446,7 +446,13 @@ function addMast(k, kind, x, yBase, yTop, z, anim, P, live) {
   if (live) live.push(...strips);
   if (kind === 'europe') strips.forEach(s => s.add(psph(0.035, P.m('gloss', 0xffcc00), 0, 0, 0.02, 6)));
   if (kind === 'pirate') { strips[1].add(psph(0.07, P.m('gloss', 0xffffff), 0, 0.08, 0.02, 8)); [0.7, -0.7].forEach(rz => { const b = pbox(0.22, 0.025, 0.02, P.m('gloss', 0xffffff), 0, -0.08, 0.02); b.rotation.z = rz; strips[1].add(b); }); }
-  anim.push((dt, t) => strips.forEach((s, i) => { const w = Math.sin(t * 6 + i); s.rotation.y = w * 0.25; s.position.z = w * 0.04; }));
+  // the wave, on top of each strip's rest pose, read on the first frame: the stage profile's merge lifts the strips
+  // out of the flag group with its turn baked in, so the strip's own z (its thickness) is the way it flutters
+  let rest = null;
+  anim.push((dt, t) => {
+    if (!rest) rest = strips.map(s => ({ pos: s.position.clone(), ry: s.rotation.y, z: new THREE.Vector3(0, 0, 1).applyQuaternion(s.quaternion) }));
+    strips.forEach((s, i) => { const w = Math.sin(t * 6 + i), r = rest[i]; s.rotation.y = r.ry + w * 0.25; s.position.copy(r.pos).addScaledVector(r.z, w * 0.04); });
+  });
 }
 
 /** The front end of the standard kart. `bodyBox` builds a box in the body material; `P.accent` is the accent colour's. */
