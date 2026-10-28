@@ -869,3 +869,27 @@ any container host still works. `render.yaml` alone describes the deployment.
 
 **Consequence.** One host to keep in sync with the code. Running the server
 in Paris again means writing a new host config, not reviving this one.
+
+## DEC-041 -- Render is the only deployment; GitHub Pages is retired
+
+**Context.** The repository's Deployments page listed three environments:
+`github-pages`, `main - politikart` (the live Render service) and
+`main - kart-republique` (the Render service from before the Politikart
+rename, still redeploying on every push). The human wanted one. The Render
+service already serves the built game and the team races on one port, so the
+Pages build was a second, solo-only copy of the same game.
+
+**Decision.** Keep the Render service `politikart` as the single deployment.
+The Pages workflow becomes `.github/workflows/ci.yml`, which builds,
+type-checks and unit-tests on every push to `main` and every pull request but
+deploys nothing. The README points players at `politikart.onrender.com`.
+By hand, outside the repository: turn Pages off, delete the old Render
+service `kart-republique`, delete the `github-pages` and
+`main - kart-republique` environments and the `POLITIKART_SERVER_URL`
+repository variable. Supersedes DEC-008; DEC-015's remote-server option
+(`VITE_POLITIKART_SERVER`) stays in the code for any static build.
+
+**Consequence.** One host and one URL. The free plan sleeps after 15 minutes
+idle, so the first visitor after that waits about a minute even to play solo;
+Pages never slept. The CI run still gates nothing Render ships (Render deploys
+on push regardless), but a red run on `main` flags a broken deploy at once.

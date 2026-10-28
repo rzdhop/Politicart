@@ -6,7 +6,7 @@ Keyboard on a computer, touch on a phone or tablet, held either way. Three laps,
 
 ## Play
 
-The game is published from this repository to GitHub Pages: `https://rzdhop.github.io/Politicart/`.
+The game, solo and team races, is published from this repository on Render: `https://politikart.onrender.com/`. The free plan sleeps after 15 minutes with nobody connected, so the first visitor after that waits about a minute.
 
 To run it locally you need Node 26 and npm:
 
@@ -22,7 +22,7 @@ npm run dev -w @politikart/game   # http://127.0.0.1:5173
 
 Two to six players race in two teams, Bleu and Rouge; AI candidates fill the grid to six. Every finishing place scores points for its team (10, 8, 6, 4, 2, 1) and the highest total wins. Items and powers never hit a teammate.
 
-Team races need the game server, which serves the game and the race connection on one port. GitHub Pages is static, so the published page shows the Multijoueur button only once it is pointed at a server hosted elsewhere (see [Playing online](#playing-online-render--github-pages)).
+Team races need the game server, which serves the game and the race connection on one port. The published game runs on it (see [Playing online](#playing-online-render)); a static build of the game alone shows the Multijoueur button only once it is pointed at a server (`VITE_POLITIKART_SERVER`).
 
 ```sh
 npm ci
@@ -39,7 +39,7 @@ When a game server answers, the title screen shows **Compte**. An account is a p
 - **Candidates.** Emmanuel Macaron, Philippe Martini, Jean Lassalle-des-Fêtes and Sandrine Ruisseau are free. The others are bought in the **Boutique** with politicoins once the level that makes them reachable is passed, one per level from 2 to 13: Nathalie Artichaut, José Bovin, Marine Le Stylo, Jordan Mortadella, Eva Joly-Jumper, Jean-Luc Mélèche, Gérard L’Archiduc, Bruno Le Maigre, Éric Zemmoule, Gérald Darmalin, Michel Bananier, then Manuel Valse. Each has a grade that sets its price — common 300, rare 800, mythic 2 000, incredible 5 000 — and a Politibox can hand one over regardless of the level. Locked candidates show on the roster with the level they need, or **Boutique** once they are reachable; a tap opens the shop on them. Accounts from before the economy keep the candidates their level had unlocked.
 - **Friends.** Add someone by pseudo; they accept or refuse. The list shows who is online and in which room. From your room in the lobby, **Inviter** sends an online friend an invitation that appears over their menus; **Rejoindre** takes them straight into your room.
 - **Bans.** The admin can ban an account from the dashboard, with a reason. A banned account is disconnected at once and its logins answer "Compte banni" with the reason until the ban is lifted; its experience and friends are kept.
-- **Guests** (no account, or no server reachable, as on a plain GitHub Pages build) choose a pseudo and play the four starting candidates, without levels or politicoins. On a server a guest's kart keeps the free (common) parts only; without any server there is no economy and the Garage offers every part. In team races they can join a room by code or by invitation but cannot create one.
+- **Guests** (no account, or no server reachable, as on a plain static build) choose a pseudo and play the four starting candidates, without levels or politicoins. On a server a guest's kart keeps the free (common) parts only; without any server there is no economy and the Garage offers every part. In team races they can join a room by code or by invitation but cannot create one.
 - **Stats.** The Compte screen shows each account's races, wins, podiums, abandons, Politibox openings, politicoins earned and spent, collection and best lap per circuit, and the same figures for every friend.
 
 Solo races are scored by the browser and reported to the server (at most one reward a minute); team races are scored by the server. The game is not built to resist cheating.
@@ -102,18 +102,16 @@ npm run -s admin-hash -w @politikart/server     # asks for the password twice (1
 
 Put the printed hash in `.env` at the repo root as `POLITIKART_ADMIN_PASSWORD_HASH='scrypt$...'` (single quotes: the hash contains `$`), or in your host's environment settings, and restart the server. At start the server creates the admin account, or resets its password to that hash, and logs whether administration is on. The admin then logs in through **Compte** like any player. Failed logins are limited per address and per account (10 every 15 minutes).
 
-### Playing online (Render + GitHub Pages)
+### Playing online (Render)
 
 The free way to play team races over the internet, with no machine of your own left running:
 
-1. **Host the server on Render.** On [render.com](https://render.com), choose **New > Blueprint**, pick this repository and apply. `render.yaml` builds the `Dockerfile` on the free plan as a single instance. The game, solo and team races, is then playable at the address Render gives, `https://<name>.onrender.com/`.
-2. **Point the GitHub page at it.** In the repository's **Settings > Secrets and variables > Actions > Variables**, add `POLITIKART_SERVER_URL` = `https://<name>.onrender.com` (no trailing path), then re-run the **Deploy to GitHub Pages** workflow. `https://rzdhop.github.io/Politicart/` now shows **Multijoueur** whenever the server answers.
-
-3. **Make yourself admin.** In the Render service's **Environment**, set `POLITIKART_ADMIN_PASSWORD_HASH` to the hash printed by `npm run -s admin-hash -w @politikart/server` (the Blueprint leaves it for you to fill). Render restarts the service; log in as `rida` through **Compte**.
+1. **Host the server on Render.** On [render.com](https://render.com), choose **New > Blueprint**, pick this repository and apply. `render.yaml` builds the `Dockerfile` on the free plan as a single instance and redeploys it on every push to `main`. The game, solo and team races, is then playable at the address Render gives, `https://politikart.onrender.com/`.
+2. **Make yourself admin.** In the Render service's **Environment**, set `POLITIKART_ADMIN_PASSWORD_HASH` to the hash printed by `npm run -s admin-hash -w @politikart/server` (the Blueprint leaves it for you to fill). Render restarts the service; log in as `rida` through **Compte**.
 
 Render's free disk is wiped whenever the service sleeps, so accounts and the admin's cast need a database there. The game uses the [Neon](https://console.neon.tech) project **Politikart** (`muddy-wave-64148556`, region `aws-eu-central-1`, Frankfurt, database `politikart`): paste its pooled connection string (Neon console > Connect, connection pooling on) into the service's `DATABASE_URL` variable, which the Blueprint leaves for you to fill. Everything targets players in France: neither Render nor Neon has a Paris region, so both sit in Frankfurt, side by side and inside the EU. Locally, `neon deploy` writes the same variable into `.env.local`, which `npm start` reads. Without it the server still runs, but every account and every cast edit vanishes at each restart (the admin account itself is recreated from its hash).
 
-The free plan sleeps after 15 minutes with nobody connected. The first visitor after that waits about a minute before the Multijoueur button appears, and a race in progress when it falls asleep is lost. Delete the variable and re-run the workflow to make the page solo again.
+The free plan sleeps after 15 minutes with nobody connected. The first visitor after that waits about a minute before the Multijoueur button appears, and a race in progress when it falls asleep is lost.
 
 ### Hosting a team race online
 
@@ -167,7 +165,7 @@ Both orientations work: in portrait the camera widens and pulls back. Phones sta
 - **Bike lane**: a green cycle lane runs along the right-hand edge of every circuit. Its cyclists ride where they like: they swerve into the karts' lanes, cut across the road, hop onto the pavement, stop dead or ride the wrong way. Hitting one knocks the rider over and shakes your kart.
 - **Messages**: the banners during a race only concern you: what you did, and what was done to you, once it is done (a projectile is announced when it lands, not when it is thrown; nothing reaches a driver who has finished). Nobody else's item or power is announced to the whole field, and the same goes for sound: a mini-turbo or a power used across the circuit is silent on your side. Banners show one at a time and stay readable for a second before the next takes over; a burst keeps at most two waiting.
 - **Contact**: karts bounce off each other once per contact, with a hop, sparks and a camera shake; rubbing door to door costs about 2 % of speed, ramming the kart in front about 10 %, and the lighter kart takes more of it. A spun-out kart always straightens up along the road before it drives off.
-- **Workshop (admin only)**: the administrator account (`POLITIKART_ADMIN_USER`, `rida` by default) logs in through the ordinary Compte screen and gets an **Atelier** button on the title: rename candidates, change their colours and their default kart (accents, number, wheels, spoiler, side pods, sticker), upload kart liveries and campaign posters. Saving sends the cast to the game server, so every player gets it, the GitHub Pages build included when it names a server. Nobody else sees the Workshop. Without a reachable server the game plays the default cast.
+- **Workshop (admin only)**: the administrator account (`POLITIKART_ADMIN_USER`, `rida` by default) logs in through the ordinary Compte screen and gets an **Atelier** button on the title: rename candidates, change their colours and their default kart (accents, number, wheels, spoiler, side pods, sticker), upload kart liveries and campaign posters. Saving sends the cast to the game server, so every player gets it, a static build included when it names a server. Nobody else sees the Workshop. Without a reachable server the game plays the default cast.
 - **Dashboard, god seat and console (admin only)**: **Tableau de bord** shows the server's figures, lists the accounts (ban with a reason, lift a ban, close an account's sessions), the open rooms (close one, **control** it from afar, or **enter it as a god** at any moment, mid-race included) and the connections (eject one). A god races as a seventh, neutral kart in creative mode: power every second, items without end, untouchable, outside the scoring. The **console divine** (G in a race) changes any race at will. See [The admin's dashboard](#the-admins-dashboard-and-the-god-seat).
 - **Garage**: every player styles their own kart from the roster (body and accent colours, wheels, spoiler, side pods, race number, sticker, exhaust, underglow, mast, nose, skin, trail). It applies to whichever candidate they pick, over that candidate's default kart, and is kept in this browser's `localStorage`. On a server, a part the account does not own is greyed with its grade and leads to the Boutique; the server never shows the others a part its owner did not buy.
 - **Messages**: every item, power and hazard has four to six lines, picked at random when it lands (`engine/lines.js`), so a race does not repeat itself.
@@ -185,7 +183,7 @@ An npm workspace with three packages.
 | `apps/server` | The game server: static files, accounts and friends (`accounts.js`, `store.js`: a JSON file or Postgres via `pg`), the admin's cast (`roster.js`) and dashboard (`dashboard.js`), rooms over WebSocket (`ws`), one worker thread per race running the game's own engine. |
 | `packages/ui` | `@politikart/ui`, the design system: the game's look as React components, with Storybook. |
 | `e2e` | The Playwright suite that drives the game through its screens and HUD. |
-| `.github/workflows/pages.yml` | Builds, checks and publishes the game to GitHub Pages on every push to `main`. |
+| `.github/workflows/ci.yml` | Builds, type-checks and unit-tests both workspaces on every push to `main` and every pull request. Deploys nothing: Render does. |
 
 ### The game (`apps/game`)
 

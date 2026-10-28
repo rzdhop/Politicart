@@ -1,0 +1,42 @@
+# Check every push to main and every pull request: build the design system,
+# then type-check and unit-test both workspaces.
+#
+# This workflow deploys nothing. Render is the only host (DEC-041): it builds
+# the Dockerfile from render.yaml on every push to main, so this run is the
+# signal that the commit Render ships passed its unit tests and type checks.
+# The E2E suite (Playwright, Chromium) is not run here -- it takes three
+# minutes and needs a browser install -- and stays the local gate after every
+# stage, as .claude/CHECKPOINT.md records.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same ref cancels the run it supersedes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - name: Build the design system, then check and test both workspaces
+        run: |
+          npm run build -w @politikart/ui
+          npm run typecheck
+          npm run test
+      - name: Build the game
+        run: npm run build -w @politikart/game
