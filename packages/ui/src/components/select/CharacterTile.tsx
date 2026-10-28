@@ -25,6 +25,19 @@ export interface CharacterTileProps
    * sits top-centre, and the two must not collide.
    */
   badge?: ReactNode;
+  /**
+   * The portrait is still being rendered: a light sweeps across the tile and
+   * the button reports `aria-busy`. Pass it while `image` is a placeholder --
+   * the game shows each candidate's colour and initials at once and swaps in
+   * the real portrait a frame at a time -- and drop it when the final image
+   * lands. The tile stays fully usable while pending; this is a promise of a
+   * better picture, not a disabled state.
+   *
+   * The sweep is CSS only (`.tile.pending::before`), drawn under the name
+   * strip and the badge, and switched off under `prefers-reduced-motion`,
+   * where the placeholder itself is the cue.
+   */
+  pending?: boolean;
 }
 
 /**
@@ -35,14 +48,15 @@ export interface CharacterTileProps
  * lifts the tile above its neighbours.
  *
  * Reports `aria-pressed` so the current choice is announced, which the original
- * markup did not do. The tile is keyboard-focusable as a button and draws a
- * white focus ring -- the game is played from the keyboard, so do not suppress
- * it.
+ * markup did not do, and `aria-busy` while its portrait is `pending`. The tile
+ * is keyboard-focusable as a button and draws a white focus ring -- the game is
+ * played from the keyboard, so do not suppress it.
  *
  * ```tsx
  * <CharacterTile
  *   name="Gégé Marteau"
  *   image={thumbs.gege}
+ *   pending={!portraitDone.gege}
  *   selected={chosen === 'gege'}
  *   onClick={() => choose('gege')}
  * />
@@ -53,6 +67,7 @@ export function CharacterTile({
   image,
   selected = false,
   badge,
+  pending = false,
   className,
   type = 'button',
   ...rest
@@ -60,8 +75,9 @@ export function CharacterTile({
   return (
     <button
       type={type}
-      className={cx('tile', selected && 'sel', className)}
+      className={cx('tile', selected && 'sel', pending && 'pending', className)}
       aria-pressed={selected}
+      aria-busy={pending || undefined}
       {...rest}
     >
       {image ? <img alt={name} src={image} /> : null}
