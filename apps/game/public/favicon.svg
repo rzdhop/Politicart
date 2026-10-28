@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Politikart's icon: a gold "P" on the night panel, over the tricolore
+       rule. Colours are the design system's tokens (--bg, --gold) and the
+       Tricolore component's three stripes. The P is drawn as a path: a
+       favicon cannot load the display font. -->
+  <rect width="64" height="64" rx="14" fill="#0c1230"/>
+  <path fill="#f2c14e" fill-rule="evenodd" d="M15 8H36A15 15 0 0 1 36 38H29V47H15ZM29 19H35A4 4 0 0 1 35 27H29Z"/>
+  <rect x="12" y="52" width="13.4" height="6" rx="2" fill="#2f55c7"/>
+  <rect x="25.3" y="52" width="13.4" height="6" fill="#fffaf0"/>
+  <rect x="38.6" y="52" width="13.4" height="6" rx="2" fill="#e63946"/>
+</svg>

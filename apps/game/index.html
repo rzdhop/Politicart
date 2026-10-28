@@ -13,6 +13,14 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0c1230">
 <meta name="claude:viewport-fit-sides" content="cover">
+<!-- The icon: a gold P on the night panel over the tricolore (public/, which
+     Vite copies to the build's root). Relative hrefs, like the build's own
+     assets (base './'), so they resolve both at / and under /Politicart/.
+     The SVG first; the PNG for browsers without SVG icons; favicon.ico
+     answers the bare /favicon.ico request browsers make on their own. -->
+<link rel="icon" type="image/svg+xml" href="./favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
 <!-- The look comes from @politikart/ui, imported by src/game.js, which also
      self-hosts the two web fonts the original fetched from Google Fonts. The
      two rules that belong to the game shell rather than the design system

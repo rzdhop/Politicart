@@ -168,6 +168,21 @@ function mergeGeometries(meshes, inv) {
   return out;
 }
 
+/**
+ * One mesh drawing `meshes` (all of one material and shadow flags) where
+ * they stand: their geometries merged in world space, from their current
+ * world matrices, so any parent transform (a non-uniform scale included) is
+ * baked in exactly. The caller removes the sources and adds the result to a
+ * root at the world origin. Children of the sources are not included.
+ */
+export function mergeInWorld(meshes) {
+  const first = meshes[0], m = new THREE.Mesh(mergeGeometries(meshes, new THREE.Matrix4()), first.material);
+  m.name = first.material.name || 'merged';
+  m.castShadow = first.castShadow; m.receiveShadow = first.receiveShadow; m.renderOrder = first.renderOrder;
+  m.userData.merged = meshes.length;
+  return m;
+}
+
 /** Re-express `o`'s transform relative to `root` (whose world matrix inverse is `inv`) and hang it on root. */
 function reparent(o, root, inv) {
   const rel = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld);
@@ -231,6 +246,25 @@ function mergeInto(root, isKept) {
   for (const o of recurse) mergeInto(o, isKept);
 }
 
+/** The shared vertex-coloured materials of finishOf, by finish. */
+const FINISHES = new Map();
+/**
+ * The vertex-coloured material a plain lit material folds into, or null:
+ * for an untextured, opaque, non-emissive MeshStandardMaterial, one shared
+ * white MeshStandardMaterial with vertex colours and the same roughness,
+ * metalness and side, so a part baked onto it (bakeVertexColours with
+ * finishOf as its target) shades exactly as it did on its own material.
+ * Anything else (a map, transparency, an emissive glow, flat shading,
+ * vertex colours of its own, another material type) gets null and stays.
+ */
+export function finishOf(m) {
+  if (m.type !== 'MeshStandardMaterial' || m.map || m.emissiveMap || m.normalMap || m.bumpMap || m.envMap || m.alphaMap || m.aoMap || m.lightMap || m.roughnessMap || m.metalnessMap
+    || m.vertexColors || m.transparent || m.opacity !== 1 || m.alphaTest || m.flatShading || m.wireframe || !m.fog || m.emissive.getHex() !== 0 || !m.visible) return null;
+  const key = m.roughness + '|' + m.metalness + '|' + m.side + '|' + m.depthWrite + '|' + m.depthTest + '|' + m.polygonOffset + '|' + m.toneMapped;
+  if (!FINISHES.has(key)) FINISHES.set(key, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: m.roughness, metalness: m.metalness, side: m.side, depthWrite: m.depthWrite, depthTest: m.depthTest, polygonOffset: m.polygonOffset, toneMapped: m.toneMapped }));
+  return FINISHES.get(key);
+}
+
 /**
  * Give every mesh under `root` a vertex colour equal to its material's colour
  * (times its own vertex colours, if it had any) and draw it with `material`,
@@ -243,13 +277,21 @@ function mergeInto(root, isKept) {
  * material would darken them), transparent materials, multi-material meshes,
  * and anything `skip` (names, objects or a predicate) matches. Geometries
  * are cloned before a colour is added, since they may be shared.
+ *
+ * `material` may also be a function `(material, mesh) => target | null`,
+ * picking the vertex-coloured target per mesh (null leaves the mesh as it
+ * is): so parts of different finishes (roughness, metalness) each fold into
+ * a target of their own finish, and the bake changes no pixel.
  */
 export function bakeVertexColours(root, material, { skip = [], keepMapped = true } = {}) {
-  if (!material || !material.vertexColors) throw new Error('bakeVertexColours: the target material must have vertexColors');
+  const pick = typeof material === 'function' ? material : () => material;
+  if (typeof material !== 'function' && (!material || !material.vertexColors)) throw new Error('bakeVertexColours: the target material must have vertexColors');
   const isSkipped = keeper(skip), col = new THREE.Color();
   const walk = o => {
     if (isSkipped(o)) return;
-    if (o.isMesh && !o.isInstancedMesh && !Array.isArray(o.material) && o.material && o.material !== material) {
+    const target = o.isMesh && !o.isInstancedMesh && !Array.isArray(o.material) && o.material ? pick(o.material, o) : null;
+    if (target && o.material !== target) {
+      if (!target.vertexColors) throw new Error('bakeVertexColours: the target material must have vertexColors');
       const m = o.material;
       const bake = m.color && !m.isMeshBasicMaterial && !m.transparent && !(keepMapped && m.map) && o.geometry.attributes.position;
       if (bake) {
@@ -259,7 +301,7 @@ export function bakeVertexColours(root, material, { skip = [], keepMapped = true
           out[i * 3] = col.r * (had ? had.getX(i) : 1); out[i * 3 + 1] = col.g * (had ? had.getY(i) : 1); out[i * 3 + 2] = col.b * (had ? had.getZ(i) : 1);
         }
         g.setAttribute('color', new THREE.BufferAttribute(out, 3));
-        o.geometry = g; o.material = material;
+        o.geometry = g; o.material = target;
       }
     }
     for (const c of o.children) walk(c);

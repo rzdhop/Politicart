@@ -396,3 +396,21 @@ select `stories.js` byte for byte, and `namescan.mjs` found nothing in
   `bundle.css`, React 18.3.1 and `bundle.js` preloaded, the way the page
   frames them. The `fonts/` 404s from `tokens.css` there are expected
   locally; `bundle.css` embeds both fonts.
+
+## The old template screenshots are gone (2026-10-28)
+
+The eleven `project/screenshots/*.jpg` (`cs1`, `cs2`, `01-cs3..5`, `02-cs3..5`,
+`03-cs4..5`, `04-cs4`) showed real politicians' names in their pixels (the
+"Not fixed" line of the section above). On the owner's call they were removed
+from the Design System artifact in one publish (version 18, `null` for each
+path, no `force`), which also sent:
+
+- `assets/notes/MIGRATION-REPORT.md`: its build-notes line no longer lists the
+  eleven paths, and its "11 × image" count says they were removed. It stays the
+  move's record otherwise.
+- `design-system.json`: only `lastChange`.
+
+`README.md` and `assets/notes/COMPONENTS.md` never named them. A read-back
+listed 249 files (260 before), none under `screenshots/`. The template has no
+screenshots now; fresh captures would show the pun names, but under
+SwiftShader its hall renders as a dark silhouette, so none were made here.

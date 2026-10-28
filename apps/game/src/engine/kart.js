@@ -40,12 +40,17 @@
 // The race's driver (stage 8, Q4: what you pick is what you race) is stage
 // 5's pilot at its race level of detail: buildPilot(def, 'race-high') on
 // "détaillés", 'race-low' on "légers", and 'headless' where there is no DOM
-// (the game server, DEC-014), which builds no geometry at all. It takes the
-// legacy driver's place in the build order, so every other part of the race
-// kart is the one the races have always drawn (kart.test.js pins it); only
+// (the game server, DEC-014), which builds no geometry at all; nor does the
+// kart around it there (PLAN R6): the server's kart is the race kart part for
+// part, each mesh holding a GeometryStub (its geometry's type and
+// parameters, no vertices). The pilot takes the legacy driver's place in
+// the build order, so every other part of the race kart is the one the
+// races have always drawn (kart.test.js pins it); only
 // the legacy driver's harness straps go, since they would sit inside the
 // new pilot's chest. The pilot's race animation (the gyrophare's spin, the
-// weathervane's turn) joins the kart's `anim`; everything else on it is still.
+// weathervane's turn, and on race-high the head's subtle sway into the
+// steering, pilot.js RACE_SWAY) joins the kart's `anim`; everything else on
+// it is still.
 //
 // The seat contract (stage 7, one for every body): stage 5's pilot IS the
 // driver. It is built at MOUNT with its per-body seat offset and the 1.45
@@ -58,8 +63,8 @@
 import * as THREE from 'three';
 
 import { surfaceSpec, textureTier } from './fabric.js';
-import { mergeByMaterial } from './geo.js';
-import { blade, capsuleMesh, hullGeometry, rimParts, roundedBoxGeometry, seat, stagePalette, stageTexture, strut, surfaceHit, tubeBumper, tyreGeometry } from './kartstage.js';
+import { bakeVertexColours, finishOf, mergeByMaterial } from './geo.js';
+import { blade, capsuleMesh, hullGeometry, rimParts, roundedBoxGeometry, seat, STAGE_DETAIL, stagePalette, stageTexture, strut, surfaceHit, tubeBumper, tyreGeometry } from './kartstage.js';
 import { defaultStyle } from './kartstyle.js';
 import { LOOK3D } from './looks.js';
 import { buildPilot } from './pilot.js';
@@ -188,6 +193,40 @@ export const RACE_LODS = Object.freeze(['race-high', 'race-low', 'headless']);
 /** The race pilot's level of detail now: 'headless' without a DOM, else by the game's detail level. */
 export const raceLod = () => (HEADLESS ? 'headless' : getPoly() === 'high' ? 'race-high' : 'race-low');
 
+// ---------- The server's kart: every part, no geometry (PLAN R6) ----------
+/**
+ * What three records about a geometry, without building it: the stand-in
+ * every mesh of the 'headless' race kart carries (the game server, DEC-014),
+ * so a grid costs the server no vertices. It keeps what the engine and the
+ * tests read off a kart's geometry, its type and parameters (a wheel's
+ * radius, the shield ring's) in three's own shape, and draws no triangles
+ * (geo.js geometryTriangles reads 0). It is not a BufferGeometry, so a
+ * renderer would refuse it; nothing headless renders. The kart around it
+ * is the race kart object for object: same meshes, transforms, materials
+ * and userData (kart.test.js compares it with race-high's).
+ */
+class GeometryStub {
+  constructor(type, parameters) { this.type = type; this.parameters = parameters; this.index = null; this.attributes = {}; this.morphAttributes = {}; this.drawRange = { start: 0, count: Infinity }; }
+  rotateZ() { return this; }   // the race bakes a wheel's quarter turn into its vertices; a stub has none
+  dispose() {}
+}
+GeometryStub.prototype.isGeometryStub = true;
+/** The stub of each geometry kart.js builds: three's type name and parameters, with its defaults (three r128). */
+const TAU = Math.PI * 2;
+const STUB = new Map([
+  [THREE.BoxGeometry, (width = 1, height = 1, depth = 1, widthSegments = 1, heightSegments = 1, depthSegments = 1) => new GeometryStub('BoxGeometry', { width, height, depth, widthSegments, heightSegments, depthSegments })],
+  [THREE.SphereGeometry, (radius = 1, widthSegments = 8, heightSegments = 6, phiStart = 0, phiLength = TAU, thetaStart = 0, thetaLength = Math.PI) => new GeometryStub('SphereGeometry', { radius, widthSegments, heightSegments, phiStart, phiLength, thetaStart, thetaLength })],
+  [THREE.CylinderGeometry, (radiusTop = 1, radiusBottom = 1, height = 1, radialSegments = 8, heightSegments = 1, openEnded = false, thetaStart = 0, thetaLength = TAU) => new GeometryStub('CylinderGeometry', { radiusTop, radiusBottom, height, radialSegments, heightSegments, openEnded, thetaStart, thetaLength })],
+  [THREE.ConeGeometry, (radius = 1, height = 1, radialSegments = 8, heightSegments = 1, openEnded = false, thetaStart = 0, thetaLength = TAU) => new GeometryStub('ConeGeometry', { radius, height, radialSegments, heightSegments, openEnded, thetaStart, thetaLength })],
+  [THREE.TorusGeometry, (radius = 1, tube = 0.4, radialSegments = 8, tubularSegments = 6, arc = TAU) => new GeometryStub('TorusGeometry', { radius, tube, radialSegments, tubularSegments, arc })],
+  [THREE.PlaneGeometry, (width = 1, height = 1, widthSegments = 1, heightSegments = 1) => new GeometryStub('PlaneGeometry', { width, height, widthSegments, heightSegments })],
+  [THREE.CircleGeometry, (radius = 1, segments = 8, thetaStart = 0, thetaLength = TAU) => new GeometryStub('CircleGeometry', { radius, segments, thetaStart, thetaLength })],
+]);
+/** Whether the kart being built is the server's (buildKart sets and clears it around one synchronous build, like `rounding`). */
+let stubbing = false;
+/** `new Type(...args)`, or its GeometryStub while the server's kart is being built. */
+const geom = (Type, ...args) => (stubbing ? STUB.get(Type)(...args) : new Type(...args));
+
 /**
  * Seat a pilot on a kart built with `pilot: false`.
  *
@@ -221,6 +260,15 @@ export function seatPilot(kart, pilot, { scale = PILOT_SCALE, hip = TEMPLATE_HIP
   return fit;
 }
 
+/** kartstage's strut; on the server's kart the same mesh, placed the same way, around a stub of its capsule (geo.js). */
+function steeringStrut(a, b, r, m, tier) {
+  if (!stubbing) return strut(a, b, r, m, tier);
+  const A = new THREE.Vector3().fromArray(a), B = new THREE.Vector3().fromArray(b), dir = B.clone().sub(A), d = STAGE_DETAIL[tier === 'low' ? 'low' : 'high'];
+  const o = new THREE.Mesh(new GeometryStub('CapsuleGeometry', { radius: r, height: dir.length(), capSegments: Math.max(2, d.cap - 2), radialSegments: Math.max(6, d.capR / 2), heightSegments: 1 }), m);
+  o.position.copy(A).add(B).multiplyScalar(0.5); o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  return o;
+}
+
 /**
  * The steering a template pilot's hands find, for `pilot: false`: the
  * template's column, wheel and gold hub mapped through the seat fit (the
@@ -238,10 +286,10 @@ function addSteering(k, P, body, x0 = SEAT[body]) {
   }
   // the tractor's hood stands where the template wheel would be: its wheel sits on the hood's back instead
   const at = body === 'tractor' ? [0, 1.72, 0.13] : T(0, 0.88, 0.2), from = body === 'tractor' ? [0, 1.5, 0.21] : T(0, 0.58, 0.5);
-  k.add(tag(strut(from, at, 0.035, dark, tier)));
-  const wheel = tag(new THREE.Mesh(new THREE.TorusGeometry(0.16 * PILOT_SCALE, 0.04, P.stage ? (tier === 'low' ? 6 : 12) : Math.max(6, seg() / 2), P.stage ? (tier === 'low' ? 20 : 40) : seg() * 2), dark));
+  k.add(tag(steeringStrut(from, at, 0.035, dark, tier)));
+  const wheel = tag(new THREE.Mesh(geom(THREE.TorusGeometry, 0.16 * PILOT_SCALE, 0.04, P.stage ? (tier === 'low' ? 6 : 12) : Math.max(6, seg() / 2), P.stage ? (tier === 'low' ? 20 : 40) : seg() * 2), dark));
   wheel.position.set(...at); wheel.rotation.x = -0.6; k.add(wheel);
-  const hub = tag(new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.06, 16), hubM)); hub.position.set(...at); hub.rotation.x = Math.PI / 2 - 0.6; k.add(hub);
+  const hub = tag(new THREE.Mesh(geom(THREE.CylinderGeometry, 0.065, 0.065, 0.06, 16), hubM)); hub.position.set(...at); hub.rotation.x = Math.PI / 2 - 0.6; k.add(hub);
 }
 
 // ---------- Kart style parts ----------
@@ -277,7 +325,7 @@ const STICKER_DRAW = {
 /** A flat sticker decal lying on a surface at height y, or null for 'none'. */
 function stickerPlane(sticker, size, x, y, z, P) {
   const draw = STICKER_DRAW[sticker]; if (!draw) return null;
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), P.sticker(sticker, draw));
+  const m = new THREE.Mesh(geom(THREE.PlaneGeometry, size, size), P.sticker(sticker, draw));
   m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.name = 'sticker'; return m;
 }
 
@@ -408,13 +456,13 @@ const put = (geo, m, x, y, z) => { const o = tag(new THREE.Mesh(geo, m)); o.posi
  * light; parts thinner than 0.08 stay sharp boxes.
  */
 let rounding = null;
-const boxGeo = (w, h, d) => (rounding && Math.min(w, h, d) >= 0.08 ? roundedBoxGeometry(w, h, d, rounding) : new THREE.BoxGeometry(w, h, d));
+const boxGeo = (w, h, d) => (rounding && Math.min(w, h, d) >= 0.08 ? roundedBoxGeometry(w, h, d, rounding) : geom(THREE.BoxGeometry, w, h, d));
 const pbox = (w, h, d, m, x, y, z) => put(boxGeo(w, h, d), m, x, y, z);
-const psph = (r, m, x, y, z, s) => put(new THREE.SphereGeometry(r, s || seg(), s || seg()), m, x, y, z);
-const pcyl = (rt, rb, h, m, x, y, z, s) => put(new THREE.CylinderGeometry(rt, rb, h, s || seg()), m, x, y, z);
-const pcone = (r, h, m, x, y, z, s) => put(new THREE.ConeGeometry(r, h, s || seg()), m, x, y, z);
-const ptorus = (r, t, m, x, y, z) => put(new THREE.TorusGeometry(r, t, Math.max(6, seg() / 2), seg() * 2), m, x, y, z);
-const chromePipe = (r, len, x, y, z, P, s) => { const p = tag(new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, s), P.m('chrome', CHROME, 0.2))); p.position.set(x, y, z); return p; };
+const psph = (r, m, x, y, z, s) => put(geom(THREE.SphereGeometry, r, s || seg(), s || seg()), m, x, y, z);
+const pcyl = (rt, rb, h, m, x, y, z, s) => put(geom(THREE.CylinderGeometry, rt, rb, h, s || seg()), m, x, y, z);
+const pcone = (r, h, m, x, y, z, s) => put(geom(THREE.ConeGeometry, r, h, s || seg()), m, x, y, z);
+const ptorus = (r, t, m, x, y, z) => put(geom(THREE.TorusGeometry, r, t, Math.max(6, seg() / 2), seg() * 2), m, x, y, z);
+const chromePipe = (r, len, x, y, z, P, s) => { const p = tag(new THREE.Mesh(geom(THREE.CylinderGeometry, r, r, len, s), P.m('chrome', CHROME, 0.2))); p.position.set(x, y, z); return p; };
 
 /**
  * The exhaust pipes, chrome, at the rear. `rear` = { x, y, z } for the
@@ -433,14 +481,14 @@ function addExhaust(k, kind, rear, side, anim, S, P, live) {
     [-1.5, -0.5, 0.5, 1.5].forEach(i => back(rear.x * 0.5 * i, rear.y, rear.z, 0.55, 0.11));
     k.add(pbox(rear.x * 2 + 0.3, 0.06, 0.4, P.m('metal', 0x666666), 0, rear.y + (P.stage ? 0.12 : 0.17), rear.z));   // heat shield (under the stage plate)
   } else if (kind === 'turbine') {
-    const cn = tag(new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.6, S), P.m('chrome', CHROME, 0.2))); cn.rotation.x = Math.PI / 2; cn.position.set(0, rear.y + 0.55, rear.z - 0.25); k.add(cn);
-    const heat = new THREE.Mesh(new THREE.CircleGeometry(0.3, S), P.heat()); heat.rotation.y = Math.PI; heat.position.set(0, rear.y + 0.55, rear.z - (P.stage ? 0.56 : 0.53)); k.add(heat);   // the stage's sits just outside the cone's base, which hides the race's
+    const cn = tag(new THREE.Mesh(geom(THREE.ConeGeometry, 0.38, 0.6, S), P.m('chrome', CHROME, 0.2))); cn.rotation.x = Math.PI / 2; cn.position.set(0, rear.y + 0.55, rear.z - 0.25); k.add(cn);
+    const heat = new THREE.Mesh(geom(THREE.CircleGeometry, 0.3, S), P.heat()); heat.rotation.y = Math.PI; heat.position.set(0, rear.y + 0.55, rear.z - (P.stage ? 0.56 : 0.53)); k.add(heat);   // the stage's sits just outside the cone's base, which hides the race's
     if (live) live.push(heat);
     anim.push((dt, t, kart) => { const b = kart ? Math.min(1, kart.boost) : 0; heat.scale.setScalar(0.9 + b * 0.4 + Math.sin(t * 30) * (0.05 + b * 0.15)); });
   } else { [-1, 1].forEach(sx => back(rear.x * sx, rear.y, rear.z, 0.5, 0.1)); }                                // stock: two pipes
   if (!P.stage || !mouths.length) return;
   const glows = mouths.map(([x, y, z, r]) => {
-    const g = new THREE.Mesh(new THREE.CircleGeometry(r * 0.78, 16), P.heat()); g.rotation.y = Math.PI; g.position.set(x, y, z - 0.004); g.name = 'exhaust-glow'; k.add(g); live.push(g); return g;
+    const g = new THREE.Mesh(geom(THREE.CircleGeometry, r * 0.78, 16), P.heat()); g.rotation.y = Math.PI; g.position.set(x, y, z - 0.004); g.name = 'exhaust-glow'; k.add(g); live.push(g); return g;
   });
   if (P.tier !== 'low') anim.push((dt, t, kart) => { const b = kart ? Math.min(1, kart.boost) : 0; glows.forEach((g, i) => g.scale.setScalar(0.85 + b * 0.5 + Math.sin(t * 23 + i * 1.7) * 0.08)); });
 }
@@ -449,7 +497,7 @@ function addExhaust(k, kind, rear, side, anim, S, P, live) {
 function addUnderglow(k, kind, anim, P, live) {
   if (!UNDERGLOW[kind]) return;
   const m = P.underglow(kind);
-  const p = new THREE.Mesh(P.stage ? new THREE.PlaneGeometry(3.0, 4.4) : new THREE.PlaneGeometry(2.2, 3.4), m); p.rotation.x = -Math.PI / 2; p.position.y = 0.06; p.name = 'underglow'; k.add(p);
+  const p = new THREE.Mesh(P.stage ? geom(THREE.PlaneGeometry, 3.0, 4.4) : geom(THREE.PlaneGeometry, 2.2, 3.4), m); p.rotation.x = -Math.PI / 2; p.position.y = 0.06; p.name = 'underglow'; k.add(p);
   if (live) live.push(p);
   // the stage glow is emissive, and its colours are linear
   if (kind === 'rainbow') anim.push(P.stage ? (dt, t) => { m.emissive.setHSL((t * 0.25) % 1, 1, 0.55).convertSRGBToLinear(); } : (dt, t) => { m.color.setHSL((t * 0.25) % 1, 1, 0.55); });
@@ -502,7 +550,7 @@ function addDetail(k, p, P, number, legacy = true) {
   [-1, 1].forEach(sx => {
     const stalk = pcyl(0.02, 0.02, 0.3, P.m('dark', 0x444444), p.mirror[0] * sx, p.mirror[1], p.mirror[2], 5); stalk.rotation.z = -sx * 0.9; k.add(stalk);
     const head = pbox(0.2, 0.14, 0.05, P.m('dark', 0x222222), (p.mirror[0] + 0.22) * sx, p.mirror[1] + 0.1, p.mirror[2]); head.rotation.y = -sx * 0.3; k.add(head);
-    const bl = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.1, 0.05), P.brake()); bl.position.set(p.brake[0] * sx, p.brake[1], p.brake[2]); k.add(bl);
+    const bl = new THREE.Mesh(geom(THREE.BoxGeometry, 0.22, 0.1, 0.05), P.brake()); bl.position.set(p.brake[0] * sx, p.brake[1], p.brake[2]); k.add(bl);
     const rd = pcyl(0.2, 0.2, 0.03, P.m(null, 0xffffff), p.roundel[0] * sx, p.roundel[1], p.roundel[2], 12); rd.rotation.z = Math.PI / 2; k.add(rd);
     if (P.stage && number !== null) flankNumber(k, P, number, p.roundel[0] * sx + sx * 0.017, p.roundel[1], p.roundel[2], sx);
   });
@@ -510,7 +558,7 @@ function addDetail(k, p, P, number, legacy = true) {
 
 /** The race number on a flank roundel (stage only): a disc decal facing out on side `sx`. */
 function flankNumber(k, P, number, x, y, z, sx, r = 0.19) {
-  const n = new THREE.Mesh(new THREE.CircleGeometry(r, 24), P.roundel(number)); n.position.set(x, y, z); n.rotation.y = sx * Math.PI / 2; n.name = 'roundel'; k.add(n);
+  const n = new THREE.Mesh(geom(THREE.CircleGeometry, r, 24), P.roundel(number)); n.position.set(x, y, z); n.rotation.y = sx * Math.PI / 2; n.name = 'roundel'; k.add(n);
 }
 
 // ---------- Wheels ----------
@@ -525,9 +573,9 @@ function stageWheel(P, { r, w, x, y, z, rim, tyre, chunky }) {
   const t = tag(new THREE.Mesh(tyreGeometry(r, w, P.tier, chunky), P.rubber(tyre)));
   t.position.set(x, y, z); t.rotation.order = 'YXZ';
   if (rim === 'tractor') {
-    const d = new THREE.CylinderGeometry(r * 0.55, r * 0.55, w * 0.96, P.tier === 'low' ? 14 : 28); d.rotateZ(Math.PI / 2);
+    const d = geom(THREE.CylinderGeometry, r * 0.55, r * 0.55, w * 0.96, P.tier === 'low' ? 14 : 28); d.rotateZ(Math.PI / 2);
     t.add(new THREE.Mesh(d, P.solid(0xc8102e, 0.35)));
-    const h = new THREE.CylinderGeometry(r * 0.16, r * 0.16, w * 1.04, 12); h.rotateZ(Math.PI / 2); t.add(new THREE.Mesh(h, P.chrome));
+    const h = geom(THREE.CylinderGeometry, r * 0.16, r * 0.16, w * 1.04, 12); h.rotateZ(Math.PI / 2); t.add(new THREE.Mesh(h, P.chrome));
   } else if (rim === 'cargo') {
     for (const m of rimParts('classic', r, w, side, P, P.tier)) t.add(m);
   } else for (const m of rimParts(rim, r, w, side, P, P.tier)) t.add(m);
@@ -557,31 +605,35 @@ function stageWheel(P, { r, w, x, y, z, rim, tyre, chunky }) {
  * the driver, at MOUNT, holding its own steering wheel, and the kart has
  * none of its own. The stage profile's driver is still the legacy one
  * restaged (stage 6); the podium seats its own pilot (`pilot: false`).
+ * A race kart at lod 'headless' (with or without its pilot) is the
+ * server's: its meshes hold GeometryStubs, never a geometry.
  */
 export function buildKart(def, style = defaultStyle(def), { profile = 'race', pilot = true, tier = getPoly(), tex = textureTier(tier), steering = true, lod = raceLod() } = {}) {
   const stage = profile === 'stage';
   if (!stage && pilot && !RACE_LODS.includes(lod)) throw new Error('buildKart: unknown race pilot level "' + lod + '"');
   rounding = stage ? tier : null;
-  try { return build(def, style, stage, pilot, tier, tex, steering, lod); } finally { rounding = null; }
+  stubbing = !stage && lod === 'headless';
+  try { return build(def, style, stage, pilot, tier, tex, steering, lod); } finally { rounding = null; stubbing = false; }
 }
 
 function build(def, style, stage, pilot, tier, tex, steering, lod) {
   const P = stage ? stagePaletteOf(style, tier, tex) : racePalette(style);
   const k = new THREE.Group(); const S = seg(); const high = getPoly() === 'high';
-  const wheels = []; const anim = []; const live = stage ? [] : null;
+  const fold = !stage && lod === 'race-low';   // "légers": the race kart folded into fewer draws (foldRaceLow)
+  const wheels = []; const anim = []; const live = stage || fold ? [] : null;
   const bodyMat = P.body;
   const bodyBox = (w, h, d, x, y, z) => { const m = tag(new THREE.Mesh(boxGeo(w, h, d), bodyMat)); m.position.set(x, y, z); return m; };
-  const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.28), P.plate(def, style.number));
+  const plate = new THREE.Mesh(geom(THREE.PlaneGeometry, 1.1, 0.28), P.plate(def, style.number));
   plate.name = 'plate';
   const addSticker = (size, x, y, z) => { const st = stickerPlane(style.sticker, size, x, y, z, P); if (st) k.add(st); };
-  const liveryPlane = (w, h) => new THREE.Mesh(new THREE.PlaneGeometry(w, h), P.livery(def.livery));
+  const liveryPlane = (w, h) => new THREE.Mesh(geom(THREE.PlaneGeometry, w, h), P.livery(def.livery));
   const body = bodyOf(def);
   const legacy = pilot && stage;   // the legacy driver, whose chest the harness straps belong on
   if (def.tractor) {
     k.add(bodyBox(1.6, 1.0, 2.6, 0, 0.9, 0.2)); k.add(bodyBox(1.3, 0.9, 1.4, 0, 1.6, 0.9)); k.add(pbox(1.5, 0.12, 1.5, P.m('dark', 0x222222), 0, 2.1, 0.9));
     k.add(pcyl(0.12, 0.12, 1.2, P.accent, 0.5, 2.4, 1.4, 8)); k.add(pbox(1.7, 0.3, 0.4, P.accent, 0, 0.4, 2.0));
     k.add(pbox(1.0, 0.55, 0.4, P.m('dark', 0x222222), 0, 1.3, -0.95)); k.add(pbox(1.0, 0.1, 0.9, P.m('dark', 0x222222), 0, 1.05, -0.4));
-    [-0.5, 0.5].forEach(x => { const hl = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), P.lamp(0xfff1b0)); hl.position.set(x, 1.5, 1.62); k.add(hl); });
+    [-0.5, 0.5].forEach(x => { const hl = new THREE.Mesh(geom(THREE.SphereGeometry, 0.14, 8, 8), P.lamp(0xfff1b0)); hl.position.set(x, 1.5, 1.62); k.add(hl); });
     k.add(pbox(1.9, 0.3, 0.5, P.m('wood', 0x8b5a2b), 0, 0.6, -1.6)); for (let i = 0; i < 5; i++) k.add(pcyl(0.05, 0.05, 0.5, P.m('wood', 0xe0c060), -0.8 + i * 0.4, 0.95, -1.6, 4));
     plate.position.set(0, 0.95, -1.86); plate.rotation.y = Math.PI; k.add(plate);
     if (def.livery) { const hood = liveryPlane(1.1, 1.0); hood.rotation.x = -Math.PI / 2; hood.position.set(0, 2.17, 0.9); k.add(hood); }
@@ -592,8 +644,8 @@ function build(def, style, stage, pilot, tier, tex, steering, lod) {
     if (stage) {
       [[-1.0, 1.2, 0.42, 0.4], [1.0, 1.2, 0.42, 0.4], [-1.05, -0.9, 0.75, 0.6], [1.05, -0.9, 0.75, 0.6]].forEach(([x, z, r, w]) => { const wh = stageWheel(P, { r, w, x, y: r, z, rim: 'tractor', tyre: 0x222222, chunky: true }); k.add(wh); wheels.push(wh); });
     } else {
-      const big = new THREE.CylinderGeometry(0.75, 0.75, 0.6, S); big.rotateZ(Math.PI / 2); const small = new THREE.CylinderGeometry(0.42, 0.42, 0.4, S); small.rotateZ(Math.PI / 2);
-      [[-1.0, 1.2, small], [1.0, 1.2, small], [-1.05, -0.9, big], [1.05, -0.9, big]].forEach(p => { const w = tag(new THREE.Mesh(p[2], P.m('rubber', 0x222222, 0.95))); w.position.set(p[0], p[2] === big ? 0.75 : 0.42, p[1]); w.rotation.order = 'YXZ'; k.add(w); wheels.push(w); if (p[2] === big) { const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.62, 10), P.m(null, 0xc8102e)); rim.rotation.z = Math.PI / 2; w.add(rim); } });
+      const big = geom(THREE.CylinderGeometry, 0.75, 0.75, 0.6, S); big.rotateZ(Math.PI / 2); const small = geom(THREE.CylinderGeometry, 0.42, 0.42, 0.4, S); small.rotateZ(Math.PI / 2);
+      [[-1.0, 1.2, small], [1.0, 1.2, small], [-1.05, -0.9, big], [1.05, -0.9, big]].forEach(p => { const w = tag(new THREE.Mesh(p[2], P.m('rubber', 0x222222, 0.95))); w.position.set(p[0], p[2] === big ? 0.75 : 0.42, p[1]); w.rotation.order = 'YXZ'; k.add(w); wheels.push(w); if (p[2] === big) { const rim = new THREE.Mesh(geom(THREE.CylinderGeometry, 0.4, 0.4, 0.62, 10), P.m(null, 0xc8102e)); rim.rotation.z = Math.PI / 2; w.add(rim); } });
     }
   } else if (def.cargo) {
     k.add(bodyBox(0.8, 0.35, 2.0, 0, 0.55, -0.5));
@@ -609,7 +661,7 @@ function build(def, style, stage, pilot, tier, tex, steering, lod) {
     if (stage) {
       [[-0.95, 1.0], [0.95, 1.0], [0, -1.4]].forEach(([x, z]) => { const wh = stageWheel(P, { r: 0.45, w: 0.18, x, y: 0.45, z, rim: 'cargo', tyre: 0x222222 }); k.add(wh); wheels.push(wh); });
     } else {
-      const wg = new THREE.CylinderGeometry(0.45, 0.45, 0.18, S); wg.rotateZ(Math.PI / 2);
+      const wg = geom(THREE.CylinderGeometry, 0.45, 0.45, 0.18, S); wg.rotateZ(Math.PI / 2);
       [[-0.95, 1.0], [0.95, 1.0], [0, -1.4]].forEach(p => { const w = tag(new THREE.Mesh(wg, P.m('rubber', 0x222222))); w.position.set(p[0], 0.45, p[1]); w.rotation.order = 'YXZ'; k.add(w); wheels.push(w); });
     }
   } else if (stage) {
@@ -619,7 +671,7 @@ function build(def, style, stage, pilot, tier, tex, steering, lod) {
     k.add(bodyBox(1.3, 0.14, 0.6, 0, 0.8, 1.0));                                                   // the cowl in front of the driver
     if (style.pods) [-0.9, 0.9].forEach(x => k.add(bodyBox(0.25, 0.35, 1.6, x, 0.5, 0.2)));        // side pods
     k.add(pbox(1.9, 0.25, 0.3, P.accent, 0, 0.3, 2.05)); k.add(pbox(1.9, 0.25, 0.3, P.accent, 0, 0.3, -1.45));
-    [-0.4, 0.4].forEach(x => { const hl = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), P.lamp(0xfff1b0)); hl.position.set(x, 0.55, 2.16); k.add(hl); }); // headlights
+    [-0.4, 0.4].forEach(x => { const hl = new THREE.Mesh(geom(THREE.SphereGeometry, 0.12, 8, 8), P.lamp(0xfff1b0)); hl.position.set(x, 0.55, 2.16); k.add(hl); }); // headlights
     k.add(pbox(1.0, 0.55, 0.4, P.m('dark', 0x222222), 0, 1.0, -0.95)); k.add(pbox(1.0, 0.1, 0.9, P.m('dark', 0x222222), 0, 0.78, -0.4));
     if (style.spoiler === 'standard') { k.add(bodyBox(1.9, 0.08, 0.5, 0, 1.25, -1.5)); [-0.6, 0.6].forEach(x => k.add(pbox(0.1, 0.5, 0.1, P.accent, x, 1.0, -1.5))); }
     if (style.spoiler === 'wing') {
@@ -644,8 +696,8 @@ function build(def, style, stage, pilot, tier, tex, steering, lod) {
       [-0.55, 0.55].forEach(x => [0.8, 1.2].forEach(z => k.add(pcyl(0.025, 0.025, 0.02, P.m('metal', 0x999999), x, 0.88, z, 6))));     // rivets on the cowl
     }
     const wl = WHEEL_LOOK[style.wheels];
-    const wg = new THREE.CylinderGeometry(wl.r, wl.r, wl.w, S); wg.rotateZ(Math.PI / 2);
-    const hub = new THREE.CylinderGeometry(wl.hubR, wl.hubR, wl.w + 0.02, 8); hub.rotateZ(Math.PI / 2);
+    const wg = geom(THREE.CylinderGeometry, wl.r, wl.r, wl.w, S); wg.rotateZ(Math.PI / 2);
+    const hub = geom(THREE.CylinderGeometry, wl.hubR, wl.hubR, wl.w + 0.02, 8); hub.rotateZ(Math.PI / 2);
     [[-0.95, 1.0], [0.95, 1.0], [-0.95, -1.0], [0.95, -1.0]].forEach(p => {
       const w = tag(new THREE.Mesh(wg, P.m('rubber', wl.tyre, 0.95))); w.position.set(p[0] + Math.sign(p[0]) * (wl.w - 0.4) / 2, wl.r, p[1]); w.rotation.order = 'YXZ';
       w.add(new THREE.Mesh(hub, P.m(null, wl.hub, wl.hubRough))); k.add(w); wheels.push(w);
@@ -657,8 +709,9 @@ function build(def, style, stage, pilot, tier, tex, steering, lod) {
     restageDriver(driver, def, P);
   } else if (pilot) {
     // the race pilot, in the legacy driver's place in the build: it sits at MOUNT and holds its own wheel; its
-    // race animation (a gyrophare, a weathervane) runs with the kart's, everything else on it stays still
-    driver = buildPilot(def, lod, { idle: false });
+    // race animation (a gyrophare, a weathervane, race-high's head sway) runs with the kart's, everything else
+    // on it stays still
+    driver = buildPilot(def, lod);
     anim.push(...driver.userData.anim);
   } else {
     // the seat anchor: an empty group at the driver's hip point (seatPilot), and the steering its hands find
@@ -668,23 +721,24 @@ function build(def, style, stage, pilot, tier, tex, steering, lod) {
     if (steering && (body !== 'kart' || !stage)) addSteering(k, P, body);
   }
   k.add(driver);
-  const sh = new THREE.Mesh(stage ? new THREE.PlaneGeometry(def.cargo ? 2.6 : 3.0, def.cargo ? 4.6 : 4.4) : new THREE.CircleGeometry(1.7, 16), P.shadow());
+  const sh = new THREE.Mesh(stage ? geom(THREE.PlaneGeometry, def.cargo ? 2.6 : 3.0, def.cargo ? 4.6 : 4.4) : geom(THREE.CircleGeometry, 1.7, 16), P.shadow());
   sh.rotation.x = -Math.PI / 2; sh.position.y = 0.03; k.add(sh);
   addUnderglow(k, style.underglow, anim, P, live);
   const sparks = [];
-  [-0.9, 0.9].forEach(x => { const s = new THREE.Mesh(new THREE.SphereGeometry(0.25, 6, 6), P.fx(0x7cc4ff)); s.position.set(x, 0.25, -1.3); s.visible = false; k.add(s); sparks.push(s); });
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(2.1, 0.12, 6, 24), P.fx(0xf2c14e)); ring.rotation.x = Math.PI / 2; ring.position.y = 0.6; ring.visible = false; k.add(ring);
+  [-0.9, 0.9].forEach(x => { const s = new THREE.Mesh(geom(THREE.SphereGeometry, 0.25, 6, 6), P.fx(0x7cc4ff)); s.position.set(x, 0.25, -1.3); s.visible = false; k.add(s); sparks.push(s); });
+  const ring = new THREE.Mesh(geom(THREE.TorusGeometry, 2.1, 0.12, 6, 24), P.fx(0xf2c14e)); ring.rotation.x = Math.PI / 2; ring.position.y = 0.6; ring.visible = false; k.add(ring);
   const rotor = new THREE.Group(); rotor.add(pcyl(0.08, 0.08, 1.6, P.m(null, 0x444444), 0, 0.8, 0, 6)); const bl = pbox(5, 0.06, 0.3, P.m(null, 0x333333), 0, 1.6, 0); rotor.add(bl); const bl2 = bl.clone(); bl2.rotation.y = Math.PI / 2; rotor.add(bl2); rotor.position.set(0, 1.4, -0.4); rotor.visible = false; k.add(rotor);
   // a star of sparks around the kart, shown for an instant after a bump
   const bumpSparks = new THREE.Group(); const sparkMat = P.fx(0xffe08a);
-  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; const sp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.7), sparkMat); sp.position.set(Math.sin(a) * 1.7, 0.7 + (i % 2) * 0.35, Math.cos(a) * 1.7); sp.rotation.y = a; bumpSparks.add(sp); }
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; const sp = new THREE.Mesh(geom(THREE.BoxGeometry, 0.12, 0.12, 0.7), sparkMat); sp.position.set(Math.sin(a) * 1.7, 0.7 + (i % 2) * 0.35, Math.cos(a) * 1.7); sp.rotation.y = a; bumpSparks.add(sp); }
   bumpSparks.visible = false; k.add(bumpSparks);
   // the shield of "Langue de bois": a blue ring that waits for the next hit
-  const shield = new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.1, 6, 24), P.fx(0x7cc4ff, { transparent: true, opacity: 0.8 })); shield.rotation.x = Math.PI / 2; shield.position.y = 1.1; shield.visible = false; k.add(shield);
+  const shield = new THREE.Mesh(geom(THREE.TorusGeometry, 2.3, 0.1, 6, 24), P.fx(0x7cc4ff, { transparent: true, opacity: 0.8 })); shield.rotation.x = Math.PI / 2; shield.position.y = 1.1; shield.visible = false; k.add(shield);
   // anim: `(dt, t, kart?) => void` per animated part, run by updateKartVisual (with the kart) and the turntable (without);
   // trail: null here, the race attaches one (trail.js) from the style.
   k.userData = { wheels, sparks, ring, driver, rotor, blades: [bl, bl2], bumpSparks, shield, anim, trail: null };
   if (stage) finishStage(k, tier, live);
+  if (fold) foldRaceLow(k, live);
   return k;
 }
 
@@ -697,6 +751,39 @@ function finishStage(k, tier, live) {
   k.traverse(o => { if (o.isMesh) { o.castShadow = tier !== 'low' && !o.material.transparent && o.name !== 'exhaust-glow'; o.receiveShadow = !o.material.transparent; } });
   const u = k.userData;
   mergeByMaterial(k, [...u.wheels, u.driver, ...u.blades, ...live, 'plate', 'sticker', 'underglow']);
+}
+
+/**
+ * The race kart on "légers" (lod 'race-low', PLAN 4.2): the same parts in
+ * fewer draws. Every lit, untextured part takes its colour as a vertex
+ * colour on the shared material of its finish (geo.js finishOf: same
+ * roughness, metalness, side), identical unlit lights share one material,
+ * and the kart is merged by material: about 27 draws become 4 or 5 on a
+ * standard kart. Same triangles, same colours and finishes, so the same
+ * picture. What moves or what userData and the race point at stays its
+ * own object at its own place: the wheels, the driver, the sparks, the
+ * rings, the rotor and its blades, the bump sparks, the animated parts
+ * (flag strips, the turbine's heat, the underglow), the plate and the
+ * sticker. "Détaillés" (race-high) and the server's kart are not folded.
+ */
+function foldRaceLow(k, live) {
+  const u = k.userData, own = [...u.wheels, u.driver, ...u.sparks, u.ring, u.rotor, ...u.blades, u.bumpSparks, u.shield, ...live];
+  const kept = new Set(own), apart = o => kept.has(o) || o.name === 'plate' || o.name === 'sticker' || o.name === 'underglow';
+  const lights = new Map();
+  k.traverse(o => {
+    for (let p = o; p && p !== k; p = p.parent) if (apart(p)) return;
+    const m = o.material;
+    if (!o.isMesh || !m.isMeshBasicMaterial || m.map || m.transparent) return;
+    const key = m.color.getHex() + '|' + m.side + '|' + m.fog;
+    if (!lights.has(key)) lights.set(key, m);
+    o.material = lights.get(key);
+  });
+  bakeVertexColours(k, finishOf, { skip: apart });
+  // the parts hung on the kart itself go aside untouched (a merge would refold their insides: the pilot's, a wheel's hub)
+  const aside = k.children.filter(apart);
+  for (const o of aside) k.remove(o);
+  mergeByMaterial(k, apart);   // what is left apart further down (the flag's strips) is lifted out at its place
+  for (const o of aside) k.add(o);
 }
 
 // ---------- The standard kart on the stage ----------
@@ -715,7 +802,7 @@ function standardStage(k, def, style, P, { anim, live, wheels, plate, pilot, ste
   const hull = tag(new THREE.Mesh(hullGeometry(T), P.body)); hull.name = 'hull'; k.add(hull);
   const hit = (from, dir) => surfaceHit(hull, from, dir);
   const onTop = (x, z) => hit([x, 3, z], [0, -1, 0]);
-  const decal = (w, h, m, x, z, lift = 0.012, name = '') => { const at = onTop(x, z); if (!at) return null; const d = seat(new THREE.Mesh(new THREE.PlaneGeometry(w, h), m), at, lift, REARWARD); d.name = name; k.add(d); return d; };
+  const decal = (w, h, m, x, z, lift = 0.012, name = '') => { const at = onTop(x, z); if (!at) return null; const d = seat(new THREE.Mesh(geom(THREE.PlaneGeometry, w, h), m), at, lift, REARWARD); d.name = name; k.add(d); return d; };
   // side pods between the wheels, in the body's paint like the race pods
   if (style.pods) [-1, 1].forEach(sx => { const p = tag(capsuleMesh(0.17, 1.06, P.body, T)); p.position.set(sx * 0.93, 0.46, 0); k.add(p); });
   // bumpers: the template's chrome tube for the stock nose, an accent bar otherwise; an accent bar at the back
@@ -727,18 +814,18 @@ function standardStage(k, def, style, P, { anim, live, wheels, plate, pilot, ste
   // headlights on the nose, brake lights and the plate on the tail, seated on the hull
   [-0.4, 0.4].forEach(x => {
     const at = hit([x, 0.5, 3], [0, 0, -1]); if (!at) return;
-    const lamp = seat(new THREE.Mesh(new THREE.CircleGeometry(0.11, 20), P.lamp(0xfff1b0)), at, 0.006);
-    const bezel = seat(new THREE.Mesh(new THREE.TorusGeometry(0.115, 0.022, 6, 20), P.chrome), at, 0.004);
+    const lamp = seat(new THREE.Mesh(geom(THREE.CircleGeometry, 0.11, 20), P.lamp(0xfff1b0)), at, 0.006);
+    const bezel = seat(new THREE.Mesh(geom(THREE.TorusGeometry, 0.115, 0.022, 6, 20), P.chrome), at, 0.004);
     k.add(lamp, bezel);
   });
-  [-0.66, 0.66].forEach(x => { const at = hit([x, 0.7, -3], [0, 0, 1]); if (!at) return; k.add(seat(new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.1), P.brake()), at, 0.006)); });
+  [-0.66, 0.66].forEach(x => { const at = hit([x, 0.7, -3], [0, 0, 1]); if (!at) return; k.add(seat(new THREE.Mesh(geom(THREE.PlaneGeometry, 0.24, 0.1), P.brake()), at, 0.006)); });
   // the engine block behind the seat, the plate on it, between the exhausts
   k.add(tag(new THREE.Mesh(roundedBoxGeometry(0.9, 0.5, 0.32, T, 0.04), P.dark)).translateZ(-1.5).translateY(0.62));
   plate.position.set(0, 0.72, -1.665); plate.rotation.y = Math.PI; k.add(plate);
   // the seat: a leather cushion and the template's leather shell back, smaller around the legacy driver
   k.add(tag(blade(0.84, 0.12, 0.7, P.leather, T)).translateY(0.86).translateZ(-0.42));
-  { const sb = pilot ? 0.42 : 0.5; const back = tag(new THREE.Mesh(new THREE.SphereGeometry(sb, high ? 32 : 14, high ? 20 : 10), P.leather)); back.position.set(0, 0.78 + sb * 0.85, -0.86); back.rotation.x = -0.15; back.scale.set(1.0, 0.85, 0.34); k.add(back); }
-  if (pilot) [-0.17, 0.17].forEach(x => { const st = tag(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.04), P.strap)); st.position.set(x, 1.22, 0); st.rotation.x = 0.12; k.add(st); });   // the harness on the driver's chest, as in the race
+  { const sb = pilot ? 0.42 : 0.5; const back = tag(new THREE.Mesh(geom(THREE.SphereGeometry, sb, high ? 32 : 14, high ? 20 : 10), P.leather)); back.position.set(0, 0.78 + sb * 0.85, -0.86); back.rotation.x = -0.15; back.scale.set(1.0, 0.85, 0.34); k.add(back); }
+  if (pilot) [-0.17, 0.17].forEach(x => { const st = tag(new THREE.Mesh(geom(THREE.BoxGeometry, 0.1, 0.5, 0.04), P.strap)); st.position.set(x, 1.22, 0); st.rotation.x = 0.12; k.add(st); });   // the harness on the driver's chest, as in the race
   // spoilers
   const wing = style.spoiler === 'wing', standard = style.spoiler === 'standard';
   if (standard) {
@@ -751,33 +838,33 @@ function standardStage(k, def, style, P, { anim, live, wheels, plate, pilot, ste
     else k.add(tag(blade(2.3, 0.1, 0.7, P.body, T)).translateY(1.6).translateZ(-1.6));
     [-0.5, 0.5].forEach(x => k.add(tag(strut([x, 0.8, -1.38], [x, 1.56, -1.62], 0.05, tri ? P.dark : P.accent, T))));
     [-1.13, 1.13].forEach(x => k.add(tag(blade(0.06, 0.45, 0.8, tri ? P.body : P.accent, T)).translateX(x).translateY(1.55).translateZ(-1.6)));   // end plates
-    if (high) [-0.9, 0.9].forEach(x => [-1.85, -1.35].forEach(z => k.add(put(new THREE.CylinderGeometry(0.03, 0.03, 0.04, 8), P.chrome, x, 1.66, z))));   // bolts
+    if (high) [-0.9, 0.9].forEach(x => [-1.85, -1.35].forEach(z => k.add(put(geom(THREE.CylinderGeometry, 0.03, 0.03, 0.04, 8), P.chrome, x, 1.66, z))));   // bolts
   }
   // decals on the hood: the livery, the sticker over it, the number roundel nearer the driver
   if (def.livery) {
     decal(1.0, 0.62, P.livery(def.livery), 0, 1.32, 0.01);
-    if (standard) { const sp = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.45), P.livery(def.livery)); sp.rotation.x = -Math.PI / 2; sp.position.set(0, 1.296, -1.5); k.add(sp); }
-    if (wing) { const sp = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.65), P.livery(def.livery)); sp.rotation.x = -Math.PI / 2; sp.position.set(0, 1.656, -1.6); k.add(sp); }
+    if (standard) { const sp = new THREE.Mesh(geom(THREE.PlaneGeometry, 1.8, 0.45), P.livery(def.livery)); sp.rotation.x = -Math.PI / 2; sp.position.set(0, 1.296, -1.5); k.add(sp); }
+    if (wing) { const sp = new THREE.Mesh(geom(THREE.PlaneGeometry, 2.2, 0.65), P.livery(def.livery)); sp.rotation.x = -Math.PI / 2; sp.position.set(0, 1.656, -1.6); k.add(sp); }
   }
   if (STICKER_DRAW[style.sticker]) { const st = decal(0.5, 0.5, P.sticker(style.sticker, STICKER_DRAW[style.sticker]), 0, 1.6, 0.016, 'sticker'); if (st) st.renderOrder = 1; }
   if (style.number !== null) decal(0.46, 0.46, P.roundel(style.number), 0, 1.08, 0.014, 'roundel');
   // mirrors on stalks at the cowl's edges
   [-1, 1].forEach(sx => {
-    const stalk = put(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 6), P.dark, 0.88 * sx, 0.82, 0.95); stalk.rotation.z = -sx * 0.9; k.add(stalk);
-    const head = put(new THREE.BoxGeometry(0.2, 0.14, 0.05), P.accent, 1.1 * sx, 0.92, 0.95); head.rotation.y = -sx * 0.3; k.add(head);
-    const glass = put(new THREE.PlaneGeometry(0.17, 0.11), P.chrome, 1.1 * sx + 0.008 * sx, 0.92, 0.95 - 0.027); glass.rotation.y = -sx * 0.3 + Math.PI; k.add(glass);
+    const stalk = put(geom(THREE.CylinderGeometry, 0.02, 0.02, 0.3, 6), P.dark, 0.88 * sx, 0.82, 0.95); stalk.rotation.z = -sx * 0.9; k.add(stalk);
+    const head = put(geom(THREE.BoxGeometry, 0.2, 0.14, 0.05), P.accent, 1.1 * sx, 0.92, 0.95); head.rotation.y = -sx * 0.3; k.add(head);
+    const glass = put(geom(THREE.PlaneGeometry, 0.17, 0.11), P.chrome, 1.1 * sx + 0.008 * sx, 0.92, 0.95 - 0.027); glass.rotation.y = -sx * 0.3 + Math.PI; k.add(glass);
   });
   // flank roundels: on the pods, or on the hull's sides; numbered when the style is
   [-1, 1].forEach(sx => {
     const x = style.pods ? 0.93 + 0.17 : 0.8;
     const at = style.pods ? { point: new THREE.Vector3(sx * x, 0.46, 0), normal: new THREE.Vector3(sx, 0, 0) } : hit([sx * 3, 0.5, 0.3], [-sx, 0, 0]);
     if (!at) return;
-    k.add(seat(new THREE.Mesh(new THREE.CircleGeometry(0.15, 20), style.number !== null ? P.roundel(style.number) : P.solid(0xf6f1e4, 0.35)), at, 0.006));
+    k.add(seat(new THREE.Mesh(geom(THREE.CircleGeometry, 0.15, 20), style.number !== null ? P.roundel(style.number) : P.solid(0xf6f1e4, 0.35)), at, 0.006));
   });
   addExhaust(k, style.exhaust, { x: 0.35, y: 0.45, z: -1.7 }, { x: 1.12, y: 0.55, z: 0, len: 1.0 }, anim, seg(), P, live);
   addNoseStage(k, style.nose, P, T);
   addMast(k, style.mast, -0.72, 0.9, 2.3, -1.1, anim, P, live);
-  if (high) [-0.45, 0.45].forEach(x => [0.95, 1.25].forEach(z => { const at = onTop(x, z); if (at) k.add(seat(new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), P.chrome), at, -0.012)); }));   // rivets on the cowl
+  if (high) [-0.45, 0.45].forEach(x => [0.95, 1.25].forEach(z => { const at = onTop(x, z); if (at) k.add(seat(new THREE.Mesh(geom(THREE.SphereGeometry, 0.028, 8, 6), P.chrome), at, -0.012)); }));   // rivets on the cowl
   if (!pilot && steering) addSteering(k, P, 'kart');
   // wheels: the race's positions and sizes, lathed tyres and the style's rims
   const wl = WHEEL_LOOK[style.wheels];
@@ -792,11 +879,11 @@ function addNoseStage(k, kind, P, T) {
   if (kind === 'splitter') k.add(tag(blade(1.8, 0.05, 0.4, P.accent, T)).translateY(0.16).translateZ(1.95));
   if (kind === 'wedge') { const w = tag(blade(1.1, 0.16, 0.5, P.body, T)); w.position.set(0, 0.4, 2.0); w.rotation.x = 0.55; k.add(w); }
   if (kind === 'bull') {
-    [-0.45, 0.45].forEach(x => { const t = put(new THREE.TorusGeometry(0.28, 0.04, 8, 32), P.accent, x, 0.42, 2.2); k.add(t); });
+    [-0.45, 0.45].forEach(x => { const t = put(geom(THREE.TorusGeometry, 0.28, 0.04, 8, 32), P.accent, x, 0.42, 2.2); k.add(t); });
     const bar = tag(capsuleMesh(0.045, 1.5, P.accent, T, 'x')); bar.position.set(0, 0.57, 2.2); k.add(bar);
   }
   if (kind === 'ram') {
     k.add(tag(blade(0.34, 0.14, 0.5, P.accent, T)).translateY(0.86).translateZ(1.6));
-    const sp = put(new THREE.ConeGeometry(0.17, 0.7, 20), P.accent, 0, 0.92, 1.9); sp.rotation.x = Math.PI / 2; k.add(sp);
+    const sp = put(geom(THREE.ConeGeometry, 0.17, 0.7, 20), P.accent, 0, 0.92, 1.9); sp.rotation.x = Math.PI / 2; k.add(sp);
   }
 }

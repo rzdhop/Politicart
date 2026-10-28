@@ -966,7 +966,9 @@ per level are in PLAN.md section 3.3 and are asserted by tests.
 
 **Consequence.** What you pick is what you race, and races draw fewer calls
 than today's unmerged drivers. Every new hair, fabric or prop goes through
-one builder for all levels.
+one builder for all levels. On race-high the head sways a couple of degrees
+and looks into the steering (pilot.js RACE_SWAY): one rotation on the head's
+own node, no draw added; race-low and headless stay still.
 
 ## DEC-045 -- Roster portraits render progressively behind placeholders
 
@@ -1002,3 +1004,46 @@ compiled ahead, the Garage parts included.
 **Consequence.** The UI answers in 30 to 58 ms even on software GL.
 Animations are skipped on such machines. Nothing changes on a GPU that
 keeps up.
+
+## DEC-047 -- "Légers" folds what never moves; the server's kart has no vertices
+
+**Context.** A "légers" race drew 630 to 690 calls where about 365 were
+planned: one per decor part and one per kart part, most of which never
+move. The game server (DEC-014) built every vertex of every kart only to
+read its transforms and userData.
+
+**Decision.** On "légers", decor its builder marks with `still()`
+(track.js, folded by `foldStill`) and the race-low kart (kart.js
+`foldRaceLow`) are baked to vertex colours on shared materials of the same
+finish, then merged by material. Anything that moves, or that a userData
+entry points at, stays its own object. The headless race kart keeps every
+object of race-high's tree, but each geometry is a stub holding only its
+type and parameters.
+
+**Consequence.** On the Élysée grid at 1440 px the countdown frame drops
+from 686 to 271 calls and the live race from 631 to 254, at the same
+~84k triangles; six server karts build in about 2 ms (race.test.js asserts
+5 ms at most). "Détaillés" and the select stage are untouched. RACE_GOLDEN
+pins the folded race-low kart and tests prove it paints the same look as
+race-high, before and after its parts animate. A new decor builder must
+call `still()` on what never moves to benefit.
+
+## DEC-048 -- The note banner sits on night glass, closable, with nothing under it
+
+**Context.** The library's note is bare muted text. Over the select stage
+on a phone it read over the roster's tiles, and DEC-042's reserve (the
+screen's bottom padding) only kept the scroll's end clear: at rest a tile
+could sit, tappable, under the note.
+
+**Decision.** `#note` gets the night glass of the HUD and the panels
+(`--panel`, the hairline, a 6px blur, 12px corners) inside the screens'
+16px gutter, and a close button `#note-close` ("Masquer la note",
+`actions.hideNote()`) that hides it until the next load. While it shows,
+every screen but the Politibox ends `--note-room` above the viewport's
+bottom instead of padding it, so nothing tappable sits under the note, at
+rest or scrolled. `--note-room` follows the note's measured height
+(`--note-h`, set by a ResizeObserver). This amends DEC-042's note rule.
+
+**Consequence.** On a phone the note reads as a card of its own and never
+covers a control. The Politibox's full-bleed stage still clears the note
+itself.

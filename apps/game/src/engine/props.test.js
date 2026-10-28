@@ -11,9 +11,9 @@ import { KART_MOUNTS, PROP_BUILDERS } from './props.js';
 
 const BODIES = { standard: CHARACTERS.find(c => !c.tractor && !c.cargo), tractor: CHARACTERS.find(c => c.tractor), cargo: CHARACTERS.find(c => c.cargo) };
 
-/** The first visible surface of a race kart straight below `from` (kart.js's own driver taken out). */
+/** The first visible surface of a race kart straight below `from` (kart.js's own driver taken out): the browser's, the server's has no surfaces (PLAN R6). */
 function surfaceBelow(def, from) {
-  const k = buildKart(def); k.remove(k.userData.driver); k.updateMatrixWorld(true);
+  const k = buildKart(def, undefined, { lod: 'race-high' }); k.remove(k.userData.driver); k.updateMatrixWorld(true);
   const shown = o => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
   const hits = new THREE.Raycaster(new THREE.Vector3(...from), new THREE.Vector3(0, -1, 0)).intersectObject(k, true).filter(h => shown(h.object) && h.object.name !== 'underglow');
   return hits.length ? hits[0].distance : Infinity;

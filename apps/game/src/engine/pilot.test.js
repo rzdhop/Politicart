@@ -8,7 +8,7 @@ import { CHARACTERS } from './data.js';
 import { countMeshes, countTriangles } from './geo.js';
 import { CUTS, FABRICS, FACIAL_HAIR, GLASSES, HAIR_STYLES, LAYERS, LOOK3D, MOUTHS, POSES, PROPS } from './looks.js';
 import {
-  bodyOf, buildPilot, complement, darken, disposePilot, HAIR_SHINE, IMPLEMENTED, lighten, liveNames, LODS, MOUNT, PILOT_SCALE, pilotLayout, POSE_AT, SEATS, USERDATA_KEYS,
+  bodyOf, buildPilot, complement, darken, disposePilot, HAIR_SHINE, IMPLEMENTED, lighten, liveNames, LODS, MOUNT, PILOT_SCALE, pilotLayout, POSE_AT, RACE_SWAY, SEATS, USERDATA_KEYS,
 } from './pilot.js';
 import { KART_MOUNTS } from './props.js';
 import { linear } from './stagelook.js';
@@ -105,6 +105,102 @@ describe('the userData contract', () => {
     for (const f of lucie.userData.anim) f(0.016, 0.125);
     expect(hand.rotation.z).toBeCloseTo(lucie.userData.rest.hand[2] + 0.35, 5);
     [p, vane, lucie].forEach(disposePilot);
+  });
+});
+
+describe('the race head sway', () => {
+  /** Run a pilot's anim from t0 for `secs` at 30 fps with the kart's state `kart` (or none); the head's rotation each frame, as offsets from rest. */
+  const run = (p, t0, secs, kart) => {
+    const h = p.userData.head, r = p.userData.rest.head, out = [];
+    for (let i = 1; i <= secs * 30; i++) {
+      for (const f of p.userData.anim) f(1 / 30, t0 + i / 30, kart);
+      out.push([h.rotation.x - r[0], h.rotation.y - r[1], h.rotation.z - r[2]]);
+    }
+    return out;
+  };
+  const most = (frames, axis) => Math.max(...frames.map(f => Math.abs(f[axis])));
+  const mean = (frames, axis) => frames.reduce((a, f) => a + f[axis], 0) / frames.length;
+  /** Every node's local transform but the head's. */
+  const others = p => { const out = []; p.traverse(o => { if (o !== p.userData.head) out.push(o.position.toArray().concat(o.quaternion.toArray(), o.scale.toArray()).join()); }); return out; };
+
+  it.each(CHARACTERS.map(c => [c.id, c]))('%s: race-high turns its head a couple of degrees round its rest pose, and moves nothing else', (_id, def) => {
+    const p = buildPilot(def, 'race-high'), h = p.userData.head, still = !liveNames(LOOK3D[def.id]).some(n => PROPS[n]?.live && n !== 'ponytail');
+    const at = h.position.toArray().concat(h.scale.toArray()), rest = others(p);
+    const frames = run(p, 0, 40, { steer: 0, speed: 20 });
+    // it moves, slowly and by little: about 2 degrees at most on each axis, centred on the rest pose
+    expect(most(frames, 1), 'yaw').toBeGreaterThan(RACE_SWAY.yaw * 0.6);
+    expect(most(frames, 1), 'yaw').toBeLessThanOrEqual(RACE_SWAY.yaw + 1e-9);
+    expect(most(frames, 2), 'roll').toBeLessThanOrEqual(RACE_SWAY.roll + 1e-9);
+    expect(most(frames, 0), 'nod').toBeLessThanOrEqual(RACE_SWAY.nod + 1e-9);
+    for (const a of [0, 1, 2]) expect(Math.abs(mean(frames, a)), `mean ${a}`).toBeLessThan(0.006);
+    expect(Math.max(RACE_SWAY.yaw, RACE_SWAY.roll, RACE_SWAY.nod)).toBeLessThanOrEqual(2.5 * Math.PI / 180);
+    // no frame jumps: at 30 fps a frame turns it by a fraction of a degree
+    for (let i = 1; i < frames.length; i++) for (const a of [0, 1, 2]) expect(Math.abs(frames[i][a] - frames[i - 1][a])).toBeLessThan(0.004);
+    // only the head's rotation: its pivot stays put, and so does every other node of a pilot with no moving prop
+    expect(h.position.toArray().concat(h.scale.toArray())).toEqual(at);
+    if (still) expect(others(p)).toEqual(rest);
+    disposePilot(p);
+  });
+
+  it('looks into the steering and leans to the inside, a little late, and comes back to rest when the wheel does', () => {
+    for (const def of CHARACTERS) {
+      const p = buildPilot(def, 'race-high'), drift = Math.hypot(RACE_SWAY.yaw, 1e-9), roll = RACE_SWAY.roll;
+      // the first frame of a turn barely turns it: the head follows the wheel
+      const first = run(p, 10, 1 / 30, { steer: 1 })[0];
+      expect(Math.abs(first[1])).toBeLessThan(drift + RACE_SWAY.lookYaw * 0.2);
+      // full right lock for two seconds: the head looks right (the front wheels turn by -steer) and tilts its top to the right
+      const right = run(p, 10, 2, { steer: 1 }).at(-1);
+      expect(right[1], def.id).toBeLessThan(-RACE_SWAY.lookYaw * 0.95 + drift);
+      expect(right[1], def.id).toBeGreaterThanOrEqual(-RACE_SWAY.lookYaw - drift - 1e-9);
+      expect(right[2], def.id).toBeGreaterThan(RACE_SWAY.lookRoll * 0.95 - roll);
+      // and back straight for three seconds: back to the drift round rest
+      const back = run(p, 12, 3, { steer: 0 }).at(-1);
+      expect(Math.abs(back[1]), def.id).toBeLessThanOrEqual(drift + RACE_SWAY.lookYaw * 1e-4);
+      expect(Math.abs(back[2]), def.id).toBeLessThanOrEqual(roll + RACE_SWAY.lookRoll * 1e-4);
+      // left the other way; a wild input is clamped; no kart (a turntable) only drifts
+      expect(run(p, 15, 2, { steer: -1 }).at(-1)[1]).toBeGreaterThan(RACE_SWAY.lookYaw * 0.95 - drift);
+      const wild = run(p, 17, 2, { steer: 40 }).concat(run(p, 19, 1, { steer: NaN }));
+      expect(most(wild, 1)).toBeLessThanOrEqual(RACE_SWAY.lookYaw + drift + 1e-9);
+      for (const f of wild) for (const v of f) expect(Number.isFinite(v)).toBe(true);
+      const q = buildPilot(def, 'race-high'), alone = run(q, 25, 4, undefined);
+      expect(most(alone, 1)).toBeLessThanOrEqual(drift + 1e-9);
+      [p, q].forEach(disposePilot);
+    }
+  });
+
+  it('turns the head\'s own mesh: race-high keeps the head a node of its own, moved as a whole, the body untouched', () => {
+    for (const def of CHARACTERS) {
+      const p = buildPilot(def, 'race-high'), h = p.userData.head;
+      // the head's own merged mesh, and the body: every mesh outside the head but a spinning prop's (martine's
+      // gyrophare; thierry's weathervane turns on his hat, inside the head)
+      const moving = Object.values(p.userData.live).flatMap(meshes), inHead = h.children.filter(o => o.isMesh), body = meshes(p).filter(m => !meshes(h).includes(m) && !moving.includes(m));
+      expect(inHead.length, def.id).toBe(1);
+      expect(body.length, def.id).toBeGreaterThanOrEqual(1);
+      const box = list => { p.updateMatrixWorld(true); const b = new THREE.Box3(); for (const m of list) b.expandByObject(m); return b.min.toArray().concat(b.max.toArray()); };
+      const head0 = box(inHead), body0 = box(body);
+      run(p, 0, 3, { steer: 1 });
+      expect(box(inHead), def.id).not.toEqual(head0);
+      expect(box(body), def.id).toEqual(body0);
+      disposePilot(p);
+    }
+  });
+
+  it('costs no draw, no triangle and no material: race-high is the same pilot with one more anim entry, race-low and headless have none', () => {
+    for (const def of CHARACTERS) {
+      const sway = buildPilot(def, 'race-high'), none = buildPilot(def, 'race-high', { idle: false });
+      expect(countMeshes(sway), def.id).toBe(countMeshes(none));
+      expect(countTriangles(sway), def.id).toBe(countTriangles(none));
+      expect(meshes(sway).map(m => m.material), def.id).toEqual(meshes(none).map(m => m.material));   // the same shared instances
+      expect(sway.userData.anim.length, def.id).toBe(none.userData.anim.length + 1);
+      // race-low merges the head into the body: no sway entry at all, and running its anim leaves the head as it was
+      const low = buildPilot(def, 'race-low'), lowNone = buildPilot(def, 'race-low', { idle: false });
+      expect(low.userData.anim.length, def.id).toBe(lowNone.userData.anim.length);
+      const r = low.userData.head.rotation.toArray();
+      run(low, 0, 2, { steer: 1 });
+      expect(low.userData.head.rotation.toArray(), def.id).toEqual(r);
+      expect(buildPilot(def, 'headless').userData.anim, def.id).toEqual([]);
+      [sway, none, low, lowNone].forEach(disposePilot);
+    }
   });
 });
 

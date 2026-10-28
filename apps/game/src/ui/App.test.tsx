@@ -1,4 +1,8 @@
 // @vitest-environment jsdom
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -256,6 +260,24 @@ describe('the React screens', () => {
     const visible = [...container.querySelectorAll('section.screen')].filter(s => !(s as HTMLElement).hidden).map(s => s.id);
     expect(visible).toEqual(['s-title']);
     expect((container.querySelector('#note') as HTMLElement).hidden).toBe(false);
+  });
+
+  it('close the note from its × button, which keeps Enter from reaching the game\'s keys', () => {
+    const { container } = render(<App />);
+    const close = container.querySelector('#note #note-close') as HTMLButtonElement;
+    expect(close.tagName).toBe('BUTTON');
+    expect(close.type).toBe('button');
+    expect(close.getAttribute('aria-label')).toBe('Masquer la note');
+    const seen: string[] = [];
+    const spy = (e: KeyboardEvent) => seen.push(e.key);
+    window.addEventListener('keydown', spy);
+    fireEvent.keyDown(close, { key: 'Enter', code: 'Enter' });
+    fireEvent.keyDown(close, { key: ' ', code: 'Space' });
+    window.removeEventListener('keydown', spy);
+    expect(seen, 'game.js listens on window').toEqual([]);
+    fireEvent.click(close);
+    expect((container.querySelector('#note') as HTMLElement).hidden).toBe(true);
+    expect(getState()).toBe('title');
   });
 
   it('follow the machine: play opens the roster with eleven tiles and the chosen candidate in the showcase', () => {
@@ -1138,5 +1160,21 @@ describe('the kart card and the coin line (stage 7)', () => {
     expect($(container, 'r-xp')?.textContent).toBe('Créez un compte pour gagner de l’expérience et débloquer des candidat·es.');
     expect($(container, 'r-xp')?.textContent).not.toContain('politicoins');
     expect($(container, 'r-kart')).not.toBeNull();                 // the card needs no account
+  });
+});
+
+describe('the page icons', () => {
+  const APP = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+
+  it('link the SVG favicon, its PNG fallback and the home-screen icon, by relative hrefs to files in public/', () => {
+    const doc = new DOMParser().parseFromString(readFileSync(resolve(APP, 'index.html'), 'utf8'), 'text/html');
+    const links = [...doc.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]')].map(l => [l.getAttribute('rel'), l.getAttribute('type'), l.getAttribute('href')]);
+    expect(links).toEqual([
+      ['icon', 'image/svg+xml', './favicon.svg'],
+      ['icon', 'image/png', './favicon-32.png'],
+      ['apple-touch-icon', null, './apple-touch-icon.png'],
+    ]);
+    // relative, so the build works at / and under /Politicart/ (base './'); and the bare /favicon.ico a browser asks for exists too
+    for (const f of ['favicon.svg', 'favicon-32.png', 'apple-touch-icon.png', 'favicon.ico']) expect(existsSync(resolve(APP, 'public', f)), f).toBe(true);
   });
 });

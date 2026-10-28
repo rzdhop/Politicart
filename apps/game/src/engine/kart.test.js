@@ -187,7 +187,9 @@ describe('buildKart', () => {
 // metalness, blending, opacity, side, map, shared instances, and whether it is
 // the very primitives.mat() instance for its colour and roughness) and what
 // each userData key points at. `apart(o)` leaves an object and its subtree
-// out (a reference to it reads 'apart').
+// out (a reference to it reads 'apart'). `vertices: false` leaves out what
+// only built vertices hold (triangle count, position checksum), for the
+// server's kart, whose meshes carry a geometry stub: type and parameters.
 //
 // RACE_GOLDEN holds the hashes of the race kart without its driver, taken
 // from kart.js before the race pilot (stage 7's tip, 5167505), per candidate
@@ -195,9 +197,12 @@ describe('buildKart', () => {
 // the legacy driver's two harness straps are left out, everything else must
 // come out the same. The straps are gone on purpose (they would sit inside
 // the new pilot's chest). PILOT_GOLDEN pins the race pilot itself, per
-// candidate and level of detail.
+// candidate and level of detail. The "légers" kart (race-low) is then folded
+// into fewer draws (kart.js foldRaceLow, PLAN 4.2): its hashes were retaken
+// then, every 'détaillés' (race-high) fingerprint staying the 5167505 one,
+// and the race profile test below proves the folded kart paints the same.
 const r5 = v => Math.round(v * 1e5) / 1e5;
-function fingerprint(k, apart = () => false, ownAnim = () => true) {
+function fingerprint(k, apart = () => false, ownAnim = () => true, { vertices = true } = {}) {
   const index = new Map(), geos = new Map(), mats = new Map(), lines = [];
   let tris = 0, count = 0;
   const walk = o => {
@@ -207,10 +212,14 @@ function fingerprint(k, apart = () => false, ownAnim = () => true) {
       ...o.position.toArray().map(r5), ...o.quaternion.toArray().map(r5), ...o.scale.toArray().map(r5), o.parent ? index.get(o.parent) ?? 'root' : -1];
     if (o.isMesh) {
       count++;
-      const g = o.geometry, p = g.attributes.position.array;
+      const g = o.geometry;
       if (!geos.has(g)) geos.set(g, geos.size);
-      let sum = 0; for (let i = 0; i < p.length; i++) sum += p[i] * ((i % 3) * 2 + 1);
-      const n = (g.index ? g.index.count : g.attributes.position.count) / 3; tris += n;
+      let sum = 0, n = 0;
+      if (vertices) {
+        const p = g.attributes.position.array;
+        for (let i = 0; i < p.length; i++) sum += p[i] * ((i % 3) * 2 + 1);
+        n = (g.index ? g.index.count : g.attributes.position.count) / 3; tris += n;
+      }
       const m = o.material;
       if (!mats.has(m)) mats.set(m, mats.size);
       const isMat = m.type === 'MeshStandardMaterial' && !m.map && m === mat(m.color.getHex(), m.roughness);
@@ -231,7 +240,49 @@ const sha = s => createHash('sha1').update(s).digest('hex').slice(0, 16);
 const isStrap = o => o.isMesh && o.geometry.type === 'BoxGeometry' && o.material.color?.getHex() === 0xc8102e
   && JSON.stringify(o.geometry.parameters) === JSON.stringify({ width: 0.1, height: 0.5, depth: 0.04, widthSegments: 1, heightSegments: 1, depthSegments: 1 });
 /** Everything but the driver (and the legacy straps): the kart's own anim functions, the ones the pilot brought apart. */
-const kartPart = k => fingerprint(k, o => o === k.userData.driver || isStrap(o), f => !k.userData.driver.userData.anim?.includes(f));
+const kartPart = (k, opts) => fingerprint(k, o => o === k.userData.driver || isStrap(o), f => !k.userData.driver.userData.anim?.includes(f), opts);
+/**
+ * What a kart draws, whatever it is cut into: its visible triangles (the
+ * driver's aside) in world space, grouped by what paints them (material
+ * type, finish, blending, map, and the colour, the material's times the
+ * vertex colour). Per group: the triangle count, the area, its first and
+ * second moments (where the triangles are and how they spread), and how
+ * well each triangle's winding agrees with its vertex normals (which side
+ * it faces, and how it is lit). Two karts with the same look paint the
+ * same picture; compared with a tolerance, since a merge bakes transforms.
+ */
+function look(k) {
+  k.updateMatrixWorld(true);
+  const out = new Map(), nm = new THREE.Matrix3(), col = new THREE.Color(), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
+  const walk = o => {
+    if (!o.visible || o === k.userData.driver) return;
+    if (o.isMesh) {
+      const m = o.material, g = o.geometry, pos = g.attributes.position, nor = g.attributes.normal, vc = m.vertexColors ? g.attributes.color : null;
+      nm.getNormalMatrix(o.matrixWorld);
+      const total = g.index ? g.index.count : pos.count, at = g.index ? i => g.index.getX(i) : i => i;
+      for (let t = g.drawRange.start; t + 2 < Math.min(total, g.drawRange.start + g.drawRange.count); t += 3) {
+        const [i0, i1, i2] = [at(t), at(t + 1), at(t + 2)];
+        col.copy(m.color); if (vc) col.multiply(new THREE.Color(vc.getX(i0), vc.getY(i0), vc.getZ(i0)));
+        const key = [m.type, r5(m.roughness ?? -1), r5(m.metalness ?? -1), m.side, m.transparent ? 1 : 0, r5(m.opacity), m.blending, m.depthWrite ? 1 : 0, m.map ? 'map:' + m.map.name : '', col.getHexString()].join(',');
+        a.fromBufferAttribute(pos, i0).applyMatrix4(o.matrixWorld); b.fromBufferAttribute(pos, i1).applyMatrix4(o.matrixWorld); c.fromBufferAttribute(pos, i2).applyMatrix4(o.matrixWorld);
+        const face = e1.subVectors(b, a).cross(e2.subVectors(c, a)), area = face.length() / 2;
+        n.set(0, 0, 0); for (const i of [i0, i1, i2]) n.add(e2.fromBufferAttribute(nor, i).applyMatrix3(nm).normalize());
+        const s = out.get(key) ?? out.set(key, [0, 0, 0, 0, 0, 0, 0, 0, 0]).get(key), cx = (a.x + b.x + c.x) / 3, cy = (a.y + b.y + c.y) / 3, cz = (a.z + b.z + c.z) / 3;
+        s[0]++; s[1] += area; s[2] += area * cx; s[3] += area * cy; s[4] += area * cz; s[5] += area * cx * cx; s[6] += area * cy * cy; s[7] += area * cz * cz; s[8] += face.dot(n) / 6;
+      }
+    }
+    o.children.forEach(walk);
+  };
+  walk(k);
+  return out;
+}
+/** Two looks are the same: the same groups, the same counts, the same areas and moments (to 1e-6, relatively). */
+function sameLook(x, y, name) {
+  expect([...x.keys()].sort(), name).toEqual([...y.keys()].sort());
+  for (const [key, s] of x) { const t = y.get(key); expect(t[0], name + ' ' + key).toBe(s[0]); s.slice(1).forEach((v, i) => expect(Math.abs(v - t[i + 1]), name + ' ' + key + ' #' + (i + 1)).toBeLessThanOrEqual(1e-6 * Math.max(1, Math.abs(v)))); }
+}
+/** Every BufferGeometry under an object, each counted once. */
+const geometries = o => { const out = new Set(); o.traverse(m => { if (m.geometry?.isBufferGeometry) out.add(m.geometry); }); return out.size; };
 
 /** The four Garage presets of the visual sheet (over the built-in style). */
 const PRESETS = {
@@ -267,41 +318,41 @@ function raceFingerprints(build, print = kartPart) {
   return out;
 }
 const RACE_GOLDEN = {
-  aymeric: '62 meshes 3810 tris #c9bb78ef1ec453fa',
-  bernadette: '62 meshes 3810 tris #0d4713bf99f1b5a2',
-  capucine: '41 meshes 4594 tris #4efbe00d5ebe167b',
-  gaspard: '62 meshes 3810 tris #4e69c1b0f4d2185f',
-  gege: '62 meshes 3810 tris #028f8135b5cf6191',
-  hubert: '62 meshes 3810 tris #471096186830ae47',
-  jeanmi: '62 meshes 3810 tris #c8360ea53350b091',
-  kevin: '62 meshes 3810 tris #d6a76925c31cbf71',
-  lucie: '62 meshes 3810 tris #b460df55a62c1760',
-  lulu: '62 meshes 3810 tris #0125520c4a6a6008',
-  martine: '62 meshes 3810 tris #e310f146ed0899c7',
-  maurice: '62 meshes 3810 tris #a7481ece09b871d2',
-  odile: '62 meshes 3810 tris #5b26615a810a3b28',
-  patrick: '50 meshes 2078 tris #abbf37acb4f7d301',
-  thierry: '62 meshes 3810 tris #f4b361aab8125efa',
-  victor: '62 meshes 3810 tris #1700b089ba22d382',
+  aymeric: '62 meshes 3810 tris #046a267e6c0674e1',
+  bernadette: '62 meshes 3810 tris #957f1b14811ce57b',
+  capucine: '41 meshes 4594 tris #7ed2ddcf18eb4b85',
+  gaspard: '62 meshes 3810 tris #6de45f9e263f4a37',
+  gege: '62 meshes 3810 tris #5e37976e51092d0b',
+  hubert: '62 meshes 3810 tris #af5284e3794367ea',
+  jeanmi: '62 meshes 3810 tris #a1c4b42b4fcc8f73',
+  kevin: '62 meshes 3810 tris #68468219715e5b01',
+  lucie: '62 meshes 3810 tris #39f12552959bc087',
+  lulu: '62 meshes 3810 tris #55782eef4d37f8f5',
+  martine: '62 meshes 3810 tris #bfc674c927383009',
+  maurice: '62 meshes 3810 tris #4346ab12eb69e731',
+  odile: '62 meshes 3810 tris #c762b287e5e5728f',
+  patrick: '50 meshes 2078 tris #6ad362a4e7c55ae6',
+  thierry: '62 meshes 3810 tris #4e83de8a3cc04410',
+  victor: '62 meshes 3810 tris #5da2a91b8afa7ebb',
 };
 /** Per candidate: each race level's meshes/triangles, and one hash of both pilots' fingerprints. */
 const PILOT_GOLDEN = {
-  aymeric: 'race-high 2/4968 race-low 1/1655 #dc7f883d155948cf',
-  bernadette: 'race-high 2/5549 race-low 1/1698 #c4d09b88863af222',
-  capucine: 'race-high 2/4378 race-low 1/1779 #8af2c18ee3a49135',
-  gaspard: 'race-high 2/4818 race-low 1/1874 #0e31506be2133781',
-  gege: 'race-high 2/4952 race-low 1/2046 #6bec43996a4f9d49',
-  hubert: 'race-high 2/4570 race-low 1/1745 #9d73c45bcae78b1f',
-  jeanmi: 'race-high 2/4348 race-low 1/1601 #30d9a0b95edb97a3',
-  kevin: 'race-high 2/4850 race-low 1/1760 #882aff372b4ee0e6',
-  lucie: 'race-high 2/4496 race-low 1/1755 #0c8f3cfb4590a96e',
-  lulu: 'race-high 2/4496 race-low 1/1582 #1977ad5b9781ddcf',
-  martine: 'race-high 3/4466 race-low 2/1844 #0d6e39783ce51bec',
-  maurice: 'race-high 2/5084 race-low 1/1975 #19db5ed62e47611a',
-  odile: 'race-high 2/4694 race-low 1/1911 #260f57eb8ee5a59c',
-  patrick: 'race-high 2/4700 race-low 1/2088 #10de9f2d199a36b0',
-  thierry: 'race-high 3/4448 race-low 2/1687 #15706804c767e268',
-  victor: 'race-high 2/4350 race-low 1/1623 #e99cac7caa8ed73d',
+  aymeric: 'race-high 2/4968 race-low 1/1655 #f7f5302a70264416',
+  bernadette: 'race-high 2/5549 race-low 1/1698 #7e2729cbdc8d8098',
+  capucine: 'race-high 2/4378 race-low 1/1779 #f5ca7aec9a181d52',
+  gaspard: 'race-high 2/4818 race-low 1/1874 #e4f45e31484de48c',
+  gege: 'race-high 2/4952 race-low 1/2046 #da09c08374479852',
+  hubert: 'race-high 2/4570 race-low 1/1745 #d47228412156e2be',
+  jeanmi: 'race-high 2/4348 race-low 1/1601 #f7bc29333eeb1c28',
+  kevin: 'race-high 2/4850 race-low 1/1760 #3f3aa361791f7137',
+  lucie: 'race-high 2/4496 race-low 1/1755 #4e92304bb21b32ae',
+  lulu: 'race-high 2/4496 race-low 1/1582 #2d607642f6748fe6',
+  martine: 'race-high 3/4466 race-low 2/1844 #37ea36173800e66f',
+  maurice: 'race-high 2/5084 race-low 1/1975 #a604682069f82671',
+  odile: 'race-high 2/4694 race-low 1/1911 #6cff0270be828b99',
+  patrick: 'race-high 2/4700 race-low 1/2088 #764ee1298ae2b82a',
+  thierry: 'race-high 3/4448 race-low 2/1687 #a62a5958eaa3618b',
+  victor: 'race-high 2/4350 race-low 1/1623 #ed755487d03dbce6',
 };
 const LOD_OF = { high: 'race-high', low: 'race-low' };
 /** The race kart as a browser builds it on the current detail level. */
@@ -312,12 +363,50 @@ describe('the race profile', () => {
     expect(raceFingerprints(raceKart)).toEqual(RACE_GOLDEN);
   }, 120000);
 
-  it('is the same kart under every race level of detail, the server\'s headless one included', () => {
-    for (const c of [victor, tractor, cargo]) for (const level of ['high', 'low']) withPoly(level, () => {
-      const prints = ['race-high', 'race-low', 'headless'].map(lod => kartPart(buildKart(c, defaultStyle(c), { lod })).text);
-      expect(new Set(prints).size).toBe(1);
+  // The same kart under every race level of detail, cut differently (PLAN 4.2, R6). Before, the three levels built
+  // the same kart part for part, vertex for vertex. Now:
+  // - The server's kart (lod 'headless', DEC-014) builds no geometry: each of its meshes carries a stub holding its
+  //   geometry's type and parameters. Everything else is race-high's: the same objects in the same tree, with the
+  //   same transforms, rotation orders, visibility, shadow flags and materials, the same geometry sharing, the wheels
+  //   in the same order, every userData key on the same node, the driver (the headless pilot) in the same place.
+  // - "Légers" (race-low) folds the kart into fewer draws: it paints the same triangles in the same colours and
+  //   finishes as race-high (look()), before and after its parts animate, and every userData target is the same
+  //   kind of object at the same place in the world, the wheels in the same order, in at most half the draws.
+  // RACE_GOLDEN pins both browser levels' kart as drawn. Every candidate and Garage style, on both detail levels.
+  it('is the same kart under every race level of detail: the same look in fewer draws on "légers", without a single geometry on the server', () => {
+    const place = (k, o) => [k.children.indexOf(o), ...o.position.toArray(), ...o.quaternion.toArray(), ...o.scale.toArray(), o.rotation.order];
+    const targets = k => { const u = k.userData; return [...u.wheels, ...u.sparks, u.ring, u.rotor, ...u.blades, u.bumpSparks, u.shield, u.driver]; };
+    const world = o => [o.type, o.visible, o.rotation.order, ...o.matrixWorld.elements.map(v => Math.round(v * 1e6) / 1e6)];
+    const draws = k => countMeshes(k, true) - countMeshes(k.userData.driver, true);
+    const ownAnim = k => k.userData.anim.filter(f => !k.userData.driver.userData.anim?.includes(f));
+    const check = (c, s, name, opts = {}) => {
+      const [high, low, server] = ['race-high', 'race-low', 'headless'].map(lod => buildKart(c, s, { lod, ...opts }));
+      sameLook(look(low), look(high), name);
+      expect(Object.keys(low.userData).sort(), name).toEqual(KEYS);
+      expect(targets(low).map(world), name).toEqual(targets(high).map(world));
+      expect(low.userData.wheels.map(w => w.geometry.parameters), name).toEqual(high.userData.wheels.map(w => w.geometry.parameters));
+      // the kart's own anim is the same; the pilots' differ by race-high's head sway alone (pilot.js RACE_SWAY)
+      expect(ownAnim(low).length, name).toBe(ownAnim(high).length);
+      expect(high.userData.anim.length - low.userData.anim.length, name).toBe(opts.pilot === false ? 0 : 1);
+      expect(named(low, 'plate'), name).toHaveLength(1);
+      expect(named(low, 'sticker').length, name).toBe(named(high, 'sticker').length);
+      expect(draws(low), name).toBeLessThanOrEqual(draws(high) / 2);
+      expect(kartPart(server, { vertices: false }).text, name).toBe(kartPart(high, { vertices: false }).text);
+      for (const k of [high, low]) for (const f of k.userData.anim) { f(1 / 60, 1.3); f(1 / 60, 2.1, { boost: 1 }); }
+      sameLook(look(low), look(high), name + ' animated');
+      expect(geometries(server), name).toBe(0);
+      expect(geometries(high), name).toBeGreaterThan(20);
+      expect(place(server, server.userData.driver), name).toEqual(place(high, high.userData.driver));
+      expect(server.userData.wheels.map(w => w.geometry.parameters), name).toEqual(high.userData.wheels.map(w => w.geometry.parameters));
+      for (const lod of [high, low]) if (lod.userData.driver.userData.lod) disposePilot(lod.userData.driver);
+    };
+    for (const c of CHARACTERS) for (const level of ['high', 'low']) withPoly(level, () => {
+      for (const [name, s] of stylesOf(c)) check(c, s, c.id + ' ' + level + '/' + name);
+      check({ ...c, livery: 'data:image/png;base64,AAAA' }, { ...mergeStyle(builtinStyle(c)), spoiler: 'wing' }, c.id + ' ' + level + '/livery');
     });
-  });
+    // the empty-seat kart (pilot: false), with and without its own steering, the same way
+    for (const c of BODIES) for (const steering of [true, false]) check(c, defaultStyle(c), c.id + ' seat ' + steering, { pilot: false, steering });
+  }, 120000);
 
   it('pins the race pilot of every candidate on both levels, whatever the kart style', () => {
     const out = {};
@@ -457,7 +546,7 @@ describe('the stage profile', () => {
     const v = new THREE.Vector3();
     const reach = k => { let r = 0; k.updateMatrixWorld(true); for (const m of visibleMeshes(k)) { if (m.material.depthWrite === false) continue; const a = m.geometry.attributes.position; for (let i = 0; i < a.count; i++) r = Math.max(r, Math.hypot(...v.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld).toArray().filter((_, j) => j !== 1))); } return r; };
     const reaching = /^(spoiler|nose|exhaust|wheels|mast|pods):|^(builtin|stock|podium|rare|incredible)$/;   // the fields that move a part outwards
-    for (const c of BODIES) for (const [n, s] of variants(c)) if (reaching.test(n)) expect(reach(stageKart(c, s))).toBeLessThanOrEqual(reach(buildKart(c, s)) + 0.01);
+    for (const c of BODIES) for (const [n, s] of variants(c)) if (reaching.test(n)) expect(reach(stageKart(c, s))).toBeLessThanOrEqual(reach(buildKart(c, s, { lod: 'race-high' })) + 0.01);
   }, 60000);
 
   it.each([['high', 60], ['low', 60]])('stays within %s budget: at most %i draws for every candidate and preset, pilot or not', (tier, max) => {
@@ -477,7 +566,7 @@ describe('the stage profile', () => {
 describe('pilot: false', () => {
   it.each([...BODIES.map(c => [c.id, c, 'race']), ...BODIES.map(c => [c.id, c, 'stage'])])('%s (%s) has no driver mesh, an empty seat anchor where the legacy driver sat, and steering', (_id, c, profile) => {
     const withDriver = buildKart(c, defaultStyle(c), { profile, lod: 'race-high' });
-    const k = buildKart(c, defaultStyle(c), { profile, pilot: false });
+    const k = buildKart(c, defaultStyle(c), { profile, pilot: false, lod: 'race-high' });
     expect(Object.keys(k.userData).sort()).toEqual(KEYS);
     const seatAnchor = k.userData.driver;
     expect(seatAnchor.isGroup).toBe(true);
@@ -550,7 +639,7 @@ describe('the race pilot', () => {
     for (const lod of ['race-high', 'race-low']) {
       // the kart brings no steering of its own: without its driver it is the steering-less seat kart
       const k = buildKart(c, defaultStyle(c), { lod });
-      expect(kartPart(k).text).toBe(kartPart(buildKart(c, defaultStyle(c), { pilot: false, steering: false })).text);
+      expect(kartPart(k).text).toBe(kartPart(buildKart(c, defaultStyle(c), { pilot: false, steering: false, lod })).text);
       // the pilot carries exactly one (seen unmerged), and its left hand is on it
       const p = buildPilot(c, lod, { merge: false, idle: false }); const kart = new THREE.Group(); kart.add(p); kart.updateMatrixWorld(true);
       const named = n => { const out = []; p.traverse(o => { if (o.name === n && o.isMesh) out.push(o); }); return out; };
@@ -566,14 +655,19 @@ describe('the race pilot', () => {
     }
   });
 
-  it('turns martine\'s gyrophare and thierry\'s weathervane with the kart\'s anim, and leaves every other pilot still', () => {
+  it('turns martine\'s gyrophare and thierry\'s weathervane with the kart\'s anim, sways the race-high head a little, and leaves everything else still', () => {
     for (const c of CHARACTERS) for (const lod of ['race-high', 'race-low']) {
-      const k = buildKart(c, defaultStyle(c), { lod }), d = k.userData.driver;
-      const before = poses(d);
-      for (const f of k.userData.anim) { f(1 / 60, 0.7, { boost: 0 }); f(1 / 60, 1.9, { boost: 0 }); }
-      const moved = poses(d).some((p, i) => p !== before[i]);
+      const k = buildKart(c, defaultStyle(c), { lod }), d = k.userData.driver, head = d.userData.head;
+      const butHead = () => { const out = []; d.traverse(o => { if (o !== head) out.push(o.position.toArray().concat(o.quaternion.toArray(), o.scale.toArray()).map(v => v.toFixed(6)).join(',')); }); return out; };
+      const before = butHead(), at = head.position.toArray().concat(head.scale.toArray()), q0 = head.quaternion.clone();
+      for (const f of k.userData.anim) { f(1 / 60, 0.7, { boost: 0, steer: 0 }); f(1 / 60, 1.9, { boost: 0, steer: 0 }); }
+      const moved = butHead().some((p, i) => p !== before[i]);
       expect(moved, c.id + ' ' + lod).toBe(c.id === 'martine' || c.id === 'thierry');
       if (moved) expect(Object.keys(d.userData.live)).toContain(c.id === 'martine' ? 'gyrophare' : 'weathervane');
+      // the head turns on race-high only, by a few degrees about its pivot (pilot.js RACE_SWAY); race-low's is merged and still
+      const turned = head.quaternion.angleTo(q0);
+      if (lod === 'race-high') { expect(turned, c.id).toBeGreaterThan(0); expect(turned, c.id).toBeLessThan(0.1); } else expect(head.quaternion.toArray(), c.id).toEqual(q0.toArray());
+      expect(head.position.toArray().concat(head.scale.toArray()), c.id + ' ' + lod).toEqual(at);
       disposePilot(d);
     }
   });
