@@ -920,3 +920,66 @@ clears the canvas to `--bg`. The empty lobby status line is hidden.
 character-select design on the Design System page (a hemicycle stage,
 podium and richer pilots) is a separate, larger piece of work, planned on
 its own.
+
+## DEC-043 -- The 3D select stage is ported to three r128 and isolated on the shared renderer
+
+**Context.** The Design System page's "Character select 3D" template (a
+hemicycle backdrop, a lit podium, caricature pilots) targets three r184. The
+game is pinned to r128 (DEC-007). Upgrading would restyle every circuit,
+kart, trail and the Politibox and touch the server's headless engine, all
+for one menu; a second canvas costs a second WebGL context. A throwaway port
+ran the template unmodified on r128 through a small compat shim, within
+8/255 mean pixel difference of r184. One real r128 constraint: a material's
+tone mapping and light units are fixed at its first compile and never
+re-checked, so a material shared by the race (legacy linear look) and the
+stage (ACES, sRGB, physical lights) keeps whichever compiled first.
+
+**Decision.** Port the design to r128 (DEC-007 stands). The stage never
+renders a material the race renders: `buildKart` takes a `profile`
+(`'race'` keeps `mat()` exactly as today, `'stage'` draws from
+`stagelook.js`'s own cache); the stage pass runs inside `withLook()`, which
+sets and restores the renderer's tone mapping, exposure, output encoding
+and light mode; the stage has its own camera, fitted by the DEC-042
+showcase-band framing. The race keeps its look for now.
+
+**Consequence.** The same kart reads richer on the podium than on the
+track, by design for this task. A later race restyle can adopt `withLook`
+per scene, and is the moment to revisit a three upgrade.
+
+## DEC-044 -- One pilot builder, four levels of detail, from a per-candidate look spec
+
+**Context.** The template's pilots (fabrics, hair, faces, props, poses) are
+far richer than the game's box-built `buildDriver`, at 113k to 145k
+triangles and about 100 meshes each. The human wants the new pilots in
+races too, where six karts share the screen, on phones, and the server
+builds karts headless (DEC-014). The game keeps its pun names and identity
+(DEC-023); only 5 of the template's 11 entries are game candidates, the
+other 6 are donors.
+
+**Decision.** `engine/looks.js` holds `LOOK3D` per candidate id (hair,
+fabric, face, pose, props, tint), carrying no name or copy, validated by a
+test that also scans the code for the template's real names.
+`engine/pilot.js` builds one pilot at four levels: `stage` (select, garage,
+portraits), `race-high`, `race-low` (merged by material into 1 to 3 draw
+calls) and `headless` (an empty group with the same `userData`). Budgets
+per level are in PLAN.md section 3.3 and are asserted by tests.
+
+**Consequence.** What you pick is what you race, and races draw fewer calls
+than today's unmerged drivers. Every new hair, fabric or prop goes through
+one builder for all levels.
+
+## DEC-045 -- Roster portraits render progressively behind placeholders
+
+**Context.** The stage's pilots compile 35 to 48 shader programs; in
+software GL the first two portraits took 15 s. `makeThumbs()` renders all
+16 portraits synchronously today, which would freeze the select screen.
+
+**Decision.** `makeThumbs()` returns at once with placeholder tiles (the
+candidate's kart colour and initials) so `#roster .tile img` stays 16 at
+once (DEC-009), then renders the real portraits one per frame and patches
+the UI every few; a tile gets `data-portrait="ready"` when final. The stage
+warms its shaders up on the title screen. Portraits are not cached across
+sessions.
+
+**Consequence.** The select screen is usable at once and fills in. E2E
+specs that need final portraits wait on `data-portrait`.

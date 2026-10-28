@@ -4,6 +4,20 @@ Marked UNCONFIRMED / confirmed / invalidated.
 
 ## Unconfirmed
 
+- **A-036 -- The stage tint is derived from the kart colour.** UNCONFIRMED.
+  The rim light, sky glow and LED strips take each candidate's `def.kart`
+  hue, lifted to lightness >= 0.55 and saturation >= 0.6; dark karts (odile,
+  martine) override it in `LOOK3D`. Judge on stage 7's visual sheet.
+- **A-037 -- The template-sized pilot fits the game's seat at x1.45.**
+  UNCONFIRMED. The pilot is built in template units and scaled 1.45 into the
+  game kart (about 4.1 long against the template's 2.6), so physics, shields
+  and rings are untouched; the podium is sized to the game kart (top radius
+  about 2.8). Judge on stage 5's contact sheet and against `01-cs3` at stage 7.
+- **A-038 -- The "go" launch drives down the aisle, away from the camera.**
+  UNCONFIRMED. Never into the camera; the circuit screen opens at once and
+  the stage draws the 1.4 s tail behind it, then clears to `--bg` (DEC-042).
+  Off under `prefers-reduced-motion`. Judge at stage 9.
+
 - **A-005 -- Nunito's woff2 subsets are a variable font.** UNCONFIRMED.
   `packages/ui/src/styles/fonts.css` declares Nunito once per subset with
   `font-weight: 400 900`, on the evidence that Google serves the identical file

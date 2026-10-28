@@ -2,7 +2,23 @@
 
 Current state only. History lives in git.
 
-## Latest task -- 2026-10-27: politicoins, the Politibox, grades, parts, trails, two circuits, stats
+## Latest task -- 2026-10-28: the 3D character-select stage
+
+- **Branch:** `feature/amazing-davinci-af7iw1`, cut from `main` at `b18667a`
+  (PR #12, DEC-042: the live screens follow the design system's layout rules).
+- **Plan:** `.claude/PLAN.md`, approved 2026-10-28 (owner answers Q1-Q11 at
+  its top). DEC-043 (r128 port, stage look isolation), DEC-044 (one pilot,
+  four levels, `LOOK3D`), DEC-045 (progressive portraits); A-036..A-038.
+- **Stage 0 done:** plan, decisions, baseline. Baseline counts in PLAN.md
+  (select 164/78 draws, race about 1,400/330, high/low). E2E in this
+  container: 41 of 59 on `main`; the 18 race-start specs time out under
+  software WebGL on `main` too (same set), so stages are judged against it.
+  Playwright here needs `executablePath` pointed at the installed
+  `/opt/pw-browsers/chromium-1243` (the repo's 1.64.1 wants build 1248).
+- **Next:** wave 1 = stage 1 (stage look, fabrics, geometry) || stage 2
+  (look specs x16) || stage 3 (design-system parts).
+
+## Previous task -- 2026-10-27: politicoins, the Politibox, grades, parts, trails, two circuits, stats
 
 - **Branch:** `feature/epic-turing-clj1rj`, cut from `main` at `1bbcd2e`, pushed.
 - **Plan:** `.claude/PLAN.md`, all stages **done** (DEC-032..039, A-026..A-035).
@@ -40,7 +56,7 @@ Current state only. History lives in git.
   (A-034); the two flaky timing tests deserve a looser budget; the
   `/design-sync` re-sync for the economy components and ChoiceGroup.
 
-## Previous task -- 2026-10-27: cast review, quieter HUD, admin dashboard and god seat
+## Earlier task -- 2026-10-27: cast review, quieter HUD, admin dashboard and god seat
 
 - **Branch:** `feature/relaxed-pascal-rlbpu6`, cut from `main` at `fd118b5`.
 - **Shipped on the branch:** DEC-028 (three powers retuned: Déconstruction,
