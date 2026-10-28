@@ -77,8 +77,20 @@ html,body{overscroll-behavior:none;}
 }
 /* Compte's figure cards (stage 6c): small enough for two to a row on a phone. */
 #acc-stats,#acc-friend-stats .admin{grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;}
-/* The Garage's, the Boutique's and Compte's last row stays clear of the fixed note banner while it shows (the screens carry `noted` then). */
-#s-garage.noted,#s-shop.noted,#s-account.noted{padding-bottom:calc(52px + env(safe-area-inset-bottom,0px));}
+/* ---------- The fixed note banner (#note, NoteBanner) ----------
+   It sits 8px above the safe area (the library's .note) in 16px lines,
+   pinned here so the reserve is exact: one line for the keyboard copy, two
+   for the touch copy below 600px (it is 492px long). While it shows, every
+   screen keeps that height plus a 12px gap free at its bottom, so its last
+   row scrolls clear of the note. `:has` follows the note's `hidden`; the
+   per-screen `noted` class (Garage, Boutique, Compte) stays as a separate
+   rule for browsers without `:has`. The Politibox's full-bleed stage clears
+   the note itself. */
+#note{line-height:16px;}
+body{--note-room:calc(8px + 16px + 12px + env(safe-area-inset-bottom,0px));}
+@media (max-width:600px){.kr-touch{--note-room:calc(8px + 32px + 12px + env(safe-area-inset-bottom,0px));}}
+#ui .screen.noted{padding-bottom:var(--note-room);}
+#ui:has(>#note:not([hidden])) .screen:not(#s-lootbox){padding-bottom:var(--note-room);}
 /* On a phone the Garage's chips are tap targets: 44px tall, their grade badge included. */
 .kr-touch #s-garage .chip{min-height:44px;}
 @media (pointer:coarse){#s-garage .chip{min-height:44px;}}
@@ -140,11 +152,16 @@ html,body{overscroll-behavior:none;}
 }
 
 /* ---------- Accounts ----------
-   A candidate the account has not unlocked yet: dimmed, not clickable, with
-   the level that unlocks it over the portrait. The password field takes the
+   A candidate the account has not unlocked yet: its portrait and name greyed
+   and dimmed, not clickable, with what unlocks it in a gold pill over the
+   portrait. The grey goes on the portrait and the name, not the tile, or it
+   would grey the pill too. The pill stays inside the tile: its type scales
+   with the tile (9 to 12px) and wraps to a second line rather than being
+   cut off. The password field takes the
    workshop inputs' look. A friend's invitation pins itself to the top. */
-.tile.locked{filter:grayscale(1);opacity:.55;cursor:not-allowed;position:relative;}
-.tile.locked::after{content:attr(data-lock);position:absolute;top:6px;left:50%;transform:translateX(-50%);white-space:nowrap;font-family:var(--font-display);font-size:12px;letter-spacing:.03em;padding:2px 8px;border-radius:999px;background:rgba(12,18,48,.85);color:var(--gold);border:1px solid var(--gold);}
+.tile.locked{cursor:not-allowed;position:relative;container-type:inline-size;}   /* the pill's type follows the tile's width (cqi) */
+.tile.locked img,.tile.locked .tname{filter:grayscale(1);opacity:.55;}
+.tile.locked::after{content:attr(data-lock);position:absolute;top:4px;left:3px;right:3px;width:fit-content;margin-inline:auto;box-sizing:border-box;white-space:normal;overflow-wrap:break-word;text-align:center;font-family:var(--font-display);font-size:clamp(9px,14cqi,12px);line-height:1.1;letter-spacing:.02em;padding:2px 3px;border-radius:8px;background:var(--panel);color:var(--gold);border:1px solid var(--gold);}
 .tile.locked:hover{transform:none;}
 .admin input[type=password]{font:inherit;font-size:14px;color:var(--fg);background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:7px;padding:6px 8px;}
 .invite-banner{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:30;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;width:max-content;max-width:calc(100vw - 32px);border:2px solid var(--gold);}
