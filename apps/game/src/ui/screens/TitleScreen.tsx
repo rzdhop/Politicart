@@ -37,11 +37,12 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
       <GameTitle>POLITIKART</GameTitle>
       <Subtitle>Grand Prix de l’Hémicycle</Subtitle>
       <Panel style={COLUMN}>
+        {/* Jouer is the row's one primary; everything else is a ghost, signed in or not. */}
         <Row>
           <Button id="b-play" onClick={actions.play}>Jouer</Button>
-          {ui.netAvailable && <Button id="b-multi" onClick={actions.multiplayer}>Multijoueur</Button>}
+          {ui.netAvailable && <Button id="b-multi" variant="ghost" onClick={actions.multiplayer}>Multijoueur</Button>}
           {ui.netAvailable && (
-            <Button id="b-account" variant={ui.account ? 'primary' : 'ghost'} onClick={actions.openAccount}>
+            <Button id="b-account" variant="ghost" onClick={actions.openAccount}>
               {ui.account ? ui.account.profile.name + ' · niv. ' + ui.account.profile.level + friendBadge(ui) : 'Compte · se connecter'}
             </Button>
           )}

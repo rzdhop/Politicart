@@ -45,6 +45,13 @@ async function served(ok: boolean) {
   await act(async () => { actions.detectServer(); await Promise.resolve(); await Promise.resolve(); });
 }
 
+/** The ids of each row's primary (non-ghost) buttons under `screen`: the design system allows at most one per row. */
+function primaries(container: HTMLElement, screen: string) {
+  return [...container.querySelectorAll(screen + ' .row')]
+    .map(row => [...row.querySelectorAll(':scope > .btn:not(.ghost)')].map(b => b.id))
+    .filter(ids => ids.length);
+}
+
 const PROFILE = { id: 'u1', name: 'Alice', xp: 130, level: 2, xpInto: 10, xpNext: 160, unlocked: ['victor', 'gege', 'maurice', 'capucine', 'lucie'] };
 
 /** A game server that answers the probe and logs Alice in. */
@@ -87,12 +94,14 @@ describe('the lobby', () => {
     expect(sock.sent[0]).toEqual({ t: 'hello', name: 'Alice', token: 'tok' });
     fireEvent.click(container.querySelector('#b-acc-back')!);
     expect(container.querySelector('#b-account')?.textContent).toBe('Alice · niv. 2');
+    expect(primaries(container, '#s-title')).toEqual([['b-play']]);   // signed in, the account stays a ghost
 
     fireEvent.click(container.querySelector('#b-multi')!);
     expect(getState()).toBe('lobby');
     expect((container.querySelector('#s-lobby') as HTMLElement).hidden).toBe(false);
     expect(sock.url).toMatch(/^ws:\/\/.+\/ws$/);
     expect(container.querySelector('#lobby-status')?.textContent).toBe('Connecté au serveur');
+    expect(primaries(container, '#s-lobby')).toEqual([['b-mp-create']]);   // an account creates; joining is the ghost
 
     fireEvent.click(container.querySelector('#b-mp-create')!);
     expect(sock.sent.at(-2)).toEqual({ t: 'hello', name: 'Alice', token: 'tok' });
@@ -130,12 +139,18 @@ describe('the lobby', () => {
     act(() => { sock.open(); });
     expect((container.querySelector('#b-mp-create') as HTMLButtonElement).disabled).toBe(true);
     expect(container.querySelector('#lobby-guest')).not.toBeNull();
+    expect(primaries(container, '#s-lobby')).toEqual([['b-mp-join']]);   // a guest cannot create, so joining is the primary
+    // "Se connecter" sits in its own row under the note, and the empty status line takes no room.
+    expect(container.querySelector('#lobby-guest #b-mp-account')).toBeNull();
+    expect(container.querySelector('#b-mp-account')?.parentElement?.classList.contains('row')).toBe(true);
+    expect((container.querySelector('#lobby-error') as HTMLElement).hidden).toBe(true);
     act(() => { sock.open(); sock.serve({ t: 'welcome', id: 'bob' }); sock.serve({ t: 'room', room: ROOM() }); });
     expect(container.querySelector('#b-mp-start')).toBeNull();
     fireEvent.click(container.querySelector('#b-mp-ready')!);
     expect(sock.sent.at(-1)).toEqual({ t: 'set', ready: true });
     act(() => sock.serve({ t: 'error', msg: 'Ce candidat est déjà pris.' }));
     expect(container.querySelector('#lobby-error')?.textContent).toBe('Ce candidat est déjà pris.');
+    expect((container.querySelector('#lobby-error') as HTMLElement).hidden).toBe(false);
     fireEvent.click(container.querySelector('#b-mp-leave')!);
     expect(sock.sent.at(-1)).toEqual({ t: 'leave' });
     expect(container.querySelector('#b-mp-create')).not.toBeNull();
