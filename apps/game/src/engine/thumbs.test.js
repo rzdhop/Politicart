@@ -63,17 +63,22 @@ describe('thumbSteps', () => {
   });
 
   it('keeps every build step well inside a frame’s budget (measured here in Node)', () => {
-    const steps = {};
-    for (const t of TRACKS) {
-      const gen = thumbSteps(t, { poly: 'high' });
-      for (;;) {
-        const t0 = performance.now(), r = gen.next(), dt = performance.now() - t0;
-        const name = r.done ? 'camera' : r.value;
-        steps[name] = Math.max(steps[name] ?? 0, dt);
-        if (r.done) { disposeThumbScene(r.value.scene); break; }
+    // three builds, each step's best run kept: a step that holds a whole phase is slow every time, a GC pause or a loaded machine is not
+    const runs = [0, 1, 2].map(() => {
+      const steps = {};
+      for (const t of TRACKS) {
+        const gen = thumbSteps(t, { poly: 'high' });
+        for (;;) {
+          const t0 = performance.now(), r = gen.next(), dt = performance.now() - t0;
+          const name = t.id + ':' + (r.done ? 'camera' : r.value);
+          steps[name] = Math.max(steps[name] ?? 0, dt);
+          if (r.done) { disposeThumbScene(r.value.scene); break; }
+        }
       }
-    }
-    // the first build pays for the module's warm-up: a generous bound, the point being "milliseconds, not a phase"
+      return steps;
+    });
+    const steps = Object.fromEntries(Object.keys(runs[0]).map(name => [name, Math.min(...runs.map(r => r[name] ?? Infinity))]));
+    // a generous bound, the point being "milliseconds, not a phase"
     for (const [name, ms] of Object.entries(steps)) expect(ms, name).toBeLessThan(BUDGET_MS * 4);
   });
 });

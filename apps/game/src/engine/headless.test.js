@@ -60,10 +60,12 @@ describe('headless engine', () => {
     const road = G.scene.children.find(o => o.isMesh && o.material.map && o.geometry.attributes.uv && o.geometry.attributes.position.count === (G.N + 1) * 2);
     expect(road).toBeTruthy();
     expect(road.material.map).toBe(roadTexOf(TRACKS[i]));
-    // Decor budget: generous, so it never flakes, but a runaway loop would trip it.
+    // Decor budget: generous, so it never flakes, but a runaway loop would trip it. The floor is on triangles, which count
+    // every instanced copy: instancing (DEC-056) cuts the mesh count on purpose, so a mesh floor would punish it.
     let meshes = 0; G.scene.traverse(o => { if (o.isMesh) meshes++; });
-    expect(meshes).toBeGreaterThan(1500);
+    expect(meshes).toBeGreaterThan(500);
     expect(meshes).toBeLessThan(14000);
+    expect(countTriangles(G.scene)).toBeGreaterThan(150_000);
   });
 });
 
