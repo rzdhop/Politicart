@@ -8,8 +8,8 @@
 import * as THREE from 'three';
 
 import { box, cone, cyl, imgPlane, mat, plane, sph, tag, textPlane, torus } from '../primitives.js';
-import { CFG, G, seg } from '../state.js';
-import { TEX } from '../textures.js';
+import { CFG, G, disposable, seg } from '../state.js';
+import { TEX, surface } from '../textures.js';
 import { hex, pick, rand } from '../util.js';
 import { DS, still } from './context.js';
 
@@ -64,7 +64,8 @@ export function tree(scene, x, z, kind) {
 let LAMP_MAT = null, HEADLIGHT_MAT = null;
 export const lampMat = () => LAMP_MAT || (LAMP_MAT = new THREE.MeshBasicMaterial({ color: 0xfff2b0 }));
 const headlightMat = () => HEADLIGHT_MAT || (HEADLIGHT_MAT = new THREE.MeshBasicMaterial({ color: 0xfff1b0 }));
-export function lamp(scene, x, z, style) { if (style === 'paris') { scene.add(still(cyl(0.14, 0.22, 6, 0x2f3a3a, x, 3, z, 8))); scene.add(still(box(0.7, 0.9, 0.7, 0x2f3a3a, x, 6.4, z))); const l = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 0.55), lampMat()); l.position.set(x, 6.4, z); scene.add(still(l)); } else { scene.add(still(cyl(0.12, 0.18, 6, 0x2f3a44, x, 3, z, 6))); const l = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), lampMat()); l.position.set(x, 6.2, z); scene.add(still(l)); } }
+// Every head goes into G.lamps with its height over the lamp's foot, for the climate to light at night (climate.js).
+export function lamp(scene, x, z, style) { if (style === 'paris') { scene.add(still(cyl(0.14, 0.22, 6, 0x2f3a3a, x, 3, z, 8))); scene.add(still(box(0.7, 0.9, 0.7, 0x2f3a3a, x, 6.4, z))); const l = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 0.55), lampMat()); l.position.set(x, 6.4, z); scene.add(still(l)); G.lamps.push({ head: l, rise: 6.4 }); } else { scene.add(still(cyl(0.12, 0.18, 6, 0x2f3a44, x, 3, z, 6))); const l = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), lampMat()); l.position.set(x, 6.2, z); scene.add(still(l)); G.lamps.push({ head: l, rise: 6.2 }); } }
 export function flagPole(scene, x, z, colors, h) { h = h || 9; scene.add(still(cyl(0.1, 0.12, h, 0xdddddd, x, h / 2, z, 6))); colors.forEach((c, i) => scene.add(still(box(1.2, 2.2, 0.06, c, x + 0.6 + i * 1.2, h - 1.2, z)))); }
 export function sedan(scene, x, z, rotY, color, taxi) {
   const g = new THREE.Group(); const S = seg();
@@ -79,7 +80,7 @@ export function sedan(scene, x, z, rotY, color, taxi) {
 }
 // A Haussmann block; `tint` multiplies the facade (ochre and pink in Marseille), `roofColor` swaps the zinc for tiles.
 export function building(scene, x, z, w, d, h, rotY, tint, roofColor) {
-  const m = tag(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ map: TEX.facade.clone(), roughness: 0.9, color: tint || 0xffffff })));
+  const fs = surface('facade'), m = tag(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), disposable(new THREE.MeshStandardMaterial({ map: disposable(fs.map.clone()), normalMap: fs.normalMap, roughness: 0.9, color: tint || 0xffffff }))));
   m.material.map.needsUpdate = true; m.material.map.repeat.set(Math.max(1, Math.round(w / 8)), Math.max(1, Math.round(h / 9)));
   m.position.set(x, h / 2, z); m.rotation.y = rotY || 0; scene.add(m);
   const roof = box(w * 0.96, 2.6, d * 0.96, roofColor || 0x59606b, 0, h + 1.3, 0); roof.position.set(x, h + 1.3, z); roof.rotation.y = rotY || 0; scene.add(still(roof));
@@ -87,7 +88,7 @@ export function building(scene, x, z, w, d, h, rotY, tint, roofColor) {
 }
 export function palace(scene, x, z, w, h, d, rotY, roofColor) {
   const g = new THREE.Group();
-  const body = tag(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ map: TEX.palace.clone(), roughness: 0.9 }))); body.material.map.needsUpdate = true; body.material.map.repeat.set(Math.round(w / 10), Math.round(h / 10)); body.position.y = h / 2; g.add(body);
+  const ps = surface('palace'), body = tag(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), disposable(new THREE.MeshStandardMaterial({ map: disposable(ps.map.clone()), normalMap: ps.normalMap, roughness: 0.9 })))); body.material.map.needsUpdate = true; body.material.map.repeat.set(Math.round(w / 10), Math.round(h / 10)); body.position.y = h / 2; g.add(body);
   g.add(box(w + 1, 1.4, d + 1, 0xd9cfb8, 0, h + 0.7, 0));
   const roof = box(w - 2, 4, d - 3, roofColor || 0x4a4f5a, 0, h + 3.4, 0); g.add(roof);
   const central = box(w * 0.22, h + 6, d + 2, 0xeadfc8, 0, (h + 6) / 2, 0); g.add(central); g.add(box(w * 0.22 + 1, 1.2, d + 3, 0xd9cfb8, 0, h + 6.6, 0));
@@ -115,7 +116,7 @@ export function bateau(scene) {
   g.add(box(0.5, 0.5, 0.5, 0xc8102e, -12, 4.3, 0)); scene.add(g); G.animated.push(dt => { g.position.x += dt * 6; if (g.position.x > 420) g.position.x = -420; }); g.position.set(-200, 0, -165);
 }
 export function fountain(scene, x, z, r, tiers, gold) {
-  scene.add(cyl(r, r, 1.0, 0xd9cfb8, x, 0.5, z, 32)); const w = new THREE.Mesh(new THREE.CircleGeometry(r - 0.8, 32), new THREE.MeshStandardMaterial({ map: TEX.water, roughness: 0.2, metalness: 0.2 })); w.rotation.x = -Math.PI / 2; w.position.set(x, 1.02, z); scene.add(w);
+  scene.add(cyl(r, r, 1.0, 0xd9cfb8, x, 0.5, z, 32)); const w = new THREE.Mesh(new THREE.CircleGeometry(r - 0.8, 32), disposable(new THREE.MeshStandardMaterial({ map: TEX.water, normalMap: surface('water').normalMap, roughness: 0.2, metalness: 0.2 }))); w.rotation.x = -Math.PI / 2; w.position.set(x, 1.02, z); scene.add(w);
   for (let t = 0; t < tiers; t++) { const rr = r * (0.42 - t * 0.12); scene.add(cyl(rr, rr * 1.1, 0.6, 0xd9cfb8, x, 1.3 + t * 2.2, z, 24)); scene.add(cyl(0.5, 0.7, 1.6, 0xd9cfb8, x, 2.4 + t * 2.2, z, 12)); }
   if (gold) { for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; scene.add(sph(0.6, 0xd4af37, x + Math.cos(a) * (r * 0.55), 1.5, z + Math.sin(a) * (r * 0.55), 10)); } scene.add(box(2.2, 1.4, 1.4, 0xd4af37, x, 1.4 + tiers * 2.2 + 0.4, z)); }
   const jets = [];

@@ -17,9 +17,9 @@ import { getCustom } from './custom.js';
 import { box, canvasTexture, cone, cyl, mat, tag, textPlane } from './primitives.js';
 import { buildCyclists } from './cyclists.js';
 import { bakeVertexColours, finishOf, mergeByMaterial, mergeInWorld } from './geo.js';
-import { CFG, G, getPoly } from './state.js';
-import { TEX, textures } from './textures.js';
-import { hex, pick, rand } from './util.js';
+import { CFG, G, disposable, getPoly } from './state.js';
+import { TEX, surface, textures } from './textures.js';
+import { pick, rand } from './util.js';
 import { STILL, setDecorScale, still } from './decor/context.js';
 import { BUILDERS } from './decor/index.js';
 import { ADS, JACKETS, SKINS, adBoard, crowdZone, figure, grandstand, lamp, sedan } from './decor/street.js';
@@ -80,7 +80,7 @@ function buildFeatures(scene, track) {
     } else if (f.t === 'pit') {
       const len = f.len || 9; const b = G.samples[(i0 + len) % N]; const L = Math.hypot(b.x - a.x, b.z - a.z); G.pits.push({ i0, len, kind: f.kind });
       const g = new THREE.Group(); g.position.set((a.x + b.x) / 2, 0, (a.z + b.z) / 2); g.rotation.y = Math.atan2(b.x - a.x, b.z - a.z);
-      if (f.kind === 'water') { const w = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2 + 1, L), new THREE.MeshStandardMaterial({ map: TEX.water, roughness: 0.15, metalness: 0.3 })); w.rotation.x = -Math.PI / 2; w.position.y = 0.12; g.add(w); [-hw - 0.3, hw + 0.3].forEach(x => g.add(box(0.6, 0.5, L, 0xd9cfb8, x, 0.25, 0))); G.animated.push(dt => { w.material.map.offset.y += dt * 0.05; }); }
+      if (f.kind === 'water') { const w = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2 + 1, L), disposable(new THREE.MeshStandardMaterial({ map: TEX.water, normalMap: surface('water').normalMap, roughness: 0.15, metalness: 0.3 }))); w.rotation.x = -Math.PI / 2; w.position.y = 0.12; g.add(w); [-hw - 0.3, hw + 0.3].forEach(x => g.add(box(0.6, 0.5, L, 0xd9cfb8, x, 0.25, 0))); G.animated.push(dt => { w.material.map.offset.y += dt * 0.05; }); }
       else if (f.kind === 'works') { const t = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2, L), mat(0x4a3b2a)); t.rotation.x = -Math.PI / 2; t.position.y = 0.09; g.add(t); for (let z = -L / 2 + 1; z < L / 2; z += 3) { [-hw + 1, hw - 1].forEach(x => { g.add(cone(0.45, 1.1, 0xff6a00, x, 0.55, z, 8)); g.add(box(0.9, 0.06, 0.9, 0x222222, x, 0.06, z)); }); } g.add(box(hw * 2, 0.4, 0.4, 0xe0a030, 0, 0.5, -L / 2)); const sg = textPlane(4, 1.2, 'TRAVAUX', '#f2c14e', '#111', 90); sg.position.set(hw + 2.4, 2.4, -L / 2 - 1); g.add(sg); g.add(cyl(0.06, 0.06, 2, 0x555555, hw + 2.4, 1, -L / 2 - 1, 5)); for (let i = 0; i < 3; i++) { const wk = figure(0xff6a00, pick(SKINS), null); wk.position.set(rand(-4, 4), 0, rand(-L / 2 + 2, L / 2 - 2)); wk.rotation.y = rand(0, 6); g.add(wk); G.crowd.push({ g: wk, ph: rand(0, 6), amp: 0.08, base: 0 }); } }
       else if (f.kind === 'manif') { for (let i = 0; i < 16; i++) { const m = figure(pick(JACKETS), pick(SKINS), i % 3 === 0 ? 'sign' : i % 4 === 1 ? 'flag' : null); m.position.set(rand(-hw + 1.5, hw - 1.5), 0, rand(-L / 2 + 1.5, L / 2 - 1.5)); m.rotation.y = rand(0, 6); g.add(m); G.crowd.push({ g: m, ph: rand(0, 6), amp: 0.3, base: 0 }); } const ban = textPlane(hw * 2 - 2, 1.4, 'TOUS EN GRÈVE', '#c8102e', '#fff', 80); ban.position.set(0, 2.6, 0); g.add(ban); [-hw + 1, hw - 1].forEach(x => g.add(cyl(0.06, 0.06, 3.2, 0x8b5a2b, x, 1.6, 0, 5))); }
       scene.add(g);
@@ -103,14 +103,6 @@ function buildFeatures(scene, track) {
     }
   }
 }
-function cloudsAndSky(scene, top, horizon) {
-  const t = canvasTexture(16, 256, (c, w, h) => { const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, hex(top)); gr.addColorStop(0.55, hex(horizon)); gr.addColorStop(1, hex(horizon)); c.fillStyle = gr; c.fillRect(0, 0, w, h); });
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(1100, 24, 12), new THREE.MeshBasicMaterial({ map: t, side: THREE.BackSide, fog: false })); scene.add(sky);
-  const sun = new THREE.Mesh(new THREE.SphereGeometry(28, 16, 16), new THREE.MeshBasicMaterial({ color: 0xfff7d0, fog: false })); sun.position.set(400, 520, 260); scene.add(sun);
-  const cm = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92, fog: false });
-  for (let i = 0; i < 16; i++) { const g = new THREE.Group(); const n = 3 + Math.floor(Math.random() * 3); for (let j = 0; j < n; j++) { const s = new THREE.Mesh(new THREE.SphereGeometry(rand(7, 14), 10, 8), cm); s.position.set(j * 9 - n * 4, rand(-2, 3), rand(-4, 4)); s.scale.y = 0.55; g.add(s); } g.position.set(rand(-700, 700), rand(120, 190), rand(-700, 700)); scene.add(g); G.animated.push(dt => { g.position.x += dt * 2.5; if (g.position.x > 760) g.position.x = -760; }); }
-}
-
 // ---------- Bike lane ----------
 // A green painted lane along the right-hand edge of the road, behind a dashed
 // white line, with a cycle pictogram every so often. The cyclists who use it
@@ -163,21 +155,21 @@ export function buildTrack(scene, track, { fold = getPoly() === 'low' } = {}) {
   G.samples = samples; G.N = N; G.trackLength = total;
   const hw = CFG.roadHalfWidth, step = total / N;
 
-  // road surface (asphalt, gravel or cobbles; the texture tiles every `period` metres)
-  const roadTex = roadTexOf(track), period = track.gravel ? 10 : track.cobble ? 8 : 20;
+  // road surface (asphalt, gravel or cobbles; the texture tiles every `period` metres), with its relief and wear maps
+  const roadSurf = surface(roadKindOf(track)), roadTex = roadSurf.map, period = track.gravel ? 10 : track.cobble ? 8 : 20;
   const pos = [], uv = [], idx = [];
   for (let i = 0; i <= N; i++) { const s = samples[i % N]; const v = (i * step) / period; pos.push(s.x + s.sx * hw, 0.05, s.z + s.sz * hw, s.x - s.sx * hw, 0.05, s.z - s.sz * hw); uv.push(0, v, 1, v); }
   for (let i = 0; i < N; i++) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
   const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); rg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); rg.setIndex(idx); rg.computeVertexNormals();
   // the cobbles are tinted down: the pale stones would otherwise wash out next to the pavement
-  const road = new THREE.Mesh(rg, new THREE.MeshStandardMaterial({ map: roadTex, color: track.cobble ? 0x8f8a82 : 0xffffff, roughness: 0.95, side: THREE.DoubleSide })); road.receiveShadow = true; scene.add(road);
+  const road = new THREE.Mesh(rg, disposable(new THREE.MeshStandardMaterial({ map: roadTex, normalMap: roadSurf.normalMap, roughnessMap: roadSurf.roughnessMap, color: track.cobble ? 0x8f8a82 : 0xffffff, roughness: 0.95, side: THREE.DoubleSide }))); road.receiveShadow = true; scene.add(road);
 
   function strip(inner, outer, y0, y1, period, sideSign, c1, c2, rough) {
     const p = [], col = [], ix = []; const A = new THREE.Color(c1), B = new THREE.Color(c2);
     for (let i = 0; i <= N; i++) { const s = samples[i % N]; const c = period ? (Math.floor(i / period) % 2 === 0 ? A : B) : A; p.push(s.x + s.sx * inner * sideSign, y0, s.z + s.sz * inner * sideSign, s.x + s.sx * outer * sideSign, y1, s.z + s.sz * outer * sideSign); col.push(c.r, c.g, c.b, c.r, c.g, c.b); }
     for (let i = 0; i < N; i++) { const a = i * 2; ix.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(ix); g.computeVertexNormals();
-    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: rough || 0.9 })); m.receiveShadow = true; scene.add(m);
+    const m = new THREE.Mesh(g, disposable(new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: rough || 0.9 }))); m.receiveShadow = true; scene.add(m);
   }
   [1, -1].forEach(sg => {
     strip(hw - 1.1, hw, 0.07, 0.07, 4, sg, track.kerb[0], track.kerb[1]);             // kerb stripes
@@ -196,10 +188,9 @@ export function buildTrack(scene, track, { fold = getPoly() === 'low' } = {}) {
   const banner = canvasTexture(1024, 160, (c, w, h) => { c.fillStyle = '#1f3a93'; c.fillRect(0, 0, w / 3, h); c.fillStyle = '#fffaf0'; c.fillRect(w / 3, 0, w / 3, h); c.fillStyle = '#c8102e'; c.fillRect(2 * w / 3, 0, w / 3, h); c.fillStyle = '#0c1230'; c.font = 'bold 96px sans-serif'; c.textAlign = 'center'; c.fillText('DÉPART · ARRIVÉE', w / 2, 112); });
   const bm = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2 + 3.2, 3), new THREE.MeshBasicMaterial({ map: banner, side: THREE.DoubleSide })); bm.position.set(0, 8, 0); gantry.add(bm); scene.add(still(gantry));
 
-  // ground
-  const gt = (track.gravel ? TEX.gravel : TEX.grass).clone(); gt.needsUpdate = true; gt.repeat.set(280, 280);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(3200, 3200), new THREE.MeshStandardMaterial({ map: gt, roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
-  cloudsAndSky(scene, track.sky[0], track.sky[1]);
+  // ground: the map cloned for its own repeat (the normal map follows it: one uvTransform in r128), none of it on "légers"
+  const gs = surface(track.gravel ? 'gravel' : 'grass'), gt = disposable(gs.map.clone()); gt.needsUpdate = true; gt.repeat.set(280, 280);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(3200, 3200), disposable(new THREE.MeshStandardMaterial({ map: gt, normalMap: gs.normalMap, roughness: 1 }))); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
 
   // item boxes: rows of 4 golden urns across the wide road, four rows unless the track lists more
   G.itemBoxes = [];
@@ -224,8 +215,10 @@ export function buildTrack(scene, track, { fold = getPoly() === 'low' } = {}) {
   if (fold) foldStill(scene); else STILL.length = 0;
 }
 
-/** The road's surface texture: gravel for the park, cobbles for the butte, asphalt elsewhere. */
-export function roadTexOf(track) { return track.gravel ? TEX.gravel : track.cobble ? TEX.cobble : TEX.asphalt; }
+/** The road's surface kind: gravel for the park, cobbles for the butte, asphalt elsewhere. */
+export const roadKindOf = track => (track.gravel ? 'gravel' : track.cobble ? 'cobble' : 'asphalt');
+/** The road's surface texture (its colour map; surface(roadKindOf(track)) has the relief). */
+export function roadTexOf(track) { return TEX[roadKindOf(track)]; }
 
 
 /**

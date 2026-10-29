@@ -38,6 +38,9 @@ export const G = {
   scene: null, track: null, karts: [], player: null, samples: [], N: 0, trackLength: 0,
   hazards: [], projectiles: [], itemBoxes: [], animated: [], crowd: [], ramps: [], pits: [], pads: [], crossings: [], time: 0, countdown: 0, charIdx: 0, trackIdx: 0,
   resultsAt: Infinity, wrongTimer: 0, laps: CFG.laps, previewKart: null, previewScene: null, sun: null, thumbs: {}, thumbPoly: null,
+  // The race's climate (climate.js applyClimate): the preset applied, the sun's offset from the followed kart, the lamp heads
+  // the decor registered (lit at night), and what the race allocated and frees with its scene (disposable, race.js disposeScene).
+  climate: null, sunOffset: null, lamps: [], disposables: [],
 };
 Object.defineProperty(G, 'state', { enumerable: true, get: getState });
 export function isClear(x, z, margin) {
@@ -45,3 +48,11 @@ export function isClear(x, z, margin) {
   for (let i = 0; i < G.N; i += 2) { const s = G.samples[i]; if ((s.x - x) ** 2 + (s.z - z) ** 2 < lim) return false; }
   return true;
 }
+
+/**
+ * Register a texture or a material the race allocated for this scene only,
+ * so race.js disposeScene frees it with the scene's geometries instead of
+ * leaking it race after race. Returns it. Never register what a cache owns
+ * (primitives.mat, textPlane, the TEX bakes): those outlive the race.
+ */
+export function disposable(x) { G.disposables.push(x); return x; }
