@@ -304,6 +304,9 @@ const CONTACT = [0.5, 0.78];
  *   turn with it.
  * - `setTint(color, instant = false)`: ease the stage's tint towards an
  *   sRGB colour (or jump to it, for a portrait).
+ * - `setLeds(color = GOLD, glow = 1)`: colour the tiers' LED strips (sRGB)
+ *   at `glow` times their usual brightness, at once; the Politibox pulses
+ *   them in the prize's grade. The design's gold at 1 is how they are built.
  * - `update(dt, t)`: advance by dt seconds (clamped to [0, MAX_DT]); t is
  *   the caller's stage clock for the periodic effects (sky rays, stars,
  *   confetti flutter), the module's own clamped clock when left out.
@@ -461,6 +464,10 @@ export function buildStageScene(tier = 'high', { renderer = null, tint = GOLD, s
     if (instant) { cur.copy(target); applyTint(); }
   }
 
+  function setLeds(color = COL.led, glow = 1) {
+    ledMat.color.copy(linear(color)).multiplyScalar(1.6 * Math.max(0, glow));
+  }
+
   function update(dt, t) {
     if (disposed) return;
     dt = dt > 0 ? Math.min(dt, MAX_DT) : 0; // NaN and negative steps are still frames (A.1)
@@ -517,7 +524,7 @@ export function buildStageScene(tier = 'high', { renderer = null, tint = GOLD, s
     };
   }
 
-  return { scene, turntable, setTint, update, burst, dispose, info };
+  return { scene, turntable, setTint, setLeds, update, burst, dispose, info };
 }
 
 /** The seats' velvet spec on a tier: the wool maps (with normals on 'high' and 'phone') under VELVET's colour and sheen. */

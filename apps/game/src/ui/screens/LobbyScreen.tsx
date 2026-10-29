@@ -3,21 +3,26 @@ import { useState } from 'react';
 import {
   AdminGrid,
   Button,
+  ChoiceGroup,
   Disclaimer,
   Field,
   GradeBadge,
   Heading,
+  InviteRow,
   Panel,
-  ResultsTable,
+  PlayerCard,
+  PlayerGrid,
+  RoomCode,
   Row,
   Screen,
-  Subtitle,
+  TeamPicker,
   TextInput,
-  type ResultsRow,
+  TrackMeta,
 } from '@politikart/ui';
 
 import { CHARACTERS, TRACKS } from '../../engine/data.js';
 import { TEAM_NAMES } from '../../engine/teams.js';
+import { trackMeta } from '../../engine/thumbs.js';
 import { charGrade, GRADE_LABELS, kartCardOf } from '../kartChoices';
 import { actions, isAdmin, unlockedOf, type LobbyPlayer, type RoomView, type TeamId, type UiSnapshot } from '../store';
 import type { Character, Track } from '../types';
@@ -26,6 +31,7 @@ const COLUMN = { display: 'flex', flexDirection: 'column', gap: 14, alignItems: 
 const CHARS = CHARACTERS as unknown as Character[];
 const TRACK_LIST = TRACKS as unknown as Track[];
 const TEAM_IDS: TeamId[] = ['bleu', 'rouge'];
+const TEAM_COLOR: Record<TeamId, string> = { bleu: 'var(--blue)', rouge: 'var(--red)' };
 
 const STATUS = {
   idle: 'Hors ligne',
@@ -109,12 +115,28 @@ function InvitePanel({ ui, room }: { ui: UiSnapshot; room: RoomView }) {
   const friends = ui.net.friends.filter(f => f.status === 'friend' && f.online && !inRoom.has(f.id));
   if (!ui.account) return null;
   return (
-    <Row id="lobby-invite">
-      {friends.length
-        ? friends.map(f => <Button key={f.id} id={'b-mp-invite-' + f.id} variant="ghost" onClick={() => actions.inviteFriend(f.id)}>{'Inviter ' + f.name}</Button>)
-        : <Disclaimer>Aucun·e ami·e en ligne à inviter. Donnez-leur le code, ou ajoutez des ami·es depuis votre compte.</Disclaimer>}
-    </Row>
+    <InviteRow
+      id="lobby-invite"
+      friends={friends}
+      onInvite={actions.inviteFriend}
+      inviteLabel={name => 'Inviter ' + name}
+      buttonId={id => 'b-mp-invite-' + id}
+      empty="Aucun·e ami·e en ligne à inviter. Donnez-leur le code, ou ajoutez des ami·es depuis votre compte."
+    />
   );
+}
+
+/** The room's circuit at a glance: its figures and its layouts (thumbs.js trackMeta). */
+function CircuitMeta({ idx }: { idx: number }) {
+  const t = TRACK_LIST[idx] as (Track & { id: string }) | undefined;
+  if (!t) return null;
+  const m = trackMeta(t) as { length: number; climb: number; laps: number; layouts: readonly string[] };
+  const items = [
+    { key: 'length', label: 'Longueur', value: (m.length / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + ' km' },
+    { key: 'climb', label: 'Dénivelé', value: m.climb < 0.5 ? 'plat' : Math.round(m.climb) + ' m' },
+    { key: 'laps', label: 'Tours', value: String(m.laps) },
+  ];
+  return <TrackMeta id="lobby-track-meta" items={items} layouts={m.layouts} layoutsLabel="Tracés" />;
 }
 
 /** Inside a room: the players, my team and candidate, the circuit, ready and start. */
@@ -128,29 +150,40 @@ function RoomPanel({ ui, room }: { ui: UiSnapshot; room: RoomView }) {
   // A god (the admin, DEC-030) drives any candidate and belongs to no team.
   const allowed = me?.god || admin ? CHARS.map(c => c.id) : unlockedOf(ui);
   const state = (id: string, ready: boolean) => (id === room.host ? 'hôte' : ready ? 'prêt·e' : '…');
-  const rows: ResultsRow[] = room.players.map(p => {
-    const c = CHARS.find(x => x.id === p.charId);
-    const other = p.team === 'bleu' ? 'rouge' : 'bleu';
-    return {
-      id: p.id,
-      rank: p.god ? 'Dieu' : p.team ? TEAM_NAMES[p.team] : '—',
-      name: p.name + (p.god ? ' (dieu)' : p.guest ? ' (invité·e)' : p.level ? ' · niv. ' + p.level : '') + (p.id === room.host ? ' (hôte)' : ''),
-      detail: <PlayerDetail p={p} c={c} />,
-      time: admin && p.id !== ui.net.id ? (
-        <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-          {state(p.id, p.ready)}
-          {!p.god && room.phase === 'lobby' && <Button id={'b-mp-move-' + p.id} variant="ghost" onClick={() => actions.godCommand({ cmd: 'team', id: p.id, team: other })}>{'→ ' + TEAM_NAMES[other]}</Button>}
-          <Button id={'b-mp-kick-' + p.id} variant="ghost" onClick={() => actions.godCommand({ cmd: 'kick', id: p.id })}>Exclure</Button>
-        </span>
-      ) : state(p.id, p.ready),
-      highlighted: p.id === ui.net.id,
-    };
-  });
   const myChar = me ? CHARS.find(c => c.id === me.charId) : undefined;
+  const count = (t: TeamId) => room.players.filter(p => p.team === t).length;
   return (
     <>
-      <Subtitle id="lobby-room" style={{ fontSize: 18 }}>{'Salle ' + room.code + ' · donnez ce code à vos ami·es'}</Subtitle>
-      <ResultsTable rows={rows} columns={['Équipe', 'Joueur·se', 'État']} bodyProps={{ id: 'lobby-players' }} />
+      <RoomCode id="lobby-room" code={room.code} label="Salle" hint="Donnez ce code à vos ami·es" copyLabel="Copier le code" copiedLabel="Copié !" copyProps={{ id: 'b-mp-copy' }} />
+      <PlayerGrid id="lobby-players">
+        {room.players.map(p => {
+          const c = CHARS.find(x => x.id === p.charId);
+          const other = p.team === 'bleu' ? 'rouge' : 'bleu';
+          const tag = [p.god && '(dieu)', p.guest && '(invité·e)', p.id === room.host && '(hôte)'].filter(Boolean).join(' ');
+          return (
+            <PlayerCard
+              key={p.id}
+              id={'lobby-player-' + p.id}
+              name={p.name}
+              tag={tag || undefined}
+              level={!p.god && !p.guest && p.level ? 'niv. ' + p.level : undefined}
+              team={p.god ? 'Dieu' : p.team ? TEAM_NAMES[p.team] : '—'}
+              teamColor={p.god ? 'var(--gold)' : p.team ? TEAM_COLOR[p.team] : undefined}
+              portrait={ui.thumbs[p.charId]}
+              status={state(p.id, p.ready)}
+              ready={p.ready && p.id !== room.host}
+              you={p.id === ui.net.id}
+              kart={<PlayerDetail p={p} c={c} />}
+              actions={admin && p.id !== ui.net.id ? (
+                <>
+                  {!p.god && room.phase === 'lobby' && <Button id={'b-mp-move-' + p.id} variant="ghost" onClick={() => actions.godCommand({ cmd: 'team', id: p.id, team: other })}>{'→ ' + TEAM_NAMES[other]}</Button>}
+                  <Button id={'b-mp-kick-' + p.id} variant="ghost" onClick={() => actions.godCommand({ cmd: 'kick', id: p.id })}>Exclure</Button>
+                </>
+              ) : undefined}
+            />
+          );
+        })}
+      </PlayerGrid>
       {admin && room.phase === 'race' && (
         <Row id="lobby-race-running">
           <Disclaimer>Course en cours dans cette salle.</Disclaimer>
@@ -158,26 +191,32 @@ function RoomPanel({ ui, room }: { ui: UiSnapshot; room: RoomView }) {
           <Button id="b-mp-god-finish" variant="ghost" onClick={() => actions.godCommand({ cmd: 'finish' })}>Terminer la course</Button>
         </Row>
       )}
+      {me && !me.god && (
+        <TeamPicker
+          id="lobby-team"
+          label="Équipe"
+          value={me.team ?? 'bleu'}
+          onChange={actions.setTeam}
+          teams={TEAM_IDS.map(t => ({ value: t, label: TEAM_NAMES[t], color: TEAM_COLOR[t], id: 'b-mp-team-' + t, count: count(t) }))}
+        />
+      )}
       {me && (
         <Row>
-          {!me.god && TEAM_IDS.map(t => (
-            <Button key={t} id={'b-mp-team-' + t} variant={me.team === t ? 'primary' : 'ghost'} aria-pressed={me.team === t} onClick={() => actions.setTeam(t)}>
-              {'Équipe ' + TEAM_NAMES[t]}
-            </Button>
-          ))}
           {me.god && <span id="lobby-god" style={{ color: 'var(--gold)' }}>Mode dieu : sans équipe, sans recharge, intouchable, hors classement.</span>}
           <Button id="b-mp-char-prev" variant="ghost" aria-label="Candidat précédent" onClick={() => actions.setChar(nextFreeChar(room, me.id, me.charId, -1, allowed))}>◀</Button>
           <span id="lobby-char" style={{ minWidth: 160, textAlign: 'center' }}>{myChar?.name}</span>
           <Button id="b-mp-char-next" variant="ghost" aria-label="Candidat suivant" onClick={() => actions.setChar(nextFreeChar(room, me.id, me.charId, 1, allowed))}>▶</Button>
         </Row>
       )}
-      <Row>
-        {TRACK_LIST.map((t, i) => (
-          <Button key={t.name} id={'b-mp-track-' + i} variant={room.trackIdx === i ? 'primary' : 'ghost'} aria-pressed={room.trackIdx === i} disabled={!isHost && !admin} onClick={() => actions.pickTrack(i)}>
-            {t.name.split(' — ')[0]}
-          </Button>
-        ))}
-      </Row>
+      {/* the host (or the admin) picks the circuit; the others see the pick, their chips inert */}
+      <ChoiceGroup
+        id="lobby-track"
+        label="Circuit"
+        value={String(room.trackIdx)}
+        onChange={v => actions.pickTrack(Number(v))}
+        options={TRACK_LIST.map((t, i) => ({ value: String(i), label: t.name.split(' — ')[0], id: 'b-mp-track-' + i, disabled: !isHost && !admin }))}
+      />
+      <CircuitMeta idx={room.trackIdx} />
       <Row>
         {isHost
           ? <Button id="b-mp-start" disabled={!canStart} onClick={actions.startNetRace}>{canStart ? 'Lancer la course' : 'En attente des joueur·ses…'}</Button>

@@ -3,20 +3,35 @@
 // The engine keeps its state in module singletons (G, the state machine, the
 // event queue), so each race gets its own thread and therefore its own copy
 // of every module. The thread steps the simulation at a fixed 60 Hz, applies
-// each driver's latest controls, and every third tick (20 Hz) posts a
-// snapshot plus, per human slot, the messages and sounds addressed to them.
+// each driver's controls, and every second tick (30 Hz) posts a snapshot plus,
+// per human slot, the messages and sounds addressed to them and what their
+// client needs to correct its predicted kart (DEC-052).
 //
-// workerData: { trackIdx, roster: [{ charId, team, isAI, name, god? }], cast, fast, hold }
+// A client numbers every tick it predicts and sends its controls with the
+// newest number (one message may stand for several ticks with the same
+// controls). Each tick here stands for one tick of the client's: the queued
+// controls of that tick, or of the newest one before it if they came late;
+// none queued, the last controls go on. `ack` is the number of the controls
+// in use and `n` how many ticks they have been applied, so this kart is
+// where the client's was after its tick ack + n - 1. Controls that queue up
+// more than MAX_AHEAD ticks ahead are caught up on at once; a number at or
+// below one already received is dropped (reordered or repeated).
+//
+// workerData: { trackIdx, roster: [{ charId, team, isAI, name, god? }], cast, fast, hold, seed }
 //   cast: [{ id, name, title, quote }], the cast as the main thread has it
 //   (the admin's edits, roster.js); this thread's CHARACTERS start at the defaults.
 //   fast: step as fast as possible instead of in real time (tests only).
 //   hold: how long the clock may wait for the drivers to load, in ms (default 10 s).
-// In:  { t: 'input', slot, c: {throttle,brake,left,right,drift}, item, power }
+//   seed: the race's seed (DEC-049), the one every client was sent; 0 when absent.
+// In:  { t: 'input', slot, seq, c: {throttle,brake,left,right,drift}, item, power }
 //      { t: 'leave', slot }      the driver left; an AI takes the wheel (a god's kart turns mortal)
 //      { t: 'join', slot, entry }  the admin joins the race in progress as a god (DEC-031)
 //      { t: 'god', id, cmd, actor }  a god command (godcmd.js); actor is the admin's slot or null
 //      { t: 'stop' }
-// Out: { t: 'snap', s, per: { [slot]: { ev: [[type, text]], fx: [name] } }, fx: [name] }
+// Out: { t: 'snap', s, per: { [slot]: { ev: [[type, text]], fx: [name], ack, n, me } }, fx: [name] }
+//      s is the snapshot already stringified (encodeSnapshot), once for every player; me is the
+//      slot's private block (encodeKartPrivate); ack and n are absent until the slot's first numbered input
+//      vfx: the effects of the last few ticks, race-wide (netstate.js encodeVfx): this thread draws none (DEC-053)
 //      { t: 'done', ranking, teams }
 //      { t: 'godReply', id, ok, text }
 import { parentPort, workerData } from 'node:worker_threads';
@@ -27,33 +42,39 @@ import { drain, resolveFor } from '../../game/src/engine/events.js';
 import { applyGodCommand } from '../../game/src/engine/godcmd.js';
 import { useItem } from '../../game/src/engine/items.js';
 import { getState, resetMachine } from '../../game/src/engine/machine.js';
-import { encodeSnapshot } from '../../game/src/engine/netstate.js';
+import { encodeKartPrivate, encodeSnapshot, markTeleports } from '../../game/src/engine/netstate.js';
 import { usePower } from '../../game/src/engine/powers.js';
+import { encodeVfx } from '../../game/src/engine/netstate.js';
+import { setVfxSink } from '../../game/src/engine/vfx.js';
 import { endRace, joinField, raceOver, simStep, startField } from '../../game/src/engine/race.js';
-import { CFG, G } from '../../game/src/engine/state.js';
+import { CFG, G, STEP } from '../../game/src/engine/state.js';
 import { placementPoints, teamStandings } from '../../game/src/engine/teams.js';
 import { applyCast } from './roster.js';
 
-const STEP = 1 / 60;
-const SNAP_EVERY = 3;            // 60 Hz / 3 = 20 snapshots a second
+// 60 Hz / 2 = 30 snapshots a second (DEC-052): measured 0.55 ms of CPU per race-second for the snapshots
+// against 0.40 at 20 Hz, on a race costing about 2.8 ms a second in all; 45 kB/s per player, below the 84 of the
+// old 20 Hz protocol, for a render delay a third shorter
+const SNAP_EVERY = 2;
+const MAX_AHEAD = 4;             // queued controls past this many ticks ahead are caught up on at once
+const MAX_QUEUE = 16;            // controls kept while the clock holds, at most
 // A race nobody can finish still ends. POLITIKART_MAX_RACE_S shortens it (the end-to-end suite does).
 // The cap is for a race of the default length: a race the admin lengthens gets a longer one (DEC-031).
 const MAX_RACE_TIME = Number(process.env.POLITIKART_MAX_RACE_S) || 12 * 60;
 const raceCap = () => MAX_RACE_TIME * Math.max(1, G.laps / CFG.laps);
 
-const { trackIdx, roster, cast = [], fast, hold = 10_000 } = workerData;
+const { trackIdx, roster, cast = [], fast, hold = 10_000, seed = 0 } = workerData;
 const IDLE = Object.freeze({ throttle: false, brake: false, left: false, right: false, drift: false });
 
 // ---- set the race up
 applyCast(cast, CHARACTERS);
 resetMachine('tracks');
 G.trackIdx = trackIdx;
-startField(roster.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team, god: s.god === true })));
+startField(roster.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team, god: s.god === true })), { seed });
 
-const humans = new Map();        // slot -> { c, item, power, usedItem, usedPower, ev, fx }
+const humans = new Map();        // slot -> { c, item, power, usedItem, usedPower, ev, fx, seq, q, ack, n }
 /** Seat a human at grid slot `slot`: their controls drive that kart. */
 function seat(slot) {
-  const h = { c: IDLE, item: 0, power: 0, usedItem: 0, usedPower: 0, ev: [], fx: [] };
+  const h = { c: IDLE, item: 0, power: 0, usedItem: 0, usedPower: 0, ev: [], fx: [], seq: 0, q: [], ack: 0, n: 0 };
   humans.set(slot, h);
   G.karts[slot].ctrl = () => h.c;
 }
@@ -67,6 +88,9 @@ const loading = new Set(fast ? [] : humans.keys());
 const slotOf = new Map(G.karts.map((k, i) => [k, i]));
 let raceFx = [];
 setSfxSink((name, k) => { if (!k) { raceFx.push(name); return; } const h = humans.get(slotOf.get(k)); if (h) h.fx.push(name); });
+// Effects are only recorded here, for every client to play (vfx.js): the worker never builds one.
+let raceVfx = [];
+setVfxSink(e => { raceVfx.push(encodeVfx(e)); });
 
 const bool = v => v === true;
 parentPort.on('message', m => {
@@ -74,9 +98,15 @@ parentPort.on('message', m => {
     const h = humans.get(m.slot); if (!h) return;
     loading.delete(m.slot);
     const c = m.c ?? {};
-    h.c = { throttle: bool(c.throttle), brake: bool(c.brake), left: bool(c.left), right: bool(c.right), drift: bool(c.drift) };
+    const ctrl = { throttle: bool(c.throttle), brake: bool(c.brake), left: bool(c.left), right: bool(c.right), drift: bool(c.drift) };
     if (Number.isInteger(m.item) && m.item > h.item) h.item = m.item;
     if (Number.isInteger(m.power) && m.power > h.power) h.power = m.power;
+    if (!Number.isInteger(m.seq)) { h.c = ctrl; return; }          // unnumbered (the tests' drivers): the latest controls drive
+    if (m.seq <= h.seq) return;                                     // reordered or repeated
+    // the message stands for every tick since the last one received (a frame's ticks share its controls)
+    for (let s = Math.max(h.seq + 1, m.seq - MAX_AHEAD); s <= m.seq; s++) h.q.push({ seq: s, c: ctrl });
+    if (h.q.length > MAX_QUEUE) h.q.splice(0, h.q.length - MAX_QUEUE);
+    h.seq = m.seq;
   } else if (m.t === 'leave') {
     const k = G.karts[m.slot]; if (!k || !humans.has(m.slot)) return;
     humans.delete(m.slot); loading.delete(m.slot); k.ctrl = null; k.isAI = true; k.itemTimer = 1; k.god = false;
@@ -97,23 +127,43 @@ parentPort.on('message', m => {
 
 // ---- the loop
 let tick = 0, running = true;
+const lastPos = [];               // where each kart was after the last tick, for markTeleports
+
+/**
+ * The controls human `h` drives this tick with: the client's tick this one
+ * stands for (ack + n), from the queue -- or the newest queued before it,
+ * which came late -- else the last ones again. The first tick takes the
+ * newest queued, and controls queued too far ahead are caught up on.
+ */
+function advance(h) {
+  const next = h.n ? h.ack + h.n : -1;
+  let e = null;
+  while (h.q.length && (next < 0 || h.q[0].seq <= next || h.q.length > MAX_AHEAD)) e = h.q.shift();
+  if (e) { h.c = e.c; h.n = next < 0 ? 1 : Math.max(1, next - e.seq + 1); h.ack = e.seq; }
+  else if (h.n) h.n++;
+}
 
 function step() {
   // Item and power presses are edges: each press counts once, and only while racing, as in solo play.
   for (const [slot, h] of humans) {
     const k = G.karts[slot];
+    advance(h);
     if (h.item > h.usedItem) { h.usedItem = h.item; if (getState() === 'race') useItem(k); }
     if (h.power > h.usedPower) { h.usedPower = h.power; if (getState() === 'race') usePower(k); }
   }
   simStep(STEP); tick++;
+  markTeleports(G.karts, lastPos);
   for (const e of drain()) {
     for (const [slot, h] of humans) { const text = resolveFor(e, G.karts[slot]); if (text) h.ev.push([e.type, text]); }
   }
   if (tick % SNAP_EVERY === 0) {
     const per = {};
-    for (const [slot, h] of humans) { per[slot] = { ev: h.ev, fx: h.fx }; h.ev = []; h.fx = []; }
-    parentPort.postMessage({ t: 'snap', s: encodeSnapshot(G, tick), per, fx: raceFx });
-    raceFx = [];
+    for (const [slot, h] of humans) {
+      per[slot] = { ev: h.ev, fx: h.fx, ...(h.n ? { ack: h.ack, n: h.n } : {}), me: encodeKartPrivate(G.karts[slot]) };
+      h.ev = []; h.fx = [];
+    }
+    parentPort.postMessage({ t: 'snap', s: JSON.stringify(encodeSnapshot(G, tick)), per, fx: raceFx, vfx: raceVfx });
+    raceFx = []; raceVfx = [];
   }
   if (raceOver() || G.time > raceCap()) { finish(); return false; }
   return true;

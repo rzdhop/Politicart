@@ -26,7 +26,7 @@ import { ITEMS, rollItem } from './data.js';
 import { hintFor, say } from './events.js';
 import { readInput } from './input.js';
 import { stunKart } from './items.js';
-import { CFG, G } from './state.js';
+import { G } from './state.js';
 import { isFoe } from './teams.js';
 import { clamp, fmtTime, lerp, ordinal, rand, wrapAngle } from './util.js';
 
@@ -35,6 +35,7 @@ export function updateProgress(k) {
   const N = G.N; let best = k.idx, bestD = Infinity;
   for (let o = -16; o <= 16; o++) { const i = (k.idx + o + N) % N; const s = G.samples[i]; const d = (k.pos.x - s.x) ** 2 + (k.pos.z - s.z) ** 2; if (d < bestD) { bestD = d; best = i; } }
   const prev = k.idx; k.idx = best;
+  if (G.replaying) { k.progress = k.lap + best / N; return; }   // a networked client's replay (DEC-052): laps and the finish are the server's
   if (prev > N * 0.8 && best < N * 0.2) {
     k.lap++;
     if (k.lap > k.maxLap) {
@@ -71,7 +72,7 @@ export function updateKart(k, dt) {
   if (k.isAI || k.finished) maxSpeed *= k.aiSpeedMul;
   if (k.capped > 0) maxSpeed = Math.min(maxSpeed, DIRECTIVE_CAP);                     // directive européenne: 110 km/h, rubber-banding included
   updateProgress(k);
-  const s = G.samples[k.idx]; const hw = CFG.roadHalfWidth;
+  const s = G.samples[k.idx]; const hw = s.hw ?? G.hw;   // the road's half-width where the kart is (DEC-050)
   let lateral = (k.pos.x - s.x) * s.sx + (k.pos.z - s.z) * s.sz;
   k.offroad = Math.abs(lateral) > hw;
   if (k.offroad && k.invincible <= 0 && k.boost <= 0 && k.fly <= 0 && !k.air) maxSpeed *= 0.65;
@@ -83,10 +84,12 @@ export function updateKart(k, dt) {
   if (G.state === 'countdown') { inp.throttle = 0; inp.brake = 0; inp.drift = false; }
   if (k.fly > 0) inp.throttle = 1;
   if (k.confused > 0 && !k.isAI) inp.steer = -inp.steer;                           // éléments de langage: inverted controls
-  // ramps: ground height follows the plank; leaving its end launches the kart
-  let groundY = 0, onRamp = null;
-  for (const r of G.ramps) { const rel = (k.idx - r.i0 + G.N) % G.N; if (rel < r.len && Math.abs(lateral) < hw) { onRamp = r; groundY = r.h * clamp((rel + 0.5) / r.len, 0, 1); } }
-  if (k.rampPrev && !onRamp && !k.air) { const r = k.rampPrev; const rel = (k.idx - r.i0 + G.N) % G.N; if (rel >= r.len && rel < r.len + 8 && k.speed > 6) { k.air = true; k.y = r.h; k.vy = k.speed * (r.h / r.L) * 1.35 + 2.5; k.trick = false; sfxFor(k, 'jump'); } }
+  // the ground: the road's height and camber under the kart (DEC-050), or the plank of a ramp; leaving a ramp's end launches the kart,
+  // and so does a crest the road drops away from sharply (a bump, a terrace edge) taken at speed
+  let groundY = s.y + lateral * s.bank, onRamp = null;
+  for (const r of G.ramps) { const rel = (k.idx - r.i0 + G.N) % G.N; if (rel < r.len && Math.abs(lateral) < hw) { onRamp = r; groundY = r.y0 + r.h * clamp((rel + 0.5) / r.len, 0, 1); } }
+  if (k.rampPrev && !onRamp && !k.air) { const r = k.rampPrev; const rel = (k.idx - r.i0 + G.N) % G.N; if (rel >= r.len && rel < r.len + 8 && k.speed > 6) { k.air = true; k.y = r.y0 + r.h; k.vy = k.speed * (r.h / r.L) * 1.35 + 2.5; k.trick = false; sfxFor(k, 'jump'); } }
+  else if (!onRamp && !k.air && k.speed > CREST_SPEED && s.slope > 0.02 && s.slope - G.samples[(k.idx + 6) % G.N].slope > CREST_DROP) { k.air = true; k.vy = k.speed * s.slope * 1.1 + 1.0; k.trick = false; sfxFor(k, 'jump'); }
   k.rampPrev = onRamp;
   if (k.air) { if (inp.drift && !k.trick) { k.trick = true; say(k, 'FIGURE !'); } if (k.isAI && !k.trick && Math.random() < dt * 2) k.trick = true; inp.drift = false; }
 
@@ -95,6 +98,7 @@ export function updateKart(k, dt) {
   if (inp.throttle > 0) { if (k.speed < maxSpeed) k.speed = Math.min(maxSpeed, k.speed + accel * dt); }
   else if (inp.brake > 0) { if (k.speed > 0) k.speed = Math.max(0, k.speed - 45 * dt); else k.speed = Math.max(k.speed - 14 * dt, -baseMax * 0.35); }
   else k.speed *= Math.exp(-dt * 0.9);
+  if (!k.air && k.fly <= 0) k.speed -= s.slope * SLOPE_PULL * dt;                        // a climb drags, a descent gives
   if (k.speed > maxSpeed) k.speed = lerp(k.speed, maxSpeed, 1 - Math.exp(-dt * 2.5));
   if (k.stun > 0) k.speed *= Math.exp(-dt * 3);
 
@@ -121,6 +125,8 @@ export function updateKart(k, dt) {
   k.pos.x += Math.sin(moveDir) * k.speed * dt; k.pos.z += Math.cos(moveDir) * k.speed * dt;
   // knock-back from a kart-on-kart contact: a sideways shove that dies out in a fraction of a second
   if (k.kx || k.kz) { k.pos.x += k.kx * dt; k.pos.z += k.kz * dt; const f = Math.exp(-dt * 7); k.kx *= f; k.kz *= f; if (Math.abs(k.kx) + Math.abs(k.kz) < 0.05) { k.kx = 0; k.kz = 0; } }
+  // a side wind (Marseille's mistral) pushes the kart across the road while its wheels are on it
+  if (s.wind && !k.air && k.fly <= 0) { k.pos.x += s.sx * s.wind * dt; k.pos.z += s.sz * s.wind * dt; }
 
   lateral = (k.pos.x - s.x) * s.sx + (k.pos.z - s.z) * s.sz;
   const limit = hw + 0.1;
@@ -139,7 +145,7 @@ export function updateKart(k, dt) {
   if (!k.air) k.y = groundY;
   else { k.vy -= 32 * dt; k.y += k.vy * dt; if (k.y <= groundY) { k.y = groundY; k.air = false; if (k.trick) { k.boost = Math.max(k.boost, 0.7); k.boostPower = 1.35; sfxFor(k, 'boost'); } else k.speed *= 0.94; k.trick = false; } }
   // pits, dash pads
-  if (!k.air && k.y <= 0.1 && k.fly <= 0) {
+  if (!k.air && !onRamp && k.fly <= 0) {
     if (k.pitGrace <= 0) for (const p of G.pits) { const rel = (k.idx - p.i0 + G.N) % G.N; if (rel < p.len && Math.abs(lateral) < hw) { k.pitGrace = 2;
       if (p.kind === 'water') { k.speed *= 0.3; if (stunKart(k, 0.8)) say(k, 'PLOUF !'); }
       else if (p.kind === 'works') { k.slowed = Math.max(k.slowed, 2.2); k.speed *= 0.6; { say(k, 'ZONE DE TRAVAUX !'); sfxFor(k, 'bump'); } }
@@ -153,11 +159,12 @@ export function updateKart(k, dt) {
   k.bump = Math.max(0, (k.bump || 0) - dt); k.bumpCd = Math.max(0, (k.bumpCd || 0) - dt);
   k.shield = Math.max(0, (k.shield || 0) - dt); k.rabot = Math.max(0, (k.rabot || 0) - dt); k.capped = Math.max(0, (k.capped || 0) - dt);
   if (k.relance > 0) { k.relanceTimer -= dt; if (k.relanceTimer <= 0) { k.relance--; k.relanceTimer = 1.1; k.boost = 0.7; k.boostPower = 1.45; sfxFor(k, 'boost'); } }
-  if (k.god && !k.item && k.itemRolling <= 0 && !k.pendingItem) { k.pendingItem = rollItem(k.rank); k.itemRolling = GOD_ITEM_DELAY; }   // creative mode: the next item is always on its way
-  if (k.itemRolling > 0) { k.itemRolling -= dt; if (k.itemRolling <= 0) { k.item = k.pendingItem; k.pendingItem = null; if (!k.isAI) { sfxFor(k, 'pick'); hintFor(k, ITEMS[k.item].hint); } else k.itemTimer = rand(0.8, 4); } }
+  if (!G.replaying && k.god && !k.item && k.itemRolling <= 0 && !k.pendingItem) { k.pendingItem = rollItem(k.rank); k.itemRolling = GOD_ITEM_DELAY; }   // creative mode: the next item is always on its way
+  // the roll is the server's: a replay keeps the item the snapshot names
+  if (k.itemRolling > 0 && !G.replaying) { k.itemRolling -= dt; if (k.itemRolling <= 0) { k.item = k.pendingItem; k.pendingItem = null; if (!k.isAI) { sfxFor(k, 'pick'); hintFor(k, ITEMS[k.item].hint); } else k.itemTimer = rand(0.8, 4); } }
 
-  k.rampSlope = onRamp ? onRamp.slope : 0;
-  updateKartVisual(k, dt, sf);
+  k.rampSlope = onRamp ? onRamp.slope : k.air ? 0 : Math.atan(s.slope);           // the mesh pitches with the plank or the road
+  if (!G.replaying) updateKartVisual(k, dt, sf);                                  // a replayed tick is not drawn: the frame poses the kart once (netrace.js)
 }
 
 /**
@@ -187,7 +194,7 @@ export function updateKartVisual(k, dt, sf) {
   const m = k.mesh; const flyY = k.fly > 0 ? Math.min(5, k.fly > 3.5 ? (4 - k.fly) * 10 : k.fly < 0.5 ? k.fly * 10 : 5) : 0;
   // a bumped kart hops and rocks for BUMP_TIME seconds
   const bump = k.bump > 0 ? k.bump / BUMP_TIME : 0; const hop = Math.sin(bump * Math.PI) * 0.45 * (k.bumpPower || 1);
-  m.position.set(k.pos.x, k.y + flyY + hop, k.pos.z); m.rotation.y = k.heading; m.rotation.z = k.steer * 0.06 * sf + (k.air && k.trick ? Math.sin(G.time * 12) * 0.5 : 0) + Math.sin(bump * Math.PI * 4) * 0.18 * bump * (k.bumpSide || 1);
+  m.position.set(k.pos.x, k.y + flyY + hop, k.pos.z); m.rotation.y = k.heading; m.rotation.z = k.steer * 0.06 * sf + (k.air && k.trick ? Math.sin(G.time * 12) * 0.5 : 0) + Math.sin(bump * Math.PI * 4) * 0.18 * bump * (k.bumpSide || 1) - (k.air ? 0 : (G.samples[k.idx]?.bank || 0));
   m.rotation.x = k.rampSlope ? -k.rampSlope : k.air ? -clamp(k.vy * 0.035, -0.45, 0.45) : k.fly > 0 ? -0.12 : 0;
   const u = m.userData; u.wheels.forEach((w, i) => { w.rotation.x += k.speed * dt / 0.45; if (i < 2) w.rotation.y = -k.steer * 0.45; });
   const sparkOn = k.drift.active && k.drift.charge > 0.35;
@@ -202,6 +209,12 @@ export function updateKartVisual(k, dt, sf) {
   for (const f of u.anim) f(dt, G.time, k);
   if (u.trail) u.trail.update(k, dt);
 }
+
+// ---------- Relief (DEC-050) ----------
+/** A crest launches a kart above this speed, when the slope six samples ahead is lower by more than CREST_DROP. */
+export const CREST_SPEED = 22, CREST_DROP = 0.10;
+/** How much a slope pulls on the speed: m/s² per unit of slope. */
+export const SLOPE_PULL = 14;
 
 // ---------- The god kart ----------
 /** How long a god waits for its next item once it has used one, in seconds. */

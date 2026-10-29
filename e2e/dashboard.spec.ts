@@ -123,8 +123,8 @@ test.describe('R-19 dashboard', () => {
     await expect(admin.locator('#lobby-god')).toBeVisible();
     await expect(admin.locator('#b-mp-team-bleu')).toHaveCount(0);
     for (const p of [player, admin]) {
-      await expect(p.locator('#lobby-players tr')).toHaveCount(2);
-      await expect(p.locator('#lobby-players tr').nth(1)).toContainText('(dieu)');
+      await expect(p.locator('#lobby-players .player-card')).toHaveCount(2);
+      await expect(p.locator('#lobby-players .player-card').nth(1)).toContainText('(dieu)');
     }
     await expect(player.locator('#lobby-error')).toContainText('dieu');
 

@@ -54,6 +54,18 @@ export function useTextReadout(ref: Ref<TextReadoutHandle> | undefined) {
 }
 
 /**
+ * Restart a one-shot keyframe on `element`: take `className` off, force a
+ * style recalculation, put it back. The keyframes live in `fx.css` and are
+ * off under `prefers-reduced-motion`, where this only toggles a class.
+ */
+export function replayClass(element: HTMLElement | null, className: string) {
+  if (element === null) return;
+  element.classList.remove(className);
+  void element.offsetWidth;
+  element.classList.add(className);
+}
+
+/**
  * Set an element's inline width as a percentage, skipping the write when it
  * would not change anything.
  *

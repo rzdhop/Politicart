@@ -7,7 +7,7 @@ import {
 } from 'react';
 
 import { cx } from '../../cx';
-import { useFillWidth } from './handles';
+import { replayClass, useFillWidth } from './handles';
 
 export interface PowerGaugeHandle {
   /** Set how far the power has recharged, 0 to 1, bypassing React. */
@@ -50,8 +50,10 @@ export interface PowerGaugeProps
  * own rule -- which is why this component must keep its `.power` wrapper, and
  * why the HUD stylesheet has to load after the foundation one.
  *
- * Ready state turns the border and glow green. It is the counterpart to
- * `ItemSlot`'s gold: green means a power, gold means an item.
+ * Ready state turns the border and glow green, and the glow breathes; the
+ * moment it becomes ready through the handle the gauge pops once. It is the
+ * counterpart to `ItemSlot`'s gold: green means a power, gold means an item.
+ * Both motions are in `fx.css`, off under reduced motion.
  *
  * The cooldown advances every frame, so drive it through the handle.
  *
@@ -85,7 +87,11 @@ export function PowerGauge({
     () => ({
       setCharge: setFraction,
       setReady(next: boolean) {
-        root.current?.classList.toggle('ready', next);
+        const element = root.current;
+        if (element === null) return;
+        const was = element.classList.contains('ready');
+        element.classList.toggle('ready', next);
+        if (next && !was) replayClass(element, 'charged');   // the moment it comes back: one pop, then the ready glow breathes
       },
       setName(next: string) {
         if (nameNode.current !== null && nameNode.current.textContent !== next) {

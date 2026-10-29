@@ -1,33 +1,44 @@
-import { memo } from 'react';
+import { lazy, memo, Suspense } from 'react';
 import {
   CenterAnnounce,
   DriftGauge,
+  HitVignette,
   HudCorner,
   HudHint,
   HudLayer,
   ItemSlot,
   LapCounter,
+  LatencyReadout,
+  LayoutReadout,
   MinimapFrame,
   PositionReadout,
   PowerGauge,
   RaceTimer,
   SpeedReadout,
+  StatusBadges,
   Toast,
   WrongWay,
   type DriftGaugeHandle,
+  type HitVignetteHandle,
   type ItemSlotHandle,
+  type Latency,
+  type LatencyReadoutHandle,
+  type LayoutReadoutHandle,
   type PositionReadoutHandle,
   type PowerGaugeHandle,
   type SpeedReadoutHandle,
+  type StatusBadgesHandle,
   type TextReadoutHandle,
   type ToastHandle,
   type WrongWayHandle,
 } from '@politikart/ui';
 
 import { attachMinimap } from '../engine/minimap.js';
-import { GodPanel } from './GodConsole';
 import { useUi } from './store';
 import { TouchControls } from './TouchControls';
+
+// The god console ships with the admin's screens (vite.config.js screens-admin): fetched the first time a live race shows it.
+const GodPanel = lazy(() => import('./GodConsole').then(m => ({ default: m.GodPanel })));
 
 /**
  * The HUD's imperative handles, filled in by the readouts' refs when the HUD
@@ -47,11 +58,22 @@ export interface HudHandles {
   center: TextReadoutHandle | null;
   toast: ToastHandle | null;
   wrong: WrongWayHandle | null;
+  /** The team race's connection: round trip and render delay (DEC-052), coloured by the round trip; hidden in solo play. */
+  net: LatencyReadoutHandle | null;
+  /** The layout the race's seed drew (DEC-049), under the countdown and in the pause. */
+  layout: LayoutReadoutHandle | null;
+  /** Stage 4's (DEC-053): the tinted edges and the statuses on the kart. */
+  vignette: HitVignetteHandle | null;
+  status: StatusBadgesHandle | null;
 }
 
 export const hud: HudHandles = {
-  pos: null, lap: null, time: null, item: null, power: null, hint: null, speed: null, drift: null, center: null, toast: null, wrong: null,
+  pos: null, lap: null, time: null, item: null, power: null, hint: null, speed: null, drift: null, center: null, toast: null, wrong: null, net: null,
+  vignette: null, status: null, layout: null,
 };
+
+/** The connection's line, in French. */
+export const formatNet = ({ rtt, delay }: Latency) => 'ping ' + (rtt ?? '…') + ' ms · délai ' + delay + ' ms';
 
 /**
  * The readouts, rendered exactly once. Memoised with no props so the layer's
@@ -63,10 +85,14 @@ export const hud: HudHandles = {
 const Readouts = memo(function Readouts() {
   return (
     <>
+      <HitVignette id="h-hit" ref={(h) => { hud.vignette = h; }} />
       <HudCorner corner="topLeft">
         <PositionReadout id="h-pos" position={6} ref={(h) => { hud.pos = h; }} />
         <LapCounter id="h-lap" ref={(h) => { hud.lap = h; }}>TOUR 1/3</LapCounter>
         <RaceTimer id="h-time" ref={(h) => { hud.time = h; }}>0:00.00</RaceTimer>
+        {/* the team race's ping and delay, coloured by the round trip; hidden and empty in solo play */}
+        <LatencyReadout id="h-net" format={formatNet} ref={(h) => { hud.net = h; }} />
+        <StatusBadges id="h-status" ref={(h) => { hud.status = h; }} />
       </HudCorner>
       <HudCorner corner="topRight">
         <MinimapFrame id="minimap" ref={(canvas) => { attachMinimap(canvas); }} />
@@ -90,6 +116,7 @@ const Readouts = memo(function Readouts() {
         <DriftGauge value={0} fillProps={{ id: 'h-drift' }} ref={(h) => { hud.drift = h; }} />
       </HudCorner>
       <CenterAnnounce id="h-center" ref={(h) => { hud.center = h; }} />
+      <LayoutReadout id="hud-layout" label="Tracé du jour" hidden ref={(h) => { hud.layout = h; }} />
       <Toast id="h-toast" ref={(h) => { hud.toast = h; }} />
       <WrongWay id="h-wrong" hidden ref={(h) => { hud.wrong = h; }}>SENS INTERDIT !</WrongWay>
     </>
@@ -105,7 +132,7 @@ export function Hud() {
       <Readouts />
       <TouchControls live={live} paused={ui.state === 'paused'} />
       {/* The admin's absolute power over the race (DEC-031); nobody else gets it. */}
-      {live && <GodPanel ui={ui} />}
+      {live && <Suspense fallback={null}><GodPanel ui={ui} /></Suspense>}
     </HudLayer>
   );
 }

@@ -17,15 +17,17 @@ import { initAudio, isMuted, toggleMute as toggleAudioMute } from '../engine/aud
 import { beginDraft, clearDraft, getDraft, setRoster } from '../engine/custom.js';
 import { emptyOwned } from '../engine/catalog.js';
 import { getGarage, resetGarage, setGarage, setOwned } from '../engine/garage.js';
-import { playOpening, skipOpening as skipBoxOpening, stopOpening } from '../engine/lootbox.js';
+import { playOpening, skipOpening as skipBoxOpening, stopOpening } from '../engine/boxgate.js';
 import { canTransition, getState, onTransition, transition } from '../engine/machine.js';
 import * as net from '../engine/net.js';
-import { isNetRace, onNetResults, pressItem, pressPower } from '../engine/netrace.js';
+import { isNetRace, netLatency, onNetResults, pressItem, pressPower } from '../engine/netrace.js';
 import { applyGodCommand } from '../engine/godcmd.js';
 import { useItem as engineUseItem } from '../engine/items.js';
 import { usePower as engineUsePower } from '../engine/powers.js';
 import { CHARACTERS, TRACKS } from '../engine/data.js';
-import { hasPreview, launch, makeThumbs, setPreview } from '../engine/preview.js';
+import { hasPreview, launch, makeThumbs, setPreview } from '../engine/stagegate.js';
+import { requestPrebuild } from '../engine/prebuild.js';
+import { onThumbs as onTrackThumbs, warmFigures } from '../engine/thumbs.js';
 import { STARTERS } from '../engine/progress.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
@@ -64,7 +66,11 @@ export interface Stats {
   boxes: number; coinsEarned: number; coinsSpent: number;
   bestLap: Record<string, number>; bestTime: Record<string, number>; byChar: Record<string, number>;
   drops: Record<string, number>; lastDaily: string | null; lastRaceAt: number | null;
+  /** The last ten Politibox drops, newest first (economy.js RECENT_DROPS); absent on a profile from before the bundle. */
+  recent?: RecentDrop[];
 }
+/** One of the last Politibox drops as the server's stats keep it. */
+export interface RecentDrop { kind: DropKind; id?: string; grade?: Grade; amount?: number; at: number }
 /** How much of the catalogue an account holds (engine/catalog.js collection). */
 export interface Collection { have: number; total: number; pct: number }
 /** A friend's figures, as GET /api/stats/friends lists them. */
@@ -108,17 +114,27 @@ export interface Gain { gained: number; coins: number; daily: boolean; levelUpCo
 /** The kart this screen drives in the race on screen (or the last one): its candidate and the full style it was built with. */
 export interface RaceKart { charId: string; style: KartStyle }
 
+/** A circuit's thumbnail on the circuits screen (engine/thumbs.js): on its way, rendered (with its canvas), or the placeholder for good. */
+export interface TrackThumb { state: 'pending' | 'ready' | 'static'; canvas: HTMLCanvasElement | null }
+/** A team race's connection as the pause screen shows it (netrace.js netLatency): round trip (null before the first pong) and render delay, ms. */
+export interface NetLatency { rtt: number | null; delay: number }
+
 export type Grade = 'common' | 'rare' | 'mythic' | 'incredible';
+export type DropKind = 'char' | 'part' | 'trail' | 'coins';
 /** What a Politibox held (engine/catalog.js rollBox): politicoins, or an item, refunded when it was already owned. */
 export type Drop =
   | { kind: 'coins'; amount: number }
   | { kind: 'char' | 'part' | 'trail'; id: string; grade: Grade; duplicate: boolean; refund: number };
-/** Where the opening is, for the DOM half (the library's RevealStage). */
-export type RevealPhase = 'idle' | 'opening' | 'burst' | 'reveal';
+/** Where the opening is, for the DOM half (the library's RevealStage); `tease` is the rarity build-up, `next` the pause between two openings of a bundle. */
+export type RevealPhase = 'idle' | 'opening' | 'tease' | 'burst' | 'reveal' | 'next';
 export type ShopTab = 'box' | 'chars' | 'parts';
-/** The Boutique: where it was opened from, the tab on show, the last call's outcome, and the Politibox being opened. */
-export interface ShopView { from: 'title' | 'select'; tab: ShopTab; busy: boolean; error: string | null; notice: string | null; drop: Drop | null; phase: RevealPhase }
-type ShopReply = { ok: boolean; status: number; error?: string; profile?: Profile; drop?: Drop };
+/**
+ * The Boutique: where it was opened from, the tab on show, the last call's
+ * outcome, and the Politibox being opened: every drop of the run (one, or
+ * the bundle's five), the one on screen (`drop` = `drops[index]`) and its phase.
+ */
+export interface ShopView { from: 'title' | 'select'; tab: ShopTab; busy: boolean; error: string | null; notice: string | null; drop: Drop | null; drops: Drop[]; index: number; phase: RevealPhase }
+type ShopReply = { ok: boolean; status: number; error?: string; profile?: Profile; drop?: Drop; drops?: Drop[] };
 export type AdminStatus = 'idle' | 'saved';
 /** What the roster API answers (engine/account.js fetchRoster / saveRoster). */
 type RosterReply = { ok: boolean; status: number; error?: string; field?: string; roster?: unknown };
@@ -187,6 +203,12 @@ export interface UiSnapshot {
   lastGain: Gain | null;
   /** The local kart of the race on screen, for the kart card on the pause and results screens; null before the first race. */
   raceKart: RaceKart | null;
+  /** The layout the race on screen was drawn with (DEC-049), for the pause screen; null before the first race. */
+  raceLayout: string | null;
+  /** The connection when the race was paused, null in solo play. */
+  pauseNet: NetLatency | null;
+  /** The circuits' thumbnails by track id (engine/thumbs.js), filled in while the circuits screen shows. */
+  trackThumbs: Record<string, TrackThumb>;
   /** The admin's dashboard (DEC-030). */
   dashboard: DashboardView;
   /** The admin's god console is open over the race (DEC-031). */
@@ -274,10 +296,13 @@ let snapshot: UiSnapshot = {
   accountError: null,
   lastGain: null,
   raceKart: null,
+  raceLayout: null,
+  pauseNet: null,
+  trackThumbs: {},
   dashboard: { stats: null, users: [], connections: [], rooms: [], query: '', busy: false, error: null, notice: null, updatedAt: null },
   godConsole: false,
   godReply: null,
-  shop: { from: 'title', tab: 'box', busy: false, error: null, notice: null, drop: null, phase: 'idle' },
+  shop: { from: 'title', tab: 'box', busy: false, error: null, notice: null, drop: null, drops: [], index: 0, phase: 'idle' },
   friendStats: null,
   friendShown: null,
   friendStatsError: null,
@@ -320,15 +345,25 @@ onTransition((to: string, from: string) => {
   const patch: Partial<UiSnapshot> = { state: to as GameState };
   if (to === 'countdown' && from !== 'paused') { patch.noteHidden = true; patch.lastGain = null; patch.godReply = null; }
   // A grid is on the track (a god entering a race mid-way joins it during the countdown, netrace.js).
-  if ((to === 'countdown' || to === 'race') && from !== 'paused') patch.raceKart = captureRaceKart();
+  if ((to === 'countdown' || to === 'race') && from !== 'paused') { patch.raceKart = captureRaceKart(); patch.raceLayout = (G.layout as { name?: string } | null)?.name || null; }
+  if (to === 'paused') patch.pauseNet = isNetRace() ? (netLatency() as NetLatency | null) : null;
+  // the circuits' figures are worked out while the roster shows, so "Choisir le circuit →" finds them ready (thumbs.js)
+  if (to === 'select') warmFigures();
+  // the lobby's player cards show the candidates' portraits: placeholders at least, the portraits once rendered (DEC-045)
+  if (to === 'lobby' && !Object.keys(snapshot.thumbs).length) refreshThumbs();
   set(patch);
   // A solo race just ended: the account earns its experience (a team race's comes from the server).
   if (to === 'lobby') soloRace = false;
   if (to === 'results' && from === 'race' && soloRace) reportSoloRace();
 });
 
-net.onNet((view: NetView) => set({ net: view }));
+net.onNet((view: NetView) => {
+  set({ net: view });
+  // The lobby's circuit is built ahead while the players get ready (prebuild.js, DEC-055); the race itself keys on the seed.
+  if (view.room && view.room.phase === 'lobby' && getState() === 'lobby') requestPrebuild(view.room.trackIdx);
+});
 onNetResults((r: NetResults) => set({ netResults: r }));
+onTrackThumbs((view: Record<string, TrackThumb>) => set({ trackThumbs: view }));
 
 /**
  * Tell the Garage what the player owns (DEC-035), and redraw what shows
@@ -489,8 +524,13 @@ function sessionExpired() {
 function shop(patch: Partial<ShopView>) { set({ shop: { ...snapshot.shop, ...patch } }); }
 
 /** The engine's opening phases, as the DOM half shows them. */
-const REVEAL_OF: Record<string, RevealPhase> = { drop: 'opening', spin: 'opening', shake: 'opening', burst: 'burst', reveal: 'reveal', hold: 'reveal' };
-const onBoxPhase = (name: string) => { if (getState() === 'lootbox') shop({ phase: REVEAL_OF[name] ?? 'opening' }); };
+const REVEAL_OF: Record<string, RevealPhase> = { drop: 'opening', spin: 'opening', tease: 'tease', burst: 'burst', reveal: 'reveal', next: 'next', hold: 'reveal' };
+/** A phase entered, for opening `index` of the run (0 for a single box): the card shows that opening's drop. */
+const onBoxPhase = (name: string, index = snapshot.shop.index) => {
+  if (getState() !== 'lootbox') return;
+  const i = Math.max(0, Math.min(index, snapshot.shop.drops.length - 1));
+  shop({ phase: REVEAL_OF[name] ?? 'opening', index: i, drop: snapshot.shop.drops[i] ?? snapshot.shop.drop });
+};
 
 /**
  * One shop call with the account's token: busy while it runs, and on an
@@ -546,6 +586,7 @@ export const actions = {
   selectTrack(i: number) {
     G.trackIdx = i;
     set({ trackIdx: i });
+    requestPrebuild(i);   // built ahead while the player reads the cards (prebuild.js, DEC-055)
   },
   /** "Graphismes": the stage is rebuilt at the new tier (the old one disposed), and the portraits with it. */
   togglePoly() {
@@ -888,15 +929,20 @@ export const actions = {
   async buyPart(category: string, value: string) {
     if (await shopCall(t => account.shop.buyPart(t, category, value, { base: remoteServer }))) shop({ notice: 'Acquis !' });
   },
-  /** Open a Politibox: the server charges and rolls; the opening plays on the canvas, from the shop or again from the result. */
-  async openBox() {
-    const r = await shopCall(t => account.shop.openBox(t, { base: remoteServer }));
-    if (!r?.drop) return;
+  /**
+   * Open a Politibox, or five at once (`count` 5, the bundle at
+   * BOX_BUNDLE.price): the server charges and rolls; the opening plays on
+   * the canvas, from the shop or again from the result, one reveal per drop.
+   */
+  async openBox(count: 1 | 5 = 1) {
+    const r = await shopCall(t => account.shop.openBox(t, { count, base: remoteServer }));
+    const drops = r?.drops ?? (r?.drop ? [r.drop] : []);
+    if (!drops.length) return;
     const st = getState();
     if (st !== 'shop' && st !== 'lootbox') return;          // left the shop while the server answered
-    shop({ drop: r.drop, phase: 'opening' });
+    shop({ drops, drop: drops[0]!, index: 0, phase: 'opening' });
     if (st === 'shop') transition('lootbox');
-    playOpening(r.drop, { onPhase: onBoxPhase });
+    playOpening(drops, { onPhase: onBoxPhase });
   },
   /** A tap on the stage: hurry the opening along (to the burst, then to the prize). */
   skipOpening() { if (getState() === 'lootbox') skipBoxOpening(); },
@@ -904,7 +950,7 @@ export const actions = {
   boxDone() {
     stopOpening();
     if (getState() === 'lootbox') transition('shop');
-    shop({ phase: 'idle', drop: null, error: null, notice: null });
+    shop({ phase: 'idle', drop: null, drops: [], index: 0, error: null, notice: null });
     setPreview(G.charIdx);
   },
 };

@@ -1047,3 +1047,216 @@ rest or scrolled. `--note-room` follows the note's measured height
 **Consequence.** On a phone the note reads as a card of its own and never
 covers a control. The Politibox's full-bleed stage still clears the note
 itself.
+
+## DEC-049 -- Each race draws a layout variant from a seed every side shares
+
+**Context.** The five circuits were static: the same chicanes, pads and
+crossing on every race, and nothing but cosmetic randomness between two
+races on the same map. Every random draw went through `Math.random`, so the
+server worker, each client and solo play already built slightly different
+scenes (a random number of cyclists, matched by index in snapshots). The
+owner asked for races that vary on the same map.
+
+**Decision.** A race has a 32-bit `seed` (`engine/seed.js`, mulberry32 with
+salted sub-streams). Solo draws it in `startRace`; the server draws it in
+`runRace`, sends it in every `{t:'race'}` message (the god's re-send
+included) and in the worker's `workerData`. `buildTrack` derives
+`G.layout` from the track's `variants` pool (`engine/layout.js`
+`chooseLayout`): named variants that add chicanes, static obstacles, pads,
+crossing timings, jumps and a climate to the track's fixed skeleton. Every
+gameplay-relevant draw (layout, obstacle placement, crossing phase,
+cyclist count and spawns) uses the seeded stream; cosmetic decor keeps
+`Math.random`. Static obstacles carry entity ids so a client drops the ones
+the server has mown.
+
+**Consequence.** Solo, the worker and every client build identical
+gameplay state from the same seed; two races on one map differ by their
+variant, announced at the countdown. `data.test.js` pins the pool schema
+and `headless.test.js` proves determinism. The protocol version is 2.
+
+## DEC-050 -- Circuits have elevation and a width of their own
+
+**Context.** The road was flat and 30 m wide everywhere (A-015, A-035:
+Montmartre's climb was three ramps in series). The owner confirmed a real
+relief model.
+
+**Decision.** Each track carries an elevation `profile` sampled into
+`G.samples[i].y` and `slope`, and a `roadHalfWidth` of its own; a `narrow`
+feature pinches the width over a stretch and `bank` cambers it. Physics
+reads the ground height from the sample (plus any ramp), launches a kart
+off a crest at speed, and reads the half-width from the sample. Decor
+builders place through `yAt(x, z)`.
+
+**Consequence.** The five circuits differ in relief and width, not only in
+decor; every reader of `CFG.roadHalfWidth` reads the track's or the
+sample's width instead. The minimap shades height.
+
+## DEC-051 -- Each circuit has a climate preset; the race keeps its legacy pipeline
+
+**Context.** Lighting, fog distances and the sky were identical on every
+circuit; the owner wanted maps that look different without restyling the
+race onto the stage's ACES pipeline (DEC-043 stands).
+
+**Decision.** `engine/climate.js` holds presets (dawn, noon, golden, dusk,
+night, overcast): sky gradient, sun colour and angle, hemisphere, ambient,
+fog, clouds, lamps lit at night. A layout variant picks one from the
+track's allowed list. Textures are redrawn procedurally with normal maps
+and size tiers (`textures.js`, on `fabric.js`'s noise), on the legacy
+materials. No point light is added anywhere: the program count must not
+change with the scene (PLAN A.4).
+
+**Consequence.** The same circuit reads differently at dusk and at noon;
+phones keep the legacy materials at the low tier without normal maps.
+
+## DEC-052 -- The local kart is predicted and reconciled; the field stays interpolated
+
+**Context.** A networked kart answered about half a round trip plus 100 ms
+late (DEC-014's known limit), the render clock followed arrival jitter and
+a late snapshot froze every kart. The owner chose prediction.
+
+**Decision.** Inputs carry a sequence number; the worker echoes the acked
+seq, how many ticks it has applied it (`n`) and an owner-only state block
+(`me`) in the owner's snapshot. The client predicts its own kart at fixed
+1/60 steps from `updateKart` under a `G.replaying` guard that silences
+messages, sounds, laps and visuals, re-simulates from the acked state on
+every snapshot and blends the correction out over about 100 ms (snapping
+past 3 m or on a teleport flag). The other karts are interpolated behind an
+adaptive delay sized from measured jitter, moved by at most one tick per
+second. A ping measures the round trip for the HUD. Public kart floats are
+quantised; HUD-only fields travel to their owner alone; the server handles
+inputs and pings outside the per-connection queue, stringifies a snapshot
+once and skips a backed-up socket.
+
+**Consequence.** The player's kart moves on the frame of the input;
+discrete state (items, stuns, laps, finish) stays the server's word.
+`predict.test.js` proves the replay reproduces the server's kart.
+
+## DEC-053 -- One pooled effects module, and an effects channel beside the sounds
+
+**Context.** Two thirds of the items and powers had no visual of their own,
+status effects were drawn nowhere and absent from snapshots, and the one
+power effect (the Mégaphone ring) was built inside the server worker where
+no client could see it.
+
+**Decision.** `engine/vfx.js` is a pooled, headless-safe effects module
+modelled on `trail.js`. Items, powers, pits, pads, bumps and pickups call
+it at the points that already route sound; in the worker it only records
+an event, carried in the snapshot message beside `fx`, that every client
+replays. Status timers travel in the kart's snapshot so auras draw on every
+screen. The HUD reads new payload fields (hit, boost, statuses, item used)
+and animates through `fx.css`, off under reduced motion.
+
+**Consequence.** Every move has a visible cause and effect on every
+client; the worker builds no effect geometry.
+
+## DEC-054 -- The Politibox opens on the hemicycle stage
+
+**Context.** The Politibox played on the legacy race look with no sound,
+no rarity build-up and one opening at a time; the select stage (DEC-043)
+set a higher bar.
+
+**Decision.** The opening runs on `buildStageScene` under `withLook`, with
+a rarity tease phase, stage confetti, synthesized sounds, a five-opening
+bundle at 550 politicoins (one atomic roll on the server, odds unchanged)
+and a ring of the last ten drops in the account's stats. The library gains
+the reveal parts (tease, multi, card, history, odds table); the frame
+governor and reduced motion cut the sequence short as on the stage.
+
+**Consequence.** DEC-037's phase machine, skip and E2E contract stay; the
+timeline table in `lootbox.test.js` changes once. DEC-043's "the Politibox
+never sees the stage's settings" is amended: it is now a stage scene.
+
+## DEC-055 -- The game ships in chunks behind a splash; the server caches and compresses
+
+**Context.** One monolithic bundle was parsed before React mounted, the
+server sent no cache or compression headers, and the race scene was built
+synchronously when the race started.
+
+**Decision.** Vite splits three, React, the stage engine and the admin
+screens into chunks loaded on demand; a CSS splash shows until the UI
+mounts; hashed assets are served `immutable` and precompressed (brotli and
+gzip), `index.html` with ETag. `engine/prebuild.js` builds the
+seed-independent part of the chosen circuit in slices while the player is
+on the circuits screen or in the lobby, and the countdown primes the
+remaining programs; race kart and pilot geometry is cached across races.
+
+**Consequence.** A repeat visit paints in under a second, the countdown
+starts at once; the prebuilt scene is dropped on a key mismatch and the
+synchronous build remains the fallback.
+
+## DEC-056 -- Decor is instanced and folded on both tiers
+
+**Context.** Denser decor at one draw per part would blow DEC-047's call
+budget; "détaillés" was left unfolded.
+
+**Decision.** Repeated props (trees, lamps, bollards, crowd bodies, bikes,
+cones, pigeons) are `InstancedMesh` groups (`engine/decor/instanced.js`);
+still decor is folded on "détaillés" too, keeping shadows; far landmarks
+are merged. Budgets per circuit are tests.
+
+**Consequence.** Three times the decor density on high within about 1,400
+calls; `headless.test.js`'s mesh ceiling counts an instanced group once.
+
+## DEC-057 -- A pre-build step is milliseconds, never a phase
+
+**Context.** The wave-1 E2E caught the circuits screen opening 140-170 ms
+after "Choisir le circuit" (R-25 asks for 100 ms). The pre-build (DEC-055)
+had an 8 ms budget per frame but ran one whole phase per step: the road,
+the strips and the decor each took 90-330 ms in one frame, mostly baking a
+512 px procedural surface on its first use.
+
+**Decision.** The textures phase bakes every surface the circuit uses ahead,
+a few rows of pixels per step (`textures.js bakeSurface`, nothing computed
+headless); each decor file lists its kinds (`SURFACES`) and
+`prebuild.test.js` fails when a build uses one nobody listed. Every heavy
+phase yields inside itself under its own name; the circuit builders are
+generators that yield between their sections, and the instanced batches
+flush one per step. The build's statements and their order are unchanged.
+`prebuildStatus().step` reports the longest single step.
+
+**Consequence.** The circuits screen opens in 16-18 ms under software GL;
+the longest step fell from 300 ms to under 10 ms in the decor (the
+"légers" fold remains one step of 20-120 ms). A decor worker keeps each
+section under about 8 ms.
+
+## DEC-058 -- The netcode's wire choices, as measured
+
+**Context.** Stage 3 built DEC-052 and found three places where Annex B's
+letter would have been wrong or costly.
+
+**Decision.** (1) Each server tick stands for one client tick: a message
+covers every client tick since the last one received, a queue more than 4
+ticks ahead is caught up, and the server's kart is at client tick
+`ack + n - 1` (latest-wins plus `n` miscounted by a tick whenever two
+inputs landed in one tick). (2) A teleport is detected in the worker (a
+kart moving more than 8 m in a tick increments `tp`) rather than flagged
+by each item, power and god command. (3) `SNAP_EVERY = 2`: 30 snapshots a
+second cost 2.80-2.95 ms of worker CPU per race-second against 2.64-2.87 at
+20 Hz, 45 kB/s per player against the old 84, and the field's minimum delay
+falls from 100 to 67 ms. `PROTOCOL` is 3; a new client facing an old
+server only interpolates.
+
+**Consequence.** Snapshots are 1.40-1.65 kB per player (were 4.1-4.5 kB);
+the cyclists' 0.5 kB is the follow-up that would bring them under 1.5 kB.
+An Amendement swap shorter than 8 m is not flagged; the smoother still
+snaps beyond 3 m.
+
+## DEC-059 -- Instanced decor is batched per cell, and the tests count it as such
+
+**Context.** Stage 7 (DEC-056) drew the repeated props as InstancedMesh.
+r128 culls an instanced mesh by its geometry's sphere around its origin and
+turns culling off for it; it also keeps one program per material without
+checking whether the next instanced mesh has per-copy colours.
+
+**Decision.** `decor/instanced.js` groups copies in 200 m cells (800 m on
+"légers" for the street life), each cell a geometry sharing the part's
+buffers with a sphere over its own copies, culling on; tinted batches take
+a material of their own. The fold test's "half the draws" ratio leaves
+instanced meshes out (they never fold), and `headless.test.js` floors a
+circuit's decor on triangles (which count every copy), not meshes. A flat
+circuit's ground is one quad; "légers" ground uses 50 m cells.
+
+**Consequence.** Against `main`, scene-wide at race start (headless, 6
+karts, 3 seeds): meshes -33 to -48 % on both tiers; triangles on
+"détaillés" from -35 % (Élysée) to +37 % (Versailles), on "légers" from
++7 % (Élysée) to +29 % (Marseille). Build time per race about unchanged.

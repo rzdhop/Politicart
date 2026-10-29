@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CHARACTERS, TRACKS } from './data.js';
 import { builtinStyle, mergeStyle } from './kartstyle.js';
+import { chooseLayout, seedForVariant } from './layout.js';
 import { getState, resetMachine } from './machine.js';
 import { animateCrowd, simStep, startField, startRace } from './race.js';
 import { drain, resolveFor } from './events.js';
@@ -16,6 +17,8 @@ import { buildTrack, roadTexOf } from './track.js';
 import { POOL } from './trail.js';
 
 const STEP = 1 / 60;
+/** Visible instanced meshes under a scene. */
+const countInstanced = scene => { let n = 0; scene.traverseVisible(o => { if (o.isInstancedMesh) n++; }); return n; };
 
 describe('headless engine', () => {
   beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; });
@@ -27,7 +30,7 @@ describe('headless engine', () => {
 
   it.each(TRACKS.map((t, i) => [t.name, i]))('builds %s and races it for 30 s', (_name, i) => {
     G.trackIdx = i;
-    startRace();
+    startRace({ seed: 11 + i });
     expect(getState()).toBe('countdown');
     expect(G.karts).toHaveLength(6);
     // the race pilots are headless here (stage 8): the driver contract, no geometry
@@ -52,16 +55,104 @@ describe('headless engine', () => {
 
   it.each(TRACKS.map((t, i) => [t.name, i]))('builds %s with its road and a bounded mesh count', (_name, i) => {
     G.trackIdx = i;
-    startRace();
+    startRace({ seed: 11 + i });
     // The road itself: one textured ribbon of (samples + 1) * 2 vertices, added to the scene (a comment once swallowed its scene.add).
     const road = G.scene.children.find(o => o.isMesh && o.material.map && o.geometry.attributes.uv && o.geometry.attributes.position.count === (G.N + 1) * 2);
     expect(road).toBeTruthy();
     expect(road.material.map).toBe(roadTexOf(TRACKS[i]));
-    // Decor budget: generous, so it never flakes, but a runaway loop would trip it.
+    // Decor budget: generous, so it never flakes, but a runaway loop would trip it. The floor is on triangles, which count
+    // every instanced copy: instancing (DEC-056) cuts the mesh count on purpose, so a mesh floor would punish it.
     let meshes = 0; G.scene.traverse(o => { if (o.isMesh) meshes++; });
-    expect(meshes).toBeGreaterThan(1500);
-    expect(meshes).toBeLessThan(9000);
+    expect(meshes).toBeGreaterThan(500);
+    expect(meshes).toBeLessThan(14000);
+    expect(countTriangles(G.scene)).toBeGreaterThan(150_000);
   });
+});
+
+// Every circuit under every variant of its layout pool (DEC-049) builds and
+// races, and the same seed builds the same race twice: the layout, the
+// static obstacles' ids and places, the riders and the crossings' clocks.
+describe('seeded layouts, headless', () => {
+  beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; });
+
+  it.each(TRACKS.flatMap((t, i) => t.variants.map((v, j) => [t.id, v.name, i, j])))('races %s « %s » for 30 s with six karts', (_id, name, i, j) => {
+    G.trackIdx = i;
+    startRace({ seed: seedForVariant(TRACKS[i], j) });
+    expect(G.layout.name).toBe(name);
+    expect(G.layout).toEqual(chooseLayout(TRACKS[i], G.seed));
+    expect(G.karts).toHaveLength(6);
+    expect(G.hw).toBe(TRACKS[i].roadHalfWidth);
+    for (let n = 0; n < 30 * 60; n++) simStep(STEP);
+    expect(getState()).toBe('race');
+    for (const k of G.karts) { expect(Number.isFinite(k.pos.x)).toBe(true); expect(Number.isFinite(k.pos.z)).toBe(true); expect(Number.isFinite(k.y)).toBe(true); }
+    expect(G.karts.map(k => k.rank).sort()).toEqual([0, 1, 2, 3, 4, 5]);
+    for (const c of G.cyclists) expect(Number.isFinite(c.x + c.z + c.y)).toBe(true);
+  }, 30000);
+
+  const picture = () => ({
+    layout: G.layout, seq: G.entitySeq,
+    hazards: G.hazards.map(h => [h.id, h.type, h.kind, Math.round(h.x * 1000), Math.round(h.z * 1000), Math.round((h.y || 0) * 1000), h.r]),
+    cyclists: G.cyclists.map(c => [Math.round(c.d * 1000), Math.round(c.lat * 1000), c.base, c.timer]),
+    crossings: G.crossings.map(c => c.t), ramps: G.ramps.map(r => [r.i0, r.len, r.h]), pits: G.pits.map(p => [p.i0, p.len, p.kind]), pads: G.pads.map(p => p.i0),
+    samples: [G.samples[100].y, G.samples[900].hw, G.samples[1300].bank],
+  });
+
+  it('builds the same race twice from one seed, and another from another', () => {
+    G.trackIdx = 4; startRace({ seed: 2024 }); const a = picture();
+    resetMachine('tracks'); G.trackIdx = 4; startRace({ seed: 2024 }); const b = picture();
+    expect(b).toEqual(a);
+    expect(a.hazards.length).toBeGreaterThan(0);
+    expect(a.hazards.every(h => Number.isInteger(h[0]))).toBe(true);
+    expect(new Set(a.hazards.map(h => h[0])).size).toBe(a.hazards.length);
+    expect(a.cyclists).toHaveLength(G.layout.cyclists);
+    resetMachine('tracks'); G.trackIdx = 4; startRace({ seed: seedForVariant(TRACKS[4], (a.layout.variant + 1) % 3) }); const c = picture();
+    expect(c.layout.name).not.toBe(a.layout.name);
+    expect(c.hazards).not.toEqual(a.hazards);
+  });
+
+  it('numbers the static obstacles first, so a hazard dropped later never collides with them', () => {
+    G.trackIdx = 0; startRace({ seed: 3 });
+    const statics = G.hazards.map(h => h.id);
+    expect(statics).toEqual(statics.map((_, i) => i + 1));
+    expect(G.entitySeq).toBe(statics.length);
+  });
+});
+
+// Relief (DEC-050): a kart on a slope sits on the road's height, climbs and
+// descends with it, and the samples carry the width a `narrow` pinches.
+describe('elevation and width, headless', () => {
+  beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; });
+
+  it('keeps a kart on the road height of its sample, camber included', () => {
+    G.trackIdx = 3; startRace({ seed: 5 });   // the butte
+    transitionToRace();
+    const k = G.karts[0]; const i = G.samples.findIndex(s => s.y > 10 && Math.abs(s.slope) < 0.02);
+    expect(i).toBeGreaterThan(0);
+    const s = G.samples[i]; k.idx = i; k.pos.x = s.x + s.sx * 2; k.pos.z = s.z + s.sz * 2; k.speed = 0; k.air = false; k.y = 0;
+    k.ctrl = () => ({ throttle: false, brake: false, left: false, right: false, drift: false }); k.isAI = false;
+    simStep(STEP);
+    expect(k.y).toBeCloseTo(s.y + 2 * s.bank, 6);
+    expect(k.mesh.position.y).toBeCloseTo(k.y, 6);
+    expect(Math.abs(k.y)).toBeGreaterThan(10);
+  });
+
+  it('pinches the width over a narrow feature and keeps the AI inside it', () => {
+    G.trackIdx = 3; startRace({ seed: seedForVariant(TRACKS[3], 2) });   // « Nuit blanche »: narrow to 8 m around f = 0.5
+    const f = G.layout.features.find(x => x.t === 'narrow'); const i0 = Math.floor(f.f * G.N);
+    expect(G.samples[i0 + Math.floor(f.len / 2)].hw).toBeCloseTo(f.w, 6);
+    expect(G.samples[(i0 - 20 + G.N) % G.N].hw).toBe(11);
+    expect(G.samples[i0 + f.len + 20].hw).toBe(11);
+  });
+
+  it('lifts the riders and the item boxes with the road', () => {
+    G.trackIdx = 3; startRace({ seed: 5 });
+    const high = G.cyclists.filter(c => c.y > 10);
+    expect(high.length).toBeGreaterThan(0);
+    for (const c of G.cyclists) { const s = G.samples[Math.floor(c.d) % G.N]; expect(Math.abs(c.y - s.y)).toBeLessThan(2); }
+    expect(G.itemBoxes.some(b => b.mesh.position.y > 12)).toBe(true);
+  });
+
+  function transitionToRace() { for (let n = 0; n < 4 * 60; n++) simStep(STEP); drain(); }
 });
 
 describe('styled karts, headless', () => {
@@ -90,7 +181,7 @@ describe('styled karts, headless', () => {
 });
 
 describe('the bike lane', () => {
-  beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; G.trackIdx = 0; startRace(); drain(); });
+  beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; G.trackIdx = 0; startRace({ seed: 21 }); drain(); });
 
   it('puts cyclists on every circuit, and they keep riding', () => {
     expect(G.cyclists.length).toBeGreaterThan(8);
@@ -98,14 +189,15 @@ describe('the bike lane', () => {
     for (let n = 0; n < 10 * 60; n++) simStep(STEP);
     const moved = G.cyclists.filter((c, i) => Math.hypot(c.x - before[i][0], c.z - before[i][1]) > 5);
     expect(moved.length).toBeGreaterThan(G.cyclists.length / 2);
-    for (const c of G.cyclists) { expect(Number.isFinite(c.x)).toBe(true); expect(Math.abs(c.lat)).toBeLessThan(CFG.roadHalfWidth + 3); }
+    for (const c of G.cyclists) { expect(Number.isFinite(c.x)).toBe(true); expect(Math.abs(c.lat)).toBeLessThan(G.hw + 3); }
   });
 
   it('knocks over a cyclist a kart drives into, and shakes the kart', () => {
     for (let n = 0; n < 4 * 60; n++) simStep(STEP);   // racing
     drain();
-    const k = G.player, c = G.cyclists[0];
-    k.hazardGrace = 0; k.invincible = 0; k.shield = 0; k.speed = 30; k.pos.x = c.x; k.pos.z = c.z;
+    // a rider on the road (one on the pavement is out of the kart's reach: the wall keeps the kart on the road), upright
+    const k = G.player, c = G.cyclists.find(o => o.fallen <= 0 && Math.abs(o.lat) < G.hw - 1);
+    k.hazardGrace = 0; k.invincible = 0; k.shield = 0; k.speed = 30; k.pos.x = c.x; k.pos.z = c.z; k.idx = Math.floor(c.d); k.y = c.y;
     simStep(STEP);
     expect(c.fallen).toBeGreaterThan(0);
     expect(k.stun).toBeGreaterThan(0);
@@ -114,7 +206,7 @@ describe('the bike lane', () => {
 });
 
 describe('several humans in one race', () => {
-  beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; G.trackIdx = 0; startRace(); drain(); });
+  beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; G.trackIdx = 0; startRace({ seed: 21 }); drain(); });
 
   // Put kart k just before the line on its last lap, so the next step finishes it.
   function onFinalStraight(k) {
@@ -221,8 +313,8 @@ describe('the "légers" decor', () => {
   function build(i, fold) {
     let s = 20261028 + seed;
     vi.spyOn(Math, 'random').mockImplementation(() => { if (new Error().stack.includes('generateUUID')) return real(); s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; });
-    const scene = new THREE.Scene(); G.animated = []; G.trackIdx = i; G.track = TRACKS[i];
-    buildTrack(scene, TRACKS[i], { fold });
+    const scene = new THREE.Scene(); G.animated = []; G.hazards = []; G.entitySeq = 0; G.trackIdx = i; G.track = TRACKS[i];
+    buildTrack(scene, TRACKS[i], { fold, seed: 7 });   // the race seed is explicit: the seeded draws never go through Math.random
     vi.restoreAllMocks();
     return { scene, animated: G.animated, crowd: G.crowd, moving: [...G.crowd.map(c => c.g), ...G.cyclists.map(c => c.mesh), ...G.crossings.map(c => c.mesh), ...G.itemBoxes.map(b => b.mesh)] };
   }
@@ -238,7 +330,9 @@ describe('the "légers" decor', () => {
     const folded = build(i, true), plain = build(i, false);
     expect(countTriangles(folded.scene)).toBe(countTriangles(plain.scene));
     sameLook(look(folded.scene), look(plain.scene), TRACKS[i].id);
-    expect(countMeshes(folded.scene, true)).toBeLessThanOrEqual(countMeshes(plain.scene, true) / 2);
+    // instanced batches (decor/instanced.js) are one draw a cell on both tiers and never fold: they stay out of the ratio
+    const foldable = scene => countMeshes(scene, true) - countInstanced(scene);
+    expect(foldable(folded.scene)).toBeLessThanOrEqual(foldable(plain.scene) / 2);
     for (const o of folded.moving) { let p = o; while (p.parent) p = p.parent; expect(p).toBe(folded.scene); expect(countMeshes(o)).toBeGreaterThan(0); }
     run(folded, 90); run(plain, 90);
     sameLook(look(folded.scene), look(plain.scene), TRACKS[i].id + ' after 1.5 s');

@@ -2,8 +2,84 @@
 
 Current state only. History lives in git.
 
-## Latest task -- closed 2026-10-28: polish after the 3D select
+## Latest task -- closed 2026-10-29: the maps, races, Politibox, multiplayer and loading overhaul
 
+- **Branch:** `claude/racing-game-improvements-2f59ui`, cut from `main` at
+  `61ebddb` (PR #16), pushed. Plan in `.claude/PLAN.md` (approved by the
+  owner, Q1-Q6; all stages done, measured targets in its table),
+  DEC-049..059, A-039..046. Workers in parallel worktrees (DEC-039), merged
+  in order: wave 1 (stages 0, 1, 2, 5, 6), then `797d582` (the pre-build
+  fix) and `decor/instanced.js`, wave 2 (`wt/net`, `wt/vfx` -> `865aba6`),
+  stage 8 (`wt/ui8` -> `ebb652a`), wave 3 (`wt/d7c`, `wt/d7b`, `wt/d7a`),
+  stage 9 (integration, budgets, records).
+- **Found and fixed by the dispatcher:** the pre-build ran whole phases per
+  step (R-25: circuits screen 140-170 ms; now 16-18 ms, DEC-057); tinted
+  instanced batches drew white (r128's program cache; own materials,
+  DEC-059); the fold ratio and the decor floor punished instancing (tests
+  now leave instanced meshes out of the ratio and floor on triangles); the
+  flat Élysée's ground was a 33k-triangle grid; "légers" ribbons now take
+  every other sample; three load- or randomness-sensitive tests made robust
+  (effects test waits for what it asserts, thumbnail steps best of three,
+  pre-build key test timeout).
+- **Tier 1 on the tip:** typecheck clean; ui 465 + 8 skipped, game 1183,
+  server 183. Build: three 528 kB, engine-race 463 kB, react 219 kB, index
+  102 kB, engine-stage 33 kB, screens-admin 20 kB, engine-box 16 kB; `.br`
+  and `.gz` siblings.
+- **E2E:** full runs after wave 2 (63/80), after 7c + stage 8 (64/83) and on
+  the complete tip (64/83): every failure is in the software-WebGL
+  race-start set (the 17 race specs; R-28 joins it, stalling at the green
+  light after its new checks pass; R-05 now and then), except **R-20**
+  ("the admin enters a race already running"): it fails in both full runs
+  after stage 7a and passes alone (1.1 min, 50 s). The race is capped at
+  45 s (nine laps of the E2E server's 15 s cap); a god joining mid-race
+  builds the circuit synchronously and cold (no pre-build: the seed comes
+  with the join), and the denser Élysée under a loaded software-GL run
+  no longer fits: the race ends on its own and the console unmounts under
+  the click on `#god-finish`. Follow-up below.
+- **Measured** (PLAN.md "Targets", countdown frame at 1440 under software
+  GL, WebGL call hook, `main` re-measured by the same probe):
+  - détaillés: 706-944 calls / 270-401k tris (`main` 1,062-1,462 /
+    185-277k): draws -30 to -39 %, within 1,400 / 450k.
+  - légers: 125-182 calls / 64-79k tris, **Bourbon 96k, over the 90k
+    target by 7 %** (`main` 115-234 / 54-62k).
+  - snapshots 1.40-1.65 kB per player at 30 Hz (were 4.1-4.5 kB at 20 Hz).
+- **The owner has not seen any of it on a real GPU or phone:** the new
+  circuits and climates, the effects, the stage Politibox, the thumbnails,
+  a team race over the internet with prediction.
+- **Owner's to-do:** a race on each circuit x 3 layouts on desktop and a
+  phone (A-046: "légers" triangles are up 18-68 % on `main`, draws are
+  not); a two-browser team race on Render (A-041, A-044: 30 Hz snapshots on
+  the free instance); the Politibox x5 on a phone; judge the thumbnails
+  (A-045).
+- **Follow-ups:**
+  - Bourbon "légers" at 96k triangles at the start line (dozens of light
+    batches in 800 m cells; finer cells cost draws);
+  - AI lane/skill and item rolls still on `Math.random` (`G.rng` ready);
+  - the cyclists' 0.5 kB of each snapshot (spline distance + offset would
+    bring it under 1.5 kB);
+  - track.js: the banked turn's inner half sinks under the ground plane;
+    the crossing's car moves along its own length axis sideways; Bourbon's
+    6 m humps blend into the terrain so no arch shows; `godcmd.placeAt`
+    sets `k.y = 0` on relief;
+  - new obstacle kinds (sardine stalls, pétanque, tour groups, 2CV, café
+    chairs) need `OBSTACLE_KINDS` in track.js; fountain spray that slows
+    karts needs physics; the funicular as Montmartre's crossing;
+  - the Grand Canal plane reaches 1,275 m, past the 1,100 m sky dome;
+  - catch-up boost zones (stage 4) skipped: they would change the seeded
+    layouts; R-31 (`#h-net` in a team race) and a 120 ms
+    `POLITIKART_TEST_DELAY_MS` multiplayer spec need a real GPU to run;
+  - a test seed hook would let R-28 prove two seeds give two names;
+  - the god's mid-race join (and any late joiner) builds the circuit cold:
+    sending a running room's seed to the dashboard and pre-building it
+    there would shorten a real admin's wait and give R-20 its window back.
+- **Container notes:** worktrees need `cp -al node_modules` plus the three
+  package `node_modules` and a `packages/ui` build; `.worktrees/`,
+  `playwright.local.config.ts` (Chromium 1243 at
+  `/opt/pw-browsers/chromium-1243/chrome-linux64/chrome`) and
+  `apps/game/src/zz/` (scratch measurements) are in `.git/info/exclude`.
+  Never `pkill -f` a pattern that the same command line contains.
+
+## Previous task -- closed 2026-10-28: polish after the 3D select
 - **Branch:** `feature/polish-after-3d-select`, cut from `main` at `12a745c`
   (PR #13, the 3D character-select stage). Workers in parallel worktrees
   (DEC-039), merged in order: `wt/kart` (`da1ff93`), `wt/ui` (`42e57c7`),

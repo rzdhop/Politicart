@@ -414,3 +414,97 @@ path, no `force`), which also sent:
 listed 249 files (260 before), none under `screenshots/`. The template has no
 screenshots now; fresh captures would show the pun names, but under
 SwiftShader its hall renders as a dark silhouette, so none were made here.
+
+## To re-sync: the Politibox reveal parts (2026-10-29)
+
+Stage 6 of the overhaul (PLAN.md, DEC-054) added to `components/economy/`,
+each with a story carrying a docs description, an export with its Props
+type and `economy.test.tsx` coverage; none is in the Design System artifact yet:
+
+- `RevealStage`: `phase` gains `tease` and `next`, plus `count`/`index`
+  and a counter chip (`counterProps`, `formatCounter`). The stories gain
+  `Tease` and `Bundle`; the interactive one steps through six phases.
+- `RevealCard` (new): the result card with a `KindGlyph` (also exported),
+  caption, name, refund line, grade badge; part props `resultProps`,
+  `badgeProps`, `refundProps`.
+- `DropHistory` (new): the last drops as grade-coloured chips.
+- `OddsTable` (new): the odds as a table with a caption, row headers and
+  `sub` rows.
+- `economy.css` gained the static looks (`.kr-tease`, `.kr-counter`,
+  `.reveal-card`, `.drop-history`/`.drop-chip`, `.odds-table`), `fx.css`
+  the keyframes `kr-tease`, `kr-sink`, `kr-chip-in` and keeps the grade
+  sweep off `.drop-chip` as off `.grade-dot`; all off under reduced motion.
+- `RevealStage` stories render a fixed overlay, so their preview needs
+  the same `position: relative; height; transform: translateZ(0)` frame
+  as the `Screen` stories (see "Traps hit" above).
+
+## Re-sync after the overhaul (2026-10-29, version 20)
+
+Synced from `af88dd9` (stages 4, 6 and 8 of the overhaul, everything under
+`packages/ui` since `3d46ba4`). One publish, 85 files (68 new); the read-back
+lists 317 files (249 before). Tokens are unchanged (`tokens.css`, `tokens.json`
+not sent). The section "To re-sync: the Politibox reveal parts" above is done.
+
+- **New components (18, bundle 72):** economy `RevealCard`, `KindGlyph`,
+  `DropHistory`, `OddsTable`, `TrailStrip`; hud `HitVignette`, `StatusBadges`,
+  `LatencyReadout`, `LayoutReadout`; tracks `TrackMeta`; a new **lobby** group
+  `PlayerCard`, `PlayerGrid`, `TeamPicker`, `RoomCode`, `InviteRow`; results
+  `Podium`, `GainBreakdown`, `TeamStandings`. Each has README, `.d.ts`,
+  `preview.html` and `stories.js`, except `KindGlyph`: it has no story, so it
+  has an `index.d.ts` section (props from its signature) and is named in the
+  `RevealCard` line of the project README, with no card.
+- **Changed cards:** `RevealStage` (phases `tease`/`next`, the counter;
+  stories `Tease`, `Bundle`), `ItemSlot` (`rolling`, story `Rolling`, the
+  handle's `setRolling`/`flashUsed`), `TrackCard` (`thumb`, `meta`, three new
+  stories). `CenterAnnounce`, `PositionReadout`, `PowerGauge` and the toast
+  changed only in behaviour and CSS: they ride in `bundle.js`/`bundle.css`;
+  their stories, props and READMEs are as published.
+- **Project README:** 72 components, the lobby group, the new entries per
+  group, the class vocabulary, the HUD handle list, and the screens table rows
+  for the circuit select, Boutique, Politibox opening, team lobby, race HUD,
+  pause and results as the game composes them now. `design-system.json`:
+  `lastChange` only. `.design-sync/conventions.md` (the repo copy of the
+  README's opening) was not touched by this sync and is behind the published
+  README since version 16.
+- **`tools/cards.py` replaces `docs.py` for any component.** It reads the
+  `<Comp>Props` interface from the source (own members, JSDoc folded to one
+  line, then the native `ref`/`className`/`id`/`style`/`children` unless
+  omitted; an `Omit<OtherProps>` of a library component, as `TeamPicker` does
+  of `ChoiceGroupProps`, lists that one's members too), writes the file's other
+  exported types (handles, row shapes, unions) before the props, and rebuilds
+  `index.d.ts` in the bundle header's order, keeping every published section
+  it is not asked to rewrite. With no components it reproduces the published
+  `index.d.ts` byte for byte. Unlike the original converter it does not cut
+  prop docs at 120 characters, as `docs.py` did not. `assemble.sh` now takes
+  the component list (no default) and calls it; `docs.py` stays as the record
+  of the select parts' hand-written docs. Re-running `assemble.sh` with the
+  list above and the render's `heights.json` reproduced all 84 generated files.
+- **`RevealStage` frames now live in `gen.mjs`** (`FRAMED`): each story's
+  own box height (460/420/420/460/460px) becomes a `position: relative;
+  transform: translateZ(0)` frame, replacing the 420px owned frame of the old
+  published file.
+- **Four more `cardMode: "column"` overrides:** `HitVignette` and
+  `LayoutReadout` (the 440px `HudStage` fixture, as `CenterAnnounce` and
+  `Toast` already had), `DropHistory` and `OddsTable` (520px decorators).
+- **Left unpublished on purpose:** regenerating every `stories.js` shows 28
+  unchanged; 21 more differ only by the new `TRACK_FIGURES` /
+  `TRACK_FIGURES_BEST` fixture constants that esbuild keeps (a spread is not
+  tree-shaken), so they were not re-sent; `Screen` and `NoteBanner` differ by
+  their owned frames, which `gen.mjs` does not write, so never regenerate those
+  two from it. Before re-sending a story module, diff it against the read-back
+  without those fixture lines.
+- **Local captures:** `render.cjs` needs React 18.3.1's UMD files in
+  `<sync dir>/lib/`; `npm pack react@18.3.1 react-dom@18.3.1` and their
+  `umd/*.production.min.js` were enough. `GainBreakdown` counts up on mount, so
+  a 600 ms capture shows the amounts mid-count; `RevealStage` `Burst` is blank
+  once its one flash has played, as in Storybook.
+- **Trap: the work folder's `repo/` must be a real directory, not a
+  symlink.** `gen.mjs` maps a story's library imports to the bundle global by
+  comparing resolved paths with `<tree root>/packages/ui/src/components`; esbuild
+  resolves the symlink, the comparison fails, and every story module silently
+  bundles the components' own code instead of `window.PolitikartUI`. A copy
+  with `git archive HEAD` and the worktree's `node_modules` hard-linked
+  (`cp -al`) works.
+- `namescan.mjs` over the 85 staged files and over `.design-sync/`: 0 hits.
+  The cards' sample names are the game's pun names (the fixtures'), which the
+  scan accepts.

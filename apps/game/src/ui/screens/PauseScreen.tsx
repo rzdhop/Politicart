@@ -1,7 +1,8 @@
-import { Button, Heading, KartCard, Panel, Row, Screen } from '@politikart/ui';
+import { Button, Heading, KartCard, LatencyReadout, Panel, Row, Screen, Subtitle } from '@politikart/ui';
 
 import { CHARACTERS } from '../../engine/data.js';
 import { charGrade, GRADE_LABELS, kartCardOf } from '../kartChoices';
+import { formatNet } from '../Hud';
 import { actions, type UiSnapshot } from '../store';
 import type { Character } from '../types';
 
@@ -23,12 +24,14 @@ export function RaceKartCard({ ui, id }: { ui: UiSnapshot; id: string }) {
   return <KartCard id={id} name={char.name} title={char.title} grade={grade} gradeLabel={GRADE_LABELS[grade]} parts={parts} trail={trail} image={ui.thumbs[char.id]} />;
 }
 
-/** The pause menu, over the frozen race, with the kart card. */
+/** The pause menu, over the frozen race: the layout the seed drew, the connection in a team race, the kart card. */
 export function PauseScreen({ ui }: { ui: UiSnapshot }) {
   return (
     <Screen id="s-pause" hidden={ui.state !== 'paused'}>
       <Panel style={COLUMN}>
         <Heading>Suspension de séance</Heading>
+        {ui.raceLayout ? <Subtitle id="pause-layout" style={{ fontSize: 16 }}>{'Tracé du jour : « ' + ui.raceLayout + ' »'}</Subtitle> : null}
+        <LatencyReadout id="pause-net" latency={ui.pauseNet} format={formatNet} />
         <RaceKartCard ui={ui} id="pause-kart" />
         <Row>
           <Button id="b-resume" onClick={actions.resume}>Reprendre</Button>

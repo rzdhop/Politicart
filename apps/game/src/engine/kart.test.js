@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { CHARACTERS } from './data.js';
 import { countMeshes, countTriangles, geometryTriangles } from './geo.js';
-import { buildKart, PILOT_SCALE, RACE_LODS, raceLod, seatPilot, TEMPLATE_HIP } from './kart.js';
+import { buildKart, fxAnchorsOf, PILOT_SCALE, RACE_LODS, raceLod, seatPilot, TEMPLATE_HIP } from './kart.js';
 import { builtinStyle, defaultStyle, EXHAUSTS, MASTS, mergeStyle, NOSES, SKINS, SPOILERS, STICKERS, TRAILS, UNDERGLOWS, WHEELS } from './kartstyle.js';
 import { resetMachine } from './machine.js';
 import { framePayload } from './payload.js';
@@ -708,5 +708,38 @@ describe('styled karts in a race', () => {
     expect(G.karts[0].style).toEqual(defaultStyle(others[0].def));
     const dots = framePayload(G, CFG).kartPositions;
     expect(dots.find(d => d.isPlayer).color).toBe(0xabcdef);
+  });
+});
+
+// Where a kart's effects attach (vfx.js, DEC-053): its exhaust mouths and a point over the driver's head, in kart
+// space. Kept beside the kart rather than in its tree or its userData, so RACE_GOLDEN and the userData keys above did
+// not move; and so they survive the "légers" fold untouched: every level of detail has the same anchors.
+describe('effect anchors', () => {
+  it('are the same on every race level of detail, for every candidate and exhaust, folded or not', () => {
+    for (const c of CHARACTERS) for (const exhaust of EXHAUSTS) for (const level of ['high', 'low']) withPoly(level, () => {
+      const s = { ...mergeStyle(builtinStyle(c)), exhaust };
+      const [high, low, server] = RACE_LODS.map(lod => buildKart(c, s, { lod }));
+      const a = fxAnchorsOf(high), name = c.id + ' ' + exhaust + ' ' + level;
+      expect(fxAnchorsOf(low), name).toEqual(a);
+      expect(fxAnchorsOf(server), name).toEqual(a);
+      expect(a.exhaust.length, name).toBe(exhaust === 'turbine' ? 1 : exhaust === 'side' || exhaust === 'stock' ? 2 : 4);
+      for (const [x, y, z, r] of a.exhaust) { expect(z, name).toBeLessThan(0.5); expect(Math.abs(x), name).toBeLessThan(1.6); expect(y, name).toBeGreaterThan(0.2); expect(r, name).toBeGreaterThan(0); }
+      expect(a.top, name).toBeCloseTo(high.userData.driver.position.y + 1.6, 6);
+      for (const k of [high, low]) if (k.userData.driver.userData.lod) disposePilot(k.userData.driver);
+    });
+  }, 120000);
+
+  it('sit at the mouths of the pipes the kart draws', () => {
+    const c = CHARACTERS.find(x => x.id === 'victor'), k = buildKart(c, { ...mergeStyle(builtinStyle(c)), exhaust: 'stock' }, { lod: 'race-high' });
+    const mouths = fxAnchorsOf(k).exhaust;
+    expect(mouths).toEqual([[-0.35, 0.45, -1.95, 0.1], [0.35, 0.45, -1.95, 0.1]]);
+    // the two chrome pipes run along z from their centre at -1.7, 0.5 long: their back ends are the mouths
+    const pipes = []; k.traverse(o => { if (o.isMesh && o.geometry.type === 'CylinderGeometry' && Math.abs(o.position.z + 1.7) < 1e-6 && Math.abs(o.position.y - 0.45) < 1e-6) pipes.push(o); });
+    expect(pipes.map(p => p.position.x).sort()).toEqual([-0.35, 0.35]);
+    if (k.userData.driver.userData.lod) disposePilot(k.userData.driver);
+  });
+
+  it('fall back to the stock kart\'s for anything that is not a built kart', () => {
+    expect(fxAnchorsOf(new THREE.Group()).exhaust).toHaveLength(2);
   });
 });

@@ -3,23 +3,26 @@ import { describe, expect, it } from 'vitest';
 
 import { CHARACTERS } from '../../game/src/engine/data.js';
 import { buildKart } from '../../game/src/engine/kart.js';
+import { decodeVfx } from '../../game/src/engine/netstate.js';
 import { buildPilot } from '../../game/src/engine/pilot.js';
+import { VFX_KINDS } from '../../game/src/engine/vfx.js';
 import { Room } from './lobby.js';
 import { runRace } from './race.js';
 
 function harness() {
   const room = new Room('TEST'); room.join('alice', 'Alice'); room.join('bob', 'Bob');
   room.set('bob', { team: 'rouge' }); room.trackIdx = 0;
-  const sent = []; let done;
+  const sent = [], raw = []; let done;
   const finished = new Promise(ok => { done = ok; });
-  const io = { send: (id, m) => sent.push([id, m]), broadcast: () => {}, done: r => done(r) };
-  return { room, roster: room.roster(), sent, io, finished };
+  // snapshots come already stringified (sendRaw): kept as text, and parsed beside the other messages
+  const io = { send: (id, m) => sent.push([id, m]), sendRaw: (id, text) => { raw.push([id, text]); sent.push([id, JSON.parse(text)]); }, broadcast: () => {}, done: r => done(r) };
+  return { room, roster: room.roster(), sent, raw, io, finished };
 }
 
 /** Resolve once `ok()` holds, checking every 50 ms; reject after 10 s. */
-async function until(ok) {
-  for (let t = 0; t < 10_000; t += 50) { if (ok()) return; await new Promise(r => setTimeout(r, 50)); }
-  throw new Error('condition not met within 10 s');
+async function until(ok, ms = 10_000) {
+  for (let t = 0; t < ms; t += 50) { if (ok()) return; await new Promise(r => setTimeout(r, 50)); }
+  throw new Error('condition not met within ' + ms / 1000 + ' s');
 }
 
 describe('a race in a worker', () => {
@@ -30,17 +33,54 @@ describe('a race in a worker', () => {
       const starts = sent.filter(([, m]) => m.t === 'race');
       expect(starts.map(([id, m]) => [id, m.you])).toEqual([['alice', 4], ['bob', 5]]);
       expect(starts[0][1].roster).toHaveLength(6);
+      // the race seed (DEC-049): one per race, the same to every player
+      expect(Number.isInteger(starts[0][1].seed)).toBe(true);
+      expect(starts[1][1].seed).toBe(starts[0][1].seed);
       race.input('alice', { c: { throttle: true } });
       race.input('bob', { c: {} });                      // idle controls, as a client sends from its first frame
       await new Promise(r => setTimeout(r, 5000));      // 3.6 s countdown, then about a second of racing
       const snaps = sent.filter(([id, m]) => id === 'alice' && m.t === 'snap').map(([, m]) => m);
-      expect(snaps.length).toBeGreaterThan(60);           // ~20 Hz for 5 s
+      expect(snaps.length).toBeGreaterThan(90);           // ~30 Hz for 5 s
       const last = snaps.at(-1).s;
       expect(last.st).toBe('race');
       expect(last.k).toHaveLength(6);
       expect(last.k[4].s).toBeGreaterThan(5);           // alice accelerates
       expect(Math.abs(last.k[5].s)).toBeLessThan(1);    // bob never touched the throttle
       expect(snaps.some(m => m.fx.includes('go'))).toBe(true);
+    } finally { race.stop(); }
+  }, 15_000);
+
+  it('echoes each player\'s numbered inputs as ack and n, with their own private block, one tick for each of theirs (DEC-052)', async () => {
+    const { room, roster, sent, raw, io } = harness();
+    const race = runRace(room, roster, io, { fast: false, hold: 0 });
+    try {
+      // alice numbers her ticks; she sends ten at once while the clock is still held, then the rest at intervals
+      for (let q = 1; q <= 10; q++) race.input('alice', { seq: q, c: { throttle: true } });
+      race.input('bob', { c: {} });                                   // bob does not number his: latest wins, no echo
+      await until(() => sent.filter(([id, m]) => id === 'alice' && m.t === 'snap').length > 30);
+      race.input('alice', { seq: 40, c: { throttle: true } });
+      race.input('alice', { seq: 35, c: {} });                        // late and out of order: dropped
+      await until(() => sent.filter(([id, m]) => id === 'alice' && m.t === 'snap' && m.ack >= 40).length > 5);
+      const mine = sent.filter(([id, m]) => id === 'alice' && m.t === 'snap').map(([, m]) => m);
+      const bobs = sent.filter(([id, m]) => id === 'bob' && m.t === 'snap').map(([, m]) => m);
+      expect(mine[0]).toMatchObject({ ack: 10, n: mine[0].s.tk });     // the first tick took the newest controls queued, and kept them
+      expect(mine.some(m => m.ack === 35)).toBe(false);
+      // the server's kart stands for the client's tick ack + n - 1, three ticks further on each snapshot
+      const at = mine.map(m => m.ack + m.n - 1);
+      at.forEach((t, i) => { if (i) expect(t - at[i - 1]).toBe(mine[i].s.tk - mine[i - 1].s.tk); });
+      expect(mine.every(m => m.me && Number.isInteger(m.me.lap))).toBe(true);
+      expect(bobs.every(m => m.ack === undefined && m.n === undefined && m.me)).toBe(true);
+      // each block is its owner's kart: its progress is that kart's place on the spline
+      const last = mine.at(-1), hers = bobs.at(-1);
+      expect(last.me.pr).toBeCloseTo(last.me.lap + last.s.k[4].idx / 1800, 3);
+      expect(hers.me.pr).toBeCloseTo(hers.me.lap + hers.s.k[5].idx / 1800, 3);
+      expect(last.s.k[4].idx).not.toBe(last.s.k[5].idx);
+      expect(mine.at(-1).s.k[4]).not.toHaveProperty('lap');            // the HUD-only fields travel in the block alone
+      // one snapshot text for everyone, each player's part spliced on
+      const tk = mine.at(-1).s.tk;
+      const texts = raw.filter(([, t]) => t.includes('"tk":' + tk + ',')).map(([, t]) => t.slice(0, t.indexOf(',"ev":')));
+      expect(texts).toHaveLength(2); expect(texts[0]).toBe(texts[1]);
+      expect(raw[0][1].startsWith('{"t":"snap","s":{')).toBe(true);
     } finally { race.stop(); }
   }, 15_000);
 
@@ -78,10 +118,11 @@ describe('a race in a worker', () => {
       expect(sent.find(([id, m]) => id === 'alice' && m.t === 'kartJoin')[1]).toMatchObject({ slot: 6, entry: { charId: 'thierry', god: true, team: null } });
       const start = sent.find(([id, m]) => id === 'rida' && m.t === 'race')[1];
       expect(start.you).toBe(6); expect(start.roster).toHaveLength(7);
+      expect(start.seed).toBe(sent.find(([id, m]) => id === 'alice' && m.t === 'race')[1].seed);   // the god builds the same race
       expect(race.grid).toHaveLength(7); expect(roster).toHaveLength(7);
       await until(() => sent.some(([id, m]) => id === 'rida' && m.t === 'snap' && m.s.k.length === 7));
       const snap = sent.filter(([id, m]) => id === 'rida' && m.t === 'snap').at(-1)[1].s;
-      expect(snap.k[6].gd).toBe(true); expect(snap.lp).toBe(3);
+      expect(snap.k[6].gd).toBe(1); expect(snap.lp).toBe(3);
 
       expect(await race.god({ cmd: 'stun', target: 'all', dur: 2 }, 'rida')).toMatchObject({ ok: true });
       expect(await race.god({ cmd: 'laps', laps: 5 }, 'rida')).toMatchObject({ ok: true });
@@ -96,9 +137,25 @@ describe('a race in a worker', () => {
     } finally { race.stop(); }
   }, 20_000);
 
+  it('sends the effects beside the sounds, recorded by a worker that builds none (DEC-053)', async () => {
+    const { room, roster, sent, io } = harness();
+    const race = runRace(room, roster, io, { fast: true, seed: 77 });
+    const snaps = () => sent.filter(([id, m]) => id === 'alice' && m.t === 'snap').map(([, m]) => m);
+    try {
+      race.input('bob', { c: { throttle: true } });
+      const effects = () => snaps().flatMap(m => m.vfx).map(decodeVfx);
+      // the statuses travel with the karts, for every screen's auras (sl co ca ra sp rl)
+      const statused = () => snaps().some(m => m.s.k.some(k => ['sl', 'co', 'ca', 'ra', 'sp', 'rl'].some(f => k[f] > 0)));
+      // the AI's rolls are not seeded, so how soon it has thrown enough varies: race until it has, not for a fixed time
+      await until(() => { const e = effects(); return e.length > 20 && e.some(x => x?.ty === 'windup') && statused(); }, 25_000);
+      expect(snaps().every(m => Array.isArray(m.vfx))).toBe(true);
+      expect(effects().every(e => e && VFX_KINDS.includes(e.ty) && (e.k === undefined || (e.k >= 0 && e.k < 6)))).toBe(true);
+    } finally { race.stop(); }
+  }, 30_000);
+
   it('runs to the finish when the drivers hand over to the AI, and scores the teams', async () => {
     const { room, roster, io, finished } = harness();
-    const race = runRace(room, roster, io, { fast: true });
+    const race = runRace(room, roster, io, { fast: true, seed: 77 });
     race.leave('alice'); race.leave('bob');
     const { ranking, teams } = await finished;
     expect(ranking.map(r => r.rank)).toEqual([0, 1, 2, 3, 4, 5]);

@@ -194,7 +194,11 @@ async function stories(comp, mode, primary, skip) {
   return { keys, group };
 }
 
-const FRAMED = { SelectLayout: { WithStage: '720px' } };
+const FRAMED = {
+  SelectLayout: { WithStage: '720px' },
+  // RevealStage is a fixed overlay; each story's own box height becomes its frame.
+  RevealStage: { Reveal: '460px', Tease: '420px', Burst: '420px', Bundle: '460px', PolitiboxOpening: '460px' },
+};
 const cfg = JSON.parse(readFileSync(join(SYNC, 'config.json'), 'utf8'));
 if (MODE === 'bundle') await bundle();
 else

@@ -4,16 +4,20 @@ import { describe, expect, it } from 'vitest';
 
 import { CenterAnnounce } from './CenterAnnounce';
 import { DriftGauge, type DriftGaugeHandle } from './DriftGauge';
+import { HitVignette, type HitVignetteHandle } from './HitVignette';
 import { HudCorner } from './HudCorner';
 import { HudHint } from './HudHint';
 import { HudLayer } from './HudLayer';
 import { ItemSlot, type ItemSlotHandle } from './ItemSlot';
 import { LapCounter } from './LapCounter';
+import { LatencyReadout, latencyQuality, type LatencyReadoutHandle } from './LatencyReadout';
+import { LayoutReadout, type LayoutReadoutHandle } from './LayoutReadout';
 import { MinimapFrame } from './MinimapFrame';
 import { PositionReadout, type PositionReadoutHandle } from './PositionReadout';
 import { PowerGauge, type PowerGaugeHandle } from './PowerGauge';
 import { RaceTimer } from './RaceTimer';
 import { SpeedReadout, type SpeedReadoutHandle } from './SpeedReadout';
+import { badgeValue, StatusBadges, type StatusBadgesHandle } from './StatusBadges';
 import { Toast, type ToastHandle } from './Toast';
 import { WrongWay, type WrongWayHandle } from './WrongWay';
 import type { TextReadoutHandle } from './handles';
@@ -303,5 +307,172 @@ describe('part props (DEC-012)', () => {
     expect(container.querySelector('.pk')?.textContent).toBe('F · PRÊT !');
     ref.current?.setKeyHint('F · PRÊT !');
     expect(container.querySelector('.pk')?.textContent).toBe('F · PRÊT !');
+  });
+});
+
+// Stage 4's motion (DEC-053): every keyframe is a class the handles put on, the keyframes themselves in fx.css.
+describe('HitVignette', () => {
+  it('renders an inert full-screen layer at its level and tone', () => {
+    const { container } = render(<HitVignette level={0.5} tone="lap" />);
+    const layer = container.firstElementChild as HTMLElement;
+    expect(layer.className).toBe('hit-vignette');
+    expect(layer.getAttribute('aria-hidden')).toBe('true');
+    expect(layer.dataset.tone).toBe('lap');
+    expect(layer.style.getPropertyValue('--hit')).toBe('0.50');
+  });
+
+  it('sets the level (clamped), the tone and a flash through its handle', () => {
+    const ref = createRef<HitVignetteHandle>();
+    const { container } = render(<HitVignette ref={ref} />);
+    const layer = container.firstElementChild as HTMLElement;
+    expect(layer.style.getPropertyValue('--hit')).toBe('0.00');
+    ref.current?.setLevel(0.734);
+    expect(layer.style.getPropertyValue('--hit')).toBe('0.73');
+    ref.current?.setLevel(7);
+    expect(layer.style.getPropertyValue('--hit')).toBe('1.00');
+    ref.current?.setLevel(Number.NaN);
+    expect(layer.style.getPropertyValue('--hit')).toBe('0.00');
+    ref.current?.setTone('boost');
+    expect(layer.dataset.tone).toBe('boost');
+    ref.current?.flash();
+    expect(layer.classList.contains('flash')).toBe(true);
+  });
+});
+
+describe('StatusBadges', () => {
+  const slowed = { id: 'slowed', icon: '🐌', label: 'Ralenti', time: 1.26 };
+  const shield = { id: 'shield', icon: '🤐', label: 'Langue de bois', time: 20, tone: 'good' as const };
+
+  it('formats a timer to the tenth with a French comma, and a count with a times sign', () => {
+    expect(badgeValue({ time: 1.26 })).toBe('1,3 s');
+    expect(badgeValue({ time: -2 })).toBe('0,0 s');
+    expect(badgeValue({ count: 3 })).toBe('×3');
+    expect(badgeValue({})).toBe('');
+  });
+
+  it('renders one badge per status, coloured by tone', () => {
+    const { container } = render(<StatusBadges statuses={[slowed, shield]} />);
+    const badges = [...container.querySelectorAll('.status-badge')] as HTMLElement[];
+    expect(badges.map((b) => b.dataset.status)).toEqual(['slowed', 'shield']);
+    expect(badges[0]?.className).toContain('tone-bad');
+    expect(badges[1]?.className).toContain('tone-good');
+    expect(badges[0]?.textContent).toBe('🐌Ralenti1,3 s');
+  });
+
+  it('keeps, adds, reorders and removes badges by id through its handle, rewriting only the timers', () => {
+    const ref = createRef<StatusBadgesHandle>();
+    const { container } = render(<StatusBadges ref={ref} />);
+    const ids = () => [...container.querySelectorAll('.status-badge')].map((b) => (b as HTMLElement).dataset.status);
+    ref.current?.setStatuses([slowed]);
+    expect(ids()).toEqual(['slowed']);
+    const first = container.querySelector('[data-status="slowed"]');
+    expect(first?.classList.contains('kr-badge-in')).toBe(true);    // a new badge slides in
+    ref.current?.setStatuses([shield, { ...slowed, time: 0.4 }]);
+    expect(ids()).toEqual(['shield', 'slowed']);
+    expect(container.querySelector('[data-status="slowed"]')).toBe(first);   // the same element, kept
+    expect(first?.querySelector('.sb-time')?.textContent).toBe('0,4 s');
+    ref.current?.setStatuses([]);
+    expect(ids()).toEqual([]);
+  });
+});
+
+describe('HUD motion through the handles', () => {
+  it('spins the item roulette and flashes the slot when the item goes', () => {
+    const ref = createRef<ItemSlotHandle>();
+    const { container } = render(<ItemSlot ref={ref} icon="·" label="aucun objet" />);
+    const slot = container.firstElementChild as HTMLElement;
+    ref.current?.setRolling(true);
+    expect(slot.classList.contains('rolling')).toBe(true);
+    ref.current?.setRolling(false);
+    expect(slot.classList.contains('rolling')).toBe(false);
+    ref.current?.flashUsed();
+    expect(slot.classList.contains('used')).toBe(true);
+    expect(render(<ItemSlot icon="🗳️" label="…" rolling />).container.firstElementChild?.className).toBe('item rolling');
+  });
+
+  it('pops the position up on a place won and down on a place lost, and not when it stays', () => {
+    const ref = createRef<PositionReadoutHandle>();
+    const { container } = render(<PositionReadout ref={ref} position={4} />);
+    const pos = container.firstElementChild as HTMLElement;
+    ref.current?.setPosition(4);
+    expect(pos.className).toBe('pos');
+    ref.current?.setPosition(3);
+    expect(pos.classList.contains('gain')).toBe(true);
+    ref.current?.setPosition(5);
+    expect(pos.classList.contains('loss')).toBe(true);
+    expect(pos.classList.contains('gain')).toBe(false);
+  });
+
+  it('beats the centre announcement on every new word, never on an empty one', () => {
+    const ref = createRef<TextReadoutHandle>();
+    const { container } = render(<CenterAnnounce ref={ref} />);
+    const center = container.firstElementChild as HTMLElement;
+    ref.current?.setText('');
+    expect(center.classList.contains('beat')).toBe(false);
+    ref.current?.setText('3');
+    expect(center.textContent).toBe('3');
+    expect(center.classList.contains('beat')).toBe(true);
+  });
+
+  it('pops the power gauge once when it charges, and keeps it ready', () => {
+    const ref = createRef<PowerGaugeHandle>();
+    const { container } = render(<PowerGauge ref={ref} name="Grand débat" charge={0} />);
+    const gauge = container.firstElementChild as HTMLElement;
+    ref.current?.setReady(false);
+    expect(gauge.classList.contains('charged')).toBe(false);
+    ref.current?.setReady(true);
+    expect(gauge.classList.contains('ready')).toBe(true);
+    expect(gauge.classList.contains('charged')).toBe(true);
+  });
+});
+
+describe('LatencyReadout', () => {
+  it('rates the round trip', () => {
+    expect([null, 40, 89, 90, 169, 170, 400, Number.NaN].map(latencyQuality)).toEqual(['unknown', 'good', 'good', 'fair', 'fair', 'poor', 'poor', 'unknown']);
+  });
+
+  it('is hidden and empty without a connection, and shows the measures with their quality', () => {
+    const { container, rerender } = render(<LatencyReadout id="net" />);
+    const el = container.querySelector('#net') as HTMLElement;
+    expect(el.className).toBe('latency');
+    expect(el.hidden).toBe(true);
+    expect(el.textContent).toBe('');
+    rerender(<LatencyReadout id="net" latency={{ rtt: 120, delay: 100 }} />);
+    expect(el.hidden).toBe(false);
+    expect(el.textContent).toBe('ping 120 ms · delay 100 ms');
+    expect(el.dataset.quality).toBe('fair');
+  });
+
+  it('writes through its handle with the caller’s format, and hides again for null', () => {
+    const ref = createRef<LatencyReadoutHandle>();
+    const { container } = render(<LatencyReadout ref={ref} format={(l) => `ping ${l.rtt ?? '…'} ms · délai ${l.delay} ms`} />);
+    const el = container.firstElementChild as HTMLElement;
+    ref.current?.setLatency({ rtt: 48, delay: 100 });
+    expect(el.textContent).toBe('ping 48 ms · délai 100 ms');
+    expect(el.dataset.quality).toBe('good');
+    expect(el.hidden).toBe(false);
+    ref.current?.setLatency({ rtt: null, delay: 83 });
+    expect(el.textContent).toBe('ping … ms · délai 83 ms');
+    expect(el.dataset.quality).toBe('unknown');
+    ref.current?.setLatency(null);
+    expect(el.hidden).toBe(true);
+    expect(el.textContent).toBe('');
+  });
+});
+
+describe('LayoutReadout', () => {
+  it('shows the caption and the name, and the handle rewrites the name alone and toggles it', () => {
+    const ref = createRef<LayoutReadoutHandle>();
+    const { container } = render(<LayoutReadout id="lay" ref={ref} label="Tracé du jour" hidden />);
+    const el = container.querySelector('#lay') as HTMLElement;
+    expect(el.className).toBe('layout-readout');
+    expect(el.hidden).toBe(true);
+    ref.current?.setName('Jour de manif');
+    ref.current?.setVisible(true);
+    expect(el.hidden).toBe(false);
+    expect(el.querySelector('.lr-label')?.textContent).toBe('Tracé du jour');
+    expect(el.querySelector('.lr-name')?.textContent).toBe('Jour de manif');
+    ref.current?.setVisible(false);
+    expect(el.hidden).toBe(true);
   });
 });

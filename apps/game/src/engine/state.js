@@ -13,9 +13,16 @@
 import { getState } from './machine.js';
 
 // samples grew from 600 to 900 and then 1800 with the circuits (scale 1.5, then 3), keeping
-// the spacing between them. The road is 30 m wide (it was 18): a bike lane runs along its
-// right-hand edge, between bikeLane.inner and bikeLane.outer (lateral offsets, right is +).
+// the spacing between them. roadHalfWidth is the default half-width: each circuit carries
+// its own (DEC-050), which buildTrack puts in G.hw and in every sample's `hw` (a `narrow`
+// feature pinches it), and that is what the engine reads. A bike lane runs along the road's
+// right-hand edge (lateral offsets, right is +): bikeLane is its offsets at the default
+// width, bikeLaneOf(hw) the same lane on a road of half-width hw.
 export const CFG = { roadHalfWidth: 15, samples: 1800, laps: 3, numAI: 5, powerCooldown: 24, bikeLane: { inner: 10.3, outer: 13.9 } };
+/** The bike lane's lateral offsets on a road of half-width `hw`: 4.7 m to 1.1 m in from the right-hand kerb. */
+export const bikeLaneOf = hw => ({ inner: hw - 4.7, outer: hw - 1.1 });
+/** The simulation's fixed step: the server's race worker ticks at 60 Hz, and a networked client predicts its own kart at the same step (DEC-052). */
+export const STEP = 1 / 60;
 
 /**
  * Graphics detail. 'high' adds segments and shadows, 'low' lightens both.
@@ -38,10 +45,39 @@ export const G = {
   scene: null, track: null, karts: [], player: null, samples: [], N: 0, trackLength: 0,
   hazards: [], projectiles: [], itemBoxes: [], animated: [], crowd: [], ramps: [], pits: [], pads: [], crossings: [], time: 0, countdown: 0, charIdx: 0, trackIdx: 0,
   resultsAt: Infinity, wrongTimer: 0, laps: CFG.laps, previewKart: null, previewScene: null, sun: null, thumbs: {}, thumbPoly: null,
+  // the race's seed and what it drew (DEC-049): the layout (engine/layout.js), the race's own
+  // random stream, and the circuit's half-width (DEC-050); entitySeq numbers hazards and
+  // projectiles so snapshots can name them, static obstacles first (reset before buildTrack)
+  seed: 0, layout: null, rng: null, hw: CFG.roadHalfWidth, entitySeq: 0,
+  // The race's climate (climate.js applyClimate): the preset applied, the sun's offset from the followed kart, the lamp heads
+  // the decor registered (lit at night), and what the race allocated and frees with its scene (disposable, race.js disposeScene).
+  climate: null, sunOffset: null, lamps: [], disposables: [],
+  // True while a networked client re-simulates its own kart (predict.js, DEC-052): messages, sounds, laps,
+  // the item roll and the mesh's pose are the server's word or the frame's, so the step leaves them alone.
+  replaying: false,
+  // The local kart's effects for the HUD and the camera (vfx.js, DEC-053): hit flash, shake, landing dip, boost kick,
+  // lap flash, and a count of items gone from the slot. Null headless and between races.
+  fxHud: null,
 };
 Object.defineProperty(G, 'state', { enumerable: true, get: getState });
+/** The next entity id: hazards and projectiles carry one so a snapshot can name them (DEC-014); static obstacles take theirs at build. */
+export const nextEntityId = () => (G.entitySeq = (G.entitySeq || 0) + 1);
+/** Whether (x, z) is at least `margin` metres clear of the road's edge, at the road's width where it passes. */
 export function isClear(x, z, margin) {
-  const lim = (CFG.roadHalfWidth + margin) ** 2;
-  for (let i = 0; i < G.N; i += 2) { const s = G.samples[i]; if ((s.x - x) ** 2 + (s.z - z) ** 2 < lim) return false; }
+  for (let i = 0; i < G.N; i += 2) { const s = G.samples[i]; const lim = (s.hw ?? G.hw) + margin; if ((s.x - x) ** 2 + (s.z - z) ** 2 < lim * lim) return false; }
   return true;
 }
+/** The road's height under (x, z): the nearest sample's y (0 before a circuit is built). A full search; for spawns, not for every frame. */
+export function roadYAt(x, z) {
+  let best = null, bd = Infinity;
+  for (let i = 0; i < G.N; i++) { const s = G.samples[i]; const d = (s.x - x) ** 2 + (s.z - z) ** 2; if (d < bd) { bd = d; best = s; } }
+  return best ? best.y || 0 : 0;
+}
+
+/**
+ * Register a texture or a material the race allocated for this scene only,
+ * so race.js disposeScene frees it with the scene's geometries instead of
+ * leaking it race after race. Returns it. Never register what a cache owns
+ * (primitives.mat, textPlane, the TEX bakes): those outlive the race.
+ */
+export function disposable(x) { G.disposables.push(x); return x; }

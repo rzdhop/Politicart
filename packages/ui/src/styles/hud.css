@@ -224,6 +224,121 @@
   text-shadow:0 3px 0 #000;
 }
 
+/* Stage 4's two layers (DEC-053): the tinted edges and the statuses' badges. */
+.hit-vignette {
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  opacity:var(--hit,0);
+  background:radial-gradient(ellipse at center,transparent 52%,rgba(200,16,46,.6) 100%);
+}
+
+.hit-vignette[data-tone=lap] { background:radial-gradient(ellipse at center,transparent 55%,rgba(242,193,78,.55) 100%); }
+
+.hit-vignette[data-tone=boost] { background:radial-gradient(ellipse at center,transparent 60%,rgba(124,196,255,.45) 100%); }
+
+.status-badges {
+  list-style:none;
+  margin:4px 0 0;
+  padding:0;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
+.status-badge {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  width:max-content;
+  padding:3px 9px 3px 5px;
+  border-radius:999px;
+  background:var(--panel);
+  border:1px solid #ff5c6c;
+  font-size:12px;
+  line-height:1.2;
+  text-shadow:0 1px 0 #000;
+}
+
+.status-badge.tone-good { border-color:#9ad04f; }
+
+.status-badge .sb-ico {
+  font-size:16px;
+  line-height:1;
+}
+
+.status-badge .sb-label {
+  font-family:var(--font-display);
+  letter-spacing:.03em;
+}
+
+.status-badge .sb-time {
+  font-family:var(--font-mono);
+  color:var(--muted);
+  min-width:3.4em;
+  text-align:right;
+}
+
+/* Stage 8: the connection's readout and the layout's name. */
+.latency {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-family:var(--font-mono);
+  font-size:13px;
+  color:var(--muted);
+  text-shadow:0 1px 0 #000;
+}
+
+.latency::before {
+  content:'';
+  flex:none;
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:var(--muted);
+  box-shadow:0 0 6px currentColor;
+}
+
+.latency[data-quality=good]::before { background:#9ad04f; color:#9ad04f; }
+.latency[data-quality=fair]::before { background:var(--gold); color:var(--gold); }
+.latency[data-quality=poor]::before { background:#ff5c6c; color:#ff5c6c; }
+.latency[data-quality=poor] { color:#ffb3ba; }
+
+.latency[hidden],
+.layout-readout[hidden] { display:none!important; }
+
+.layout-readout {
+  position:absolute;
+  left:50%;
+  top:calc(34% + clamp(58px,13vw,150px));
+  transform:translateX(-50%);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:2px;
+  max-width:min(80vw,460px);
+  padding:6px 16px 8px;
+  border-radius:14px;
+  background:var(--panel);
+  border:1px solid rgba(242,193,78,.55);
+  text-align:center;
+}
+
+.layout-readout .lr-label {
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--gold);
+}
+
+.layout-readout .lr-name {
+  font-family:var(--font-display);
+  font-size:clamp(18px,3.4vw,26px);
+  line-height:1.05;
+  text-shadow:0 2px 0 rgba(0,0,0,.5);
+}
+
 @media (max-width:600px) {
   .minimap {
     width:100px;
@@ -244,5 +359,8 @@
   }
   .power {
     width:110px;
+  }
+  .status-badge .sb-label {
+    display:none;
   }
 }

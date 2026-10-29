@@ -20,16 +20,18 @@ import './game.css';
 import { updateEngine } from './engine/audio.js';
 import { createBannerQueue } from './engine/banner.js';
 import { loadCustom } from './engine/custom.js';
-import { ITEMS } from './engine/data.js';
+import { ITEMS, STATUSES } from './engine/data.js';
 import { drain, resolveFor } from './engine/events.js';
 import { loadGarage } from './engine/garage.js';
 import { setInputSource } from './engine/input.js';
 import { getState, onTransition } from './engine/machine.js';
-import { renderLootbox } from './engine/lootbox.js';
+import { renderLootbox } from './engine/boxgate.js';
 import { isNetRace, netStep } from './engine/netrace.js';
-import { launching, renderPreview, showsTurntable, stageInfo, warmStage } from './engine/preview.js';
+import { launching, renderPreview, showsTurntable, stageInfo, stageStill, warmStage } from './engine/stagegate.js';
+import { prebuildFrame, prebuildStatus, primeCountdown } from './engine/prebuild.js';
+import { BUDGET_MS as THUMB_BUDGET_MS, setStillProbe, thumbsFrame, thumbStatus } from './engine/thumbs.js';
 import { endRace, renderRace, stepRace } from './engine/race.js';
-import { clearCanvas } from './engine/render.js';
+import { clearCanvas, getRenderer } from './engine/render.js';
 import { G } from './engine/state.js';
 import { $, clamp, fmtTime } from './engine/util.js';
 import { hud } from './ui/Hud.tsx';
@@ -52,7 +54,7 @@ import { initTouch, installNoContextMenu, isCoarsePointer, isTouchMode, setTouch
 // against an unchanged value, so a readout that did not move costs nothing
 // at 60 fps, and nothing here ever goes through React state. The minimap is
 // not written from here at all: the engine draws it (engine/minimap.js).
-let lastItemShown = '', lastPowerReady = null, lastGod = null;
+let lastItemShown = '', lastPowerReady = null, lastGod = null, lastLayoutShown = '';
 function updateHUD(p) {
   const h = hud;
   if (!h.pos || !h.lap || !h.time || !h.item || !h.power || !h.speed || !h.drift || !h.center || !h.wrong) return;
@@ -69,10 +71,28 @@ function updateHUD(p) {
   if (p.powerReady !== lastPowerReady || p.god !== lastGod) { lastPowerReady = p.powerReady; lastGod = p.god; h.power.setReady(p.powerReady); h.power.setKeyHint(p.god ? 'F · MODE DIEU' : p.powerReady ? 'F · PRÊT !' : 'F · recharge'); }
   h.power.setName(p.powerName);
   h.center.setText(p.announce);
+  // the layout the seed drew (DEC-049): its own readout under the countdown (shown at the countdown and in the pause, see onTransition below)
+  if (p.layoutName !== lastLayoutShown) { lastLayoutShown = p.layoutName; h.layout?.setName(p.layoutName); }
   h.wrong.setVisible(p.wrongWay);
+  // a team race's connection (DEC-052): the round trip and how far behind the others are drawn, coloured by the round trip; hidden in solo play
+  h.net?.setLatency(p.net ? { rtt: p.net.rtt ?? null, delay: p.net.delay } : null);
   // the touch buttons carry the item and the power state themselves (the HUD's own slots make way for them)
   touchHud.item?.(shown.split('|')[0], !!p.item && !p.itemRolling);
   touchHud.power?.(1 - p.powerCd / p.powerCdMax, p.powerReady);
+  updateHudMotion(p);
+}
+// Stage 4's HUD motion (DEC-053): the item roulette and its flash, the tinted edges, the statuses' badges.
+let lastRolling = null, lastUsed = 0, lastStatusKey = '';
+function updateHudMotion(p) {
+  const h = hud;
+  if (p.itemRolling !== lastRolling) { lastRolling = p.itemRolling; h.item?.setRolling?.(p.itemRolling); }
+  if (p.itemUsed !== lastUsed) { if (p.itemUsed > lastUsed) h.item?.flashUsed?.(); lastUsed = p.itemUsed; }
+  if (h.vignette) {
+    const tone = p.hit > 0.02 ? 'hit' : p.lapFlash > 0.02 ? 'lap' : p.boost ? 'boost' : 'hit';
+    h.vignette.setTone(tone); h.vignette.setLevel(Math.max(p.hit, p.lapFlash, p.boost ? 0.22 : 0));
+  }
+  const key = p.status.map(s => s.id + ':' + (s.count ?? s.time.toFixed(1))).join('|');
+  if (key !== lastStatusKey && h.status) { lastStatusKey = key; h.status.setStatuses(p.status.map(s => ({ ...s, icon: STATUSES[s.id].icon, label: STATUSES[s.id].name, tone: STATUSES[s.id].good ? 'good' : 'bad' }))); }
 }
 // The two text channels the engine's event queue feeds. Toasts go through
 // the banner queue (engine/banner.js): one at a time, each held long enough
@@ -80,6 +100,7 @@ function updateHUD(p) {
 // is this writer's frame clock.
 const banners = createBannerQueue();
 function setHint(t) { if (hud.hint) hud.hint.setText(t); }
+const HINT = 'Ramassez une urne dorée pour obtenir un objet.';
 function toast(t) { banners.push(t); }
 function tickToast(dt) { const r = banners.tick(dt); if (!r || !hud.toast) return; if (r.show) hud.toast.show(r.show); else if (r.hide) hud.toast.hide(); }
 
@@ -149,7 +170,9 @@ if (isCoarsePointer()) actions.togglePoly();
 // catch-up after a pause, so the first frame back is not a 0.05 s jump.
 onTransition((to, from) => {
   if (from === 'paused') lastFrame = performance.now();
-  if (to === 'countdown' && from !== 'paused') { banners.clear(); if (hud.toast) hud.toast.hide(); }   // a new race starts with a clean ribbon
+  // the layout's name shows under the countdown and while paused, never during the race itself
+  hud.layout?.setVisible(to === 'countdown' || to === 'paused');
+  if (to === 'countdown' && from !== 'paused') { banners.clear(); if (hud.toast) hud.toast.hide(); setHint(HINT); }   // a new race starts with a clean ribbon and the opening hint
 });
 
 // ---------- Screens: mount ----------
@@ -173,6 +196,10 @@ let lastFrame = performance.now();
  */
 let titleIdle = 0;
 const WARM_AFTER = 0.8;
+/** The work a menu frame may do ahead (the pre-build, then the thumbnails), ms. */
+const FRAME_SHARE_MS = 12;
+// The thumbnails stand aside on a GPU the select stage's governor stood still (DEC-046).
+setStillProbe(stageStill);
 function frame(now) {
   requestAnimationFrame(frame);
   // clamped both ways: the first rAF timestamp can predate lastFrame, and a negative step would run time backwards (PLAN 1.2 A.1)
@@ -185,6 +212,14 @@ function frame(now) {
   // but for the circuits' first 1.4 s after "Choisir le circuit →": the stage draws the kart
   // driving off behind the cards, then clears to that background itself (preview.js launch, Q3).
   if (state === 'lootbox') { renderLootbox(dt); return; }
+  // The chosen circuit is built ahead, a slice per frame, while the player sits on the circuits, in the lobby or on the
+  // results (engine/prebuild.js, DEC-055); the stage's launch keeps its frames to itself. Drawn over or cleared below.
+  if (state === 'tracks' || state === 'lobby' || state === 'results') {
+    const t0 = performance.now(), launch = launching();
+    prebuildFrame({ renderer: getRenderer(), budget: launch ? 0 : undefined });
+    // the circuits' thumbnails get what the pre-build left of the frame's share, at most their own budget (engine/thumbs.js)
+    if (state === 'tracks' && !launch) { const left = Math.min(THUMB_BUDGET_MS, FRAME_SHARE_MS - (performance.now() - t0)); thumbsFrame({ renderer: getRenderer(), budget: left >= 1.5 ? left : 0 }); }
+  }
   if (showsTurntable(state) || (state === 'tracks' && launching())) { renderPreview(dt); return; }
   if (state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'dashboard' || state === 'shop') { clearCanvas(); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
@@ -194,6 +229,8 @@ function frame(now) {
   for (const e of drain()) { const text = resolveFor(e, G.player); if (text === null) continue; if (e.type === 'toast') toast(text); else if (e.type === 'hint') setHint(text); }
   tickToast(dt);
   updateHUD(payload); updateEngine();
+  // The countdown primes the items' materials, a few per frame, so the first throw never stutters (prebuild.js).
+  if (state === 'countdown') primeCountdown({ renderer: getRenderer() });
   renderRace();
 }
 requestAnimationFrame(frame);
@@ -208,4 +245,6 @@ requestAnimationFrame(frame);
 // reached this screen (nothing in the DOM shows a kart's style).
 // stage() is read-only too: the select stage as its last frame drew it (preview.js stageInfo): the candidate,
 // the podium's yaw, the frame's draw calls, triangles and programs, the model's box on screen, the portraits.
-window.__kr = { endRace, karts: () => (G.karts || []).map(k => ({ charId: k.def.id, style: { ...k.style } })), stage: () => stageInfo() };
+// prebuild() is read-only: the circuit being built ahead (prebuild.js prebuildStatus), its phase and timings.
+// thumbs() is read-only: the circuits' thumbnails (thumbs.js thumbStatus): how many are rendered, the slices' cost.
+window.__kr = { endRace, karts: () => (G.karts || []).map(k => ({ charId: k.def.id, style: { ...k.style } })), stage: () => stageInfo(), prebuild: () => prebuildStatus(), thumbs: () => thumbStatus() };

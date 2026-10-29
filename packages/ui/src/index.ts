@@ -64,11 +64,25 @@ export { StatGrid, type StatGridProps } from './components/select/StatGrid';
 
 // Track select.
 export { CardGrid, type CardGridProps } from './components/tracks/CardGrid';
-export { TrackCard, type TrackCardProps } from './components/tracks/TrackCard';
+export { TrackCard, type TrackCardProps, type TrackThumbState } from './components/tracks/TrackCard';
+export {
+  type TrackClimate,
+  TrackMeta,
+  type TrackMetaItem,
+  type TrackMetaProps,
+} from './components/tracks/TrackMeta';
+
+// Lobby: the team race's waiting room (stage 8).
+export { type Invitee, InviteRow, type InviteRowProps } from './components/lobby/InviteRow';
+export { PlayerCard, type PlayerCardProps } from './components/lobby/PlayerCard';
+export { PlayerGrid, type PlayerGridProps } from './components/lobby/PlayerGrid';
+export { COPIED_MS, RoomCode, type RoomCodeProps } from './components/lobby/RoomCode';
+export { type TeamOption, TeamPicker, type TeamPickerProps } from './components/lobby/TeamPicker';
 
 // HUD. The live readouts also expose imperative handles -- see handles.ts for
 // why, and read that before driving the HUD from a game loop.
 export {
+  replayClass,
   type TextReadoutHandle,
 } from './components/hud/handles';
 export {
@@ -85,6 +99,12 @@ export {
   type HudCornerPosition,
   type HudCornerProps,
 } from './components/hud/HudCorner';
+export {
+  HitVignette,
+  type HitVignetteHandle,
+  type HitVignetteProps,
+  type HitVignetteTone,
+} from './components/hud/HitVignette';
 export { HudHint, type HudHintProps } from './components/hud/HudHint';
 export { HudLayer, type HudLayerProps } from './components/hud/HudLayer';
 export {
@@ -93,6 +113,22 @@ export {
   type ItemSlotProps,
 } from './components/hud/ItemSlot';
 export { LapCounter, type LapCounterProps } from './components/hud/LapCounter';
+export {
+  FAIR_MS,
+  formatLatency,
+  GOOD_MS,
+  type Latency,
+  type LatencyQuality,
+  latencyQuality,
+  LatencyReadout,
+  type LatencyReadoutHandle,
+  type LatencyReadoutProps,
+} from './components/hud/LatencyReadout';
+export {
+  LayoutReadout,
+  type LayoutReadoutHandle,
+  type LayoutReadoutProps,
+} from './components/hud/LayoutReadout';
 export {
   MinimapFrame,
   type MinimapFrameProps,
@@ -113,6 +149,13 @@ export {
   type SpeedReadoutHandle,
   type SpeedReadoutProps,
 } from './components/hud/SpeedReadout';
+export {
+  StatusBadges,
+  badgeValue,
+  type StatusBadge,
+  type StatusBadgesHandle,
+  type StatusBadgesProps,
+} from './components/hud/StatusBadges';
 export { Toast, type ToastHandle, type ToastProps } from './components/hud/Toast';
 export {
   WrongWay,
@@ -122,10 +165,21 @@ export {
 
 // Results.
 export {
+  GainBreakdown,
+  type GainBreakdownProps,
+  type GainLine,
+} from './components/results/GainBreakdown';
+export { Podium, type PodiumEntry, type PodiumProps } from './components/results/Podium';
+export {
   ResultsTable,
   type ResultsRow,
   type ResultsTableProps,
 } from './components/results/ResultsTable';
+export {
+  type TeamStanding,
+  TeamStandings,
+  type TeamStandingsProps,
+} from './components/results/TeamStandings';
 
 // Workshop (admin). Every one of these except AdPreview must be rendered
 // inside an AdminGrid -- the stylesheet scopes them to `.admin`.
@@ -152,6 +206,11 @@ export { NoteBanner, type NoteBannerProps } from './components/misc/NoteBanner';
 // motion is fx.css, keyed on the `grade-<g>` classes these set.
 export { CoinCount, type CoinCountProps } from './components/economy/CoinCount';
 export {
+  DropHistory,
+  type DropHistoryItem,
+  type DropHistoryProps,
+} from './components/economy/DropHistory';
+export {
   GRADES,
   type Grade,
   GradeBadge,
@@ -163,6 +222,13 @@ export {
   type KartPart,
   type KartTrail,
 } from './components/economy/KartCard';
+export { type OddsRow, OddsTable, type OddsTableProps } from './components/economy/OddsTable';
+export {
+  type DropKind,
+  KindGlyph,
+  RevealCard,
+  type RevealCardProps,
+} from './components/economy/RevealCard';
 export {
   RevealStage,
   type RevealPhase,
@@ -170,6 +236,7 @@ export {
 } from './components/economy/RevealStage';
 export { ShopCard, type ShopCardProps } from './components/economy/ShopCard';
 export { type Tab, Tabs, type TabsProps } from './components/economy/Tabs';
+export { type TrailKind, TrailStrip, type TrailStripProps } from './components/economy/TrailStrip';
 
 /** Package version, exported so a consumer can confirm which build it loaded. */
 export const version = '0.1.0';

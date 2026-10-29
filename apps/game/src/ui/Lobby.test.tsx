@@ -4,7 +4,7 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../engine/preview.js', () => ({ hasPreview: () => false, makeThumbs: () => ({}), setPreview: () => {}, setPreviewFrame: () => {} }));
+vi.mock('../engine/stagegate.js', () => ({ hasPreview: () => false, makeThumbs: () => ({}), setPreview: () => {}, setPreviewFrame: () => {} }));
 vi.mock('../engine/race.js', () => ({ startRace: vi.fn(), startField: vi.fn() }));
 vi.mock('../engine/minimap.js', () => ({ attachMinimap: vi.fn() }));
 vi.mock('../engine/audio.js', () => ({ initAudio: () => {}, isMuted: () => false, toggleMute: () => false }));
@@ -110,10 +110,19 @@ describe('the lobby', () => {
 
     act(() => sock.serve({ t: 'room', room: ROOM() }));
     expect(container.querySelector('#lobby-room')?.textContent).toContain('ABCD');
-    const rows = [...container.querySelectorAll('#lobby-players tr')].map(r => r.textContent);
+    const rows = [...container.querySelectorAll('#lobby-players .player-card')].map(r => r.textContent);
     expect(rows).toHaveLength(2);
     expect(rows[0]).toContain('Bleu');
     expect(rows[1]).toContain('Rouge');
+    // stage 8: the players as cards (mine washed gold), the team as a ChoiceGroup, the circuit chips, the code to copy
+    expect(container.querySelector('#lobby-player-me')?.classList.contains('you')).toBe(true);
+    expect(container.querySelector('#lobby-player-me .pc-status')?.textContent).toBe('hôte');
+    expect(container.querySelector('#b-mp-team-bleu')?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('#b-mp-team-bleu')?.classList.contains('chip')).toBe(true);
+    expect(container.querySelector('#b-mp-track-0')?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('#b-mp-track-1')?.getAttribute('aria-disabled')).toBeNull();   // the host picks the circuit
+    expect(container.querySelector('#lobby-room .rc-code')?.textContent).toBe('ABCD');
+    expect(container.querySelectorAll('#lobby-track-meta .tl-name')).toHaveLength(3);
 
     // The host waits for Bob, then can start; switching team and candidate sends the change.
     expect((container.querySelector('#b-mp-start') as HTMLButtonElement).disabled).toBe(true);
@@ -146,6 +155,11 @@ describe('the lobby', () => {
     expect((container.querySelector('#lobby-error') as HTMLElement).hidden).toBe(true);
     act(() => { sock.open(); sock.serve({ t: 'welcome', id: 'bob' }); sock.serve({ t: 'room', room: ROOM() }); });
     expect(container.querySelector('#b-mp-start')).toBeNull();
+    // a guest sees the host's circuit, its chips inert
+    expect(container.querySelector('#b-mp-track-1')?.getAttribute('aria-disabled')).toBe('true');
+    const sent = sock.sent.length;
+    fireEvent.click(container.querySelector('#b-mp-track-1')!);
+    expect(sock.sent).toHaveLength(sent);
     fireEvent.click(container.querySelector('#b-mp-ready')!);
     expect(sock.sent.at(-1)).toEqual({ t: 'set', ready: true });
     act(() => sock.serve({ t: 'error', msg: 'Ce candidat est déjà pris.' }));
@@ -171,7 +185,7 @@ describe('the lobby badges (DEC-036, A-032)', () => {
       { id: 'bob', name: 'Bob', team: 'rouge', charId: 'patrick', ready: true, style: { trail: 'confetti', spoiler: 'wing' } },
       { id: 'cid', name: 'Cid', team: 'rouge', charId: 'gege', ready: true },
     ] }) }));
-    const rows = [...container.querySelectorAll('#lobby-players tr')];
+    const rows = [...container.querySelectorAll('#lobby-players .player-card')];
     expect(rows).toHaveLength(3);
     // the candidate's grade badge beside their name
     const badge = (row: Element) => row.querySelector('.grade[data-grade]');

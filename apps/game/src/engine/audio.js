@@ -49,8 +49,52 @@ function playSfx(name) {
     case 'count': o.type = 'square'; o.frequency.setValueAtTime(440, t); env(0.12, 0.2); break;
     case 'go': o.type = 'square'; o.frequency.setValueAtTime(880, t); env(0.16, 0.6); break;
     case 'finish': [0, 0.15, 0.3, 0.45].forEach((d, i) => { const o2 = AC.createOscillator(), g2 = AC.createGain(); o2.type = 'square'; o2.frequency.value = [523, 659, 784, 1046][i]; g2.gain.setValueAtTime(0.12, t + d); g2.gain.exponentialRampToValueAtTime(0.001, t + d + 0.4); o2.connect(g2); g2.connect(master); o2.start(t + d); o2.stop(t + d + 0.42); }); break;
+    // ---- The Politibox (DEC-054): played from lootbox.js's timeline through sfx(), solo screen, no kart to route by.
+    case 'box_drop': voice(t, 'triangle', 110, 38, 0.25, 0.28); voice(t, 'square', 70, 40, 0.08, 0.1); break;                        // the urn lands: a thud
+    case 'box_rattle': o.type = 'square'; o.frequency.setValueAtTime(300, t); o.frequency.setValueAtTime(180, t + 0.03); o.frequency.setValueAtTime(260, t + 0.06); env(0.07, 0.1); break;
+    case 'box_tease': o.type = 'sine'; o.frequency.setValueAtTime(880, t); o.frequency.exponentialRampToValueAtTime(1320, t + 0.05); env(0.08, 0.12); break;   // one pulse of the build-up
+    case 'box_burst': voice(t, 'sawtooth', 1400, 90, 0.45, 0.2); voice(t, 'square', 220, 60, 0.3, 0.1); break;                        // the lid flies
+    case 'box_reveal_common': chord(t, 'triangle', [523, 659], 0.18, 0.3, 0.1); break;
+    case 'box_reveal_rare': chord(t, 'square', [523, 659, 784], 0.12, 0.35, 0.1); break;
+    case 'box_reveal_mythic': chord(t, 'square', [523, 659, 784, 1046, 1318], 0.11, 0.45, 0.11); chord(t, 'triangle', [262, 330], 0.3, 0.8, 0.08); break;
+    case 'box_reveal_incredible': chord(t, 'square', [784, 784, 784, 1046], 0.14, 0.3, 0.14); voice(t + 0.56, 'square', 1318, 1318, 0.9, 0.14); voice(t + 0.56, 'triangle', 659, 659, 0.9, 0.1); break;   // a fanfare
+    case 'coin_rain': for (let i = 0; i < 8; i++) voice(t + i * 0.06, 'sine', 1500 + ((i * 7919) % 1100), 2200 + ((i * 104729) % 600), 0.1, 0.06); break;
+    // ---- The items' and powers' own (DEC-053), routed per kart through sfxFor like every race sound.
+    case 'impact': voice(t, 'square', 190, 45, 0.18, 0.2); noise(t, 0.12, 0.22, 1800); break;                                         // a projectile or a hazard connects
+    case 'swoosh': noise(t, 0.28, 0.16, 900, 3800); voice(t, 'triangle', 500, 1400, 0.2, 0.05); break;                               // something thrown
+    case 'teleport': chord(t, 'sine', [523, 784, 1046, 1568, 2093], 0.04, 0.18, 0.08); voice(t, 'triangle', 2400, 300, 0.35, 0.05); break;
+    case 'siren': for (let i = 0; i < 4; i++) voice(t + i * 0.16, 'square', i % 2 ? 880 : 660, i % 2 ? 880 : 660, 0.15, 0.06); break;   // the BRAV-M's two tones
+    case 'gas': noise(t, 0.9, 0.14, 500, 260); voice(t, 'sine', 130, 90, 0.8, 0.05); break;                                            // a hiss settling
+    case 'pans': for (let i = 0; i < 7; i++) { voice(t + i * 0.075, 'square', 1250 + (i % 3) * 230, 900, 0.07, 0.07); voice(t + i * 0.075, 'triangle', 2600 + (i % 2) * 400, 2400, 0.05, 0.04); } break;
+    case 'gavel': [0, 0.17].forEach(d => { voice(t + d, 'triangle', 240, 80, 0.1, 0.32); noise(t + d, 0.04, 0.18, 2500); }); break;   // two knocks
+    case 'stamp': voice(t, 'square', 140, 50, 0.12, 0.26); noise(t, 0.07, 0.16, 1200); break;                                           // a rubber stamp comes down
+    case 'mow': voice(t, 'sawtooth', 95, 120, 0.9, 0.08); voice(t, 'square', 47, 60, 0.9, 0.05); noise(t, 0.9, 0.06, 3000, 1500); break;   // the mower's engine
+    case 'euro': voice(t, 'sine', 1568, 1568, 0.12, 0.1); voice(t + 0.09, 'sine', 2093, 2093, 0.3, 0.1); for (let i = 0; i < 4; i++) voice(t + 0.12 + i * 0.05, 'triangle', 2600 + i * 180, 2300, 0.06, 0.04); break;   // the till
+    case 'rally': chord(t, 'square', [392, 523, 659, 784], 0.08, 0.22, 0.09); voice(t + 0.32, 'triangle', 1046, 1046, 0.5, 0.08); break;   // a rally's fanfare
   }
 }
+/** Every sound the items and powers play besides the race's own, for the test: each a case above. */
+export const ITEM_SOUNDS = Object.freeze(['impact', 'swoosh', 'teleport', 'siren', 'gas', 'pans', 'gavel', 'stamp', 'mow', 'euro', 'rally']);
+let noiseBuf = null;
+/** White noise from `t` for `dur` seconds through a band-pass at `f0` Hz (sweeping to `f1`), fading from `vol`. */
+function noise(t, dur, vol, f0, f1 = f0) {
+  if (!noiseBuf) { noiseBuf = AC.createBuffer(1, AC.sampleRate, AC.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+  const src = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain(); src.buffer = noiseBuf;
+  f.type = 'bandpass'; f.Q.value = 1.2; f.frequency.setValueAtTime(f0, t); if (f1 !== f0) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(f); f.connect(g); g.connect(master); src.start(t); src.stop(t + dur + 0.02);
+}
+/** Every sound the Politibox plays, for the timeline's test: each a case above. */
+export const BOX_SOUNDS = Object.freeze(['box_drop', 'box_rattle', 'box_tease', 'box_burst', 'box_reveal_common', 'box_reveal_rare', 'box_reveal_mythic', 'box_reveal_incredible', 'coin_rain']);
+/** One oscillator of its own: `type` from f0 to f1 Hz over `dur` seconds, starting at `t`, fading from `vol`. */
+function voice(t, type, f0, f1, dur, vol) {
+  const o = AC.createOscillator(), g = AC.createGain(); o.type = type;
+  o.frequency.setValueAtTime(f0, t); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02);
+}
+/** An arpeggio: `notes` Hz one every `gap` seconds, each `dur` long. */
+function chord(t, type, notes, gap, dur, vol) { notes.forEach((f, i) => voice(t + i * gap, type, f, f, dur, vol)); }
 export function updateEngine() { if (!engineGain) return; const k = G.player; const racing = G.state === 'race' || G.state === 'countdown'; engineGain.gain.value = racing && !muted ? 0.045 + Math.abs(k.speed) / 900 : 0; engineOsc.frequency.value = 55 + Math.abs(k.speed) * 2.6 + (k.boost > 0 ? 60 : 0) + (k.fly > 0 ? 40 : 0); }
 /**
  * Mute or unmute, returning the new state.
@@ -78,11 +122,11 @@ let sink = null;
 /** Route every sound to `fn(name, kartOrNull)` instead of playing it. Pass null to restore. */
 export function setSfxSink(fn) { sink = typeof fn === 'function' ? fn : null; }
 
-/** A sound for everyone in the race. */
-export function sfx(name) { if (sink) sink(name, null); else playSfx(name); }
+/** A sound for everyone in the race. Silent while a networked client replays its kart (DEC-052): the server sends the sound once. */
+export function sfx(name) { if (G.replaying) return; if (sink) sink(name, null); else playSfx(name); }
 
-/** A sound for kart k's driver only. Silent for AI karts. */
+/** A sound for kart k's driver only. Silent for AI karts, and while replaying. */
 export function sfxFor(k, name) {
-  if (!k || k.isAI) return;
+  if (!k || k.isAI || G.replaying) return;
   if (sink) sink(name, k); else if (k === G.player) playSfx(name);
 }

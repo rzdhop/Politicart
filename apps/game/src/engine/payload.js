@@ -23,6 +23,7 @@ export function framePayload(G, CFG) {
     state: G.state,
     time: G.time,
     announce,
+    layoutName: G.layout?.name ?? '',       // the variant the seed drew (DEC-049), shown under the countdown
     rank: k.rank,
     lap: k.lap,
     laps: G.laps ?? CFG.laps,              // the race's own: the admin can change it mid-race (DEC-031)
@@ -40,5 +41,32 @@ export function framePayload(G, CFG) {
     wrongWay: G.wrongTimer >= 1.2,
     god: k.god === true,
     kartPositions: G.karts.map(o => ({ x: o.pos.x, z: o.pos.z, color: o.style ? parseInt(o.style.body.slice(1), 16) : o.def.kart, isPlayer: o === k })),
+    ...motionOf(G, k),
   };
+}
+
+// ---------- What the HUD animates (DEC-053) ----------
+/**
+ * The statuses on kart k, in the HUD's order: each `{ id, time }` (seconds
+ * left) or `{ id, count }` (the relance's boosts). The loophole's phantom
+ * hides the immunity it comes with.
+ */
+export function statusOf(k) {
+  const out = [], on = (id, v) => { if (v > 0) out.push({ id, time: v }); };
+  on('slowed', k.slowed); on('confused', k.confused); on('capped', k.capped); on('rabot', k.rabot); on('slip', k.slip);
+  if (k.relance > 0) out.push({ id: 'relance', count: k.relance });
+  on('shield', k.shield);
+  if (k.phantom > 0) on('phantom', k.phantom); else on('immunity', k.invincible);
+  on('fly', k.fly);
+  return out;
+}
+/**
+ * The HUD's motion for kart k: `hit` (the red flash, 0 to 1), `shake` (the
+ * camera's), `lapFlash` (the gold one), `boost` (the kart boosts), `status`
+ * (statusOf) and `itemUsed` (a count bumped each time the item leaves the
+ * slot: the slot flashes on a change). G.fxHud is vfx.js's, null headless.
+ */
+export function motionOf(G, k) {
+  const fx = G.fxHud;
+  return { hit: fx?.hit ?? 0, shake: fx?.shake ?? 0, lapFlash: fx?.lap ?? 0, boost: k.boost > 0, status: statusOf(k), itemUsed: fx?.used ?? 0 };
 }

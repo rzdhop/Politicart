@@ -1,5 +1,7 @@
-/* Motion: the library's first keyframes, for the economy's grades and the
-   Politibox reveal.
+/* Motion: the library's keyframes, for the economy's grades, the Politibox
+   reveal and the race HUD (the countdown's beats, the position's pop, the
+   item roulette and its flash, the power's ready pulse, the toast's slide,
+   the hit vignette's flash and the status badges).
 
    Loads last so its grade rules beat any component's own border or
    background by source order. Every effect is a pseudo-element or a
@@ -57,6 +59,24 @@
   0% { transform:scale(.6); opacity:0; }
   60% { transform:scale(1.08); opacity:1; }
   100% { transform:scale(1); opacity:1; }
+}
+
+/* The tease's pulse: the vignette breathes at the grade's rate (--kr-rate, economy.css). */
+@keyframes kr-tease {
+  0%,100% { opacity:.12; }
+  50% { opacity:.55; }
+}
+
+/* The card leaving between two openings of a bundle. */
+@keyframes kr-sink {
+  from { transform:translateY(0); opacity:1; }
+  to { transform:translateY(28px); opacity:0; }
+}
+
+/* A new history chip slides in from the left. */
+@keyframes kr-chip-in {
+  from { transform:translateX(-10px); opacity:0; }
+  to { transform:translateX(0); opacity:1; }
 }
 
 /* Grades ------------------------------------------------------------------- */
@@ -136,15 +156,21 @@
   z-index:-1;
 }
 
-/* A part dot is too small for any of this: colour only. */
-.grade-dot {
+/* A part dot is too small for any of this, and ten history chips would be
+   noise under a result card: colour only. */
+.grade-dot,
+.drop-chip {
   animation:none;
   background-image:none;
   overflow:visible;
 }
 
 .grade-dot::before,
-.grade-dot::after { content:none; }
+.grade-dot::after,
+.drop-chip::before,
+.drop-chip::after { content:none; }
+
+.drop-chip.grade-incredible { border-color:var(--grade-incredible); }
 
 /* Reveal -------------------------------------------------------------------- */
 
@@ -155,6 +181,15 @@
 
 .kr-rise { animation:kr-rise .55s cubic-bezier(.2,.9,.3,1.2) both; }
 
+.kr-sink { animation:kr-sink .4s ease-in both; }
+
+.kr-tease { animation:kr-tease var(--kr-rate,.5s) ease-in-out infinite; }
+
+/* The three newest chips slide in, one after the other. */
+.drop-chip:nth-child(-n+3) { animation:kr-chip-in .35s ease-out both; }
+.drop-chip:nth-child(2) { animation-delay:.06s; }
+.drop-chip:nth-child(3) { animation-delay:.12s; }
+
 .kr-pop { animation:kr-pop .5s cubic-bezier(.2,.9,.3,1.2) both; }
 
 /* The badge the game puts in the result card pops in after the card rises. */
@@ -164,6 +199,155 @@
   animation-timing-function:cubic-bezier(.2,.9,.3,1.2);
   animation-delay:.35s;
   animation-fill-mode:both;
+}
+
+/* HUD (DEC-053) -------------------------------------------------------------- */
+
+/* The countdown's beats and the start: each new word lands big and settles. */
+@keyframes kr-beat {
+  0% { transform:scale(1.9); opacity:0; }
+  35% { transform:scale(.92); opacity:1; }
+  100% { transform:scale(1); opacity:1; }
+}
+
+/* A place won pops up gold-bright; a place lost drops and dims a moment. */
+@keyframes kr-pos-gain {
+  0% { transform:scale(1.45) translateY(-4px); filter:brightness(1.6); }
+  100% { transform:none; filter:none; }
+}
+
+@keyframes kr-pos-loss {
+  0% { transform:scale(.8) translateY(6px); opacity:.55; }
+  100% { transform:none; opacity:1; }
+}
+
+/* The item roulette: the glyph rolls through the reel, a little blurred. */
+@keyframes kr-reel {
+  0% { transform:translateY(-55%); opacity:.2; filter:blur(1.5px); }
+  45% { transform:translateY(0); opacity:1; filter:blur(0); }
+  100% { transform:translateY(55%); opacity:.2; filter:blur(1.5px); }
+}
+
+/* The item leaves the slot: a gold flash outward. */
+@keyframes kr-used {
+  0% { box-shadow:0 0 0 0 rgba(242,193,78,.9),0 0 30px rgba(242,193,78,.8); transform:scale(1.08); }
+  100% { box-shadow:0 0 0 14px rgba(242,193,78,0),0 0 0 rgba(242,193,78,0); transform:scale(1); }
+}
+
+/* The power's ready glow breathes; the moment it charges, it pops. */
+@keyframes kr-ready {
+  0%,100% { box-shadow:0 0 12px rgba(154,208,79,.25); }
+  50% { box-shadow:0 0 24px rgba(154,208,79,.6); }
+}
+
+@keyframes kr-charged {
+  0% { transform:scale(1.12); }
+  100% { transform:scale(1); }
+}
+
+/* The ribbon slides down into place. */
+@keyframes kr-toast-in {
+  from { transform:translateY(-14px); }
+  to { transform:translateY(0); }
+}
+
+/* The edges flash, then settle back to their level. */
+@keyframes kr-vignette {
+  0% { opacity:1; }
+  100% { opacity:var(--hit,0); }
+}
+
+/* A new status badge slides in from the left. */
+@keyframes kr-badge-in {
+  from { transform:translateX(-12px); opacity:0; }
+  to { transform:translateX(0); opacity:1; }
+}
+
+.center.beat { animation:kr-beat .45s cubic-bezier(.2,.9,.3,1.2) both; }
+
+.pos.gain { animation:kr-pos-gain .4s ease-out both; }
+
+.pos.loss { animation:kr-pos-loss .35s ease-out both; }
+
+.pos { transform-origin:left center; }
+
+.item.rolling .ico { animation:kr-reel .0833s linear infinite; }
+
+.item.used { animation:kr-used .45s ease-out both; }
+
+.power.ready { animation:kr-ready 1.6s ease-in-out infinite; }
+
+.power.ready.charged { animation:kr-charged .35s cubic-bezier(.2,.9,.3,1.2),kr-ready 1.6s ease-in-out .35s infinite; }
+
+.toast.on { animation:kr-toast-in .28s cubic-bezier(.2,.9,.3,1.2) both; }
+
+.hit-vignette.flash { animation:kr-vignette .5s ease-out both; }
+
+.status-badge.kr-badge-in { animation:kr-badge-in .25s ease-out both; }
+
+/* Screens (stage 8) ----------------------------------------------------------- */
+
+/* A circuit's thumbnail on its way: a slow light sweep over the outline. */
+.card .track-thumb[data-thumb=pending]::after {
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.14) 50%,transparent 65%);
+  animation:kr-shimmer 1.8s ease-in-out infinite;
+  will-change:transform;
+  pointer-events:none;
+}
+
+/* A trail's preview: the stream scrolls out behind the kart. */
+@keyframes kr-trail {
+  to { background-position-x:var(--kr-trail-step,-40px); }
+}
+
+.trail-strip .ts-stream { animation:kr-trail .6s linear infinite; }
+.trail-strip[data-trail=smoke] .ts-stream { --kr-trail-step:-60px; animation-duration:1.4s; }
+.trail-strip[data-trail=sparkles] .ts-stream { --kr-trail-step:-48px; animation-duration:.8s; }
+.trail-strip[data-trail=confetti] .ts-stream { --kr-trail-step:-88px; animation-duration:1.6s; }
+.trail-strip[data-trail=laser] .ts-stream { --kr-trail-step:-80px; animation-duration:.4s; }
+
+/* The podium's steps rise in, third first and the winner last. */
+.podium-place { animation:kr-rise .55s cubic-bezier(.2,.9,.3,1.2) both; }
+.podium-place[data-place='3'] { animation-delay:.05s; }
+.podium-place[data-place='2'] { animation-delay:.2s; }
+.podium-place[data-place='1'] { animation-delay:.38s; }
+
+/* A gain counts up from 0 to its figure (--to), the lines one after the
+   other: a registered integer animated into a counter on the value's
+   ::after, the real figure kept in the DOM (visually hidden meanwhile).
+   Only where @property animates (the relative-colour test below) and the
+   player has not asked for less motion: elsewhere the figure shows as is. */
+@property --kr-count {
+  syntax:'<integer>';
+  inherits:false;
+  initial-value:0;
+}
+
+@keyframes kr-count {
+  from { --kr-count:0; }
+}
+
+@supports (color:rgb(from red r g b)) {
+  @media (prefers-reduced-motion:no-preference) {
+    .gain-value.kr-count {
+      --kr-count:var(--to);
+      counter-reset:kr-n var(--kr-count);
+      animation:kr-count 1.1s cubic-bezier(.2,.7,.3,1) both;
+      animation-delay:calc(.25s + var(--i,0) * .25s);
+    }
+    .gain-value.kr-count::after { content:counter(kr-n); }
+    .gain-value.kr-count .gain-num {
+      position:absolute;
+      width:1px;
+      height:1px;
+      overflow:hidden;
+      clip-path:inset(50%);
+      white-space:nowrap;
+    }
+  }
 }
 
 /* Where `@property` is missing, a custom property cannot interpolate and the
@@ -184,13 +368,34 @@
   .kr-flash::before,
   .kr-flash::after,
   .kr-rise,
+  .kr-sink,
+  .kr-tease,
   .kr-pop,
-  .kr-reveal-card .grade {
+  .kr-reveal-card .grade,
+  .drop-chip:nth-child(-n+3),
+  .center.beat,
+  .pos.gain,
+  .pos.loss,
+  .item.rolling .ico,
+  .item.used,
+  .power.ready,
+  .power.ready.charged,
+  .toast.on,
+  .hit-vignette.flash,
+  .status-badge.kr-badge-in,
+  .card .track-thumb[data-thumb=pending]::after,
+  .trail-strip .ts-stream,
+  .podium-place {
     animation:none;
   }
   .grade-rare::before,
-  .grade-incredible::after { will-change:auto; }
+  .grade-incredible::after,
+  .card .track-thumb[data-thumb=pending]::after { will-change:auto; }
+  .card .track-thumb[data-thumb=pending]::after { content:none; }
   .grade-mythic::before { opacity:.7; }
   .kr-rise,
-  .kr-pop { transform:none; opacity:1; }
+  .kr-pop,
+  .drop-chip:nth-child(-n+3) { transform:none; opacity:1; }
+  .kr-sink { transform:none; opacity:0; }
+  .kr-tease { opacity:.3; }
 }

@@ -28,6 +28,8 @@ export const PART_PRICE = Object.freeze({ common: 0, rare: 150, mythic: 400, inc
 export const REFUND = Object.freeze({ common: 50, rare: 150, mythic: 400, incredible: 1000 });
 
 export const BOX_PRICE = 120;
+/** The bundle: five openings for one price (owner's answer Q5: about 8 % off five boxes), the same odds for each. */
+export const BOX_BUNDLE = Object.freeze({ count: 5, price: 550 });
 /** Odds of the first draw: a candidate, a part or trail, and the rest is coins. */
 export const BOX_ODDS = Object.freeze({ char: 0.02, part: 0.04 });
 /** [amount, odds] of each coin drop, as a share of every opening: together they are the coins share, 1 - char - part. */

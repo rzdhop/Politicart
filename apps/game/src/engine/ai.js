@@ -8,14 +8,24 @@
 // decides when an opponent fires its item or its special power.
 import { useItem } from './items.js';
 import { usePower } from './powers.js';
-import { CFG, G } from './state.js';
+import { G } from './state.js';
 import { clamp, rand, wrapAngle } from './util.js';
+import { spawnVfx } from './vfx.js';
+
+/** How long an opponent winds up before it fires an item or its power: a line of light shows it coming (vfx.js windup). */
+export const WINDUP = 0.3;
+/**
+ * Start the wind-up of kart k's item or power: the tell shows now, the move
+ * goes off WINDUP seconds later (aiInput). Its colour is the HUD's: gold for
+ * an item, green for a power.
+ */
+function windUp(k, kind) { k.windup = WINDUP; k.windupKind = kind; spawnVfx('windup', { kart: k, color: kind === 'item' ? 0xf2c14e : 0x9ad04f }); }
 
 // ---------- AI ----------
 export function aiInput(k, dt, lateral) {
-  const N = G.N; const hw = CFG.roadHalfWidth; const look = 8 + Math.floor(Math.abs(k.speed) / 5);
+  const N = G.N; const hw = G.samples[k.idx].hw ?? G.hw; const look = 8 + Math.floor(Math.abs(k.speed) / 5);
   const t = G.samples[(k.idx + look) % N];
-  const lane = Math.abs(lateral) > hw - 2.5 ? 0 : k.lane;
+  const lane = Math.abs(lateral) > hw - 2.5 ? 0 : clamp(k.lane, -(hw - 5), hw - 5);   // a lane drawn for a wide road is kept inside a narrow one
   const tx = t.x + t.sx * lane, tz = t.z + t.sz * lane;
   const desired = Math.atan2(tx - k.pos.x, tz - k.pos.z);
   const diff = wrapAngle(desired - k.heading);
@@ -24,9 +34,11 @@ export function aiInput(k, dt, lateral) {
   const curve = Math.abs(wrapAngle(Math.atan2(far.x - k.pos.x, far.z - k.pos.z) - k.heading));
   let throttle = 1; if (curve > 1.05 && Math.abs(k.speed) > 26 * k.stats.speed) throttle = 0;
   const drift = curve > 1.15 && Math.abs(k.speed) > 28 && Math.abs(lateral) < hw - 3;
-  k.laneTimer -= dt; if (k.laneTimer <= 0) { k.lane = rand(-8, 7); k.laneTimer = rand(3, 8); }
+  k.laneTimer -= dt; if (k.laneTimer <= 0) { k.lane = rand(-8, 7) * (G.hw / 15); k.laneTimer = rand(3, 8); }
   for (const h of G.hazards) { const dx = h.x - k.pos.x, dz = h.z - k.pos.z; const ahead = dx * Math.sin(k.heading) + dz * Math.cos(k.heading); const side = dx * (-Math.cos(k.heading)) + dz * Math.sin(k.heading); if (ahead > 0 && ahead < 30 && Math.abs(side) < (h.r || 2) + 1.5) k.lane = side > 0 ? -4 : 4; }
-  if (k.item && k.itemRolling <= 0) { k.itemTimer -= dt; if (k.itemTimer <= 0) useItem(k); }
-  if (k.powerCd <= 0 && G.state === 'race' && Math.random() < dt * 0.25 && (k.def.power.id !== 'rattrapage' || k.rank >= 3)) usePower(k);
+  // an item or the power is wound up first (WINDUP), then fired: it may have been lost in between, which useItem and usePower check
+  if (k.windup > 0) { k.windup -= dt; if (k.windup <= 0) { const kind = k.windupKind; k.windup = 0; k.windupKind = null; if (kind === 'item') useItem(k); else usePower(k); } }
+  else if (k.item && k.itemRolling <= 0 && (k.itemTimer -= dt) <= 0) windUp(k, 'item');
+  else if (k.powerCd <= 0 && G.state === 'race' && Math.random() < dt * 0.25 && (k.def.power.id !== 'rattrapage' || k.rank >= 3)) windUp(k, 'power');
   return { throttle, brake: 0, steer, drift };
 }

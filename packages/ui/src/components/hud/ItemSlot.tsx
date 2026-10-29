@@ -7,6 +7,7 @@ import {
 } from 'react';
 
 import { cx } from '../../cx';
+import { replayClass } from './handles';
 
 export interface ItemSlotHandle {
   /**
@@ -14,6 +15,10 @@ export interface ItemSlotHandle {
    * empty slot.
    */
   setItem(item: { icon: string | null; label: string | null; filled?: boolean }): void;
+  /** Spin the roulette while an item is being drawn: the glyph rolls like a slot machine's reel. */
+  setRolling(rolling: boolean): void;
+  /** Flash the slot once: the item has just been used. */
+  flashUsed(): void;
 }
 
 export interface ItemSlotProps
@@ -28,6 +33,8 @@ export interface ItemSlotProps
    * is what the game's `·` does.
    */
   filled?: boolean;
+  /** Whether the roulette spins (an item is being drawn). */
+  rolling?: boolean;
   /** Imperative handle for updates driven from the game loop. */
   ref?: Ref<ItemSlotHandle>;
 }
@@ -41,14 +48,16 @@ export interface ItemSlotProps
  *
  * The game only writes to this on pickup and use rather than every frame, but
  * the handle is here so those writes do not have to go through a React render
- * mid-race.
+ * mid-race. While an item is drawn the glyph rolls (`rolling`, `setRolling`),
+ * and `flashUsed()` flashes the slot when the item goes; both keyframes are
+ * in `fx.css`, off under reduced motion.
  *
  * ```tsx
  * <ItemSlot icon="🚀" label="49.3 Turbo" filled />
  * <ItemSlot icon="·" label="aucun objet" />
  * ```
  */
-export function ItemSlot({ icon, label, filled = false, className, ref, ...rest }: ItemSlotProps) {
+export function ItemSlot({ icon, label, filled = false, rolling = false, className, ref, ...rest }: ItemSlotProps) {
   const root = useRef<HTMLDivElement | null>(null);
   const iconNode = useRef<HTMLDivElement | null>(null);
   const labelNode = useRef<HTMLDivElement | null>(null);
@@ -61,12 +70,18 @@ export function ItemSlot({ icon, label, filled = false, className, ref, ...rest 
         if (labelNode.current !== null) labelNode.current.textContent = nextLabel ?? '';
         root.current?.classList.toggle('has', nextFilled ?? nextIcon !== null);
       },
+      setRolling(next: boolean) {
+        root.current?.classList.toggle('rolling', next);
+      },
+      flashUsed() {
+        replayClass(root.current, 'used');
+      },
     }),
     [],
   );
 
   return (
-    <div ref={root} className={cx('item', filled && 'has', className)} {...rest}>
+    <div ref={root} className={cx('item', filled && 'has', rolling && 'rolling', className)} {...rest}>
       <div ref={iconNode} className="ico">
         {icon}
       </div>

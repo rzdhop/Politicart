@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../engine/preview.js', () => ({ hasPreview: () => false, makeThumbs: () => ({}), setPreview: () => {}, setPreviewFrame: () => {} }));
+vi.mock('../engine/stagegate.js', () => ({ hasPreview: () => false, makeThumbs: () => ({}), setPreview: () => {}, setPreviewFrame: () => {} }));
 vi.mock('../engine/race.js', () => ({ startRace: vi.fn(), startField: vi.fn(), joinField: vi.fn() }));
 vi.mock('../engine/minimap.js', () => ({ attachMinimap: vi.fn() }));
 vi.mock('../engine/audio.js', () => ({ initAudio: () => {}, isMuted: () => false, toggleMute: () => false, sfx: () => {}, sfxFor: () => {} }));

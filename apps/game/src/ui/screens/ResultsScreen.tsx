@@ -1,4 +1,7 @@
-import { Button, Disclaimer, Heading, Panel, ResultsTable, Row, Screen, Subtitle, type ResultsRow } from '@politikart/ui';
+import {
+  Button, Disclaimer, GainBreakdown, Heading, Panel, Podium, ResultsTable, Row, Screen, Subtitle, TeamStandings,
+  type GainLine, type PodiumEntry, type ResultsRow,
+} from '@politikart/ui';
 
 import { DAILY_COINS } from '../../engine/catalog.js';
 import { CHARACTERS } from '../../engine/data.js';
@@ -20,10 +23,14 @@ const VERDICTS = [
   'Dernière place : retour à la base, pour écouter le pays.',
 ];
 
+const fr = (n: number) => n.toLocaleString('fr-FR');
+const TEAM_COLOR: Record<string, string> = { bleu: 'var(--blue)', rouge: 'var(--red)' };
+
 /**
- * What the race earned the account: experience, politicoins with the daily
- * and level-up bonuses (economy.js settleRace), a new level, new candidates.
- * Guests see an invitation to sign up, and nothing about coins.
+ * What the race earned the account, as a breakdown that counts up:
+ * experience, politicoins, the daily and level-up bonuses (economy.js
+ * settleRace), then a new level and new candidates as notes. Guests see an
+ * invitation to sign up, and nothing about coins.
  */
 export function XpLine({ ui }: { ui: UiSnapshot }) {
   const g: Gain | null = ui.lastGain;
@@ -31,16 +38,12 @@ export function XpLine({ ui }: { ui: UiSnapshot }) {
   if (!g) return <Disclaimer id="r-xp">{'Niveau ' + ui.account.profile.level}</Disclaimer>;
   const chars = CHARACTERS as unknown as Character[];
   const names = g.unlockedNow.map(id => chars.find(c => c.id === id)?.name ?? id);
-  return (
-    <div id="r-xp" className="xp-gain">
-      {'+' + g.gained + ' XP'}
-      {g.coins > 0 ? ' · +' + g.coins + ' politicoins' : ''}
-      {g.daily ? ' · bonus du jour +' + DAILY_COINS : ''}
-      {g.levelUp ? ' · Niveau ' + g.level + ' atteint !' : ''}
-      {g.levelUpCoins > 0 ? ' · niveau ' + g.level + ' : +' + g.levelUpCoins + ' politicoins' : ''}
-      {names.length ? ' · Débloqué : ' + names.join(', ') : ''}
-    </div>
-  );
+  const lines: GainLine[] = [{ key: 'xp', label: 'XP', value: g.gained, tone: 'xp' }];
+  if (g.coins > 0) lines.push({ key: 'coins', label: 'politicoins', value: g.coins, tone: 'coin' });
+  if (g.daily) lines.push({ key: 'daily', label: 'bonus du jour', value: DAILY_COINS, tone: 'bonus' });
+  if (g.levelUpCoins > 0) lines.push({ key: 'level', label: 'politicoins (niveau ' + g.level + ')', value: g.levelUpCoins, tone: 'bonus' });
+  const notes = [...(g.levelUp ? ['Niveau ' + g.level + ' atteint !'] : []), ...(names.length ? ['Débloqué : ' + names.join(', ')] : [])];
+  return <GainBreakdown id="r-xp" lines={lines} notes={notes} format={fr} />;
 }
 
 function summary(player: Racer, field: number) {
@@ -60,6 +63,9 @@ export function ResultsScreen({ ui }: { ui: UiSnapshot }) {
   const karts = (live ? (G.karts as unknown as Racer[]) : []);
   const player = live ? (G.player as unknown as Racer) : null;
   const order = [...karts].sort((a, b) => a.rank - b.rank);
+  const podium: PodiumEntry[] = order.slice(0, 3).map(k => ({
+    key: k.def.id, name: k.def.name, detail: k.def.title, portrait: ui.thumbs[k.def.id], value: k.finished ? fmtTime(k.finishTime) : 'en course…', you: k === player,
+  }));
   const rows: ResultsRow[] = order.map((k) => ({
     id: k.def.id,
     rank: ordinal(k.rank + 1),
@@ -73,6 +79,7 @@ export function ResultsScreen({ ui }: { ui: UiSnapshot }) {
       <Panel style={COLUMN}>
         <Heading id="r-title">Résultats du scrutin</Heading>
         <Subtitle id="r-sub" style={{ fontSize: 16 }}>{player ? summary(player, karts.length) : ''}</Subtitle>
+        {podium.length ? <Podium id="r-podium" entries={podium} placeLabel={ordinal} /> : null}
         <XpLine ui={ui} />
         <RaceKartCard ui={ui} id="r-kart" />
         <ResultsTable rows={rows} columns={['', 'Candidat·e', 'Temps']} bodyProps={{ id: 'r-body' }} />
@@ -100,9 +107,14 @@ function TeamResults({ ui, results }: { ui: UiSnapshot; results: NetResults }) {
       highlighted: r.slot === results.you,
     };
   });
-  const teamRows: ResultsRow[] = results.teams.map((t, i) => ({
-    id: t.team, rank: ordinal(i + 1), name: 'Équipe ' + t.name, detail: t.drivers.length + ' pilote' + (t.drivers.length > 1 ? 's' : ''), time: t.points + ' pts',
-  }));
+  const mine = results.ranking.find(r => r.slot === results.you)?.team ?? null;
+  const podium: PodiumEntry[] = results.ranking.slice(0, 3).map(r => {
+    const c = chars.find(x => x.id === r.charId);
+    return {
+      key: r.slot, name: r.isAI ? (c?.name ?? r.name) : r.name, portrait: ui.thumbs[r.charId],
+      detail: r.isAI ? 'IA' : (c?.name ?? '') + (r.team ? ' · ' + TEAM_NAMES[r.team] : ''), value: r.time !== null ? fmtTime(r.time) : 'en course…', you: r.slot === results.you,
+    };
+  });
   const [first, second] = results.teams;
   const verdict = results.error ? 'La course a été interrompue.'
     : !first ? 'Aucune équipe classée.'
@@ -113,9 +125,15 @@ function TeamResults({ ui, results }: { ui: UiSnapshot; results: NetResults }) {
       <Panel style={COLUMN}>
         <Heading id="r-title">Résultats du scrutin</Heading>
         <Subtitle id="r-sub" style={{ fontSize: 16 }}>{verdict}</Subtitle>
+        {podium.length ? <Podium id="r-podium" entries={podium} placeLabel={ordinal} /> : null}
+        <TeamStandings
+          bodyProps={{ id: 'r-teams' }}
+          rankLabel={ordinal}
+          pointsLabel={p => p + ' pts'}
+          teams={results.teams.map(t => ({ key: t.team, name: 'Équipe ' + t.name, points: t.points, detail: t.drivers.length + ' pilote' + (t.drivers.length > 1 ? 's' : ''), color: TEAM_COLOR[t.team], you: t.team === mine }))}
+        />
         <XpLine ui={ui} />
         <RaceKartCard ui={ui} id="r-kart" />
-        <ResultsTable rows={teamRows} columns={['', 'Équipe', 'Points']} bodyProps={{ id: 'r-teams' }} />
         <ResultsTable rows={rows} columns={['', 'Pilote', 'Temps · points']} bodyProps={{ id: 'r-body' }} />
         <Row>
           <Button id="b-again" onClick={actions.backToLobby}>Retour au salon</Button>

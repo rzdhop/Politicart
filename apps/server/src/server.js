@@ -15,19 +15,23 @@
 //   /api/admin/users/unban, /api/admin/users/logout, /api/admin/rooms/close,
 //   /api/admin/connections/kick, /api/admin/coins
 //                 -> the admin's dashboard (dashboard.js), admin only
-//   GET /*        -> apps/game/dist, read-only, no directory escapes
+//   GET /*        -> apps/game/dist, read-only, no directory escapes; hashed
+//                    assets immutable, the rest with ETag/304, text assets from
+//                    their precompressed siblings (DEC-055)
 //   WS  /ws       -> the lobby protocol below; races run in a worker
 //
 // Client -> server: hello {name, token?} | create | join {code} | set {team,
-// charId, ready} | track {trackIdx} | start | leave | input {...} (during a
-// race) | friends | friendAdd {name} | friendAccept {id} | friendRemove {id}
+// charId, ready} | track {trackIdx} | start | leave | input {seq, c, item,
+// power} (during a race) | ping {n, at} | friends | friendAdd {name} | friendAccept {id} | friendRemove {id}
 // | invite {id} | godJoin {code, style} (the admin enters a room as a god,
 // DEC-030, mid-race included) | god {code?, cmd} (the admin changes any room
 // at will, DEC-031: lobby commands here, race commands in the worker).
 // Server -> client: welcome {id, profile} | room {room} | error {msg} |
-// notice {msg} | race {...} | snap {...} | results {...} | profile {profile,
+// notice {msg} | race {...} | snap {...} | pong {n, at} | results {...} | profile {profile,
 // gained, coins, bonus} | friends {list} | invite {from: {id, name}, code}.
-// Every message is one JSON object with a `t`.
+// Every message is one JSON object with a `t`. Inputs and pings are handled
+// the moment they arrive, ahead of the connection's queue (DEC-052): a slow
+// hello must not hold a race's controls up, nor skew the round trip.
 //
 // A connection that says hello with a valid session token is that account:
 // its friends see it online, it can create rooms, invite friends into them,
@@ -62,12 +66,74 @@ const MIME = {
   '.woff2': 'font/woff2', '.map': 'application/json', '.txt': 'text/plain; charset=utf-8', '.webp': 'image/webp',
 };
 
-export const PROTOCOL = 1;
+// 2 since DEC-049: the race start message carries the seed, and a client refuses one without it.
+// 3 since DEC-052: inputs are numbered, a player's snapshot carries ack/n/me, HUD-only kart fields travel in me alone.
+export const PROTOCOL = 3;
+/** A socket with more than this queued unsent is not sent snapshots until it drains (DEC-052): the next one supersedes the skipped. */
+export const MAX_BUFFERED = 64 * 1024;
+
+// ---- the built game's files (DEC-055)
+/** The text assets the build precompresses (apps/game/scripts/compress.mjs): served from their `.br` or `.gz` sibling when the client takes it. */
+const PRECOMPRESSED = new Set(['.js', '.mjs', '.css', '.html', '.svg', '.json', '.txt', '.xml', '.webmanifest']);
+/** Whether an Accept-Encoding header takes `name` (a listed token with a non-zero q, or `*`). */
+export function acceptsEncoding(header, name) {
+  let star = false;
+  for (const part of String(header ?? '').split(',')) {
+    const [token, ...params] = part.trim().split(';'); if (!token) continue;
+    const q = params.map(p => p.trim()).find(p => p.startsWith('q='));
+    const taken = q === undefined || Number(q.slice(2)) > 0;
+    if (token.trim().toLowerCase() === name) return taken;
+    if (token.trim() === '*') star = taken;
+  }
+  return star;
+}
+/** Whether an If-None-Match header names `etag` (weak comparison, `*` included). */
+const matchesEtag = (header, etag) => String(header ?? '').split(',').some(t => { t = t.trim(); return t === '*' || t.replace(/^W\//, '') === etag.replace(/^W\//, ''); });
+/**
+ * Serve one file of the build. Vite names everything under /assets/ with a
+ * content hash, so those are cached for a year and never revalidated
+ * (`immutable`); the page and the other unhashed files carry a weak ETag and
+ * `no-cache`, so a browser asks every time and gets a 304 while nothing
+ * changed. A text asset goes out from its precompressed sibling (brotli
+ * first, then gzip) when Accept-Encoding allows and the sibling is as new as
+ * the file, with Vary so caches keep one copy per encoding.
+ */
+function serveFile(req, res, file, rel) {
+  let st; try { st = statSync(file); } catch { st = null; }
+  if (!st || !st.isFile()) {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end(rel === '/index.html' ? 'The game is not built yet: run `npm run build -w @politikart/game`.' : 'Not found');
+    return;
+  }
+  const ext = extname(file).toLowerCase(), hashed = rel.startsWith('/assets/');
+  const headers = { 'content-type': MIME[ext] ?? 'application/octet-stream', 'cache-control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache' };
+  let body = file, size = st.size, enc = null;
+  if (PRECOMPRESSED.has(ext)) {
+    headers.vary = 'Accept-Encoding';
+    for (const [name, suffix] of [['br', '.br'], ['gzip', '.gz']]) {
+      if (!acceptsEncoding(req.headers['accept-encoding'], name)) continue;
+      let cs; try { cs = statSync(file + suffix); } catch { continue; }
+      if (cs.isFile() && cs.mtimeMs >= st.mtimeMs) { body = file + suffix; size = cs.size; enc = name; break; }
+    }
+  }
+  if (enc) headers['content-encoding'] = enc;
+  headers.etag = 'W/"' + st.size.toString(16) + '-' + Math.floor(st.mtimeMs).toString(16) + (enc ? '-' + enc : '') + '"';
+  if (matchesEtag(req.headers['if-none-match'], headers.etag)) {
+    const { 'content-type': _ct, 'content-encoding': _ce, ...kept } = headers;
+    res.writeHead(304, kept); res.end(); return;
+  }
+  headers['content-length'] = size;
+  res.writeHead(200, headers);
+  if (req.method === 'HEAD') { res.end(); return; }
+  createReadStream(body).pipe(res);
+}
 
 /**
  * Start a game server. `runRace(room, roster, io)` starts a race and returns
  * `{ input(playerId, msg), leave(playerId), stop() }`; io carries
- * `send(playerId, msg)`, `broadcast(msg)` and `done(results)`. `store` keeps
+ * `send(playerId, msg)`, `sendRaw(playerId, text)` (a message already
+ * stringified, skipped for a backed-up socket), `broadcast(msg)` and
+ * `done(results)`. `store` keeps
  * the accounts (store.js); without one they live in memory. `loginTries`
  * caps sign-ups and failed logins per address and minute (tests raise it).
  * `admin` is `{ user, hash }` (admin.js): run ensureAdmin() on the store
@@ -76,10 +142,14 @@ export const PROTOCOL = 1;
  * CHARACTERS (roster.js), so lobbies and races name the AI as edited; an
  * invalid stored cast is logged and the default one used.
  * `rng` draws the Politibox and `now` is the clock of race rewards (the daily
- * bonus); tests inject both.
+ * bonus); tests inject both. `inputDelayMs` holds every race input back that
+ * long before the race sees it (POLITIKART_TEST_DELAY_MS: the end-to-end
+ * suite's stand-in for a distant server); 0, the default, hands it on at once.
+ * `maxBuffered` is how much a socket may hold unsent and still get a
+ * snapshot (MAX_BUFFERED; tests lower it).
  * Resolves to `{ port, close() }` once listening.
  */
-export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, store = openFileStore(null), loginTries, admin, rng = Math.random, now = Date.now }) {
+export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, store = openFileStore(null), loginTries, admin, rng = Math.random, now = Date.now, inputDelayMs = 0, maxBuffered = MAX_BUFFERED }) {
   const root = resolve(staticDir);
   const rooms = new Map();          // code -> Room
   const races = new Map();          // code -> race handle
@@ -120,20 +190,14 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
     if (rel.endsWith('/')) rel += 'index.html';
     const file = normalize(join(root, rel));
     if (file !== root && !file.startsWith(root + sep)) { res.writeHead(403).end(); return; }
-    let st; try { st = statSync(file); } catch { st = null; }
-    if (!st || !st.isFile()) {
-      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-      res.end(rel === '/index.html' ? 'The game is not built yet: run `npm run build -w @politikart/game`.' : 'Not found');
-      return;
-    }
-    res.writeHead(200, { 'content-type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream', 'content-length': st.size });
-    if (req.method === 'HEAD') { res.end(); return; }
-    createReadStream(file).pipe(res);
+    serveFile(req, res, file, rel);
   });
 
   const wss = new WebSocketServer({ server: http, path: '/ws', maxPayload: 16 * 1024 });
 
   const send = (id, msg) => { const c = conns.get(id); if (c && c.ws.readyState === 1) c.ws.send(JSON.stringify(msg)); };
+  // A message already stringified (a race snapshot, race.js), skipped for a socket that has not drained what it was sent.
+  const sendRaw = (id, text) => { const c = conns.get(id); if (c && c.ws.readyState === 1 && c.ws.bufferedAmount <= maxBuffered) c.ws.send(text); };
   const toRoom = (room, msg) => { for (const p of room.players) send(p.id, msg); };
   const showRoom = room => toRoom(room, { t: 'room', room: room.view() });
   const fail = (id, msg) => send(id, { t: 'error', msg });
@@ -230,7 +294,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
     room.phase = 'race';
     const roster = room.roster(), trackIdx = room.trackIdx;
     const io = {
-      send, broadcast: msg => toRoom(room, msg),
+      send, sendRaw, broadcast: msg => toRoom(room, msg),
       done: results => {
         races.delete(room.code); raceSince.delete(room.code); room.endRace(); toRoom(room, { t: 'results', ...results }); showRoom(room);
         if (!results.error) award(roster, results, trackIdx).catch(e => console.error('race not paid:', e));
@@ -328,7 +392,6 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
     track: (c, m) => { const room = rooms.get(c.code); if (!room) return; const e = isAdminConn(c) ? room.forceTrack(m.trackIdx) : room.setTrack(c.id, m.trackIdx); if (e) fail(c.id, e); showRoom(room); },
     start: c => { const room = rooms.get(c.code); if (room) start(c, room, isAdminConn(c)); },
     leave: c => leaveRoom(c),
-    input: (c, m) => { races.get(c.code)?.input(c.id, m); },
 
     // ---- friends (accounts only)
     friends: async c => { if (c.user) await pushFriends(c.user.id); },
@@ -360,12 +423,20 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
     },
   };
 
+  // ---- the race's own traffic, outside the queue
+  const toRace = (c, m) => { races.get(c.code)?.input(c.id, m); };
+  const fast = {
+    input: inputDelayMs > 0 ? (c, m) => { setTimeout(() => toRace(c, m), inputDelayMs); } : toRace,
+    ping: (c, m) => send(c.id, { t: 'pong', n: m.n, at: m.at }),
+  };
+
   wss.on('connection', ws => {
     const c = { ws, id: randomUUID(), name: '', code: null, alive: true, user: null, queue: Promise.resolve() };
     conns.set(c.id, c);
     ws.on('pong', () => { c.alive = true; });
     ws.on('message', raw => {
       let m; try { m = JSON.parse(String(raw)); } catch { return; }
+      if (m && (m.t === 'input' || m.t === 'ping')) { try { fast[m.t](c, m); } catch (e) { console.error('message ' + m.t + ' failed:', e); } return; }
       const h = m && typeof m.t === 'string' && Object.hasOwn(handlers, m.t) ? handlers[m.t] : null;
       // One message at a time per connection: hello may wait on the store, and what follows it must see its outcome.
       if (h) c.queue = c.queue.then(() => h(c, m)).catch(e => console.error('message ' + m.t + ' failed:', e));
