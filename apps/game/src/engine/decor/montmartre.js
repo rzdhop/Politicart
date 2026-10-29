@@ -37,8 +37,8 @@ const TERRACED = [[0.12, 0.31], [0.66, 0.86]];
 /** The instanced batches the last build opened (tests). */
 const OPENED = [];
 export const openedBatches = () => OPENED;
-// Each colour is a batch of its own: instanced() can tint copies, but r128 keeps a program compiled for tinted
-// instances when the same shared finish then draws untinted ones, and fails on the missing colours.
+// A batch per wall plaster and per 2CV paint: the colour bakes into the prop (the plaster's material, the
+// shared finish), so no tinted variant of the shared materials is needed; "légers" keeps one or two.
 const WALLS = [0xffffff, 0xf2d9b8], CV_COLOURS = [0xd0d4d8, 0xb33a3a, 0xf2c14e, 0x6f8fb8];
 
 export function* buildMontmartre(scene, world) {
