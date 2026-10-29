@@ -305,9 +305,12 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
 
   // road surface (asphalt, gravel or cobbles; the texture tiles every `period` metres), as wide as each sample says, with its relief and wear maps
   const roadSurf = surface(roadKindOf(track)), roadTex = roadSurf.map, period = track.gravel ? 10 : track.cobble ? 8 : 20;
+  // "légers" draws the plain ribbons (road, kerb stone, pavement, lane, embankment) on every other sample: 3.4 m apart, a few
+  // centimetres off on the tightest curve; the striped ones keep every sample so their stripes stay crisp; physics keeps them all
+  const RS = getPoly() === 'low' && N % 2 === 0 ? 2 : 1;
   const pos = [], uv = [], idx = [];
-  for (let i = 0; i <= N; i++) { const s = samples[i % N]; const v = (i * step) / period; pos.push(s.x + s.sx * s.hw, roadY(s, s.hw) + 0.05, s.z + s.sz * s.hw, s.x - s.sx * s.hw, roadY(s, -s.hw) + 0.05, s.z - s.sz * s.hw); uv.push(0, v, 1, v); }
-  for (let i = 0; i < N; i++) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+  for (let i = 0; i <= N; i += RS) { const s = samples[i % N]; const v = (i * step) / period; pos.push(s.x + s.sx * s.hw, roadY(s, s.hw) + 0.05, s.z + s.sz * s.hw, s.x - s.sx * s.hw, roadY(s, -s.hw) + 0.05, s.z - s.sz * s.hw); uv.push(0, v, 1, v); }
+  for (let i = 0; i < N / RS; i++) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
   const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); rg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); rg.setIndex(idx); rg.computeVertexNormals();
   // the cobbles are tinted down: the pale stones would otherwise wash out next to the pavement
   const road = new THREE.Mesh(rg, disposable(new THREE.MeshStandardMaterial({ map: roadTex, normalMap: roadSurf.normalMap, roughnessMap: roadSurf.roughnessMap, color: track.cobble ? 0x8f8a82 : 0xffffff, roughness: 0.95, side: THREE.DoubleSide }))); road.receiveShadow = true; scene.add(road);
@@ -315,9 +318,9 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
 
   // A ribbon beside the road: `inner` and `outer` are lateral offsets from the sample's edge (its hw), y0 and y1 heights over the road's surface there.
   function strip(inner, outer, y0, y1, period, sideSign, c1, c2, rough) {
-    const p = [], col = [], ix = []; const A = new THREE.Color(c1), B = new THREE.Color(c2);
-    for (let i = 0; i <= N; i++) { const s = samples[i % N]; const c = period ? (Math.floor(i / period) % 2 === 0 ? A : B) : A; const li = (s.hw + inner) * sideSign, lo = (s.hw + outer) * sideSign; p.push(s.x + s.sx * li, roadY(s, li) + y0, s.z + s.sz * li, s.x + s.sx * lo, roadY(s, lo) + y1, s.z + s.sz * lo); col.push(c.r, c.g, c.b, c.r, c.g, c.b); }
-    for (let i = 0; i < N; i++) { const a = i * 2; ix.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    const p = [], col = [], ix = [], st = period ? 1 : RS; const A = new THREE.Color(c1), B = new THREE.Color(c2);
+    for (let i = 0; i <= N; i += st) { const s = samples[i % N]; const c = period ? (Math.floor(i / period) % 2 === 0 ? A : B) : A; const li = (s.hw + inner) * sideSign, lo = (s.hw + outer) * sideSign; p.push(s.x + s.sx * li, roadY(s, li) + y0, s.z + s.sz * li, s.x + s.sx * lo, roadY(s, lo) + y1, s.z + s.sz * lo); col.push(c.r, c.g, c.b, c.r, c.g, c.b); }
+    for (let i = 0; i < N / st; i++) { const a = i * 2; ix.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(ix); g.computeVertexNormals();
     const m = new THREE.Mesh(g, disposable(new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: rough || 0.9 }))); m.receiveShadow = true; scene.add(m);
   }
@@ -329,7 +332,7 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
     yield TRACK_PHASES[2];
   }
   bikeLane(scene, track, strip);
-  embankment(scene, samples, track.ground);
+  embankment(scene, samples, track.ground, RS);
   yield TRACK_PHASES[2];
 
   // start line + gantry
@@ -427,12 +430,12 @@ export const roadKindOf = track => (track.gravel ? 'gravel' : track.cobble ? 'co
 export function roadTexOf(track) { return TEX[roadKindOf(track)]; }
 
 /** The embankment: from the pavement's edge, at the road's height, down (or up) to the terrain EMBANK metres out, both sides in one mesh. */
-function embankment(scene, samples, color) {
+function embankment(scene, samples, color, stride = 1) {
   const N = samples.length, p = [], ix = [];
   for (const sg of [1, -1]) {
     const base = p.length / 3;
-    for (let i = 0; i <= N; i++) { const s = samples[i % N]; const li = (s.hw + PAVEMENT) * sg, lo = (s.hw + PAVEMENT + EMBANK) * sg; const ox = s.x + s.sx * lo, oz = s.z + s.sz * lo; p.push(s.x + s.sx * li, roadY(s, li) + 0.35, s.z + s.sz * li, ox, terrainY(ox, oz), oz); }
-    for (let i = 0; i < N; i++) { const a = base + i * 2; ix.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    for (let i = 0; i <= N; i += stride) { const s = samples[i % N]; const li = (s.hw + PAVEMENT) * sg, lo = (s.hw + PAVEMENT + EMBANK) * sg; const ox = s.x + s.sx * lo, oz = s.z + s.sz * lo; p.push(s.x + s.sx * li, roadY(s, li) + 0.35, s.z + s.sz * li, ox, terrainY(ox, oz), oz); }
+    for (let i = 0; i < N / stride; i++) { const a = base + i * 2; ix.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setIndex(ix); g.computeVertexNormals();
   const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: 1, side: THREE.DoubleSide })); m.receiveShadow = true; scene.add(m);
