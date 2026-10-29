@@ -1196,3 +1196,67 @@ are merged. Budgets per circuit are tests.
 
 **Consequence.** Three times the decor density on high within about 1,400
 calls; `headless.test.js`'s mesh ceiling counts an instanced group once.
+
+## DEC-057 -- A pre-build step is milliseconds, never a phase
+
+**Context.** The wave-1 E2E caught the circuits screen opening 140-170 ms
+after "Choisir le circuit" (R-25 asks for 100 ms). The pre-build (DEC-055)
+had an 8 ms budget per frame but ran one whole phase per step: the road,
+the strips and the decor each took 90-330 ms in one frame, mostly baking a
+512 px procedural surface on its first use.
+
+**Decision.** The textures phase bakes every surface the circuit uses ahead,
+a few rows of pixels per step (`textures.js bakeSurface`, nothing computed
+headless); each decor file lists its kinds (`SURFACES`) and
+`prebuild.test.js` fails when a build uses one nobody listed. Every heavy
+phase yields inside itself under its own name; the circuit builders are
+generators that yield between their sections, and the instanced batches
+flush one per step. The build's statements and their order are unchanged.
+`prebuildStatus().step` reports the longest single step.
+
+**Consequence.** The circuits screen opens in 16-18 ms under software GL;
+the longest step fell from 300 ms to under 10 ms in the decor (the
+"légers" fold remains one step of 20-120 ms). A decor worker keeps each
+section under about 8 ms.
+
+## DEC-058 -- The netcode's wire choices, as measured
+
+**Context.** Stage 3 built DEC-052 and found three places where Annex B's
+letter would have been wrong or costly.
+
+**Decision.** (1) Each server tick stands for one client tick: a message
+covers every client tick since the last one received, a queue more than 4
+ticks ahead is caught up, and the server's kart is at client tick
+`ack + n - 1` (latest-wins plus `n` miscounted by a tick whenever two
+inputs landed in one tick). (2) A teleport is detected in the worker (a
+kart moving more than 8 m in a tick increments `tp`) rather than flagged
+by each item, power and god command. (3) `SNAP_EVERY = 2`: 30 snapshots a
+second cost 2.80-2.95 ms of worker CPU per race-second against 2.64-2.87 at
+20 Hz, 45 kB/s per player against the old 84, and the field's minimum delay
+falls from 100 to 67 ms. `PROTOCOL` is 3; a new client facing an old
+server only interpolates.
+
+**Consequence.** Snapshots are 1.40-1.65 kB per player (were 4.1-4.5 kB);
+the cyclists' 0.5 kB is the follow-up that would bring them under 1.5 kB.
+An Amendement swap shorter than 8 m is not flagged; the smoother still
+snaps beyond 3 m.
+
+## DEC-059 -- Instanced decor is batched per cell, and the tests count it as such
+
+**Context.** Stage 7 (DEC-056) drew the repeated props as InstancedMesh.
+r128 culls an instanced mesh by its geometry's sphere around its origin and
+turns culling off for it; it also keeps one program per material without
+checking whether the next instanced mesh has per-copy colours.
+
+**Decision.** `decor/instanced.js` groups copies in 200 m cells (800 m on
+"légers" for the street life), each cell a geometry sharing the part's
+buffers with a sphere over its own copies, culling on; tinted batches take
+a material of their own. The fold test's "half the draws" ratio leaves
+instanced meshes out (they never fold), and `headless.test.js` floors a
+circuit's decor on triangles (which count every copy), not meshes. A flat
+circuit's ground is one quad; "légers" ground uses 50 m cells.
+
+**Consequence.** Against `main`, scene-wide at race start (headless, 6
+karts, 3 seeds): meshes -33 to -48 % on both tiers; triangles on
+"détaillés" from -35 % (Élysée) to +37 % (Versailles), on "légers" from
++7 % (Élysée) to +29 % (Marseille). Build time per race about unchanged.

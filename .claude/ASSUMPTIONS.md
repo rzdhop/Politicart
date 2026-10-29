@@ -129,6 +129,14 @@ Marked UNCONFIRMED / confirmed / invalidated.
 - **A-041 -- A 100 ms correction blend hides reconciliation.** UNCONFIRMED.
   Below 150 ms RTT the corrections are centimetres; above, the snap
   threshold (3 m) is what the player sees.
+- **A-044 -- Thirty snapshots a second fit the Render free instance.** UNCONFIRMED.
+  Measured in process (four races about 12 ms of CPU a second against the
+  instance's 100 ms), not on Render itself; `SNAP_EVERY` reverts in one line.
+- **A-045 -- The circuit thumbnails cost little on a real GPU.** UNCONFIRMED.
+  Built in 2-5 ms a circuit in Node; the render and the readback were only
+  measured against a stand-in renderer. A slow GPU keeps the outlines (`static`).
+- **A-046 -- The denser "légers" decor keeps phones at their frame rate.**
+  UNCONFIRMED. Draws fell by a third or more; triangles rose 7-29 % scene-wide.
 - **A-042 -- 550 politicoins for five openings keeps the economy.** CONFIRMED
   by the owner (Q5, 2026-10-29); odds unchanged.
 - **A-043 -- Instancing and folding on "détaillés" keep shadows looking the same.**
