@@ -27,8 +27,9 @@ import { setInputSource } from './engine/input.js';
 import { getState, onTransition } from './engine/machine.js';
 import { renderLootbox } from './engine/boxgate.js';
 import { isNetRace, netStep } from './engine/netrace.js';
-import { launching, renderPreview, showsTurntable, stageInfo, warmStage } from './engine/stagegate.js';
+import { launching, renderPreview, showsTurntable, stageInfo, stageStill, warmStage } from './engine/stagegate.js';
 import { prebuildFrame, prebuildStatus, primeCountdown } from './engine/prebuild.js';
+import { BUDGET_MS as THUMB_BUDGET_MS, setStillProbe, thumbsFrame, thumbStatus } from './engine/thumbs.js';
 import { endRace, renderRace, stepRace } from './engine/race.js';
 import { clearCanvas, getRenderer } from './engine/render.js';
 import { G } from './engine/state.js';
@@ -193,6 +194,10 @@ let lastFrame = performance.now();
  */
 let titleIdle = 0;
 const WARM_AFTER = 0.8;
+/** The work a menu frame may do ahead (the pre-build, then the thumbnails), ms. */
+const FRAME_SHARE_MS = 12;
+// The thumbnails stand aside on a GPU the select stage's governor stood still (DEC-046).
+setStillProbe(stageStill);
 function frame(now) {
   requestAnimationFrame(frame);
   // clamped both ways: the first rAF timestamp can predate lastFrame, and a negative step would run time backwards (PLAN 1.2 A.1)
@@ -207,7 +212,12 @@ function frame(now) {
   if (state === 'lootbox') { renderLootbox(dt); return; }
   // The chosen circuit is built ahead, a slice per frame, while the player sits on the circuits, in the lobby or on the
   // results (engine/prebuild.js, DEC-055); the stage's launch keeps its frames to itself. Drawn over or cleared below.
-  if (state === 'tracks' || state === 'lobby' || state === 'results') prebuildFrame({ renderer: getRenderer(), budget: launching() ? 0 : undefined });
+  if (state === 'tracks' || state === 'lobby' || state === 'results') {
+    const t0 = performance.now(), launch = launching();
+    prebuildFrame({ renderer: getRenderer(), budget: launch ? 0 : undefined });
+    // the circuits' thumbnails get what the pre-build left of the frame's share, at most their own budget (engine/thumbs.js)
+    if (state === 'tracks' && !launch) { const left = Math.min(THUMB_BUDGET_MS, FRAME_SHARE_MS - (performance.now() - t0)); thumbsFrame({ renderer: getRenderer(), budget: left >= 1.5 ? left : 0 }); }
+  }
   if (showsTurntable(state) || (state === 'tracks' && launching())) { renderPreview(dt); return; }
   if (state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'dashboard' || state === 'shop') { clearCanvas(); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
@@ -234,4 +244,5 @@ requestAnimationFrame(frame);
 // stage() is read-only too: the select stage as its last frame drew it (preview.js stageInfo): the candidate,
 // the podium's yaw, the frame's draw calls, triangles and programs, the model's box on screen, the portraits.
 // prebuild() is read-only: the circuit being built ahead (prebuild.js prebuildStatus), its phase and timings.
-window.__kr = { endRace, karts: () => (G.karts || []).map(k => ({ charId: k.def.id, style: { ...k.style } })), stage: () => stageInfo(), prebuild: () => prebuildStatus() };
+// thumbs() is read-only: the circuits' thumbnails (thumbs.js thumbStatus): how many are rendered, the slices' cost.
+window.__kr = { endRace, karts: () => (G.karts || []).map(k => ({ charId: k.def.id, style: { ...k.style } })), stage: () => stageInfo(), prebuild: () => prebuildStatus(), thumbs: () => thumbStatus() };

@@ -420,6 +420,24 @@ describe('the React screens', () => {
     expect(container.querySelectorAll('#trackcards .card.sel')).toHaveLength(1);
   });
 
+  it('give every circuit card its figures, its three layouts, its climates and a thumbnail frame on its way (stage 8)', () => {
+    const { container } = render(<App />);
+    fireEvent.click(container.querySelector('#b-play')!);
+    fireEvent.click(container.querySelector('#b-next1')!);
+    for (const t of TRACKS as unknown as { id: string; variants: { name: string }[]; climates: string[] }[]) {
+      const card = container.querySelector('#track-card-' + t.id)!;
+      expect(card, t.id).not.toBeNull();
+      expect([...card.querySelectorAll('.track-chip .tc-label')].map(n => n.textContent)).toEqual(['Longueur', 'Dénivelé', 'Largeur', 'Tours']);
+      expect(card.querySelector('.track-chip .tc-value')?.textContent).toMatch(/^\d+,\d km$/);
+      expect([...card.querySelectorAll('.tl-name')].map(n => n.textContent)).toEqual(t.variants.map(v => v.name));
+      expect(card.querySelectorAll('.track-climate')).toHaveLength(t.climates.length);
+      // no renderer here: the outline stays up, the thumbnail still on its way (engine/thumbs.js runs from game.js's frame)
+      expect(card.querySelector('.track-thumb')?.getAttribute('data-thumb')).toBe('pending');
+      expect(card.querySelector('.track-thumb canvas')?.getAttribute('width')).toBe('320');
+    }
+    expect(container.querySelector('#track-card-elysee .track-chip:nth-child(2) .tc-value')?.textContent).toBe('plat');
+  });
+
   it('flip the graphics and sound button labels', () => {
     const { container } = render(<App />);
     const poly = container.querySelector('#b-poly')!;

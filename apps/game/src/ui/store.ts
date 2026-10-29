@@ -27,6 +27,7 @@ import { usePower as engineUsePower } from '../engine/powers.js';
 import { CHARACTERS, TRACKS } from '../engine/data.js';
 import { hasPreview, launch, makeThumbs, setPreview } from '../engine/stagegate.js';
 import { requestPrebuild } from '../engine/prebuild.js';
+import { onThumbs as onTrackThumbs, warmFigures } from '../engine/thumbs.js';
 import { STARTERS } from '../engine/progress.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
@@ -113,6 +114,11 @@ export interface Gain { gained: number; coins: number; daily: boolean; levelUpCo
 /** The kart this screen drives in the race on screen (or the last one): its candidate and the full style it was built with. */
 export interface RaceKart { charId: string; style: KartStyle }
 
+/** A circuit's thumbnail on the circuits screen (engine/thumbs.js): on its way, rendered (with its canvas), or the placeholder for good. */
+export interface TrackThumb { state: 'pending' | 'ready' | 'static'; canvas: HTMLCanvasElement | null }
+/** A team race's connection as the pause screen shows it (netrace.js netLatency): round trip (null before the first pong) and render delay, ms. */
+export interface NetLatency { rtt: number | null; delay: number }
+
 export type Grade = 'common' | 'rare' | 'mythic' | 'incredible';
 export type DropKind = 'char' | 'part' | 'trail' | 'coins';
 /** What a Politibox held (engine/catalog.js rollBox): politicoins, or an item, refunded when it was already owned. */
@@ -197,6 +203,12 @@ export interface UiSnapshot {
   lastGain: Gain | null;
   /** The local kart of the race on screen, for the kart card on the pause and results screens; null before the first race. */
   raceKart: RaceKart | null;
+  /** The layout the race on screen was drawn with (DEC-049), for the pause screen; null before the first race. */
+  raceLayout: string | null;
+  /** The connection when the race was paused, null in solo play. */
+  pauseNet: NetLatency | null;
+  /** The circuits' thumbnails by track id (engine/thumbs.js), filled in while the circuits screen shows. */
+  trackThumbs: Record<string, TrackThumb>;
   /** The admin's dashboard (DEC-030). */
   dashboard: DashboardView;
   /** The admin's god console is open over the race (DEC-031). */
@@ -284,6 +296,9 @@ let snapshot: UiSnapshot = {
   accountError: null,
   lastGain: null,
   raceKart: null,
+  raceLayout: null,
+  pauseNet: null,
+  trackThumbs: {},
   dashboard: { stats: null, users: [], connections: [], rooms: [], query: '', busy: false, error: null, notice: null, updatedAt: null },
   godConsole: false,
   godReply: null,
@@ -343,6 +358,7 @@ net.onNet((view: NetView) => {
   if (view.room && view.room.phase === 'lobby' && getState() === 'lobby') requestPrebuild(view.room.trackIdx);
 });
 onNetResults((r: NetResults) => set({ netResults: r }));
+onTrackThumbs((view: Record<string, TrackThumb>) => set({ trackThumbs: view }));
 
 /**
  * Tell the Garage what the player owns (DEC-035), and redraw what shows
