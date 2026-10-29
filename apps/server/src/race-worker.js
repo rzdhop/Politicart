@@ -6,11 +6,12 @@
 // each driver's latest controls, and every third tick (20 Hz) posts a
 // snapshot plus, per human slot, the messages and sounds addressed to them.
 //
-// workerData: { trackIdx, roster: [{ charId, team, isAI, name, god? }], cast, fast, hold }
+// workerData: { trackIdx, roster: [{ charId, team, isAI, name, god? }], cast, fast, hold, seed }
 //   cast: [{ id, name, title, quote }], the cast as the main thread has it
 //   (the admin's edits, roster.js); this thread's CHARACTERS start at the defaults.
 //   fast: step as fast as possible instead of in real time (tests only).
 //   hold: how long the clock may wait for the drivers to load, in ms (default 10 s).
+//   seed: the race's seed (DEC-049), the one every client was sent; 0 when absent.
 // In:  { t: 'input', slot, c: {throttle,brake,left,right,drift}, item, power }
 //      { t: 'leave', slot }      the driver left; an AI takes the wheel (a god's kart turns mortal)
 //      { t: 'join', slot, entry }  the admin joins the race in progress as a god (DEC-031)
@@ -41,14 +42,14 @@ const SNAP_EVERY = 3;            // 60 Hz / 3 = 20 snapshots a second
 const MAX_RACE_TIME = Number(process.env.POLITIKART_MAX_RACE_S) || 12 * 60;
 const raceCap = () => MAX_RACE_TIME * Math.max(1, G.laps / CFG.laps);
 
-const { trackIdx, roster, cast = [], fast, hold = 10_000 } = workerData;
+const { trackIdx, roster, cast = [], fast, hold = 10_000, seed = 0 } = workerData;
 const IDLE = Object.freeze({ throttle: false, brake: false, left: false, right: false, drift: false });
 
 // ---- set the race up
 applyCast(cast, CHARACTERS);
 resetMachine('tracks');
 G.trackIdx = trackIdx;
-startField(roster.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team, god: s.god === true })));
+startField(roster.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team, god: s.god === true })), { seed });
 
 const humans = new Map();        // slot -> { c, item, power, usedItem, usedPower, ev, fx }
 /** Seat a human at grid slot `slot`: their controls drive that kart. */

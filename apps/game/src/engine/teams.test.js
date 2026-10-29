@@ -60,7 +60,7 @@ describe('scoring', () => {
 });
 
 describe('friendly fire in a live race', () => {
-  beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; G.trackIdx = 0; startRace(); for (let n = 0; n < 4 * 60; n++) simStep(1 / 60); });
+  beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; G.trackIdx = 0; startRace({ seed: 1 }); for (let n = 0; n < 4 * 60; n++) simStep(1 / 60); });
 
   it('a casserolade stuns the foe beside you and spares your teammate', () => {
     const [a, mate, foe] = G.karts;

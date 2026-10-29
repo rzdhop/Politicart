@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 
 import { box, cyl, plane } from '../primitives.js';
-import { CFG, G, isClear } from '../state.js';
+import { G, isClear } from '../state.js';
 import { TEX } from '../textures.js';
 import { pick, rand } from '../util.js';
 import { DS, clearAt, nOf } from './context.js';
@@ -33,7 +33,7 @@ export function buildVersailles(scene, world) {
   for (let z = -200; z >= -420; z -= 18) { tree(scene, -34, z, 'cypress'); tree(scene, 34, z, 'cypress'); }
   for (let i = 0; i < 160; i++) { const x = rand(-330, 330), z = rand(-330, 100); if (clearAt(x, z, 9) && Math.abs(x) > 110) tree(scene, x, z, Math.random() < 0.5 ? 'cypress' : 'round'); }
   // topiary and gravel edges all along the circuit
-  for (let i = 0; i < G.N; i += 12) { const s = G.samples[i]; const sg = (i / 12) % 2 ? 1 : -1; const x = s.x + s.sx * sg * (CFG.roadHalfWidth + 8), z = s.z + s.sz * sg * (CFG.roadHalfWidth + 8); if (isClear(x, z, 6.5)) tree(world, x, z, 'topiary'); }
+  for (let i = 0; i < G.N; i += 12) { const s = G.samples[i]; const sg = (i / 12) % 2 ? 1 : -1; const x = s.x + s.sx * sg * (G.hw + 8), z = s.z + s.sz * sg * (G.hw + 8); if (isClear(x, z, 6.5)) tree(world, x, z, 'topiary', s.y); }
   for (let i = 0; i < 10; i++) { const f = figure(0x1f2a5e, pick(SKINS), 'guard'); f.position.set(-50 + i * 11, 0, 164); f.rotation.y = Math.PI; scene.add(f); }
   // more of the gardens: a ring of statues round Latone, topiary lines, extra parterres, the orangery, swans, strollers, guards
   for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; statue(scene, Math.cos(a) * 24, 50 + Math.sin(a) * 24, -a + Math.PI / 2); }

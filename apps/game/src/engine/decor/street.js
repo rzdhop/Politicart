@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 
 import { box, cone, cyl, imgPlane, mat, plane, sph, tag, textPlane, torus } from '../primitives.js';
-import { CFG, G, seg } from '../state.js';
+import { G, seg } from '../state.js';
 import { TEX } from '../textures.js';
 import { hex, pick, rand } from '../util.js';
 import { DS, still } from './context.js';
@@ -27,30 +27,30 @@ export function figure(color, skin, hat) {
   return still(g);   // a crowd figure bobs as a whole: still inside
 }
 export function crowdZone(scene, from, to, sideSign, dense) {
-  const hw = CFG.roadHalfWidth, N = G.N;
+  const hw = G.hw, N = G.N;
   // metal rail
-  for (let i = from; i < to; i += 2) { const s = G.samples[i % N]; const n = G.samples[(i + 2) % N]; const dx = (n.x + n.sx * sideSign * (hw + 1.9)) - (s.x + s.sx * sideSign * (hw + 1.9)), dz = (n.z + n.sz * sideSign * (hw + 1.9)) - (s.z + s.sz * sideSign * (hw + 1.9)); const len = Math.hypot(dx, dz); const r = box(0.06, 0.06, len, 0x9a9a9a, 0, 1.0, 0); r.position.set(s.x + s.sx * sideSign * (hw + 1.9) + dx / 2, 1.0, s.z + s.sz * sideSign * (hw + 1.9) + dz / 2); r.rotation.y = Math.atan2(dx, dz); scene.add(still(r)); if (i % 6 === from % 6) scene.add(still(cyl(0.05, 0.05, 1.1, 0x9a9a9a, s.x + s.sx * sideSign * (hw + 1.9), 0.55, s.z + s.sz * sideSign * (hw + 1.9), 5))); }
+  for (let i = from; i < to; i += 2) { const s = G.samples[i % N]; const n = G.samples[(i + 2) % N]; const dx = (n.x + n.sx * sideSign * (hw + 1.9)) - (s.x + s.sx * sideSign * (hw + 1.9)), dz = (n.z + n.sz * sideSign * (hw + 1.9)) - (s.z + s.sz * sideSign * (hw + 1.9)); const len = Math.hypot(dx, dz); const r = box(0.06, 0.06, len, 0x9a9a9a, 0, 1.0, 0); r.position.set(s.x + s.sx * sideSign * (hw + 1.9) + dx / 2, s.y + 1.0, s.z + s.sz * sideSign * (hw + 1.9) + dz / 2); r.rotation.y = Math.atan2(dx, dz); scene.add(still(r)); if (i % 6 === from % 6) scene.add(still(cyl(0.05, 0.05, 1.1, 0x9a9a9a, s.x + s.sx * sideSign * (hw + 1.9), s.y + 0.55, s.z + s.sz * sideSign * (hw + 1.9), 5))); }
   for (let i = from; i < to; i += dense ? 3 : 5) {
     const s = G.samples[i % N]; const n = dense ? 3 : 2;
-    for (let j = 0; j < n; j++) { const lat = sideSign * (hw + 2.8 + j * 1.1 + rand(-0.3, 0.3)); const f = figure(pick(JACKETS), pick(SKINS), Math.random() < 0.18 ? 'sign' : Math.random() < 0.12 ? 'flag' : null); f.position.set(s.x + s.sx * lat + s.tx * rand(-0.8, 0.8), 0, s.z + s.sz * lat + s.tz * rand(-0.8, 0.8)); f.rotation.y = Math.atan2(-s.sx * sideSign, -s.sz * sideSign) + rand(-0.4, 0.4); scene.add(f); G.crowd.push({ g: f, ph: rand(0, 6.28), amp: Math.random() < 0.5 ? 0.25 : 0, base: 0 }); }
+    for (let j = 0; j < n; j++) { const lat = sideSign * (hw + 2.8 + j * 1.1 + rand(-0.3, 0.3)); const f = figure(pick(JACKETS), pick(SKINS), Math.random() < 0.18 ? 'sign' : Math.random() < 0.12 ? 'flag' : null); f.position.set(s.x + s.sx * lat + s.tx * rand(-0.8, 0.8), s.y, s.z + s.sz * lat + s.tz * rand(-0.8, 0.8)); f.rotation.y = Math.atan2(-s.sx * sideSign, -s.sz * sideSign) + rand(-0.4, 0.4); scene.add(f); G.crowd.push({ g: f, ph: rand(0, 6.28), amp: Math.random() < 0.5 ? 0.25 : 0, base: s.y }); }
   }
 }
 export function grandstand(scene, idx, sideSign) {
-  const s = G.samples[idx]; const hw = CFG.roadHalfWidth; const g = new THREE.Group();
+  const s = G.samples[idx]; const hw = G.hw; const g = new THREE.Group();
   for (let t = 0; t < 4; t++) { g.add(box(26, 1.2, 2.4, 0x6a6f7a, 0, 0.6 + t * 1.3, 2 + t * 2.4)); for (let x = -11; x <= 11; x += 2.2) { const f = figure(pick(JACKETS), pick(SKINS), Math.random() < 0.2 ? 'flag' : null); f.scale.setScalar(0.85); f.position.set(x + rand(-0.3, 0.3), 1.2 + t * 1.3, 2.2 + t * 2.4); f.rotation.y = Math.PI; g.add(f); G.crowd.push({ g: f, ph: rand(0, 6.28), amp: 0.2, base: f.position.y }); } }
   g.add(box(28, 0.4, 11, 0x1f3a93, 0, 7.5, 6)); [-13, 13].forEach(x => { g.add(cyl(0.2, 0.2, 7.5, 0x555555, x, 3.75, 1)); g.add(cyl(0.2, 0.2, 7.5, 0x555555, x, 3.75, 11)); });
   const ban = textPlane(26, 2.2, 'TRIBUNE OFFICIELLE', '#1f3a93', '#f6f1e4', 64); ban.position.set(0, 6.3, 0.9); g.add(ban);
-  g.position.set(s.x + s.sx * sideSign * (hw + 3), 0, s.z + s.sz * sideSign * (hw + 3)); g.rotation.y = Math.atan2(s.sx * sideSign, s.sz * sideSign); scene.add(still(g));
+  g.position.set(s.x + s.sx * sideSign * (hw + 3), s.y, s.z + s.sz * sideSign * (hw + 3)); g.rotation.y = Math.atan2(s.sx * sideSign, s.sz * sideSign); scene.add(still(g));
 }
 export function adBoard(scene, idx, sideSign, text, bg, fg, img) {
-  const s = G.samples[idx]; const hw = CFG.roadHalfWidth; const g = new THREE.Group();
+  const s = G.samples[idx]; const hw = G.hw; const g = new THREE.Group();
   g.add(cyl(0.12, 0.12, 3, 0x444444, -2.6, 1.5, 0, 6)); g.add(cyl(0.12, 0.12, 3, 0x444444, 2.6, 1.5, 0, 6));
   const p = img ? imgPlane(6, 2, img) : textPlane(6, 2, text, bg, fg, 56); p.position.set(0, 3.8, 0); g.add(p); g.add(box(6.2, 2.2, 0.1, 0x222222, 0, 3.8, -0.08));
-  g.position.set(s.x + s.sx * sideSign * (hw + 4.5), 0, s.z + s.sz * sideSign * (hw + 4.5)); g.rotation.y = Math.atan2(-s.sx * sideSign, -s.sz * sideSign); scene.add(still(g));
+  g.position.set(s.x + s.sx * sideSign * (hw + 4.5), s.y, s.z + s.sz * sideSign * (hw + 4.5)); g.rotation.y = Math.atan2(-s.sx * sideSign, -s.sz * sideSign); scene.add(still(g));
 }
 export const ADS = [['VOTEZ UTILE', '#1f3a93', '#f6f1e4'], ['SONDAGE : 52 % D’INDÉCIS', '#f6f1e4', '#111'], ['RÉFORME EN COURS', '#c8102e', '#fff'], ['ENGAGEMENT N°12 : ROULER', '#f2c14e', '#111'], ['DÉBAT CE SOIR 21H', '#111', '#f2c14e'], ['LA RÉPUBLIQUE ROULE', '#2f55c7', '#fff'], ['GRAND PRIX DE L’HÉMICYCLE', '#f6f1e4', '#c8102e'], ['AMENDEMENT 49.3', '#5c1a33', '#f6f1e4']];
 // ---------- Decor builders ----------
-export function tree(scene, x, z, kind) {
+export function tree(scene, x, z, kind, y = 0) {
   const g = new THREE.Group(); const S = seg();
   if (kind === 'plane') { g.add(cyl(0.4, 0.55, 7, 0x9a9282, 0, 3.5, 0, 8)); g.add(sph(3.2, 0x5d9a4a, 0, 8.5, 0, S)); g.add(sph(2.2, 0x6fab55, 1.8, 9.5, 0.8, S)); g.add(sph(2.0, 0x4f8a40, -1.6, 9.2, -0.9, S)); g.add(sph(1.8, 0x6fab55, 0.3, 11, 0, S)); }
   else if (kind === 'cypress') { g.add(cyl(0.2, 0.3, 1.5, 0x6b4a2b, 0, 0.75, 0, 6)); const c = cone(1.1, 7, 0x2f5f32, 0, 4.5, 0, S); g.add(c); }
@@ -58,14 +58,14 @@ export function tree(scene, x, z, kind) {
   else if (kind === 'orange') { g.add(box(1.6, 1.4, 1.6, 0x2f6b3a, 0, 0.7, 0)); g.add(box(1.7, 0.15, 1.7, 0xf6f1e4, 0, 1.4, 0)); g.add(cyl(0.12, 0.14, 1.2, 0x6b4a2b, 0, 2.0, 0, 6)); g.add(sph(1.1, 0x3f8a3a, 0, 3.2, 0, S)); for (let i = 0; i < 6; i++) g.add(sph(0.12, 0xff8c1a, rand(-0.8, 0.8), 3.2 + rand(-0.6, 0.6), rand(-0.8, 0.8), 6)); }
   else if (kind === 'palm') { const t = cyl(0.22, 0.34, 9, 0x8a6a42, 0, 4.5, 0, 7); t.rotation.z = rand(-0.08, 0.08); g.add(t); for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2; const f = box(0.5, 0.12, 4.2, i % 2 ? 0x3f8a3a : 0x4fa044, 0, 0, 0); f.position.set(Math.sin(a) * 1.6, 8.6, Math.cos(a) * 1.6); f.rotation.order = 'YXZ'; f.rotation.y = a; f.rotation.x = 0.55; g.add(f); } g.add(sph(0.5, 0x6b4a2b, 0, 8.8, 0, 6)); }
   else { g.add(cyl(0.35, 0.5, 3, 0x6b4a2b, 0, 1.5, 0, 8)); g.add(sph(2.4, 0x3f8a3a, 0, 4.6, 0, S)); g.add(sph(1.6, 0x4fa044, 1.2, 5.6, 0.6, S)); g.add(sph(1.5, 0x3a7f35, -1.1, 5.4, -0.5, S)); }
-  g.position.set(x, 0, z); g.scale.setScalar(rand(0.85, 1.25)); scene.add(still(g));
+  g.position.set(x, y, z); g.scale.setScalar(rand(0.85, 1.25)); scene.add(still(g));
 }
 /** The lamps' and the sedans' lights: unlit, one material each for every lamp and car (they never change). */
 let LAMP_MAT = null, HEADLIGHT_MAT = null;
 export const lampMat = () => LAMP_MAT || (LAMP_MAT = new THREE.MeshBasicMaterial({ color: 0xfff2b0 }));
 const headlightMat = () => HEADLIGHT_MAT || (HEADLIGHT_MAT = new THREE.MeshBasicMaterial({ color: 0xfff1b0 }));
-export function lamp(scene, x, z, style) { if (style === 'paris') { scene.add(still(cyl(0.14, 0.22, 6, 0x2f3a3a, x, 3, z, 8))); scene.add(still(box(0.7, 0.9, 0.7, 0x2f3a3a, x, 6.4, z))); const l = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 0.55), lampMat()); l.position.set(x, 6.4, z); scene.add(still(l)); } else { scene.add(still(cyl(0.12, 0.18, 6, 0x2f3a44, x, 3, z, 6))); const l = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), lampMat()); l.position.set(x, 6.2, z); scene.add(still(l)); } }
-export function flagPole(scene, x, z, colors, h) { h = h || 9; scene.add(still(cyl(0.1, 0.12, h, 0xdddddd, x, h / 2, z, 6))); colors.forEach((c, i) => scene.add(still(box(1.2, 2.2, 0.06, c, x + 0.6 + i * 1.2, h - 1.2, z)))); }
+export function lamp(scene, x, z, style, y = 0) { if (style === 'paris') { scene.add(still(cyl(0.14, 0.22, 6, 0x2f3a3a, x, y + 3, z, 8))); scene.add(still(box(0.7, 0.9, 0.7, 0x2f3a3a, x, y + 6.4, z))); const l = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 0.55), lampMat()); l.position.set(x, y + 6.4, z); scene.add(still(l)); } else { scene.add(still(cyl(0.12, 0.18, 6, 0x2f3a44, x, y + 3, z, 6))); const l = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), lampMat()); l.position.set(x, y + 6.2, z); scene.add(still(l)); } }
+export function flagPole(scene, x, z, colors, h, y = 0) { h = h || 9; scene.add(still(cyl(0.1, 0.12, h, 0xdddddd, x, y + h / 2, z, 6))); colors.forEach((c, i) => scene.add(still(box(1.2, 2.2, 0.06, c, x + 0.6 + i * 1.2, y + h - 1.2, z)))); }
 export function sedan(scene, x, z, rotY, color, taxi) {
   const g = new THREE.Group(); const S = seg();
   if (taxi) { const sg = textPlane(1.2, 0.4, 'TAXI', '#111', '#f2c14e', 110); sg.position.set(-0.2, 2.4, 0); sg.rotation.y = Math.PI / 2; g.add(sg); g.add(box(1.2, 0.4, 0.1, 0x111111, -0.2, 2.4, -0.06)); }

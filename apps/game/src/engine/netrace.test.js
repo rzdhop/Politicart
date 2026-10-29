@@ -15,8 +15,9 @@ import { G } from './state.js';
 import { MIN_SPEED } from './trail.js';
 
 const ROSTER = ['victor', 'gege', 'maurice', 'capucine', 'hubert', 'lulu'].map((charId, i) => ({ charId, isAI: i < 4, team: i < 4 ? null : (i === 4 ? 'bleu' : 'rouge'), name: 'P' + i }));
+const SEED = 1;                 // the race seed (DEC-049): the "server" below and every client build the same race from it
 const SNAPS = [];
-let barricadeId = null;
+let barricadeId = null, staticIds = [];
 
 // A fixed-seed Math.random (mulberry32) for the recording. The AI picks lanes
 // and powers at random; unseeded, a kart now and then drove into the barricade
@@ -34,7 +35,8 @@ beforeAll(() => {
   // "Server": race 6 s at 60 Hz, a snapshot every third tick, a barricade dropped at 5 s.
   const random = vi.spyOn(Math, 'random').mockImplementation(seeded(1));
   resetMachine('tracks'); G.trackIdx = 0;
-  startField(ROSTER.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team })));
+  startField(ROSTER.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team })), { seed: SEED });
+  staticIds = G.hazards.map(h => h.id);
   for (let tick = 1; tick <= 360; tick++) {
     if (tick === 300) {
       const k = G.karts[4]; k.item = 'greve'; k.itemRolling = 0; useItem(k);
@@ -54,7 +56,7 @@ function clientInLobby() { resetMachine('title'); transition('lobby'); }
 describe('a networked race on the client', () => {
   it('builds the announced grid and follows our slot', () => {
     clientInLobby();
-    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5 });
+    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5, seed: SEED });
     expect(isNetRace()).toBe(true);
     expect(getState()).toBe('countdown');
     expect(G.karts.map(k => k.def.id)).toEqual(ROSTER.map(s => s.charId));
@@ -64,7 +66,7 @@ describe('a networked race on the client', () => {
 
   it('builds a kart that joins the race in progress at the slot the server names, and nothing else (DEC-031)', () => {
     clientInLobby();
-    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5 });
+    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5, seed: SEED });
     receiveKartJoin({ slot: 9, entry: { charId: 'thierry', name: 'Rida', isAI: false, team: null, god: true } });   // not the next slot: ignored
     expect(G.karts).toHaveLength(6);
     receiveKartJoin({ slot: 6, entry: { charId: 'thierry', name: 'Rida', isAI: false, team: null, god: true, style: { wheels: 'gold' } } });
@@ -79,7 +81,7 @@ describe('a networked race on the client', () => {
   it("draws each human's kart with their Garage edits over the candidate default, and AI with the default", () => {
     clientInLobby();
     const roster = ROSTER.map((s, i) => (i === 4 ? { ...s, style: { wheels: 'gold', number: 7 } } : s));
-    beginNetRace({ trackIdx: 0, roster, you: 5 });
+    beginNetRace({ trackIdx: 0, roster, you: 5, seed: SEED });
     const def = id => CHARACTERS.find(c => c.id === id);
     expect(G.karts[4].style).toEqual(playerStyle(def(roster[4].charId), { wheels: 'gold', number: 7 }));
     expect(G.karts[0].style).toEqual(defaultStyle(def(roster[0].charId)));
@@ -89,7 +91,7 @@ describe('a networked race on the client', () => {
   it("gives a slot's kart the trail of its style, in the scene, and none to the rest (DEC-036)", () => {
     clientInLobby();
     const roster = ROSTER.map((s, i) => (i === 0 ? { ...s, style: { trail: 'laser' } } : s));
-    beginNetRace({ trackIdx: 0, roster, you: 5 });
+    beginNetRace({ trackIdx: 0, roster, you: 5, seed: SEED });
     const trail = G.karts[0].mesh.userData.trail;
     expect(trail).not.toBeNull();
     expect(trail.group.name).toBe('trail:laser');
@@ -103,7 +105,7 @@ describe('a networked race on the client', () => {
 
   it('draws the karts between snapshots, goes green with the server, and mirrors hazards', () => {
     clientInLobby();
-    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5 });
+    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5, seed: SEED });
     for (const s of SNAPS) receiveSnap({ s, ev: [], fx: [] });
     const payload = netStep(1 / 60);
     // Rendered six ticks behind the newest snapshot (tick 360): snapshot 354, give or take the
@@ -120,7 +122,7 @@ describe('a networked race on the client', () => {
 
   it('replays our messages through the usual queue and ignores stale snapshots', () => {
     clientInLobby();
-    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5 });
+    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5, seed: SEED });
     drain();
     receiveSnap({ s: SNAPS[10], ev: [['toast', 'TOUR 2 — 0:31.2']], fx: [] });
     receiveSnap({ s: SNAPS[5], ev: [['toast', 'stale']], fx: [] });
@@ -132,7 +134,7 @@ describe('a networked race on the client', () => {
     class Sock { constructor() { this.readyState = 1; queueMicrotask(() => this.onopen?.()); } send(s) { sent.push(JSON.parse(s)); } close() {} }
     setTransport(Sock); connect('ws://x/ws', 'me');
     return new Promise(r => setTimeout(r, 0)).then(() => {
-      clientInLobby(); beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5 });
+      clientInLobby(); beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5, seed: SEED });
       pressItem(); pressItem();
       netStep(1 / 60);
       expect(sent.filter(m => m.t === 'input')).toEqual([]);   // nothing until the first frame has been drawn
@@ -144,7 +146,7 @@ describe('a networked race on the client', () => {
 
   it('shows the results the server sends and hands them to the UI', () => {
     let got = null; onNetResults(r => { got = r; });
-    clientInLobby(); beginNetRace({ trackIdx: 0, roster: ROSTER, you: 4 });
+    clientInLobby(); beginNetRace({ trackIdx: 0, roster: ROSTER, you: 4, seed: SEED });
     for (const s of SNAPS) receiveSnap({ s, ev: [], fx: [] });
     netStep(1 / 60);
     finishNetRace({ ranking: [], teams: [{ team: 'bleu', name: 'Bleu', points: 10, drivers: [4] }] });
@@ -153,8 +155,36 @@ describe('a networked race on the client', () => {
     expect(got).toMatchObject({ you: 4, teams: [{ team: 'bleu', points: 10 }] });
   });
 
+  it('builds the circuit\'s static obstacles from the seed, by the server\'s ids, and drops one the server has mown (DEC-049)', () => {
+    clientInLobby();
+    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5, seed: SEED });
+    expect(staticIds.length).toBeGreaterThan(0);
+    expect(G.hazards.map(h => h.id)).toEqual(staticIds);                          // the same build as the server's
+    const victim = G.hazards[0]; const mesh = victim.mesh;
+    expect(G.scene.children).toContain(mesh);
+    for (const s of SNAPS.slice(0, 20)) receiveSnap({ s, ev: [], fx: [] });
+    netStep(1 / 60);
+    expect(G.scene.children).toContain(mesh);                                       // still listed: still there
+    const mown = SNAPS.slice(20, 40).map(s => ({ ...s, h: s.h.filter(h => h.id !== victim.id) }));   // the server's fauchage removed it
+    for (const s of mown) receiveSnap({ s, ev: [], fx: [] });
+    netStep(1 / 60);
+    expect(G.scene.children).not.toContain(mesh);
+    expect(G.hazards.find(h => h.id === victim.id)).toBeUndefined();
+    expect(G.hazards).toHaveLength(staticIds.length - 1);
+    finishNetRace({ ranking: [], teams: [] });
+    expect(G.hazards.every(h => G.scene.children.includes(h.mesh))).toBe(true);     // the results screen keeps the circuit, obstacles included
+  });
+
+  it('refuses a start without a seed (a server older than protocol 2)', () => {
+    clientInLobby(); drain();
+    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5 });
+    expect(isNetRace()).toBe(false);
+    expect(getState()).toBe('lobby');
+    expect(drain()).toEqual([{ type: 'toast', text: 'SERVEUR TROP ANCIEN' }]);
+  });
+
   it('falls back to the lobby when the race is abandoned', () => {
-    clientInLobby(); beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5 });
+    clientInLobby(); beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5, seed: SEED });
     abortNetRace();
     expect(getState()).toBe('lobby');
     expect(isNetRace()).toBe(false);

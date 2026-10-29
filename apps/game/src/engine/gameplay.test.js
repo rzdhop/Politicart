@@ -18,10 +18,13 @@ const STEP = 1 / 60;
 const def = id => CHARACTERS.find(c => c.id === id);
 const ids = ['victor', 'gege', 'maurice', 'capucine', 'hubert', 'lulu'];
 
+// The race seed (DEC-049): it draws Élysée's « Visite officielle », whose obstacles all stand past sample 700,
+// so the samples the tests place karts at (80 to 600) are clear of them.
+const SEED = 1;
 /** A grid of AI karts on circuit 0 with the race running; `swap` replaces candidates by id. */
 function race(swap = {}) {
   resetMachine('tracks'); G.trackIdx = 0;
-  startField(ids.map(id => ({ def: def(swap[id] ?? id), isAI: true })));
+  startField(ids.map(id => ({ def: def(swap[id] ?? id), isAI: true })), { seed: SEED });
   transition('race'); G.countdown = 0; drain();
   for (const k of G.karts) k.powerCd = 0;     // powers ready
   return G.karts;
@@ -316,7 +319,7 @@ describe('what reaches a driver (DEC-029)', () => {
 describe('the god kart (DEC-030)', () => {
   function godRace() {
     resetMachine('tracks'); G.trackIdx = 0;
-    startField([{ def: def('victor'), isAI: true }, { def: def('gege'), isAI: true }, { def: def('lulu'), isAI: false, god: true, local: true }]);
+    startField([{ def: def('victor'), isAI: true }, { def: def('gege'), isAI: true }, { def: def('lulu'), isAI: false, god: true, local: true }], { seed: SEED });
     transition('race'); G.countdown = 0; drain();
     for (const k of G.karts) k.powerCd = 0;
     return G.karts;

@@ -119,33 +119,75 @@ export function rollItem(rank) {
 }
 
 // ---------- Tracks ----------
+// A circuit: its loop (`points` at `scale`), its surface and colours, its
+// `roadHalfWidth` (DEC-050), its elevation `profile` ([[f, y], ...] control
+// points over the lap, f = 0 first, closed at f = 1), the fixed skeleton of
+// `features`, three named `variants` of extra features one of which each race
+// draws (DEC-049, engine/layout.js), the riders' count range `cyclists` and the
+// `climates` it allows. Feature types: pad, ramp, pit, crossing (one per track,
+// in the skeleton: snapshots list crossings by index), chicane, obstacle
+// (kind: sedan, van, barrier, stall, bins, scaffold; lat within hw - 3), narrow
+// (the road pinches to half-width w over len samples), bank (camber a over len),
+// wind (lateral push over len, Marseille's mistral), bump (a short hump of h).
 export const TRACKS = [
   { id: 'elysee', name: 'L’Élysée — Faubourg Saint-Honoré', desc: 'Tour du palais, de la cour d’honneur et des boutiques du Faubourg. Garde républicaine, berlines noires et meute de photographes.',
     ground: 0x6f9a55, sky: [0x3f7fd0, 0xc9dff2], fog: 0xc9dff2, kerb: [0xd83b4b, 0xf6f1e4], pavement: 0x9a9a92,
     points: [[0, -150], [90, -155], [160, -110], [175, -30], [150, 40], [165, 110], [90, 160], [0, 130], [-90, 160], [-165, 110], [-150, 40], [-175, -30], [-160, -110], [-90, -155]],
     scale: 3, boxRows: [0.06, 0.18, 0.36, 0.42, 0.54, 0.66, 0.74, 0.88, 0.97],
-    features: [{ t: 'pad', f: 0.12 }, { t: 'pad', f: 0.25 }, { t: 'ramp', f: 0.30, h: 3.6, len: 10 }, { t: 'pit', f: 0.30833, len: 9, kind: 'manif' }, { t: 'pad', f: 0.47 }, { t: 'crossing', f: 0.60, color: 0x111111 }, { t: 'ramp', f: 0.70, h: 3.2, len: 9 }, { t: 'chicane', f: 0.78, n: 3, kind: 'vauban' }, { t: 'pit', f: 0.845, len: 8, kind: 'works' }, { t: 'pad', f: 0.93 }] },
+    roadHalfWidth: 13, profile: [[0, 0]], climates: ['golden', 'night', 'overcast'], cyclists: { min: 14, max: 22 },
+    features: [{ t: 'pad', f: 0.12 }, { t: 'pad', f: 0.25 }, { t: 'ramp', f: 0.30, h: 3.6, len: 10 }, { t: 'pit', f: 0.30833, len: 9, kind: 'manif' }, { t: 'bank', f: 0.36, len: 60, a: 0.08 }, { t: 'pad', f: 0.47 }, { t: 'crossing', f: 0.60, color: 0x111111 }, { t: 'ramp', f: 0.70, h: 3.2, len: 9 }, { t: 'pit', f: 0.845, len: 8, kind: 'works' }, { t: 'pad', f: 0.93 }],
+    variants: [
+      { name: 'Visite officielle', features: [{ t: 'chicane', f: 0.78, n: 3, kind: 'vauban' }, { t: 'obstacle', f: 0.52, lat: -6, kind: 'sedan' }, { t: 'obstacle', f: 0.545, lat: 6, kind: 'sedan' }, { t: 'obstacle', f: 0.64, lat: 0, kind: 'barrier' }, { t: 'narrow', f: 0.40, len: 40, w: 9 }] },
+      { name: 'Jour de manif', features: [{ t: 'chicane', f: 0.78, n: 2, kind: 'vauban' }, { t: 'obstacle', f: 0.44, lat: -7, kind: 'barrier' }, { t: 'obstacle', f: 0.455, lat: 7, kind: 'barrier' }, { t: 'pit', f: 0.53, len: 7, kind: 'manif' }, { t: 'obstacle', f: 0.57, lat: -5, kind: 'bins' }, { t: 'obstacle', f: 0.66, lat: 4, kind: 'van' }, { t: 'obstacle', f: 0.88, lat: 6, kind: 'stall' }] },
+      { name: 'Travaux du Faubourg', features: [{ t: 'obstacle', f: 0.41, lat: -8, kind: 'scaffold' }, { t: 'obstacle', f: 0.43, lat: -8, kind: 'scaffold' }, { t: 'obstacle', f: 0.55, lat: 5, kind: 'bins' }, { t: 'narrow', f: 0.74, len: 50, w: 8 }, { t: 'pit', f: 0.76, len: 6, kind: 'works' }, { t: 'obstacle', f: 0.90, lat: -5, kind: 'van' }, { t: 'bump', f: 0.96, len: 6, h: 0.6 }] },
+    ] },
   { id: 'bourbon', name: 'Palais Bourbon — Quais de Seine', desc: 'Le long de la Seine devant l’Assemblée : bouquinistes, bateau-mouche, pont et obélisque. Rapide sur les quais, piégeux derrière.',
     ground: 0x7a9a60, sky: [0x4a8ad6, 0xd4e6f5], fog: 0xd4e6f5, kerb: [0x1f4ea8, 0xf6f1e4], pavement: 0xa4a39b,
     points: [[0, -100], [100, -105], [170, -70], [165, 10], [120, 60], [150, 130], [70, 165], [-20, 130], [-100, 165], [-170, 120], [-165, 30], [-120, -30], [-170, -80], [-100, -105]],
     scale: 3, boxRows: [0.05, 0.18, 0.30, 0.38, 0.52, 0.62, 0.66, 0.84, 0.95],
-    features: [{ t: 'pad', f: 0.08 }, { t: 'ramp', f: 0.25, h: 3.4, len: 10 }, { t: 'pit', f: 0.25833, len: 9, kind: 'works' }, { t: 'pad', f: 0.33 }, { t: 'pad', f: 0.45 }, { t: 'crossing', f: 0.56, color: 0xf6f1e4, taxi: true }, { t: 'chicane', f: 0.70, n: 3, kind: 'vauban' }, { t: 'pit', f: 0.79, len: 8, kind: 'manif' }, { t: 'ramp', f: 0.90, h: 1.8, len: 6 }] },
+    // two bridges: humps of 6 m, one on each half of the lap
+    roadHalfWidth: 15, profile: [[0, 0], [0.14, 0], [0.20, 6], [0.26, 0], [0.84, 0], [0.90, 6], [0.96, 0]], climates: ['dawn', 'noon', 'dusk'], cyclists: { min: 16, max: 26 },
+    features: [{ t: 'pad', f: 0.08 }, { t: 'pad', f: 0.33 }, { t: 'ramp', f: 0.42, h: 3.4, len: 10 }, { t: 'pit', f: 0.42833, len: 9, kind: 'works' }, { t: 'pad', f: 0.50 }, { t: 'crossing', f: 0.56, color: 0xf6f1e4, taxi: true }, { t: 'pad', f: 0.72 }, { t: 'pit', f: 0.79, len: 8, kind: 'manif' }, { t: 'pad', f: 0.98 }],
+    variants: [
+      { name: 'Quais en fête', features: [{ t: 'chicane', f: 0.70, n: 3, kind: 'vauban' }, { t: 'obstacle', f: 0.62, lat: 7, kind: 'stall' }, { t: 'obstacle', f: 0.645, lat: -7, kind: 'stall' }, { t: 'obstacle', f: 0.30, lat: 5, kind: 'bins' }, { t: 'bump', f: 0.53, len: 6, h: 0.5 }] },
+      { name: 'Bouquinistes', features: [{ t: 'obstacle', f: 0.10, lat: 9, kind: 'stall' }, { t: 'obstacle', f: 0.115, lat: 9, kind: 'stall' }, { t: 'obstacle', f: 0.13, lat: 9, kind: 'stall' }, { t: 'obstacle', f: 0.36, lat: -6, kind: 'van' }, { t: 'narrow', f: 0.62, len: 60, w: 10 }, { t: 'obstacle', f: 0.74, lat: -8, kind: 'stall' }, { t: 'obstacle', f: 0.90, lat: 7, kind: 'bins' }] },
+      { name: 'Crue de la Seine', features: [{ t: 'pit', f: 0.12, len: 8, kind: 'water' }, { t: 'pit', f: 0.30, len: 7, kind: 'water' }, { t: 'obstacle', f: 0.60, lat: -4, kind: 'barrier' }, { t: 'obstacle', f: 0.615, lat: 4, kind: 'barrier' }, { t: 'chicane', f: 0.70, n: 2, kind: 'vauban' }, { t: 'obstacle', f: 0.86, lat: 6, kind: 'sedan' }] },
+    ] },
   { id: 'versailles', name: 'Versailles — Jardins du Congrès', desc: 'Allées de gravier entre bosquets, fontaines et parterres, château au fond. Le Congrès est réuni, le dérapage est autorisé.',
     ground: 0x8aa860, sky: [0x5a97dc, 0xe3eef8], fog: 0xe3eef8, kerb: [0xd9b24a, 0xf6f1e4], pavement: 0xcbb98a, gravel: true,
     points: [[0, -160], [110, -160], [150, -100], [110, -40], [150, 20], [120, 90], [40, 110], [-40, 110], [-120, 90], [-150, 20], [-110, -40], [-150, -100], [-110, -160]],
     scale: 3, boxRows: [0.04, 0.12, 0.30, 0.40, 0.58, 0.66, 0.80, 0.92],
-    features: [{ t: 'pad', f: 0.08 }, { t: 'ramp', f: 0.20, h: 3.8, len: 10 }, { t: 'pit', f: 0.20833, len: 10, kind: 'water' }, { t: 'pad', f: 0.36 }, { t: 'ramp', f: 0.44, h: 2.6, len: 8 }, { t: 'chicane', f: 0.50, n: 4, kind: 'hedge' }, { t: 'pad', f: 0.64 }, { t: 'ramp', f: 0.72, h: 3.0, len: 8 }, { t: 'pit', f: 0.72667, len: 8, kind: 'water' }, { t: 'pad', f: 0.88 }, { t: 'pit', f: 0.97, len: 7, kind: 'works' }] },
+    // two terraces: the allées drop 4 m twice (Latone, then the tapis vert) and climb back before the line
+    roadHalfWidth: 17, profile: [[0, 0], [0.28, 0], [0.32, -4], [0.58, -4], [0.62, -8], [0.80, -8], [0.92, 0]], climates: ['noon', 'golden', 'overcast'], cyclists: { min: 12, max: 20 },
+    features: [{ t: 'pad', f: 0.08 }, { t: 'ramp', f: 0.20, h: 3.8, len: 10 }, { t: 'pit', f: 0.20833, len: 10, kind: 'water' }, { t: 'pad', f: 0.36 }, { t: 'ramp', f: 0.44, h: 2.6, len: 8 }, { t: 'pad', f: 0.64 }, { t: 'ramp', f: 0.72, h: 3.0, len: 8 }, { t: 'pit', f: 0.72667, len: 8, kind: 'water' }, { t: 'crossing', f: 0.85, color: 0x2f6b3a }, { t: 'pad', f: 0.88 }, { t: 'pit', f: 0.97, len: 7, kind: 'works' }],
+    variants: [
+      { name: 'Jour du Congrès', features: [{ t: 'chicane', f: 0.50, n: 4, kind: 'hedge' }, { t: 'obstacle', f: 0.56, lat: -8, kind: 'sedan' }, { t: 'obstacle', f: 0.575, lat: 8, kind: 'sedan' }, { t: 'obstacle', f: 0.92, lat: 0, kind: 'barrier' }] },
+      { name: 'Grandes Eaux', features: [{ t: 'pit', f: 0.30, len: 7, kind: 'water' }, { t: 'chicane', f: 0.50, n: 2, kind: 'hedge' }, { t: 'pit', f: 0.58, len: 7, kind: 'water' }, { t: 'obstacle', f: 0.14, lat: 9, kind: 'bins' }, { t: 'bump', f: 0.78, len: 6, h: 0.5 }] },
+      { name: 'Labyrinthe', features: [{ t: 'narrow', f: 0.26, len: 50, w: 11 }, { t: 'chicane', f: 0.48, n: 5, kind: 'hedge' }, { t: 'chicane', f: 0.54, n: 3, kind: 'hedge' }, { t: 'obstacle', f: 0.80, lat: 10, kind: 'stall' }] },
+    ] },
   // Tracks are referenced by index (saved stats, the lobby, the server's byTrack), so new ones are appended, never inserted.
-  // The butte has no elevation model: the climb is three ramps in series on the long right-hand straight,
-  // then the tight bends of the place du Tertre, then two more ramps on the way down the other side (A-030).
   { id: 'montmartre', name: 'Montmartre — La Butte', desc: 'Montée pavée vers le Sacré-Cœur, place du Tertre et ses peintres, funiculaire et terrasses de café. Le Congrès est loin, les pigeons non.',
     ground: 0x6f9a55, sky: [0x86b0e0, 0xf2dcd8], fog: 0xf2dcd8, kerb: [0x24357a, 0xf6f1e4], pavement: 0xcdbf9e, cobble: true,
     points: [[0, -165], [95, -170], [165, -130], [175, -60], [180, 40], [150, 110], [100, 165], [30, 150], [-40, 172], [-120, 160], [-175, 100], [-160, 20], [-175, -80], [-110, -160]],
     scale: 3, boxRows: [0.05, 0.13, 0.26, 0.40, 0.50, 0.57, 0.66, 0.82, 0.95],
-    features: [{ t: 'pad', f: 0.08 }, { t: 'ramp', f: 0.165, h: 3.6, len: 10 }, { t: 'ramp', f: 0.187, h: 3.9, len: 10 }, { t: 'ramp', f: 0.209, h: 4.2, len: 10 }, { t: 'pit', f: 0.21733, len: 9, kind: 'manif' }, { t: 'pad', f: 0.30 }, { t: 'pad', f: 0.46 }, { t: 'crossing', f: 0.60, color: 0xf6f1e4, taxi: true }, { t: 'pad', f: 0.63 }, { t: 'ramp', f: 0.70, h: 3.2, len: 10 }, { t: 'ramp', f: 0.722, h: 3.4, len: 10 }, { t: 'chicane', f: 0.78, n: 3, kind: 'vauban' }, { t: 'pit', f: 0.84, len: 8, kind: 'works' }, { t: 'pad', f: 0.92 }] },
+    // the butte: a real climb of 22 m up the long right-hand straight, the place du Tertre on top, the descent down the other side (DEC-050 replaces A-035's ramps in series)
+    roadHalfWidth: 11, profile: [[0, 0], [0.10, 2], [0.22, 14], [0.32, 22], [0.42, 22], [0.50, 20], [0.62, 14], [0.72, 8], [0.85, 2], [0.94, 0]], climates: ['dusk', 'night', 'dawn'], cyclists: { min: 12, max: 18 },
+    features: [{ t: 'pad', f: 0.08 }, { t: 'bump', f: 0.26, len: 6, h: 0.5 }, { t: 'bump', f: 0.275, len: 6, h: 0.5 }, { t: 'bump', f: 0.29, len: 6, h: 0.5 }, { t: 'pad', f: 0.30 }, { t: 'ramp', f: 0.36, h: 2.6, len: 8 }, { t: 'pad', f: 0.46 }, { t: 'crossing', f: 0.60, color: 0xf6f1e4, taxi: true }, { t: 'pad', f: 0.63 }, { t: 'pit', f: 0.84, len: 8, kind: 'works' }, { t: 'pad', f: 0.92 }],
+    variants: [
+      { name: 'Place du Tertre', features: [{ t: 'chicane', f: 0.78, n: 3, kind: 'vauban' }, { t: 'obstacle', f: 0.40, lat: 5, kind: 'stall' }, { t: 'obstacle', f: 0.415, lat: -5, kind: 'stall' }, { t: 'obstacle', f: 0.55, lat: 4, kind: 'sedan' }, { t: 'obstacle', f: 0.70, lat: -6, kind: 'bins' }] },
+      { name: 'Fête des vendanges', features: [{ t: 'obstacle', f: 0.12, lat: 6, kind: 'stall' }, { t: 'obstacle', f: 0.135, lat: -6, kind: 'stall' }, { t: 'pit', f: 0.44, len: 8, kind: 'manif' }, { t: 'obstacle', f: 0.52, lat: 0, kind: 'barrier' }, { t: 'chicane', f: 0.78, n: 2, kind: 'vauban' }, { t: 'obstacle', f: 0.88, lat: 5, kind: 'van' }] },
+      { name: 'Nuit blanche', features: [{ t: 'obstacle', f: 0.16, lat: -7, kind: 'scaffold' }, { t: 'narrow', f: 0.50, len: 50, w: 8 }, { t: 'obstacle', f: 0.66, lat: -5, kind: 'sedan' }, { t: 'obstacle', f: 0.68, lat: 5, kind: 'sedan' }, { t: 'obstacle', f: 0.80, lat: 6, kind: 'bins' }, { t: 'bump', f: 0.90, len: 6, h: 0.6 }] },
+    ] },
   { id: 'marseille', name: 'Marseille — Vieux-Port', desc: 'Les quais du Vieux-Port : bateaux, grande roue, Bonne Mère sur sa colline et terrasses de pastis. Rapide le long de l’eau, serré derrière. Le pastis n’est pas un carburant.',
     ground: 0x8aa860, sky: [0x2b7fd6, 0xcfe9fb], fog: 0xcfe9fb, kerb: [0x2a7fd4, 0xf6f1e4], pavement: 0xd8c9a3,
     points: [[0, -170], [110, -168], [172, -125], [178, -40], [165, 50], [175, 120], [110, 168], [30, 140], [-50, 170], [-120, 150], [-170, 95], [-140, 30], [-175, -50], [-120, -150]],
     scale: 3, boxRows: [0.05, 0.17, 0.31, 0.44, 0.52, 0.61, 0.74, 0.83, 0.96],
-    features: [{ t: 'pad', f: 0.08 }, { t: 'ramp', f: 0.25, h: 3.4, len: 10 }, { t: 'pit', f: 0.25833, len: 9, kind: 'manif' }, { t: 'pad', f: 0.34 }, { t: 'pit', f: 0.40, len: 8, kind: 'works' }, { t: 'pad', f: 0.47 }, { t: 'crossing', f: 0.56, color: 0xf6f1e4, taxi: true }, { t: 'pad', f: 0.64 }, { t: 'chicane', f: 0.70, n: 3, kind: 'vauban' }, { t: 'ramp', f: 0.80, h: 2.8, len: 8 }, { t: 'pad', f: 0.86 }, { t: 'pit', f: 0.93, len: 8, kind: 'water' }] },
+    // flat along the quays, then the back half climbs 14 m to the Corniche, banked along the sea, in the mistral, and drops back to the port
+    roadHalfWidth: 14, profile: [[0, 0], [0.45, 0], [0.55, 6], [0.65, 14], [0.78, 14], [0.88, 6], [0.96, 0]], climates: ['noon', 'golden', 'overcast'], cyclists: { min: 14, max: 24 },
+    features: [{ t: 'pad', f: 0.08 }, { t: 'ramp', f: 0.25, h: 3.4, len: 10 }, { t: 'pit', f: 0.25833, len: 9, kind: 'manif' }, { t: 'pad', f: 0.34 }, { t: 'pit', f: 0.40, len: 8, kind: 'works' }, { t: 'pad', f: 0.47 }, { t: 'crossing', f: 0.56, color: 0xf6f1e4, taxi: true }, { t: 'pad', f: 0.64 }, { t: 'bank', f: 0.68, len: 70, a: 0.12 }, { t: 'wind', f: 0.73, len: 60, push: 3.5 }, { t: 'ramp', f: 0.80, h: 2.8, len: 8 }, { t: 'pad', f: 0.86 }, { t: 'pit', f: 0.93, len: 8, kind: 'water' }],
+    variants: [
+      { name: 'Jour de mistral', features: [{ t: 'chicane', f: 0.17, n: 3, kind: 'vauban' }, { t: 'obstacle', f: 0.44, lat: -6, kind: 'bins' }, { t: 'wind', f: 0.58, len: 50, push: 4 }, { t: 'obstacle', f: 0.90, lat: 7, kind: 'stall' }] },
+      { name: 'Fête du pastis', features: [{ t: 'obstacle', f: 0.12, lat: 8, kind: 'stall' }, { t: 'obstacle', f: 0.135, lat: 8, kind: 'stall' }, { t: 'obstacle', f: 0.15, lat: -8, kind: 'stall' }, { t: 'chicane', f: 0.17, n: 2, kind: 'vauban' }, { t: 'pit', f: 0.52, len: 7, kind: 'manif' }, { t: 'obstacle', f: 0.76, lat: -5, kind: 'van' }] },
+      { name: 'Jour de match', features: [{ t: 'pit', f: 0.18, len: 8, kind: 'manif' }, { t: 'obstacle', f: 0.30, lat: -5, kind: 'barrier' }, { t: 'obstacle', f: 0.315, lat: 5, kind: 'barrier' }, { t: 'obstacle', f: 0.44, lat: 6, kind: 'sedan' }, { t: 'chicane', f: 0.60, n: 2, kind: 'vauban' }, { t: 'obstacle', f: 0.90, lat: -7, kind: 'bins' }] },
+    ] },
 ];

@@ -15,7 +15,7 @@ const ids = ['victor', 'gege', 'maurice', 'capucine', 'hubert', 'lulu'];
 /** Six AI karts on circuit 0, the race running, each on its own spot of lap 0. */
 function race() {
   resetMachine('tracks'); G.trackIdx = 0;
-  startField(ids.map(id => ({ def: def(id), isAI: true })));
+  startField(ids.map(id => ({ def: def(id), isAI: true })), { seed: 1 });   // « Visite officielle »: its obstacles stand past sample 700
   transition('race'); G.countdown = 0; G.time = 10; drain();
   G.karts.forEach((k, i) => { k.idx = 100 + i * 50; k.lap = 0; k.maxLap = 0; k.progress = k.idx / G.N; k.rank = 5 - i; });
   return G.karts;
