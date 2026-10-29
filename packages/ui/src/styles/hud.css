@@ -224,6 +224,61 @@
   text-shadow:0 3px 0 #000;
 }
 
+/* Stage 4's two layers (DEC-053): the tinted edges and the statuses' badges. */
+.hit-vignette {
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  opacity:var(--hit,0);
+  background:radial-gradient(ellipse at center,transparent 52%,rgba(200,16,46,.6) 100%);
+}
+
+.hit-vignette[data-tone=lap] { background:radial-gradient(ellipse at center,transparent 55%,rgba(242,193,78,.55) 100%); }
+
+.hit-vignette[data-tone=boost] { background:radial-gradient(ellipse at center,transparent 60%,rgba(124,196,255,.45) 100%); }
+
+.status-badges {
+  list-style:none;
+  margin:4px 0 0;
+  padding:0;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
+.status-badge {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  width:max-content;
+  padding:3px 9px 3px 5px;
+  border-radius:999px;
+  background:var(--panel);
+  border:1px solid #ff5c6c;
+  font-size:12px;
+  line-height:1.2;
+  text-shadow:0 1px 0 #000;
+}
+
+.status-badge.tone-good { border-color:#9ad04f; }
+
+.status-badge .sb-ico {
+  font-size:16px;
+  line-height:1;
+}
+
+.status-badge .sb-label {
+  font-family:var(--font-display);
+  letter-spacing:.03em;
+}
+
+.status-badge .sb-time {
+  font-family:var(--font-mono);
+  color:var(--muted);
+  min-width:3.4em;
+  text-align:right;
+}
+
 @media (max-width:600px) {
   .minimap {
     width:100px;
@@ -244,5 +299,8 @@
   }
   .power {
     width:110px;
+  }
+  .status-badge .sb-label {
+    display:none;
   }
 }

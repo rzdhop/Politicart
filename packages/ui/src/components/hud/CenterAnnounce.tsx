@@ -1,7 +1,7 @@
-import type { ComponentPropsWithRef, Ref } from 'react';
+import { useImperativeHandle, useRef, type ComponentPropsWithRef, type Ref } from 'react';
 
 import { cx } from '../../cx';
-import { useTextReadout, type TextReadoutHandle } from './handles';
+import { replayClass, type TextReadoutHandle } from './handles';
 
 export interface CenterAnnounceProps extends Omit<ComponentPropsWithRef<'div'>, 'ref'> {
   /** Imperative handle for the countdown, which ticks on a timer. */
@@ -18,7 +18,8 @@ export interface CenterAnnounceProps extends Omit<ComponentPropsWithRef<'div'>, 
  * `PARTEZ !` and nothing else.
  *
  * Leave it empty rather than unmounting it when there is nothing to announce;
- * it occupies no layout space of its own.
+ * it occupies no layout space of its own. Each new text set through the
+ * handle pops in (the countdown's beats; `fx.css`, off under reduced motion).
  *
  * ```tsx
  * const announce = useRef<TextReadoutHandle>(null);
@@ -27,9 +28,21 @@ export interface CenterAnnounceProps extends Omit<ComponentPropsWithRef<'div'>, 
  * ```
  */
 export function CenterAnnounce({ className, children, ref, ...rest }: CenterAnnounceProps) {
-  const node = useTextReadout(ref);
+  const node = useRef<HTMLDivElement | null>(null);
+  useImperativeHandle(
+    ref,
+    () => ({
+      setText(text: string) {
+        const element = node.current;
+        if (element === null || element.textContent === text) return;
+        element.textContent = text;
+        if (text !== '') replayClass(element, 'beat');
+      },
+    }),
+    [],
+  );
   return (
-    <div ref={node as Ref<HTMLDivElement>} className={cx('center', className)} {...rest}>
+    <div ref={node} className={cx('center', className)} {...rest}>
       {children}
     </div>
   );

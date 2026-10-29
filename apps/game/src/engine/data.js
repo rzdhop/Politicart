@@ -102,6 +102,19 @@ export const ITEMS = {
   pantouflage: { name: 'Pantouflage',               icon: '🥿', hint: 'Reconversion express dans le privé : un bond en avant sur la piste.' },
   referendum:  { name: 'Référendum',                icon: '🗳', hint: 'Coup de poker : le oui booste tout le monde, le non sonne vos adversaires, l’abstention vous ralentit.' },
 };
+/** The statuses the HUD lists on the player's kart (payload.js statusOf, StatusBadges): glyph, name, and whether it helps. */
+export const STATUSES = {
+  slowed:   { icon: '🐌', name: 'Ralenti',        good: false },
+  confused: { icon: '🌀', name: 'Désorienté',     good: false },
+  capped:   { icon: '🇪🇺', name: 'Bridé à 110',    good: false },
+  rabot:    { icon: '🪚', name: 'Raboté',         good: false },
+  slip:     { icon: '💩', name: 'Ça glisse',      good: false },
+  relance:  { icon: '💶', name: 'Plan de relance', good: true },
+  shield:   { icon: '🤐', name: 'Langue de bois', good: true },
+  immunity: { icon: '🛡️', name: 'Immunité',       good: true },
+  phantom:  { icon: '🧾', name: 'Niche fiscale',  good: true },
+  fly:      { icon: '🚁', name: 'Hélico',         good: true },
+};
 export const ITEM_ODDS = [
   { turbo: 24, greve: 26, dossier: 8, sondage: 16, casserolade: 10, niche: 6, langue: 12, referendum: 4 },
   { turbo: 20, greve: 14, dossier: 16, sondage: 10, bravm: 10, casserolade: 8, niche: 8, langue: 8, factcheck: 6, referendum: 6 },

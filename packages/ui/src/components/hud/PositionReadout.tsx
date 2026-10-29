@@ -1,6 +1,7 @@
 import { useImperativeHandle, useRef, type ComponentPropsWithRef, type Ref } from 'react';
 
 import { cx } from '../../cx';
+import { replayClass } from './handles';
 
 export interface PositionReadoutHandle {
   /** Set the race position, bypassing React. 1-based, as displayed. */
@@ -28,7 +29,9 @@ function suffix(position: number): string {
  * the HUD's anchor -- it should stay the largest thing in any corner.
  *
  * Position changes on overtakes, which can happen several times a second, so
- * this exposes an imperative handle alongside its prop.
+ * this exposes an imperative handle alongside its prop. Each change through
+ * the handle pops the number (`gain` when a place is won, `loss` when one is
+ * lost; keyframes in `fx.css`, off under reduced motion).
  *
  * ```tsx
  * const pos = useRef<PositionReadoutHandle>(null);
@@ -40,6 +43,7 @@ function suffix(position: number): string {
 export function PositionReadout({ position, className, ref, ...rest }: PositionReadoutProps) {
   const value = useRef<HTMLSpanElement | null>(null);
   const ordinal = useRef<HTMLElement | null>(null);
+  const root = useRef<HTMLDivElement | null>(null);
 
   useImperativeHandle(
     ref,
@@ -47,7 +51,11 @@ export function PositionReadout({ position, className, ref, ...rest }: PositionR
       setPosition(next: number) {
         const text = String(next);
         if (value.current !== null && value.current.textContent !== text) {
+          // a place gained pops up, a place lost drops (fx.css)
+          const before = Number(value.current.textContent);
           value.current.textContent = text;
+          root.current?.classList.remove('gain', 'loss');
+          replayClass(root.current, next < before ? 'gain' : 'loss');
         }
         const mark = suffix(next);
         if (ordinal.current !== null && ordinal.current.textContent !== mark) {
@@ -59,7 +67,7 @@ export function PositionReadout({ position, className, ref, ...rest }: PositionR
   );
 
   return (
-    <div className={cx('pos', className)} {...rest}>
+    <div ref={root} className={cx('pos', className)} {...rest}>
       <span ref={value}>{position}</span>
       <small ref={ordinal}>{suffix(position)}</small>
     </div>

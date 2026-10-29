@@ -20,7 +20,7 @@ import './game.css';
 import { updateEngine } from './engine/audio.js';
 import { createBannerQueue } from './engine/banner.js';
 import { loadCustom } from './engine/custom.js';
-import { ITEMS } from './engine/data.js';
+import { ITEMS, STATUSES } from './engine/data.js';
 import { drain, resolveFor } from './engine/events.js';
 import { loadGarage } from './engine/garage.js';
 import { setInputSource } from './engine/input.js';
@@ -77,6 +77,20 @@ function updateHUD(p) {
   // the touch buttons carry the item and the power state themselves (the HUD's own slots make way for them)
   touchHud.item?.(shown.split('|')[0], !!p.item && !p.itemRolling);
   touchHud.power?.(1 - p.powerCd / p.powerCdMax, p.powerReady);
+  updateHudMotion(p);
+}
+// Stage 4's HUD motion (DEC-053): the item roulette and its flash, the tinted edges, the statuses' badges.
+let lastRolling = null, lastUsed = 0, lastStatusKey = '';
+function updateHudMotion(p) {
+  const h = hud;
+  if (p.itemRolling !== lastRolling) { lastRolling = p.itemRolling; h.item?.setRolling?.(p.itemRolling); }
+  if (p.itemUsed !== lastUsed) { if (p.itemUsed > lastUsed) h.item?.flashUsed?.(); lastUsed = p.itemUsed; }
+  if (h.vignette) {
+    const tone = p.hit > 0.02 ? 'hit' : p.lapFlash > 0.02 ? 'lap' : p.boost ? 'boost' : 'hit';
+    h.vignette.setTone(tone); h.vignette.setLevel(Math.max(p.hit, p.lapFlash, p.boost ? 0.22 : 0));
+  }
+  const key = p.status.map(s => s.id + ':' + (s.count ?? s.time.toFixed(1))).join('|');
+  if (key !== lastStatusKey && h.status) { lastStatusKey = key; h.status.setStatuses(p.status.map(s => ({ ...s, icon: STATUSES[s.id].icon, label: STATUSES[s.id].name, tone: STATUSES[s.id].good ? 'good' : 'bad' }))); }
 }
 // The two text channels the engine's event queue feeds. Toasts go through
 // the banner queue (engine/banner.js): one at a time, each held long enough
