@@ -21,7 +21,8 @@
 import * as THREE from 'three';
 
 import { bakeVertexColours, finishOf, mergeByMaterial } from '../geo.js';
-import { DS, yAt } from './context.js';
+import { G } from '../state.js';
+import { DS, STILL, yAt } from './context.js';
 
 /** The side of the square cells copies are grouped by, in world metres. */
 export const CELL = 200;
@@ -125,6 +126,22 @@ export function instanced(build, { world = false, tint = false, pad = 2, cell = 
   };
   BATCHES.push(batch);
   return batch;
+}
+
+/**
+ * A prop maker for instanced() out of a builder that adds to a scene, such
+ * as street.js tree(scene, 0, 0, 'plane'): `fn(group)` builds into a fresh
+ * group, and whatever it registered meanwhile (still() marks, G.crowd,
+ * G.animated, G.lamps entries) is taken back, since the prop itself is never
+ * shown -- only its instances are.
+ */
+export function fromBuilder(fn) {
+  return () => {
+    const g = new THREE.Group(), lists = [STILL, G.crowd, G.animated, G.lamps].filter(Array.isArray), lengths = lists.map(l => l.length);
+    fn(g);
+    lists.forEach((l, i) => { l.length = lengths[i]; });
+    return g;
+  };
 }
 
 /** Make every open batch's meshes into `scene` and close them (track.js, after the decor is spread); a generator that yields after each batch, for the pre-build's slices. */

@@ -3,8 +3,9 @@ import * as THREE from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { countMeshes, countTriangles } from '../geo.js';
-import { setDecorScale } from './context.js';
-import { CELL, flushInstanced, instanced, openBatches, resetInstanced } from './instanced.js';
+import { G } from '../state.js';
+import { setDecorScale, STILL, still } from './context.js';
+import { CELL, flushInstanced, fromBuilder, instanced, openBatches, resetInstanced } from './instanced.js';
 
 /** A three-part prop: two parts of one plain colour finish (merged into one), one of another. */
 function prop() {
@@ -85,5 +86,14 @@ describe('instanced decor batches', () => {
     expect(scene.children).toHaveLength(0);
     instanced(prop).add(0, 0); resetInstanced();
     expect(openBatches()).toBe(0);
+  });
+
+  it('makes a prop from a scene builder and takes back what the builder registered', () => {
+    G.crowd = []; G.animated = []; const marks = STILL.length;
+    const make = fromBuilder(scene => { const p = still(prop()); scene.add(p); G.crowd.push({ g: p }); G.animated.push(() => {}); });
+    const b = instanced(make); b.add(0, 0); b.add(30, 0);
+    const scene = new THREE.Scene(); flush(scene);
+    expect(b.meshes).toHaveLength(2);
+    expect([STILL.length, G.crowd.length, G.animated.length]).toEqual([marks, 0, 0]);
   });
 });
