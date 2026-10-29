@@ -6,14 +6,14 @@
 import * as THREE from 'three';
 
 import { box, plane } from '../primitives.js';
-import { CFG, G } from '../state.js';
+import { G } from '../state.js';
 import { TEX } from '../textures.js';
 import { pick, rand } from '../util.js';
 import { DS, clearAt, nOf } from './context.js';
 import { JACKETS, SKINS, bateau, bouquiniste, bridge, building, cafe, figure, flagPole, hedgeWall, kiosk, obelisk, palace, peniche, person, pigeon, sedan, statue, tree } from './street.js';
 
 export function buildBourbon(scene, world) {
-  const hw = CFG.roadHalfWidth;
+  const hw = G.hw;
   // the Seine, embankment, bridge, obelisk on the far bank
   const water = new THREE.Mesh(new THREE.PlaneGeometry(1600, 90), new THREE.MeshStandardMaterial({ map: TEX.water.clone(), roughness: 0.15, metalness: 0.3 })); water.material.map.needsUpdate = true; water.material.map.repeat.set(60, 4); water.rotation.x = -Math.PI / 2; water.position.set(0, 0.03, -170); scene.add(water);   // just above the ground plane, which would otherwise hide it
   G.animated.push(dt => { water.material.map.offset.x += dt * 0.02; });

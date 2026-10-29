@@ -6,14 +6,14 @@
 import * as THREE from 'three';
 
 import { box, plane } from '../primitives.js';
-import { CFG, G, isClear } from '../state.js';
+import { G, isClear } from '../state.js';
 import { TEX } from '../textures.js';
 import { pick, rand } from '../util.js';
 import { DS, clearAt, nOf } from './context.js';
 import { boat, bonneMere, building, cafe, crane, ferrisWheel, ferry, fishStall, fort, house, person, petanque, pigeon, seagull, tram, tree } from './street.js';
 
 export function buildMarseille(scene, world) {
-  const hw = CFG.roadHalfWidth, S = DS;
+  const hw = G.hw, S = DS;
   // the harbour south of the quai des Belges, the rive neuve across it, the mouth and its fort to the west
   const water = new THREE.Mesh(new THREE.PlaneGeometry(520, 34), new THREE.MeshStandardMaterial({ map: TEX.water.clone(), roughness: 0.12, metalness: 0.3 })); water.material.map.needsUpdate = true; water.material.map.repeat.set(40, 3); water.rotation.x = -Math.PI / 2; water.position.set(-50, 0.03, -212); scene.add(water);
   const mouth = water.clone(); mouth.geometry = new THREE.PlaneGeometry(120, 150); mouth.material = water.material; mouth.position.set(-370, 0.03, -200); scene.add(mouth);
@@ -46,6 +46,6 @@ export function buildMarseille(scene, world) {
   for (let a = 0.05; a < Math.PI + 0.3; a += 0.16) { const r = 207; const x = Math.cos(a) * r, z = Math.sin(a) * r; if (clearAt(x, z, 11)) house(scene, x, z, rand(12, 16), rand(9, 12), rand(8, 12), -a + Math.PI / 2); }
   for (let a = 0.1; a < Math.PI - 0.1; a += 0.18) { const r = 246; const x = Math.cos(a) * r, z = Math.sin(a) * r; if (clearAt(x, z, 18)) building(scene, x, z, rand(22, 30), rand(16, 22), rand(14, 22), -a + Math.PI / 2, pick([0xf2b88a, 0xf5d0b0, 0xf4a5a5, 0xffffff, 0xf7dcb4]), pick([0xa0523d, 0x59606b])); }
   for (let i = 0; i < 36; i++) { const x = rand(-270, 270), z = rand(-150, 270); if (clearAt(x, z, 9)) tree(scene, x, z, Math.random() < 0.5 ? 'palm' : 'round'); }
-  for (let i = 0; i < G.N; i += 72) { const s = G.samples[i]; const sg = (i / 72) % 2 ? 1 : -1; if (isClear(s.x + s.sx * sg * (hw + 9), s.z + s.sz * sg * (hw + 9), 7)) tree(world, s.x + s.sx * sg * (hw + 9), s.z + s.sz * sg * (hw + 9), 'palm'); }
+  for (let i = 0; i < G.N; i += 72) { const s = G.samples[i]; const sg = (i / 72) % 2 ? 1 : -1; if (isClear(s.x + s.sx * sg * (hw + 9), s.z + s.sz * sg * (hw + 9), 7)) tree(world, s.x + s.sx * sg * (hw + 9), s.z + s.sz * sg * (hw + 9), 'palm', s.y); }
 }
 

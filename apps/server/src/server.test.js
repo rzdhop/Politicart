@@ -68,7 +68,7 @@ describe('http', () => {
   it('answers the probe the client uses to show the Multijoueur button', async () => {
     const r = await fetch(url('/api/kr'));
     expect(r.status).toBe(200);
-    expect(await r.json()).toMatchObject({ kr: 'server', protocol: 1 });
+    expect(await r.json()).toMatchObject({ kr: 'server', protocol: 2 });
   });
 
   it('lets a page on another origin read the probe', async () => {

@@ -3,7 +3,8 @@
 //
 // The server steps the simulation and, twenty times a second, encodes it
 // with encodeSnapshot(): every kart's drawable and HUD state, the hazards and
-// projectiles by id, which ballot boxes are up, where the crossings are and
+// projectiles by id (the circuit's static obstacles included: a client drops
+// one the list stops naming, DEC-049), which ballot boxes are up, where the crossings are and
 // where the cyclists ride ([x, z, heading, y, fallen] each).
 // A client keeps the last few, blends the two around its render time with
 // lerpKart() and writes the result into its own kart objects with applyKart(),
@@ -46,8 +47,8 @@ export function encodeSnapshot(G, tick) {
   return {
     tk: tick, t: G.time, st: G.state, cd: G.countdown, ra: finite(G.resultsAt), lp: G.laps,
     k: G.karts.map(encodeKart),
-    h: G.hazards.map(h => ({ id: h.id, ty: h.type, x: h.x, z: h.z })),
-    p: G.projectiles.map(p => ({ id: p.id, ty: p.type, x: p.x, y: p.y, z: p.z })),
+    h: G.hazards.map(h => ({ id: h.id, ty: h.type, x: h.x, y: round2(h.y || 0), z: h.z })),
+    p: G.projectiles.map(p => ({ id: p.id, ty: p.type, x: p.x, y: p.y + (p.gy || 0), z: p.z })),
     b: G.itemBoxes.map(b => (b.active ? 1 : 0)).join(''),
     c: G.crossings.map(c => c.t),
     cy: (G.cyclists || []).map(c => [round2(c.x), round2(c.z), round2(c.h), round2(c.y), c.fallen > 0 ? 1 : 0]),

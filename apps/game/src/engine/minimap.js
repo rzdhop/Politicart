@@ -33,7 +33,14 @@ export function buildMinimapBase() {
   if (typeof document === 'undefined') { base = null; return; }   // headless: nothing to draw on
   const cv = document.createElement('canvas'); cv.width = cv.height = W; const c = cv.getContext('2d');
   c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath(); G.samples.forEach((s, i) => { const x = s.x * scale + offX, y = W - (s.z * scale + offZ); i ? c.lineTo(x, y) : c.moveTo(x, y); }); c.closePath();
-  c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 10; c.stroke(); c.strokeStyle = '#3a3b40'; c.lineWidth = 6; c.stroke();
+  c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 10; c.stroke();
+  // the road, shaded by its height (DEC-050): the lowest stretch stays the dark grey it always was, the highest reads pale
+  const ys = G.samples.map(s => s.y || 0), lo = Math.min(...ys), hi = Math.max(...ys), span = hi - lo;
+  c.lineWidth = 6; c.lineCap = 'butt';
+  for (let i = 0; i < G.N; i += 4) {
+    const a = G.samples[i], b = G.samples[(i + 4) % G.N]; const l = span > 0.5 ? 24 + 44 * ((a.y || 0) - lo) / span : 24;
+    c.strokeStyle = `hsl(228,5%,${l.toFixed(0)}%)`; c.beginPath(); c.moveTo(a.x * scale + offX, W - (a.z * scale + offZ)); c.lineTo(b.x * scale + offX, W - (b.z * scale + offZ)); c.stroke();
+  }
   const s0 = G.samples[0]; c.fillStyle = '#f2c14e'; c.beginPath(); c.arc(s0.x * scale + offX, W - (s0.z * scale + offZ), 6, 0, 7); c.fill();
   base = cv;
 }

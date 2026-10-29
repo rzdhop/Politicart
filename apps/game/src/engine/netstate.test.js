@@ -9,7 +9,7 @@ import { G } from './state.js';
 const blank = () => ({ pos: { x: 0, z: 0 }, drift: { active: false, dir: 0, charge: 0 } });
 
 describe('snapshots of a live race', () => {
-  beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; G.trackIdx = 1; startRace(); for (let n = 0; n < 8 * 60; n++) simStep(1 / 60); });
+  beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; G.trackIdx = 1; startRace({ seed: 8 }); for (let n = 0; n < 8 * 60; n++) simStep(1 / 60); });
 
   it('survive JSON and rebuild every kart field the client draws or shows', () => {
     const snap = JSON.parse(JSON.stringify(encodeSnapshot(G, 480)));
@@ -38,7 +38,10 @@ describe('snapshots of a live race', () => {
     applyKart(copy, snap.k[1]); expect(copy.god).toBe(false);
   });
 
-  it('name hazards and projectiles by id', () => {
+  it('name hazards and projectiles by id, the circuit\'s static obstacles first (DEC-049), each with its height', () => {
+    const statics = encodeSnapshot(G, 0).h;
+    expect(statics.length).toBeGreaterThan(0);
+    expect(statics.every(h => h.ty === 'obstacle')).toBe(true);
     const k = G.karts[0];
     k.item = 'greve'; k.itemRolling = 0; useItem(k);
     k.item = 'motion'; useItem(k);
@@ -46,12 +49,17 @@ describe('snapshots of a live race', () => {
     expect(snap.h.at(-1)).toMatchObject({ ty: 'barricade' });
     expect(snap.p.at(-1)).toMatchObject({ ty: 'motion' });
     expect(snap.h.at(-1).id).not.toBe(snap.p.at(-1).id);
+    const ids = snap.h.map(h => h.id);
+    expect(ids.every(Number.isInteger)).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const h of snap.h) expect(Number.isFinite(h.y)).toBe(true);
+    expect(JSON.parse(JSON.stringify(snap)).h).toEqual(snap.h);
   });
 });
 
 describe('mesh builders', () => {
   it('build every hazard and projectile type without placing it', () => {
-    for (const t of ['barricade', 'fakebox', 'lisier', 'lacrymo', 'rondpoint', 'chatons']) {
+    for (const t of ['barricade', 'fakebox', 'lisier', 'lacrymo', 'rondpoint', 'chatons', 'obstacle']) {
       const h = buildHazard(t);
       expect(h.g.children.length).toBeGreaterThan(0);
       expect(h.r).toBeGreaterThan(0);

@@ -13,22 +13,24 @@
 import { Worker } from 'node:worker_threads';
 
 import { CHARACTERS } from '../../game/src/engine/data.js';
+import { newSeed } from '../../game/src/engine/seed.js';
 import { castOf } from './roster.js';
 
 const WORKER = new URL('./race-worker.js', import.meta.url);
 
-export function runRace(room, roster, io, { fast = false, hold } = {}) {
+export function runRace(room, roster, io, { fast = false, hold, seed = newSeed() } = {}) {
   const slotOf = new Map();
   roster.forEach((s, slot) => { if (s.playerId) slotOf.set(s.playerId, slot); });
   // style: a human's Garage edits (cleaned by the lobby), so every client draws their kart as they styled it.
   // god: the admin's creative-mode kart (DEC-030), which the engine makes untouchable and the scoring ignores.
   const grid = roster.map(({ charId, team, isAI, name, style, god }) => ({ charId, team, isAI, name, ...(style ? { style } : {}), ...(god ? { god: true } : {}) }));
 
-  for (const [playerId, slot] of slotOf) io.send(playerId, { t: 'race', trackIdx: room.trackIdx, roster: grid, you: slot });
+  // The seed (DEC-049) goes to the worker and to every player, so all of them build the same layout.
+  for (const [playerId, slot] of slotOf) io.send(playerId, { t: 'race', trackIdx: room.trackIdx, roster: grid, you: slot, seed });
 
   // The worker has its own copy of CHARACTERS, still at the defaults: hand it
   // the admin's names, which the powers quote in their messages.
-  const worker = new Worker(WORKER, { workerData: { trackIdx: room.trackIdx, roster: grid, cast: castOf(CHARACTERS), fast, hold } });
+  const worker = new Worker(WORKER, { workerData: { trackIdx: room.trackIdx, roster: grid, cast: castOf(CHARACTERS), fast, hold, seed } });
   let over = false;
   let seq = 0; const pending = new Map();         // god command id -> resolve
   worker.on('message', m => {
@@ -61,7 +63,7 @@ export function runRace(room, roster, io, { fast = false, hold } = {}) {
       for (const [other] of slotOf) io.send(other, { t: 'kartJoin', slot, entry });
       slotOf.set(playerId, slot);
       worker.postMessage({ t: 'join', slot, entry });
-      io.send(playerId, { t: 'race', trackIdx: room.trackIdx, roster: grid, you: slot });
+      io.send(playerId, { t: 'race', trackIdx: room.trackIdx, roster: grid, you: slot, seed });
       return true;
     },
     /** Run god command `cmd` in the race, as `playerId`'s kart when they drive one. Resolves to { ok, text }. */
