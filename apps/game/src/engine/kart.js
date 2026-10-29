@@ -70,7 +70,7 @@ import { LOOK3D } from './looks.js';
 import { buildPilot } from './pilot.js';
 import { box, canvasTexture, cone, cyl, imgTex, mat, sph, tag, torus } from './primitives.js';
 import { stageMat } from './stagelook.js';
-import { getPoly, SHADOWS, seg } from './state.js';
+import { disposable, getPoly, SHADOWS, seg } from './state.js';
 
 // ---------- Driver (procedural politician, more detail in 'high') ----------
 function buildDriver(def) {
@@ -394,27 +394,34 @@ const heatMat = () => new THREE.MeshBasicMaterial({ color: 0xff8a1a });   // one
 const UNDERGLOW = { blue: 0x3a7bff, red: 0xff3a3a, gold: 0xffc83a, rainbow: 0xc03aff };   // rainbow's colour is the first frame's; anim cycles it
 const FLAG = { tricolore: [0x1f3a93, 0xf6f1e4, 0xc8102e], europe: [0x003399, 0x003399, 0x003399], pirate: [0x111111, 0x111111, 0x111111] };
 
+/** The race's skin, plate and sticker canvases, cached by what they show: a race rebuilds the same six karts over and over. Never cleared. */
+const raceTextures = new Map();
+function raceTexture(key, make) { let t = raceTextures.get(key); if (!t) { t = make(); raceTextures.set(key, t); } return t; }
+/** A race kart's own basic material: per kart as it always was, freed with the race's scene (state.js disposable). */
+const raceBasic = opts => disposable(new THREE.MeshBasicMaterial(opts));
+
 /**
  * The race palette: the materials the race kart has always been drawn
  * with. `m(role, colour, rough)` is primitives.mat(colour, rough) whatever
- * the role; the basic materials are made per call, as they always were, and
- * the brake lights share BRAKE_MAT.
+ * the role; the basic materials are made per call, as they always were (and
+ * freed with the race's scene), the brake lights share BRAKE_MAT, and the
+ * canvases a kart carries (skin, plate, stickers) are cached by their key.
  */
 function racePalette(style) {
   const c = colour(style.body), a = colour(style.accent);
-  const body = style.skin === 'flat' ? mat(c) : new THREE.MeshStandardMaterial({ map: skinTexture(style.skin, style.body, style.accent), roughness: 0.5, metalness: 0.05 });
+  const body = style.skin === 'flat' ? mat(c) : disposable(new THREE.MeshStandardMaterial({ map: raceTexture('skin:' + style.skin + ':' + style.body + ':' + style.accent, () => skinTexture(style.skin, style.body, style.accent)), roughness: 0.5, metalness: 0.05 }));
   return {
     stage: false, body, accent: mat(a), lid: style.skin === 'flat' ? mat(0xd9b36b) : body,
     m: (role, col, rough) => mat(col, rough),
-    lamp: col => new THREE.MeshBasicMaterial({ color: col }),
+    lamp: col => raceBasic({ color: col }),
     brake: () => BRAKE_MAT,
-    heat: heatMat,
-    plate: (def, number) => new THREE.MeshBasicMaterial({ map: plateTexture(def, number) }),
-    sticker: (kind, draw) => new THREE.MeshBasicMaterial({ map: canvasTexture(128, 128, draw), transparent: true }),
-    livery: url => new THREE.MeshBasicMaterial({ map: imgTex(url), side: THREE.DoubleSide }),
-    underglow: kind => new THREE.MeshBasicMaterial({ color: UNDERGLOW[kind], transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
-    shadow: () => new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: SHADOWS() ? 0.12 : 0.32 }),
-    fx: (col, extra) => new THREE.MeshBasicMaterial({ color: col, ...extra }),
+    heat: () => disposable(heatMat()),
+    plate: (def, number) => raceBasic({ map: raceTexture('plate:' + def.name.split(' ')[0] + ':' + number, () => plateTexture(def, number)) }),
+    sticker: (kind, draw) => raceBasic({ map: raceTexture('sticker:' + kind, () => canvasTexture(128, 128, draw)), transparent: true }),
+    livery: url => raceBasic({ map: imgTex(url), side: THREE.DoubleSide }),
+    underglow: kind => raceBasic({ color: UNDERGLOW[kind], transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
+    shadow: () => raceBasic({ color: 0x000000, transparent: true, opacity: SHADOWS() ? 0.12 : 0.32 }),
+    fx: (col, extra) => raceBasic({ color: col, ...extra }),
   };
 }
 
