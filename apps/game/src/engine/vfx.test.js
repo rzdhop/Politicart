@@ -53,7 +53,7 @@ describe('headless (the game server)', () => {
 
   it('races 20 s of items and powers without adding an effect object to the scene', () => {
     race();
-    const count = () => { let n = 0; G.scene.traverse(o => { if (o.isInstancedMesh || o.name.startsWith('vfx')) n++; }); return n; };
+    const count = () => { let n = 0; G.scene.traverse(o => { if ((o.isInstancedMesh && !o.name.startsWith('instanced:')) || o.name.startsWith('vfx')) n++; }); return n; };   // the decor's own batches (decor/instanced.js) are not effects
     for (let n = 0; n < 20 * 60; n++) { if (n % 120 === 0) for (const k of G.karts) { k.item = 'casserolade'; k.itemRolling = 0; useItem(k); k.powerCd = 0; applyPower(k, k.def.power.id); } simStep(STEP); }
     expect(count()).toBe(0);
   });
