@@ -28,6 +28,7 @@ export function encodeKart(k) {
     it: k.item, ir: k.itemRolling > 0, pc: k.powerCd,
     lap: k.lap, idx: k.idx, pr: k.progress, rk: k.rank, fin: k.finished, ft: k.finishTime, bl: finite(k.bestLap),
     gd: k.god === true,
+    ...encodeStatus(k),
   };
 }
 
@@ -40,6 +41,44 @@ export function applyKart(k, s) {
   k.item = s.it; k.itemRolling = s.ir ? 1 : 0; k.powerCd = s.pc;
   k.lap = s.lap; k.idx = s.idx; k.progress = s.pr; k.rank = s.rk; k.finished = s.fin; k.finishTime = s.ft; k.bestLap = unfinite(s.bl);
   k.god = s.gd === true;
+  applyKartStatus(k, s);
+}
+
+// ---------- Statuses and effects (DEC-053) ----------
+// The timers every screen draws an aura for (vfx.js) and the HUD lists
+// (StatusBadges): slowed, confused, capped, rabot, slip, and the relance's
+// boosts left. Each travels only while it runs, to 1/100 s.
+const STATUS_KEYS = Object.freeze([['sl', 'slowed'], ['co', 'confused'], ['ca', 'capped'], ['ra', 'rabot'], ['sp', 'slip'], ['rl', 'relance']]);
+/** The running statuses of kart k, by their short keys (absent when off). */
+export function encodeStatus(k) {
+  const out = {};
+  for (const [key, field] of STATUS_KEYS) { const v = k[field] || 0; if (v > 0) out[key] = round2(v); }
+  return out;
+}
+/** Write the travelled statuses into a client-side kart: a key that did not travel is a status that is off. */
+export function applyKartStatus(k, s) {
+  for (const [key, field] of STATUS_KEYS) k[field] = s[key] ?? 0;
+}
+
+/**
+ * One effect event (vfx.js vfxEvent) as it travels beside the sounds: an
+ * array `[ty, x, y, z, k, c, d, r]`, the kart slot -1 and the colour -1 when
+ * absent, trailing absences cut.
+ */
+export function encodeVfx(e) {
+  const a = [e.ty, e.x, e.y, e.z, e.k ?? -1, e.c ?? -1, e.d ?? null, e.r ?? null];
+  while (a.length > 4 && (a[a.length - 1] === null || (a.length <= 6 && a[a.length - 1] === -1))) a.pop();
+  return a;
+}
+/** The event back from its travelled array; null for anything malformed. */
+export function decodeVfx(a) {
+  if (!Array.isArray(a) || typeof a[0] !== 'string' || !Number.isFinite(a[1]) || !Number.isFinite(a[3])) return null;
+  const e = { ty: a[0], x: a[1], y: Number.isFinite(a[2]) ? a[2] : 0, z: a[3] };
+  if (Number.isInteger(a[4]) && a[4] >= 0) e.k = a[4];
+  if (Number.isFinite(a[5]) && a[5] >= 0) e.c = a[5];
+  if (Number.isFinite(a[6])) e.d = a[6];
+  if (Number.isFinite(a[7])) e.r = a[7];
+  return e;
 }
 
 /** The whole race at one server tick. */

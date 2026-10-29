@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { buildHazard, buildProjectileMesh, useItem } from './items.js';
 import { resetMachine } from './machine.js';
-import { applyKart, bracket, encodeKart, encodeSnapshot, lerpKart } from './netstate.js';
+import { applyKart, applyKartStatus, bracket, decodeVfx, encodeKart, encodeSnapshot, encodeStatus, encodeVfx, lerpKart } from './netstate.js';
 import { simStep, startRace } from './race.js';
 import { G } from './state.js';
 
@@ -92,5 +92,47 @@ describe('interpolation', () => {
     expect(bracket(buf, 1)).toMatchObject({ a: buf[0], b: buf[0], f: 0 });
     expect(bracket(buf, 20)).toMatchObject({ a: buf[2], b: buf[2], f: 0 });
     expect(bracket([], 1)).toBeNull();
+  });
+});
+
+// The statuses every screen draws an aura for (DEC-053): they travel with the kart, only while they run.
+describe('statuses and effects on the wire (DEC-053)', () => {
+  const kart = over => ({ ...blank(), heading: 0, speed: 0, steer: 0, vy: 0, y: 0, air: false, trick: false, fly: 0, invincible: 0, stun: 0, phantom: 0, boost: 0, item: null, itemRolling: 0, powerCd: 0, lap: 0, idx: 0, progress: 0, rank: 0, finished: false, finishTime: 0, bestLap: Infinity, ...over });
+
+  it('carry slowed, confused, capped, rabot, slip and the relance under their short keys, and nothing when off', () => {
+    expect(encodeStatus(kart({}))).toEqual({});
+    const on = kart({ slowed: 1.2345, confused: 0.5, capped: 3, rabot: 4, slip: 0.4, relance: 2 });
+    expect(encodeStatus(on)).toEqual({ sl: 1.23, co: 0.5, ca: 3, ra: 4, sp: 0.4, rl: 2 });
+    const snap = JSON.parse(JSON.stringify(encodeKart(on)));
+    expect(snap).toMatchObject({ sl: 1.23, co: 0.5, ca: 3, ra: 4, sp: 0.4, rl: 2 });
+    const copy = blank(); applyKart(copy, snap);
+    expect(copy).toMatchObject({ slowed: 1.23, confused: 0.5, capped: 3, rabot: 4, slip: 0.4, relance: 2 });
+  });
+
+  it('turn a status off on the client when it stops travelling', () => {
+    const copy = { ...blank(), slowed: 2, capped: 1, relance: 3 };
+    applyKartStatus(copy, {});
+    expect(copy).toMatchObject({ slowed: 0, confused: 0, capped: 0, rabot: 0, slip: 0, relance: 0 });
+  });
+
+  it('come from the newer snapshot when blended', () => {
+    const a = encodeKart(kart({ slowed: 2 })), b = encodeKart(kart({ capped: 1 }));
+    const mid = lerpKart(a, b, 0.5);
+    expect(mid.ca).toBe(1); expect(mid.sl).toBeUndefined();
+  });
+
+  it('encode an effect event as a short array that decodes back', () => {
+    const e = { ty: 'impact', x: 1.5, y: 0.2, z: -3, k: 2, c: 0xc8102e };
+    expect(encodeVfx(e)).toEqual(['impact', 1.5, 0.2, -3, 2, 0xc8102e]);
+    expect(decodeVfx(JSON.parse(JSON.stringify(encodeVfx(e))))).toEqual(e);
+    expect(decodeVfx(encodeVfx({ ty: 'swath', x: 0, y: 0, z: 0, k: 0, d: 1.5, r: 60 }))).toEqual({ ty: 'swath', x: 0, y: 0, z: 0, k: 0, d: 1.5, r: 60 });
+  });
+
+  it('keep a live race\'s snapshot small: the statuses add bytes only to the karts that carry one', () => {
+    resetMachine('tracks'); G.trackIdx = 0; startRace({ seed: 3 }); for (let n = 0; n < 60; n++) simStep(1 / 60);
+    for (const k of G.karts) { k.slowed = 0; k.confused = 0; k.capped = 0; k.rabot = 0; k.slip = 0; k.relance = 0; }
+    const plain = JSON.stringify(encodeSnapshot(G, 60)).length;
+    G.karts[1].slowed = 2.5;
+    expect(JSON.stringify(encodeSnapshot(G, 60)).length - plain).toBeLessThanOrEqual(10);
   });
 });

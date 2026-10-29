@@ -23,6 +23,8 @@ import { onKartJoin, onNet, onRace, onResults, onSnap, sendInput } from './net.j
 import { updateKartVisual } from './physics.js';
 import { animateCrowd, joinField, placeCrossing, startField, viewStep } from './race.js';
 import { G } from './state.js';
+import { decodeVfx } from './netstate.js';
+import { receiveVfx, replayVfx } from './vfx.js';
 
 const DELAY_TICKS = 6;           // render 100 ms (six 60 Hz ticks) behind the newest snapshot
 const BUFFER = 40;               // two seconds of snapshots
@@ -95,6 +97,7 @@ export function receiveSnap(m) {
   newest = { tk: s.tk, at: now() };
   for (const [type, text] of m.ev ?? []) emit(type, text);
   for (const name of m.fx ?? []) sfx(name);
+  receiveVfx((m.vfx ?? []).map(decodeVfx).filter(Boolean), s.tk);   // the effects (DEC-053): played when the render clock reaches this tick
 }
 
 /**
@@ -158,6 +161,7 @@ export function netStep(dt) {
   if (drawn) sendControls(); else drawn = true;
   const renderTick = newest.tk + (now() - newest.at) * 60 / 1000 - DELAY_TICKS;
   const br = bracket(buffer, renderTick);
+  replayVfx(renderTick);
   if (br) {
     const { a, b, f } = br;
     G.time = a.t + (b.t - a.t) * f; G.countdown = b.cd; G.resultsAt = b.ra ?? Infinity; if (b.lp) G.laps = b.lp;

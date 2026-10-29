@@ -12,6 +12,7 @@ import { encodeSnapshot } from './netstate.js';
 import { abortNetRace, beginNetRace, finishNetRace, isNetRace, netStep, onNetResults, pressItem, receiveKartJoin, receiveSnap } from './netrace.js';
 import { simStep, startField } from './race.js';
 import { G } from './state.js';
+import { setVfxHeadless, vfxRoot } from './vfx.js';
 import { MIN_SPEED } from './trail.js';
 
 const ROSTER = ['victor', 'gege', 'maurice', 'capucine', 'hubert', 'lulu'].map((charId, i) => ({ charId, isAI: i < 4, team: i < 4 ? null : (i === 4 ? 'bleu' : 'rouge'), name: 'P' + i }));
@@ -188,5 +189,34 @@ describe('a networked race on the client', () => {
     abortNetRace();
     expect(getState()).toBe('lobby');
     expect(isNetRace()).toBe(false);
+  });
+});
+
+describe('effects off the wire (DEC-053)', () => {
+  afterEach(() => setVfxHeadless(true));
+
+  it('queues the effects a snapshot brings and plays them at the render tick', () => {
+    setVfxHeadless(false);
+    clientInLobby();
+    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5, seed: SEED });
+    const live = () => vfxRoot().children.filter(m => m.visible && m.count > 0).length;
+    const last = SNAPS.at(-1);
+    for (const s of SNAPS.slice(0, -1)) receiveSnap({ s, ev: [], fx: [] });
+    receiveSnap({ s: last, ev: [], fx: [], vfx: [['impact', G.karts[0].pos.x, 0, G.karts[0].pos.z], ['shockwave', 0, 0, 0, 5, -1, null, 22], 'junk'] });
+    for (const k of G.karts) { k.stun = 0; }
+    netStep(1 / 60);                                   // the render clock is six ticks behind the snapshot that brought them
+    const before = live();
+    vi.spyOn(performance, 'now').mockReturnValue(performance.now() + 200);   // 200 ms later: past it
+    netStep(1 / 60);
+    vi.restoreAllMocks();
+    expect(live()).toBeGreaterThan(before);
+  });
+
+  it('plays nothing on a headless client, and an older server\'s snapshot without effects is fine', () => {
+    clientInLobby();
+    beginNetRace({ trackIdx: 0, roster: ROSTER, you: 5, seed: SEED });
+    for (const s of SNAPS) receiveSnap({ s, ev: [], fx: [] });
+    expect(() => netStep(1 / 60)).not.toThrow();
+    expect(vfxRoot()).toBeNull();
   });
 });

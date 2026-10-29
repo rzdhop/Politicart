@@ -38,7 +38,7 @@ export function runRace(room, roster, io, { fast = false, hold, seed = newSeed()
     if (m.t === 'snap') {
       for (const [playerId, slot] of slotOf) {
         const mine = m.per[slot] ?? { ev: [], fx: [] };
-        io.send(playerId, { t: 'snap', s: m.s, ev: mine.ev, fx: [...m.fx, ...mine.fx] });
+        io.send(playerId, { t: 'snap', s: m.s, ev: mine.ev, fx: [...m.fx, ...mine.fx], vfx: m.vfx ?? [] });
       }
     } else if (m.t === 'done') {
       over = true; worker.terminate();
