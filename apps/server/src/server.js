@@ -64,7 +64,8 @@ const MIME = {
   '.woff2': 'font/woff2', '.map': 'application/json', '.txt': 'text/plain; charset=utf-8', '.webp': 'image/webp',
 };
 
-export const PROTOCOL = 1;
+// 2 since DEC-049: the race start message carries the seed, and a client refuses one without it.
+export const PROTOCOL = 2;
 
 // ---- the built game's files (DEC-055)
 /** The text assets the build precompresses (apps/game/scripts/compress.mjs): served from their `.br` or `.gz` sibling when the client takes it. */

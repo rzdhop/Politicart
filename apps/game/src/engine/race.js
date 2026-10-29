@@ -17,6 +17,7 @@
 import * as THREE from 'three';
 
 import { sfx } from './audio.js';
+import { applyClimate, headlightCone } from './climate.js';
 import { CHARACTERS, TRACKS } from './data.js';
 import { updateCyclists } from './cyclists.js';
 import { hintFor, say, setHint } from './events.js';
@@ -29,10 +30,11 @@ import { transition } from './machine.js';
 import { buildMinimapBase, drawMinimap } from './minimap.js';
 import { framePayload } from './payload.js';
 import { kartCollisions, updateKart, updateRanks } from './physics.js';
-import { applyPrebuilt, takePrebuilt } from './prebuild.js';
+import { applyPrebuilt, prebuiltSeed, takePrebuilt } from './prebuild.js';
 import { setCast } from './primitives.js';
 import { camera, getRenderer } from './render.js';
-import { CFG, G, SHADOWS } from './state.js';
+import { newSeed } from './seed.js';
+import { CFG, G } from './state.js';
 import { buildTrack } from './track.js';
 import { buildTrail } from './trail.js';
 import { clamp, lerp, rand } from './util.js';
@@ -45,6 +47,12 @@ function makeKart(def, isAI, style) {
   // G.scene exists by now: startField builds it before the grid, joinField runs mid-race.
   const trail = buildTrail(style.trail);
   if (trail) { mesh.userData.trail = trail; G.scene.add(trail.group); }
+  // At night (climate.js) the kart's headlights throw a cone on the road: an unlit quad beside the kart, like the
+  // trail, that follows the kart's mesh each sim step. Never a part of the kart (its hashes are pinned, kart.test.js).
+  if (G.climate?.lampsOn) {
+    const cone = headlightCone(); mesh.userData.headlights = cone; G.scene.add(cone);
+    G.animated.push(() => { cone.position.copy(mesh.position); cone.rotation.y = mesh.rotation.y; cone.visible = mesh.visible; });
+  }
   return {
     def, style, stats: def.stats, isAI, mesh, pos: { x: 0, z: 0 }, heading: 0, speed: 0,
     drift: { active: false, dir: 0, charge: 0 }, boost: 0, boostPower: 1.4, stun: 0, invincible: 0, slowed: 0, fly: 0, relance: 0, relanceTimer: 0,
@@ -59,11 +67,13 @@ function makeKart(def, isAI, style) {
 /**
  * Build the scene for the chosen circuit, place the field and start the
  * countdown. Ends with the transition into 'countdown', which is what tells
- * the UI to show the HUD and redraw the minimap base.
+ * the UI to show the HUD and redraw the minimap base. Solo play draws the
+ * race's seed here (DEC-049), or takes the one the pre-build drew for this
+ * circuit (prebuild.js, DEC-055); tests pass one.
  */
-export function startRace() {
+export function startRace({ seed = prebuiltSeed(G.trackIdx) ?? newSeed() } = {}) {
   const others = CHARACTERS.filter((c, i) => i !== G.charIdx).sort(() => Math.random() - 0.5).slice(0, CFG.numAI);
-  startField([...others.map(def => ({ def, isAI: true })), { def: CHARACTERS[G.charIdx], isAI: false, local: true, style: myStyle(CHARACTERS[G.charIdx]) }]);
+  startField([...others.map(def => ({ def, isAI: true })), { def: CHARACTERS[G.charIdx], isAI: false, local: true, style: myStyle(CHARACTERS[G.charIdx]) }], { seed });
 }
 
 /**
@@ -73,34 +83,34 @@ export function startRace() {
  * kart (DEC-030: neutral, untouchable, no cooldown); the `local` slot becomes G.player,
  * the kart this screen follows. Solo play passes five AI and the player
  * last; the game server and its clients pass the lobby's roster (DEC-014).
- * `seed` is the race's layout seed (0 until the seeded layouts land): part
- * of the key a circuit built ahead must match (prebuild.js, DEC-055).
+ * `seed` is the race's (DEC-049): it picks the layout and every draw that
+ * shapes the race, so every side passes the same one; 0 by default. It is
+ * also part of the key a circuit built ahead must match (prebuild.js,
+ * DEC-055): solo play takes the pre-build's own seed (startRace).
  */
 export function startField(slots, { seed = 0 } = {}) {
   if (G.scene) disposeScene(G.scene);
   const track = TRACKS[G.trackIdx]; G.track = track;
   // DEC-055: the circuit built ahead while the player chose (prebuild.js), when it is this one at this detail and seed; else built below as before.
   const pre = takePrebuilt({ trackIdx: G.trackIdx, seed });
-  const scene = pre ? pre.scene : new THREE.Scene(); scene.background = new THREE.Color(track.fog); scene.fog = new THREE.Fog(track.fog, 220, 700);
-  scene.add(new THREE.HemisphereLight(0xdfefff, 0x55663a, 0.55));
-  scene.add(new THREE.AmbientLight(0xffffff, 0.15));
-  const sun = new THREE.DirectionalLight(0xfff4d6, 1.15); sun.position.set(120, 200, 80); scene.add(sun); scene.add(sun.target);
-  sun.castShadow = SHADOWS(); sun.shadow.mapSize.set(2048, 2048); const sc = sun.shadow.camera; sc.left = -110; sc.right = 110; sc.top = 110; sc.bottom = -110; sc.near = 10; sc.far = 500; sun.shadow.bias = -0.0006;
-  G.sun = sun; G.scene = scene; G.animated = []; G.hazards = []; G.projectiles = []; G.crowd = [];
-  if (pre) applyPrebuilt(pre); else { setCast(true); buildTrack(scene, track); }
+  const scene = pre ? pre.scene : new THREE.Scene();
+  G.scene = scene; G.animated = []; G.hazards = []; G.projectiles = []; G.crowd = []; G.lamps = []; G.disposables = [];
+  G.entitySeq = 0;   // before the track: its static obstacles take the first ids, the same on every side
+  if (pre) applyPrebuilt(pre); else { setCast(true); buildTrack(scene, track, { seed }); }
+  // the lights, the sky and the air, after the track so the climate finds the lamps the decor registered (DEC-051)
+  applyClimate(scene, track, G.layout?.climate ?? track.climates?.[0] ?? 'noon');
   buildMinimapBase();
 
   G.karts = slots.map(sl => { const k = makeKart(sl.def, sl.isAI, sl.style); k.team = sl.team ?? null; k.god = sl.god === true; return k; });
   const local = slots.findIndex(sl => sl.local);
   G.player = G.karts[local] ?? G.karts.find(k => !k.isAI) ?? G.karts[G.karts.length - 1];
-  G.entitySeq = 0;
   G.karts.forEach((k, i) => {
     const s = G.samples[6 + i * 4]; const lane = (i % 2 === 0 ? 1 : -1) * 4.5;
-    k.pos.x = s.x + s.sx * lane; k.pos.z = s.z + s.sz * lane; k.heading = Math.atan2(s.tx, s.tz); k.idx = 6 + i * 4;
-    k.mesh.position.set(k.pos.x, 0, k.pos.z); k.mesh.rotation.y = k.heading; scene.add(k.mesh);
+    k.pos.x = s.x + s.sx * lane; k.pos.z = s.z + s.sz * lane; k.heading = Math.atan2(s.tx, s.tz); k.idx = 6 + i * 4; k.y = s.y;
+    k.mesh.position.set(k.pos.x, k.y, k.pos.z); k.mesh.rotation.y = k.heading; scene.add(k.mesh);
   });
   G.time = 0; G.countdown = 3.6; G.resultsAt = Infinity; G.wrongTimer = 0; G.laps = CFG.laps;
-  const s = G.samples[0]; camera.position.set(s.x - s.tx * 14, 7, s.z - s.tz * 14); camera.fov = 65;
+  const s = G.samples[0]; camera.position.set(s.x - s.tx * 14, s.y + 7, s.z - s.tz * 14); camera.fov = 65;
   setHint('Ramassez une urne dorée pour obtenir un objet.');
   // The god's hint only: a banner here would reach the god twice in a team race, once from this client and once from the server's copy of the engine.
   if (G.player.god) hintFor(G.player, 'Mode dieu : pouvoir sans recharge, objets à volonté, intouchable. Vous ne marquez pas de points.');
@@ -121,14 +131,18 @@ export function joinField(sl) {
   if (idx < 0) { idx += G.N; lap--; }
   const s = G.samples[idx];
   k.pos.x = s.x; k.pos.z = s.z; k.heading = Math.atan2(s.tx, s.tz); k.idx = idx; k.lap = lap; k.maxLap = Math.max(0, lap); k.progress = lap + idx / G.N;
-  k.lapStart = G.time; k.rank = G.karts.length; k.powerCd = k.god ? 0 : k.powerCd;
-  k.mesh.position.set(k.pos.x, 0, k.pos.z); k.mesh.rotation.y = k.heading; G.scene.add(k.mesh);
+  k.lapStart = G.time; k.rank = G.karts.length; k.powerCd = k.god ? 0 : k.powerCd; k.y = s.y;
+  k.mesh.position.set(k.pos.x, k.y, k.pos.z); k.mesh.rotation.y = k.heading; G.scene.add(k.mesh);
   G.karts.push(k);
   return k;
 }
 
-/** Free the geometry of a scene (or any object tree) that is being replaced. */
-export function disposeScene(scene) { scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+/** Free the geometry of a scene (or any object tree) that is being replaced, and what the race registered as disposable (textures, materials). */
+export function disposeScene(scene) {
+  scene.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+  for (const d of G.disposables) if (d && typeof d.dispose === 'function') d.dispose();
+  G.disposables = [];
+}
 
 // ---------- Camera & sun ----------
 function updateCamera(dt) {
@@ -140,15 +154,15 @@ function updateCamera(dt) {
   // Closer and lower than it used to be (A-033), so the kart's parts and its
   // trail read on screen; the portrait terms are unchanged.
   const back = (k.speed < -2 ? -11 : 10.5 - Math.min(2, k.boost * 2)) + narrow * 9;
-  const ty = 5.6 + (k.fly > 0 ? 3 : 0) + k.y * 0.6 + narrow * 5;
+  const ty = k.y + 5.6 + (k.fly > 0 ? 3 : 0) + narrow * 5;                          // k.y is the kart's absolute height (DEC-050)
   const tx = k.pos.x - fx * back, tz = k.pos.z - fz * back;
   const a = 1 - Math.exp(-dt * (G.state === 'countdown' ? 1.6 : 6));
   camera.position.x = lerp(camera.position.x, tx, a); camera.position.z = lerp(camera.position.z, tz, a); camera.position.y = lerp(camera.position.y, ty, a);
-  camera.lookAt(k.pos.x + fx * 5, 1.0 + k.mesh.position.y * 0.5, k.pos.z + fz * 5);
+  camera.lookAt(k.pos.x + fx * 5, k.y + 1.0 + (k.mesh.position.y - k.y) * 0.5, k.pos.z + fz * 5);
   // a short camera shake when the followed kart is bumped
   if (k.bump > 0) { const e = k.bump * (k.bumpPower || 1) * 0.5; camera.position.x += Math.sin(G.time * 71) * e; camera.position.y += Math.sin(G.time * 53) * e * 0.6; }
   camera.fov = lerp(camera.fov, (k.boost > 0 ? 76 : 65) + narrow * 30, 1 - Math.exp(-dt * 5)); camera.updateProjectionMatrix();
-  if (G.sun) { G.sun.position.set(k.pos.x + 120, 200, k.pos.z + 80); G.sun.target.position.set(k.pos.x, 0, k.pos.z); G.sun.target.updateMatrixWorld(); }
+  if (G.sun) { const o = G.sunOffset || { x: 120, y: 200, z: 80 }; G.sun.position.set(k.pos.x + o.x, k.y + o.y, k.pos.z + o.z); G.sun.target.position.set(k.pos.x, k.y, k.pos.z); G.sun.target.updateMatrixWorld(); }
 }
 
 // ---------- Wrong way ----------
@@ -187,7 +201,7 @@ export function viewStep(dt) {
 /** Put a crossing's vehicle where its clock `c.t` says it is. */
 export function placeCrossing(c) {
   const p = (c.t * c.speed) % (4 * c.range); const lat = p < 2 * c.range ? p - c.range : 3 * c.range - p; const dir = p < 2 * c.range ? 1 : -1;
-  c.mesh.position.set(c.s.x + c.s.sx * lat, 0, c.s.z + c.s.sz * lat); c.mesh.rotation.y = Math.atan2(c.s.sx * dir, c.s.sz * dir);
+  c.mesh.position.set(c.s.x + c.s.sx * lat, c.s.y + lat * c.s.bank, c.s.z + c.s.sz * lat); c.mesh.rotation.y = Math.atan2(c.s.sx * dir, c.s.sz * dir);
 }
 
 /** Bob the crowd to the race clock. */
@@ -212,7 +226,7 @@ export function simStep(dt) {
   kartCollisions(); pickupItems(); updateProjectiles(dt); updateRanks();
   for (const f of [...G.animated]) f(dt);
   for (const c of G.crossings) { c.t += dt; placeCrossing(c);
-    for (const k of G.karts) { if (k.hazardGrace > 0 || k.fly > 0 || k.y > 1.2) continue; const d = (k.pos.x - c.mesh.position.x) ** 2 + (k.pos.z - c.mesh.position.z) ** 2; if (d < 10) { k.hazardGrace = 1.5; k.speed *= 0.3; if (stunKart(k, 1.3)) say(k, line('hazard.cortege.hit')); } } }
+    for (const k of G.karts) { if (k.hazardGrace > 0 || k.fly > 0 || k.y - c.s.y > 1.2) continue; const d = (k.pos.x - c.mesh.position.x) ** 2 + (k.pos.z - c.mesh.position.z) ** 2; if (d < 10) { k.hazardGrace = 1.5; k.speed *= 0.3; if (stunKart(k, 1.3)) say(k, line('hazard.cortege.hit')); } } }
   updateCyclists(dt);
   animateCrowd();
 }

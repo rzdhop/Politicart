@@ -20,12 +20,19 @@
 // swapped back out after: whatever race the screen still shows (the results)
 // keeps its state between two slices.
 //
-// Seed: the key carries the race's layout seed. Today every race is seed 0;
-// once the seeded layouts land (PLAN stage 1), the seed-independent phases
-// (road, strips, decor) belong here and the layout (features, obstacles,
-// cyclists) is applied at start -- a team race learns its seed with
-// {t:'race'}, after the lobby. Until that split exists the whole scene is
-// keyed on the seed and a mismatch simply falls back to the synchronous build.
+// Seed: the key carries the race's seed (DEC-049), which picks the layout,
+// the obstacles and the cyclists. Solo play lets the pre-build draw it
+// (requestPrebuild without a seed) and startRace takes it back
+// (prebuiltSeed), so the circuit screen's build is the race's. A team race
+// learns its seed with {t:'race'}, after the lobby, so the lobby's pre-build
+// misses at start and the race builds synchronously as before; the
+// follow-up is to build the seed-independent phases (road, strips, decor)
+// ahead and apply the layout (features, obstacles, cyclists) at start.
+//
+// Climate: the priming needs the race's lights, so applyClimate (climate.js)
+// is run on the pre-built scene for the layout's climate -- the programs are
+// keyed on the light types and shadows -- and everything it added is taken
+// off again before the hand-over; startField applies the climate anew.
 //
 // The grid is not known ahead (solo draws its AI at start, a team race's
 // roster comes with {t:'race'}), but a program is keyed on a material's
@@ -43,6 +50,7 @@
 // skipped; nothing here touches the DOM.
 import * as THREE from 'three';
 
+import { applyClimate } from './climate.js';
 import { CHARACTERS, TRACKS } from './data.js';
 import { myStyle } from './garage.js';
 import { buildHazard, buildProjectileMesh } from './items.js';
@@ -51,7 +59,8 @@ import { onTransition } from './machine.js';
 import { disposePilot } from './pilot.js';
 import { setCast } from './primitives.js';
 import { camera } from './render.js';
-import { G, getPoly, SHADOWS } from './state.js';
+import { newSeed } from './seed.js';
+import { CFG, G, getPoly } from './state.js';
 import { buildTrackPhases, TRACK_PHASES } from './track.js';
 import { buildTrail } from './trail.js';
 
@@ -59,33 +68,47 @@ import { buildTrail } from './trail.js';
 export const BUDGET_MS = 8;
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
-/** The fields of G a circuit build fills (track.js, cyclists.js, the decor builders): swapped in for a slice, captured after it. */
-export const FIELDS = Object.freeze(['track', 'samples', 'N', 'trackLength', 'animated', 'crowd', 'hazards', 'projectiles', 'itemBoxes', 'ramps', 'pits', 'pads', 'crossings', 'cyclists']);
-const freshState = track => ({ track, samples: [], N: 0, trackLength: 0, animated: [], crowd: [], hazards: [], projectiles: [], itemBoxes: [], ramps: [], pits: [], pads: [], crossings: [], cyclists: [] });
+/**
+ * The fields of G a circuit build fills (track.js, cyclists.js, the decor
+ * builders) or the climate sets (climate.js): swapped in for a slice,
+ * captured after it, put into G by applyPrebuilt.
+ */
+export const FIELDS = Object.freeze(['track', 'samples', 'N', 'trackLength', 'animated', 'crowd', 'hazards', 'projectiles', 'itemBoxes', 'ramps', 'pits', 'pads', 'crossings', 'cyclists',
+  'seed', 'layout', 'rng', 'hw', 'entitySeq', 'lamps', 'disposables', 'climate', 'sun', 'sunOffset']);
+const freshState = track => ({ track, samples: [], N: 0, trackLength: 0, animated: [], crowd: [], hazards: [], projectiles: [], itemBoxes: [], ramps: [], pits: [], pads: [], crossings: [], cyclists: [],
+  seed: 0, layout: null, rng: null, hw: track.roadHalfWidth ?? CFG.roadHalfWidth, entitySeq: 0, lamps: [], disposables: [], climate: null, sun: null, sunOffset: null });
 
 /** The one job: the circuit being built ahead, or null. */
 let job = null;
 
 /** The key a pre-built circuit is good for: the circuit, the detail level and the layout seed. */
-export const prebuildKey = ({ trackIdx, poly = getPoly(), seed = 0 }) => trackIdx + '|' + poly + '|' + seed;
+export const prebuildKey = ({ trackIdx, poly = getPoly(), seed = 0 }) => trackIdx + '|' + poly + '|' + (seed >>> 0);
 
 /**
- * Build circuit `trackIdx` ahead (seed `seed`), a slice per prebuildFrame
- * call. The same key already queued or built is kept; another is dropped
- * first. Returns the job's status, or null for an unknown circuit.
+ * Build circuit `trackIdx` ahead, a slice per prebuildFrame call. With a
+ * `seed` (a team race's, known in advance) the same key already queued or
+ * built is kept and another is dropped first; without one (solo) a job for
+ * the same circuit at this detail level is kept whatever its seed, else a
+ * fresh seed is drawn (startRace takes it back through prebuiltSeed).
+ * Returns the job's status, or null for an unknown circuit.
  */
-export function requestPrebuild(trackIdx, { seed = 0 } = {}) {
-  const key = prebuildKey({ trackIdx, seed });
-  if (job && job.key === key) return prebuildStatus();
+export function requestPrebuild(trackIdx, { seed = null } = {}) {
+  if (job && job.trackIdx === trackIdx && job.poly === getPoly() && (seed === null || job.seed === (seed >>> 0))) return prebuildStatus();
   dropPrebuild();
   const track = TRACKS[trackIdx]; if (!track) return null;
-  job = { key, trackIdx, seed, scene: new THREE.Scene(), gen: null, phase: null, ms: {}, state: freshState(track), saved: null, built: false, lights: null, sample: null, compile: null, prime: null, primed: false, sliced: 0 };
+  seed = seed === null ? newSeed() : seed >>> 0;
+  job = { key: prebuildKey({ trackIdx, seed }), trackIdx, poly: getPoly(), seed, scene: new THREE.Scene(), gen: null, phase: null, ms: {}, state: freshState(track), saved: null, built: false, lights: null, sample: null, compile: null, prime: null, primed: false, sliced: 0 };
   return prebuildStatus();
+}
+
+/** The seed of the circuit being built ahead for `trackIdx` at the current detail level, or null: solo play's startRace races on it. */
+export function prebuiltSeed(trackIdx) {
+  return job && job.trackIdx === trackIdx && job.poly === getPoly() ? job.seed : null;
 }
 
 /** What is built ahead: `{ key, trackIdx, phase, built, primed, ms, scene }`, or null. The phase names are TRACK_PHASES, then 'compile', 'prime'. */
 export function prebuildStatus() {
-  return job ? { key: job.key, trackIdx: job.trackIdx, seed: job.seed, phase: job.phase, built: job.built, primed: job.primed, ms: { ...job.ms }, scene: job.scene, slices: job.sliced } : null;
+  return job ? { key: job.key, trackIdx: job.trackIdx, seed: job.seed, phase: job.phase, built: job.built, primed: job.primed, lit: !!job.lights, sampled: !!job.sample, layout: job.state.layout ? job.state.layout.name : null, ms: { ...job.ms }, scene: job.scene, slices: job.sliced } : null;
 }
 
 /** Forget the circuit built ahead, freeing its geometries. */
@@ -93,6 +116,7 @@ export function dropPrebuild() {
   if (!job) return;
   unlight(job); unsample(job);
   job.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+  for (const d of job.state.disposables) if (d && typeof d.dispose === 'function') d.dispose();   // what the build registered (state.js disposable)
   job = null;
 }
 
@@ -106,7 +130,7 @@ function buildSome(j, budget) {
   const t0 = now();
   enter(j);
   try {
-    if (!j.gen) j.gen = buildTrackPhases(j.scene, TRACKS[j.trackIdx]);
+    if (!j.gen) j.gen = buildTrackPhases(j.scene, TRACKS[j.trackIdx], { seed: j.seed });
     do {
       const t1 = now(), r = j.gen.next();
       if (r.done) { j.built = true; j.phase = 'built'; break; }
@@ -118,25 +142,39 @@ function buildSome(j, budget) {
 
 // ---- lights for the priming
 /**
- * The race lights, as startField makes them (a hemisphere, an ambient, the
- * sun with its shadow), put on the scene for the priming only: a program is
- * compiled for a given set of light types and shadows, so what the pre-build
- * compiles has to see the same ones the race will. Taken off again before
- * the scene is handed over; startField adds its own.
+ * The race's climate on the pre-built scene, for the priming only: a
+ * program is compiled for a given set of light types and shadows, so what
+ * the pre-build compiles has to see the ones the race will. applyClimate
+ * (climate.js) for the layout's climate, run with the job's G swapped in (it
+ * reads G.layout and G.lamps, writes G.sun, G.climate, G.animated and
+ * G.disposables); everything it added to the scene and to those lists is
+ * taken off again before the hand-over, and startField applies the climate
+ * anew on the scene it takes.
  */
 function light(j) {
   if (j.lights) return;
-  const sun = new THREE.DirectionalLight(0xfff4d6, 1.15); sun.position.set(120, 200, 80); sun.castShadow = SHADOWS(); sun.shadow.mapSize.set(2048, 2048);
-  const sc = sun.shadow.camera; sc.left = -110; sc.right = 110; sc.top = 110; sc.bottom = -110; sc.near = 10; sc.far = 500;
-  j.lights = [new THREE.HemisphereLight(0xdfefff, 0x55663a, 0.55), new THREE.AmbientLight(0xffffff, 0.15), sun, sun.target];
-  for (const l of j.lights) j.scene.add(l);
-  j.scene.fog = new THREE.Fog(0x000000, 220, 700);
+  enter(j);
+  try {
+    const mark = { children: j.scene.children.length, animated: G.animated.length, disposables: G.disposables.length };
+    applyClimate(j.scene, TRACKS[j.trackIdx]);
+    j.lights = mark;
+  } finally { leave(j); }
 }
 function unlight(j) {
   if (!j.lights) return;
-  for (const l of j.lights) j.scene.remove(l);
-  const sun = j.lights[2]; if (sun.shadow.map) sun.shadow.map.dispose();
-  j.lights = null; j.scene.fog = null;
+  enter(j);
+  try {
+    const { children, animated, disposables } = j.lights;
+    for (const o of j.scene.children.slice(children)) {
+      j.scene.remove(o);
+      o.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.isLight && c.shadow && c.shadow.map) c.shadow.map.dispose(); });
+    }
+    G.animated.length = animated;
+    for (const d of G.disposables.splice(disposables)) if (d && typeof d.dispose === 'function') d.dispose();
+    G.climate = null; G.sun = null; G.sunOffset = null;
+    j.scene.fog = null; j.scene.background = null;
+  } finally { leave(j); }
+  j.lights = null;
 }
 
 // ---- the sample kart for the priming

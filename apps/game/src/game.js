@@ -53,7 +53,7 @@ import { initTouch, installNoContextMenu, isCoarsePointer, isTouchMode, setTouch
 // against an unchanged value, so a readout that did not move costs nothing
 // at 60 fps, and nothing here ever goes through React state. The minimap is
 // not written from here at all: the engine draws it (engine/minimap.js).
-let lastItemShown = '', lastPowerReady = null, lastGod = null;
+let lastItemShown = '', lastPowerReady = null, lastGod = null, lastLayoutShown = '';
 function updateHUD(p) {
   const h = hud;
   if (!h.pos || !h.lap || !h.time || !h.item || !h.power || !h.speed || !h.drift || !h.center || !h.wrong) return;
@@ -70,6 +70,9 @@ function updateHUD(p) {
   if (p.powerReady !== lastPowerReady || p.god !== lastGod) { lastPowerReady = p.powerReady; lastGod = p.god; h.power.setReady(p.powerReady); h.power.setKeyHint(p.god ? 'F · MODE DIEU' : p.powerReady ? 'F · PRÊT !' : 'F · recharge'); }
   h.power.setName(p.powerName);
   h.center.setText(p.announce);
+  // the layout the seed drew (DEC-049) reads under the countdown, through the hint line; the engine's own hint takes over at the green light
+  if (p.state === 'countdown' && p.layoutName && p.layoutName !== lastLayoutShown) { lastLayoutShown = p.layoutName; setHint('Tracé du jour : « ' + p.layoutName + ' »'); }
+  else if (p.state !== 'countdown' && lastLayoutShown) { lastLayoutShown = ''; setHint('Ramassez une urne dorée pour obtenir un objet.'); }
   h.wrong.setVisible(p.wrongWay);
   // the touch buttons carry the item and the power state themselves (the HUD's own slots make way for them)
   touchHud.item?.(shown.split('|')[0], !!p.item && !p.itemRolling);

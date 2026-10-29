@@ -40,10 +40,25 @@ export function plane(w, h, color, x, z, rotY) { const m = new THREE.Mesh(new TH
 // still work on it, which is all the scene builders need.
 const HEADLESS = typeof document === 'undefined';
 export function canvasTexture(w, h, draw) { if (HEADLESS) return new THREE.Texture(); const cv = document.createElement('canvas'); cv.width = w; cv.height = h; draw(cv.getContext('2d'), w, h); const t = new THREE.CanvasTexture(cv); return t; }
+// A sign's texture and material are cached by what they show: dozens of
+// signs per race repeat a handful of texts, and each used to bake its own
+// 512 px canvas and material, never freed. The cache is never cleared (like
+// mat()): a sign's material is shared by every mesh that shows it, and
+// nothing changes a sign once built. The mesh and its geometry are per call.
+const signCache = new Map();
+/** A w x h plane showing `text` in `fg` on `bg` (CSS colours), `px` the font size on a 512 px canvas; its material is shared with every identical sign. */
 export function textPlane(w, h, text, bg, fg, px) {
-  const t = canvasTexture(512, Math.round(512 * h / w), (c, cw, ch) => { c.fillStyle = bg; c.fillRect(0, 0, cw, ch); c.fillStyle = fg; c.font = 'bold ' + (px || 72) + 'px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, cw / 2, ch / 2); });
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide })); return m;
+  const key = w + '|' + h + '|' + text + '|' + bg + '|' + fg + '|' + (px || 72);
+  let m = signCache.get(key);
+  if (!m) {
+    const t = canvasTexture(512, Math.round(512 * h / w), (c, cw, ch) => { c.fillStyle = bg; c.fillRect(0, 0, cw, ch); c.fillStyle = fg; c.font = 'bold ' + (px || 72) + 'px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, cw / 2, ch / 2); });
+    t.name = 'sign:' + text;
+    m = new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide }); signCache.set(key, m);
+  }
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), m);
 }
+/** How many distinct signs are cached (tests). */
+export const signCount = () => signCache.size;
 
 // ---------- Image textures (used for player-uploaded liveries and posters) ----------
 const texCache = {};

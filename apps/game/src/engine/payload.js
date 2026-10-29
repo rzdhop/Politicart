@@ -23,6 +23,7 @@ export function framePayload(G, CFG) {
     state: G.state,
     time: G.time,
     announce,
+    layoutName: G.layout?.name ?? '',       // the variant the seed drew (DEC-049), shown under the countdown
     rank: k.rank,
     lap: k.lap,
     laps: G.laps ?? CFG.laps,              // the race's own: the admin can change it mid-race (DEC-031)
