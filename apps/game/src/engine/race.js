@@ -30,6 +30,7 @@ import { transition } from './machine.js';
 import { buildMinimapBase, drawMinimap } from './minimap.js';
 import { framePayload } from './payload.js';
 import { kartCollisions, updateKart, updateRanks } from './physics.js';
+import { applyPrebuilt, prebuiltSeed, takePrebuilt } from './prebuild.js';
 import { setCast } from './primitives.js';
 import { camera, getRenderer } from './render.js';
 import { newSeed } from './seed.js';
@@ -67,9 +68,10 @@ function makeKart(def, isAI, style) {
  * Build the scene for the chosen circuit, place the field and start the
  * countdown. Ends with the transition into 'countdown', which is what tells
  * the UI to show the HUD and redraw the minimap base. Solo play draws the
- * race's seed here (DEC-049); tests pass one.
+ * race's seed here (DEC-049), or takes the one the pre-build drew for this
+ * circuit (prebuild.js, DEC-055); tests pass one.
  */
-export function startRace({ seed = newSeed() } = {}) {
+export function startRace({ seed = prebuiltSeed(G.trackIdx) ?? newSeed() } = {}) {
   const others = CHARACTERS.filter((c, i) => i !== G.charIdx).sort(() => Math.random() - 0.5).slice(0, CFG.numAI);
   startField([...others.map(def => ({ def, isAI: true })), { def: CHARACTERS[G.charIdx], isAI: false, local: true, style: myStyle(CHARACTERS[G.charIdx]) }], { seed });
 }
@@ -82,15 +84,19 @@ export function startRace({ seed = newSeed() } = {}) {
  * the kart this screen follows. Solo play passes five AI and the player
  * last; the game server and its clients pass the lobby's roster (DEC-014).
  * `seed` is the race's (DEC-049): it picks the layout and every draw that
- * shapes the race, so every side passes the same one; 0 by default.
+ * shapes the race, so every side passes the same one; 0 by default. It is
+ * also part of the key a circuit built ahead must match (prebuild.js,
+ * DEC-055): solo play takes the pre-build's own seed (startRace).
  */
 export function startField(slots, { seed = 0 } = {}) {
   if (G.scene) disposeScene(G.scene);
   const track = TRACKS[G.trackIdx]; G.track = track;
-  const scene = new THREE.Scene();
+  // DEC-055: the circuit built ahead while the player chose (prebuild.js), when it is this one at this detail and seed; else built below as before.
+  const pre = takePrebuilt({ trackIdx: G.trackIdx, seed });
+  const scene = pre ? pre.scene : new THREE.Scene();
   G.scene = scene; G.animated = []; G.hazards = []; G.projectiles = []; G.crowd = []; G.lamps = []; G.disposables = [];
   G.entitySeq = 0;   // before the track: its static obstacles take the first ids, the same on every side
-  setCast(true); buildTrack(scene, track, { seed });
+  if (pre) applyPrebuilt(pre); else { setCast(true); buildTrack(scene, track, { seed }); }
   // the lights, the sky and the air, after the track so the climate finds the lamps the decor registered (DEC-051)
   applyClimate(scene, track, G.layout?.climate ?? track.climates?.[0] ?? 'noon');
   buildMinimapBase();

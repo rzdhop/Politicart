@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { lazy, memo, Suspense } from 'react';
 import {
   CenterAnnounce,
   DriftGauge,
@@ -25,9 +25,11 @@ import {
 } from '@politikart/ui';
 
 import { attachMinimap } from '../engine/minimap.js';
-import { GodPanel } from './GodConsole';
 import { useUi } from './store';
 import { TouchControls } from './TouchControls';
+
+// The god console ships with the admin's screens (vite.config.js screens-admin): fetched the first time a live race shows it.
+const GodPanel = lazy(() => import('./GodConsole').then(m => ({ default: m.GodPanel })));
 
 /**
  * The HUD's imperative handles, filled in by the readouts' refs when the HUD
@@ -105,7 +107,7 @@ export function Hud() {
       <Readouts />
       <TouchControls live={live} paused={ui.state === 'paused'} />
       {/* The admin's absolute power over the race (DEC-031); nobody else gets it. */}
-      {live && <GodPanel ui={ui} />}
+      {live && <Suspense fallback={null}><GodPanel ui={ui} /></Suspense>}
     </HudLayer>
   );
 }

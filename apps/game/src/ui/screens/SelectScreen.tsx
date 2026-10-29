@@ -21,7 +21,7 @@ import {
 import { initAudio } from '../../engine/audio.js';
 import { CHARACTERS } from '../../engine/data.js';
 import { unlockLevel } from '../../engine/progress.js';
-import { setPreviewFrame } from '../../engine/preview.js';
+import { setPreviewFrame } from '../../engine/stagegate.js';
 import { stageDrag } from '../../engine/stageinput.js';
 import { actions, unlockedOf, type UiSnapshot } from '../store';
 import { useTouchMode } from '../TouchControls';

@@ -1,7 +1,7 @@
 import type { DropHistoryItem } from '@politikart/ui';
 
 import { CHARACTERS } from '../engine/data.js';
-import { dropGrade } from '../engine/lootbox.js';
+import { dropGrade } from '../engine/boxgate.js';
 import { GRADE_LABELS, partPhrase, trailLabel } from './kartChoices';
 import type { Drop, Grade, RecentDrop } from './store';
 import type { Character } from './types';

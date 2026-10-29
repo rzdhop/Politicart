@@ -1,7 +1,7 @@
 import { Button, CoinCount, Disclaimer, DropHistory, Panel, RevealCard, RevealStage, Row, Screen } from '@politikart/ui';
 
 import { BOX_BUNDLE, BOX_PRICE } from '../../engine/catalog.js';
-import { dropGrade } from '../../engine/lootbox.js';
+import { dropGrade } from '../../engine/boxgate.js';
 import { dropText, GRADE_LABELS, historyItems } from '../drops';
 import { actions, type Grade, type UiSnapshot } from '../store';
 

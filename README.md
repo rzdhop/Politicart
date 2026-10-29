@@ -18,6 +18,12 @@ npm run dev -w @politikart/game   # http://127.0.0.1:5173
 
 `npm run build` builds everything; `npm run preview -w @politikart/game` serves the production build at `http://127.0.0.1:4173`.
 
+### Loading
+
+The build is split into chunks (`apps/game/vite.config.js`): Three.js, React, the engine, and three parts fetched only when needed, the 3D select stage, the Politibox opening and the admin's screens. `index.html` paints a CSS-only splash (the tricolore and the title) before any script arrives, taken down when the screens mount. The game's own build step also writes a brotli and a gzip sibling beside every text asset (`apps/game/scripts/compress.mjs`, Node's zlib, no dependency), which the game server serves.
+
+A race no longer builds its circuit when "Lancer la course" is pressed: from the circuits screen (and the lobby, and the results screen for "Rejouer") the chosen circuit is built in the background a slice per frame, its shaders compiled and each kind of object drawn once off screen (`src/engine/prebuild.js`), so the countdown starts at once; a change of circuit, detail level or layout seed drops the pre-built scene and the race builds it synchronously as before. During the countdown the items' meshes are primed the same way so the first throw never stutters.
+
 ## Team races (Multijoueur)
 
 Two to six players race in two teams, Bleu and Rouge; AI candidates fill the grid to six. Every finishing place scores points for its team (10, 8, 6, 4, 2, 1) and the highest total wins. Items and powers never hit a teammate.
@@ -124,6 +130,8 @@ docker run --rm -p 8080:8080 politikart     # the same server, in a container
 
 Two cautions. Rooms are kept in memory, so run a single instance. A free tier that sleeps when idle drops every open race when it does. Without a `DATABASE_URL`, accounts and the cast live in a JSON file under `/data`: mount a volume there or they vanish with the container.
 
+The server serves the build with the headers a browser cache wants: everything under `/assets/` carries a content hash in its name and is sent `public, max-age=31536000, immutable`; `index.html` and the other unhashed files are sent `no-cache` with a weak ETag and answered 304 while unchanged; a text asset goes out from its precompressed `.br` or `.gz` sibling when the browser accepts it (`Vary: Accept-Encoding`). A reverse proxy in front of it can pass these through as they are.
+
 ## Controls
 
 | Key | Action |
@@ -211,6 +219,8 @@ The engine never touches the DOM; the UI never touches the simulation. They meet
 | `src/engine/kart.js`, `track.js`, `primitives.js`, `textures.js` | Procedural karts (a race profile and a stage profile), decor and tracks; cached materials; canvas-painted textures. |
 | `src/engine/physics.js`, `ai.js`, `items.js`, `powers.js` | Kart physics (drift, jumps, pits, hazards, kart contact), AI with rubber-banding, the 19 items, the 16 powers. |
 | `src/engine/race.js` | Sets up a race, steps it one frame at a time and returns the **frame payload** the HUD shows. |
+| `src/engine/prebuild.js` | The **race pre-build**: the chosen circuit built ahead a slice per frame while the player chooses, its shaders compiled and primed, taken by `race.js` when the key (circuit, detail, seed) matches; the countdown's priming of the items' meshes. |
+| `src/engine/stagegate.js`, `boxgate.js` | The gates to the two chunks loaded on demand: the select stage (`preview.js`) and the Politibox opening (`lootbox.js`); they answer for them until the chunk lands. |
 | `src/engine/machine.js` | The **state machine**: title, select, tracks, admin, countdown, race, paused, results, lobby, account, garage, dashboard. |
 | `src/engine/teams.js` | Teams: who counts as a foe, the points table, team standings. |
 | `src/engine/cyclists.js` | The bike lane's cyclists: their whims, their run-ins with karts, and placing them from snapshots. |
@@ -220,7 +230,7 @@ The engine never touches the DOM; the UI never touches the simulation. They meet
 | `src/engine/banner.js` | The **banner queue**: one toast at a time, held long enough to be read. |
 | `src/engine/godcmd.js` | The admin's **god commands**: what the console divine does to a race, in solo and in the race worker alike. |
 | `src/engine/input.js` | The **input seam**: the engine reads the controls through it. |
-| `src/engine/minimap.js`, `preview.js`, `render.js`, `audio.js` | The minimap, the character showcase (the select stage's facade: the podium, the drag, the go launch, the frame governor, the progressive portraits), the one renderer and camera, WebAudio. |
+| `src/engine/minimap.js`, `preview.js`, `render.js`, `audio.js` | The minimap, the character showcase (the select stage's facade: the podium, the drag, the go launch, the frame governor, the progressive portraits; a chunk of its own), the one renderer and camera, WebAudio. |
 | `src/engine/stagelook.js`, `fabric.js`, `geo.js` | The stage's own look on the shared renderer (ACES, sRGB, physical lights, the rim tint; never a race material); procedural fabrics; capsules, merging by material, triangle counts. |
 | `src/engine/looks.js` | `LOOK3D`: each candidate's 3D look by id (hair, build, outfit, face, pose, props, tint), shapes only, no colour or copy. |
 | `src/engine/pilot.js`, `props.js` | The caricature pilots, one builder at four levels of detail (stage, race-high, race-low, headless for the server), and their props. |
@@ -230,6 +240,7 @@ The engine never touches the DOM; the UI never touches the simulation. They meet
 | `src/ui/` | The React screens and the HUD, composed from `@politikart/ui`; `store.ts` is what they read. |
 | `src/game.js` | The per-frame HUD writer, the keyboard and the clock. |
 | `public/` | The favicon (SVG, a 32 px PNG, the ICO, the 180 px Apple touch icon), copied to the build's root. |
+| `scripts/compress.mjs` | Writes the brotli and gzip siblings of the build's text assets, after `vite build`. |
 
 ### The design system (`packages/ui`)
 
