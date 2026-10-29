@@ -5,13 +5,31 @@
 // G.samples) and registers what moves in G.crowd / G.animated, as before the
 // split out of track.js (stage 0). Builders wrap what never moves in still()
 // so the "légers" fold can merge it (DEC-047).
+//
+// Stage 7 adds the instanced street life (DEC-056), re-exported here so every
+// circuit finds it in one place: crowd() figures (decor/crowd.js), flock()
+// and circling() birds (decor/flock.js), treeAt() swaying trees
+// (decor/trees.js), and below lampAt(), bench(), litterBin() and bollard()
+// furniture. They add nothing to the scene when called: their batches are
+// flushed after the decor (track.js), one draw per part and 200 m cell.
 import * as THREE from 'three';
 
+import { bakeVertexColours, finishOf, mergeByMaterial, mergeInWorld } from '../geo.js';
 import { box, cone, cyl, imgPlane, mat, plane, sph, tag, textPlane, torus } from '../primitives.js';
-import { G, disposable, seg } from '../state.js';
+import { G, disposable, getPoly, seg } from '../state.js';
 import { TEX, surface } from '../textures.js';
 import { hex, pick, rand } from '../util.js';
 import { DS, still } from './context.js';
+import { crowd, crowdKind } from './crowd.js';
+import { batch, perBuild, place } from './life.js';
+import { growTree } from './trees.js';
+
+export { CROWD_JACKETS, CROWD_KINDS, CROWD_SKINS, crowd, crowdKind } from './crowd.js';
+export { circling, flock } from './flock.js';
+export { TREE_KINDS, growTree, treeAt } from './trees.js';
+
+/** A landmark that never moves, baked to vertex colours and merged by material: one or two draws on either detail level; named for the tests. */
+const merged = (g, name) => { bakeVertexColours(g, finishOf); mergeByMaterial(g); g.name = name; return g; };
 
 // ---------- Small figures (crowd, guards, press) ----------
 export const JACKETS = [0x3b4a6b, 0x8a2b2b, 0x2e7d5b, 0xe0b040, 0x5a5a5a, 0xd96c3a, 0x4b3f8a, 0xf0f0f0, 0x222222, 0x9ad04f];
@@ -26,21 +44,42 @@ export function figure(color, skin, hat) {
   if (hat === 'flag') { g.add(cyl(0.03, 0.03, 2, 0xdddddd, 0.5, 1.8, 0, 5)); [0x2f55c7, 0xffffff, 0xe63946].forEach((c, i) => g.add(box(0.3, 0.5, 0.03, c, 0.65 + i * 0.3, 2.5, 0))); }
   return still(g);   // a crowd figure bobs as a whole: still inside
 }
+/** The road's surface height at signed lateral offset `lat` of sample s, camber included (track.js roadY): where the pavement's furniture stands. */
+const sideY = (s, lat) => s.y + lat * (s.bank || 0);
+/**
+ * A crowd behind a rail along samples [from, to) on side `sideSign`: the rail
+ * one merged mesh, the spectators instanced figures (decor/crowd.js), a
+ * third of them jumping. `dense` packs them closer; "détaillés" draws about
+ * twice the legacy crowd, "légers" about the legacy count.
+ */
 export function crowdZone(scene, from, to, sideSign, dense) {
-  const hw = G.hw, N = G.N;
-  // metal rail
-  for (let i = from; i < to; i += 2) { const s = G.samples[i % N]; const n = G.samples[(i + 2) % N]; const dx = (n.x + n.sx * sideSign * (hw + 1.9)) - (s.x + s.sx * sideSign * (hw + 1.9)), dz = (n.z + n.sz * sideSign * (hw + 1.9)) - (s.z + s.sz * sideSign * (hw + 1.9)); const len = Math.hypot(dx, dz); const r = box(0.06, 0.06, len, 0x9a9a9a, 0, 1.0, 0); r.position.set(s.x + s.sx * sideSign * (hw + 1.9) + dx / 2, s.y + 1.0, s.z + s.sz * sideSign * (hw + 1.9) + dz / 2); r.rotation.y = Math.atan2(dx, dz); scene.add(still(r)); if (i % 6 === from % 6) scene.add(still(cyl(0.05, 0.05, 1.1, 0x9a9a9a, s.x + s.sx * sideSign * (hw + 1.9), s.y + 0.55, s.z + s.sz * sideSign * (hw + 1.9), 5))); }
-  for (let i = from; i < to; i += dense ? 3 : 5) {
-    const s = G.samples[i % N]; const n = dense ? 3 : 2;
-    for (let j = 0; j < n; j++) { const lat = sideSign * (hw + 2.8 + j * 1.1 + rand(-0.3, 0.3)); const f = figure(pick(JACKETS), pick(SKINS), Math.random() < 0.18 ? 'sign' : Math.random() < 0.12 ? 'flag' : null); f.position.set(s.x + s.sx * lat + s.tx * rand(-0.8, 0.8), s.y, s.z + s.sz * lat + s.tz * rand(-0.8, 0.8)); f.rotation.y = Math.atan2(-s.sx * sideSign, -s.sz * sideSign) + rand(-0.4, 0.4); scene.add(f); G.crowd.push({ g: f, ph: rand(0, 6.28), amp: Math.random() < 0.5 ? 0.25 : 0, base: s.y }); }
+  const hw = G.hw, N = G.N, hi = getPoly() === 'high', rails = [];
+  // the rail: two bars and a post every other step
+  for (let i = from; i < to; i += 2) {
+    const s = G.samples[i % N], n = G.samples[(i + 2) % N], l = sideSign * ((s.hw ?? hw) + 1.9), ln = sideSign * ((n.hw ?? hw) + 1.9);
+    const ax = s.x + s.sx * l, az = s.z + s.sz * l, dx = n.x + n.sx * ln - ax, dz = n.z + n.sz * ln - az, len = Math.hypot(dx, dz), y = sideY(s, l);
+    for (const h of hi ? [1.0, 0.45] : [1.0]) { const r = box(0.06, 0.06, len, 0x9a9a9a, 0, 0, 0); r.position.set(ax + dx / 2, y + h, az + dz / 2); r.rotation.y = Math.atan2(dx, dz); rails.push(r); }
+    if (hi || (i - from) % 6 === 0) rails.push(cyl(0.05, 0.05, 1.1, 0x9a9a9a, ax, y + 0.55, az, 5));
+  }
+  // one mesh on "détaillés"; on "légers" the fold merges the bars with their cell's other still pieces
+  if (hi && rails.length) { rails.forEach(r => r.updateMatrixWorld()); const m = mergeInWorld(rails); m.name = 'crowdRail'; scene.add(still(m)); } else for (const r of rails) scene.add(still(r));
+  const step = hi ? (dense ? 2 : 3) : (dense ? 3 : 5), rows = hi ? (dense ? 4 : 3) : (dense ? 3 : 2);
+  for (let i = from; i < to; i += step) {
+    const s = G.samples[i % N];
+    for (let j = 0; j < rows; j++) {
+      const lat = sideSign * ((s.hw ?? hw) + 2.8 + j * 1.1 + rand(-0.3, 0.3)), u = rand(-0.8, 0.8), r = Math.random();
+      crowd(scene, s.x + s.sx * lat + s.tx * u, s.z + s.sz * lat + s.tz * u, { world: true, y: sideY(s, lat), rotY: Math.atan2(-s.sx * sideSign, -s.sz * sideSign) + rand(-0.4, 0.4), kind: r < 0.16 ? 'sign' : r < 0.27 ? 'flag' : r < 0.34 ? 'scarf' : crowdKind(), amp: Math.random() < 0.5 ? 0.25 : 0 });
+    }
   }
 }
 export function grandstand(scene, idx, sideSign) {
-  const s = G.samples[idx]; const hw = G.hw; const g = new THREE.Group();
-  for (let t = 0; t < 4; t++) { g.add(box(26, 1.2, 2.4, 0x6a6f7a, 0, 0.6 + t * 1.3, 2 + t * 2.4)); for (let x = -11; x <= 11; x += 2.2) { const f = figure(pick(JACKETS), pick(SKINS), Math.random() < 0.2 ? 'flag' : null); f.scale.setScalar(0.85); f.position.set(x + rand(-0.3, 0.3), 1.2 + t * 1.3, 2.2 + t * 2.4); f.rotation.y = Math.PI; g.add(f); G.crowd.push({ g: f, ph: rand(0, 6.28), amp: 0.2, base: f.position.y }); } }
+  const s = G.samples[idx]; const hw = G.hw; const g = new THREE.Group(), hi = getPoly() === 'high';
+  const gx = s.x + s.sx * sideSign * (hw + 3), gz = s.z + s.sz * sideSign * (hw + 3), rot = Math.atan2(s.sx * sideSign, s.sz * sideSign), c = Math.cos(rot), sn = Math.sin(rot);
+  // the spectators, instanced, in the stand's frame turned into the world's
+  for (let t = 0; t < 4; t++) { g.add(box(26, 1.2, 2.4, 0x6a6f7a, 0, 0.6 + t * 1.3, 2 + t * 2.4)); for (let x = -11; x <= 11; x += hi ? 1.6 : 2.2) { const lx = x + rand(-0.3, 0.3), lz = 2.2 + t * 2.4; crowd(scene, gx + lx * c + lz * sn, gz - lx * sn + lz * c, { world: true, y: s.y + 1.2 + t * 1.3, rotY: rot + Math.PI, scale: 0.85, kind: Math.random() < 0.2 ? 'flag' : crowdKind(), amp: 0.2 }); } }
   g.add(box(28, 0.4, 11, 0x1f3a93, 0, 7.5, 6)); [-13, 13].forEach(x => { g.add(cyl(0.2, 0.2, 7.5, 0x555555, x, 3.75, 1)); g.add(cyl(0.2, 0.2, 7.5, 0x555555, x, 3.75, 11)); });
   const ban = textPlane(26, 2.2, 'TRIBUNE OFFICIELLE', '#1f3a93', '#f6f1e4', 64); ban.position.set(0, 6.3, 0.9); g.add(ban);
-  g.position.set(s.x + s.sx * sideSign * (hw + 3), s.y, s.z + s.sz * sideSign * (hw + 3)); g.rotation.y = Math.atan2(s.sx * sideSign, s.sz * sideSign); scene.add(still(g));
+  g.position.set(gx, s.y, gz); g.rotation.y = rot; g.name = 'grandstand'; scene.add(still(g));
 }
 export function adBoard(scene, idx, sideSign, text, bg, fg, img) {
   const s = G.samples[idx]; const hw = G.hw; const g = new THREE.Group();
@@ -51,13 +90,7 @@ export function adBoard(scene, idx, sideSign, text, bg, fg, img) {
 export const ADS = [['VOTEZ UTILE', '#1f3a93', '#f6f1e4'], ['SONDAGE : 52 % D’INDÉCIS', '#f6f1e4', '#111'], ['RÉFORME EN COURS', '#c8102e', '#fff'], ['ENGAGEMENT N°12 : ROULER', '#f2c14e', '#111'], ['DÉBAT CE SOIR 21H', '#111', '#f2c14e'], ['LA RÉPUBLIQUE ROULE', '#2f55c7', '#fff'], ['GRAND PRIX DE L’HÉMICYCLE', '#f6f1e4', '#c8102e'], ['AMENDEMENT 49.3', '#5c1a33', '#f6f1e4']];
 // ---------- Decor builders ----------
 export function tree(scene, x, z, kind, y = 0) {
-  const g = new THREE.Group(); const S = seg();
-  if (kind === 'plane') { g.add(cyl(0.4, 0.55, 7, 0x9a9282, 0, 3.5, 0, 8)); g.add(sph(3.2, 0x5d9a4a, 0, 8.5, 0, S)); g.add(sph(2.2, 0x6fab55, 1.8, 9.5, 0.8, S)); g.add(sph(2.0, 0x4f8a40, -1.6, 9.2, -0.9, S)); g.add(sph(1.8, 0x6fab55, 0.3, 11, 0, S)); }
-  else if (kind === 'cypress') { g.add(cyl(0.2, 0.3, 1.5, 0x6b4a2b, 0, 0.75, 0, 6)); const c = cone(1.1, 7, 0x2f5f32, 0, 4.5, 0, S); g.add(c); }
-  else if (kind === 'topiary') { g.add(cyl(0.18, 0.22, 1.2, 0x6b4a2b, 0, 0.6, 0, 6)); g.add(cone(1.0, 2.6, 0x2f6b3a, 0, 2.5, 0, S)); }
-  else if (kind === 'orange') { g.add(box(1.6, 1.4, 1.6, 0x2f6b3a, 0, 0.7, 0)); g.add(box(1.7, 0.15, 1.7, 0xf6f1e4, 0, 1.4, 0)); g.add(cyl(0.12, 0.14, 1.2, 0x6b4a2b, 0, 2.0, 0, 6)); g.add(sph(1.1, 0x3f8a3a, 0, 3.2, 0, S)); for (let i = 0; i < 6; i++) g.add(sph(0.12, 0xff8c1a, rand(-0.8, 0.8), 3.2 + rand(-0.6, 0.6), rand(-0.8, 0.8), 6)); }
-  else if (kind === 'palm') { const t = cyl(0.22, 0.34, 9, 0x8a6a42, 0, 4.5, 0, 7); t.rotation.z = rand(-0.08, 0.08); g.add(t); for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2; const f = box(0.5, 0.12, 4.2, i % 2 ? 0x3f8a3a : 0x4fa044, 0, 0, 0); f.position.set(Math.sin(a) * 1.6, 8.6, Math.cos(a) * 1.6); f.rotation.order = 'YXZ'; f.rotation.y = a; f.rotation.x = 0.55; g.add(f); } g.add(sph(0.5, 0x6b4a2b, 0, 8.8, 0, 6)); }
-  else { g.add(cyl(0.35, 0.5, 3, 0x6b4a2b, 0, 1.5, 0, 8)); g.add(sph(2.4, 0x3f8a3a, 0, 4.6, 0, S)); g.add(sph(1.6, 0x4fa044, 1.2, 5.6, 0.6, S)); g.add(sph(1.5, 0x3a7f35, -1.1, 5.4, -0.5, S)); }
+  const g = growTree(new THREE.Group(), kind, seg());   // every kind of TREE_KINDS (decor/trees.js)
   g.position.set(x, y, z); g.scale.setScalar(rand(0.85, 1.25)); scene.add(still(g));
 }
 /** The lamps' and the sedans' lights: unlit, one material each for every lamp and car (they never change). */
@@ -66,6 +99,46 @@ export const lampMat = () => LAMP_MAT || (LAMP_MAT = new THREE.MeshBasicMaterial
 const headlightMat = () => HEADLIGHT_MAT || (HEADLIGHT_MAT = new THREE.MeshBasicMaterial({ color: 0xfff1b0 }));
 // Every head goes into G.lamps with its height over the lamp's foot, for the climate to light at night (climate.js).
 export function lamp(scene, x, z, style, y = 0) { if (style === 'paris') { scene.add(still(cyl(0.14, 0.22, 6, 0x2f3a3a, x, y + 3, z, 8))); scene.add(still(box(0.7, 0.9, 0.7, 0x2f3a3a, x, y + 6.4, z))); const l = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 0.55), lampMat()); l.position.set(x, y + 6.4, z); scene.add(still(l)); G.lamps.push({ head: l, rise: 6.4 }); } else { scene.add(still(cyl(0.12, 0.18, 6, 0x2f3a44, x, y + 3, z, 6))); const l = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), lampMat()); l.position.set(x, y + 6.2, z); scene.add(still(l)); G.lamps.push({ head: l, rise: 6.2 }); } }
+// ---------- Instanced street furniture (stage 7) ----------
+/** The lamp styles: the post's height to the head (`rise`) and its parts, the head always in lampMat(). */
+const LAMPS = {
+  paris: { rise: 6.4, build: g => { if (getPoly() === 'high') g.add(cyl(0.3, 0.36, 0.5, 0x2f3a3a, 0, 0.25, 0, 8)); g.add(cyl(0.12, 0.2, 6, 0x2f3a3a, 0, 3.2, 0, getPoly() === 'high' ? 8 : 6)); g.add(box(0.5, 0.12, 0.5, 0x2f3a3a, 0, 5.98, 0)); g.add(cone(0.5, 0.55, 0x2f3a3a, 0, 6.95, 0, 4).rotateY(Math.PI / 4)); const h = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.66, 0.46), lampMat()); h.position.y = 6.4; g.add(h); } },
+  plain: { rise: 6.2, build: g => { g.add(cyl(0.12, 0.18, 6, 0x2f3a44, 0, 3, 0, 6)); const h = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), lampMat()); h.position.y = 6.2; g.add(h); } },
+  corniche: { rise: 5.6, build: g => { g.add(cyl(0.1, 0.16, 5.8, 0xf6f1e4, 0, 2.9, 0, 6)); g.add(box(1.2, 0.08, 0.1, 0xf6f1e4, 0.5, 5.75, 0)); const h = new THREE.Mesh(new THREE.SphereGeometry(0.34, 8, 6), lampMat()); h.position.set(1.0, 5.6, 0); g.add(h); } },
+};
+// on "légers" the head is baked with the post into one part: a pale lit head, one draw per cell (the night glow is climate.js's quads either way)
+const lampBatch = style => perBuild('lamp:' + style, () => batch(() => { const g = new THREE.Group(); LAMPS[style].build(g); if (getPoly() !== 'high') g.traverse(o => { if (o.isMesh && o.material === lampMat()) o.material = mat(0xfff2b0); }); return g; }));
+/**
+ * An instanced street lamp (`style` 'paris', 'plain' or 'corniche') at (x, z),
+ * turned `rotY`; its head registered in G.lamps for the climate to light at
+ * night (climate.js reads the head's world position from its matrix, so a
+ * bare marker stands in for the instanced head). Coordinates as life.js
+ * place(): scale-1 decor coordinates by default, `world` units with an
+ * absolute `y`.
+ */
+export function lampAt(scene, x, z, style, { y = 0, world = false, rotY = 0 } = {}) {
+  const st = LAMPS[style] ? style : 'paris', p = place(x, z, { y, world }), L = LAMPS[st];
+  lampBatch(st).add(p.x, p.z, { y: p.y, rotY });
+  const head = new THREE.Object3D(); head.name = 'lampHead';
+  head.position.set(p.x + (st === 'corniche' ? Math.cos(rotY) * 1.0 : 0), p.y + L.rise, p.z - (st === 'corniche' ? Math.sin(rotY) * 1.0 : 0)); head.updateMatrixWorld(true);
+  G.lamps.push({ head, rise: L.rise });
+}
+const furniture = (name, build) => perBuild(name, () => batch(() => { const g = new THREE.Group(); build(g); return g; }));
+/** An instanced park bench (wood on cast iron), its seat facing local +z. Coordinates as lampAt(). */
+export function bench(scene, x, z, rotY, { y = 0, world = false } = {}) {
+  const p = place(x, z, { y, world });
+  furniture('bench', g => { [-0.8, 0.8].forEach(px => { g.add(box(0.08, 0.45, 0.5, 0x1f3a2a, px, 0.22, 0)); g.add(box(0.08, 0.5, 0.06, 0x1f3a2a, px, 0.7, -0.24)); }); g.add(box(1.9, 0.06, 0.48, 0x8b5a2b, 0, 0.46, 0)); g.add(box(1.9, 0.3, 0.05, 0x8b5a2b, 0, 0.78, -0.26)); }).add(p.x, p.z, { y: p.y, rotY });
+}
+/** An instanced litter bin: the green bag on its hoop, as the Paris streets have them. Coordinates as lampAt(). */
+export function litterBin(scene, x, z, { y = 0, world = false } = {}) {
+  const p = place(x, z, { y, world });
+  furniture('bin', g => { g.add(cyl(0.04, 0.04, 1.0, 0x2f3a3a, 0, 0.5, -0.3, 5)); g.add(cyl(0.3, 0.26, 0.7, 0x4f9a4a, 0, 0.55, 0, 7)); g.add(cyl(0.32, 0.32, 0.05, 0x2f3a3a, 0, 0.92, 0, 7)); }).add(p.x, p.z, { y: p.y, rotY: rand(0, 6.28) });
+}
+/** An instanced bollard: the dark cast-iron post along a pavement. Coordinates as lampAt(). */
+export function bollard(scene, x, z, { y = 0, world = false } = {}) {
+  const p = place(x, z, { y, world });
+  furniture('bollard', g => { g.add(cyl(0.11, 0.14, 0.9, 0x2a2f33, 0, 0.45, 0, 6)); g.add(sph(0.13, 0x2a2f33, 0, 0.92, 0, 6)); }).add(p.x, p.z, { y: p.y });
+}
 export function flagPole(scene, x, z, colors, h, y = 0) { h = h || 9; scene.add(still(cyl(0.1, 0.12, h, 0xdddddd, x, y + h / 2, z, 6))); colors.forEach((c, i) => scene.add(still(box(1.2, 2.2, 0.06, c, x + 0.6 + i * 1.2, y + h - 1.2, z)))); }
 export function sedan(scene, x, z, rotY, color, taxi) {
   const g = new THREE.Group(); const S = seg();
@@ -213,7 +286,7 @@ export function boat(scene, x, z, rotY, color) {
 export function ferry(scene, x0, x1, z) {
   const g = new THREE.Group(); g.add(box(11, 1.4, 4.2, 0xffffff, 0, 0.9, 0)); g.add(box(6.5, 2.2, 3.4, 0x1f3a93, -0.5, 2.6, 0)); g.add(box(7, 0.3, 3.8, 0xf6f1e4, -0.5, 3.85, 0)); g.add(box(0.5, 0.35, 0.05, 0x2a7fd4, 5, 2.2, 0));
   for (let i = 0; i < 4; i++) { const f = figure(pick(JACKETS), pick(SKINS), null); f.scale.setScalar(0.7); f.position.set(-3 + i * 1.6, 1.4, i % 2 ? 1.2 : -1.2); g.add(f); }
-  g.position.set(x0, 0, z); scene.add(g); let dir = 1;
+  merged(g, 'ferry'); g.position.set(x0, 0, z); scene.add(g); let dir = 1;
   G.animated.push(dt => { g.position.x += dt * 5 * dir; if (g.position.x > x1 * DS) dir = -1; if (g.position.x < x0 * DS) dir = 1; g.rotation.y = dir > 0 ? 0 : Math.PI; g.position.y = Math.sin(G.time * 1.4) * 0.15; });
 }
 // The big wheel: a rim, spokes, twelve gondolas that stay upright, on two A-frames. World coordinates.
@@ -224,7 +297,8 @@ export function ferrisWheel(world, x, z, r) {
   const gondolas = []; for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; const c = new THREE.Group(); c.position.set(Math.cos(a) * r, Math.sin(a) * r, 0); c.add(box(2.4, 2.2, 2.0, pick([0xc8102e, 0x2a7fd4, 0xf2c14e, 0xf6f1e4]), 0, -1.6, 0)); c.add(box(2.5, 0.9, 2.1, 0x223344, 0, -1.3, 0)); wheel.add(c); gondolas.push(c); }
   [-1.6, 1.6].forEach(lz => [-1, 1].forEach(sx => { const leg = cyl(0.4, 0.5, Math.hypot(r * 0.6, r + 4), 0x9a9a9a, sx * r * 0.3, (r + 4) / 2, lz, 8); leg.rotation.z = -sx * Math.atan2(r * 0.6, r + 4); g.add(leg); }));
   G.animated.push(dt => { wheel.rotation.z += dt * 0.12; for (const c of gondolas) c.rotation.z = -wheel.rotation.z; });
-  world.add(g);
+  bakeVertexColours(g, finishOf); mergeByMaterial(g, [wheel, ...gondolas]);   // the frame, the wheel and each gondola one draw apiece, still turning
+  g.name = 'ferrisWheel'; world.add(g);
 }
 // A fish stall: a bed of ice with the catch on it under a parasol, the vendor behind.
 export function fishStall(scene, x, z, rotY) {
@@ -235,14 +309,14 @@ export function fishStall(scene, x, z, rotY) {
   g.position.set(x, 0, z); g.rotation.y = rotY || 0; scene.add(g);
 }
 // Fort Saint-Jean: two stone walls meeting at a round tower. World coordinates.
-export function fort(world, x, z, rotY) { const g = new THREE.Group(); g.add(box(70, 11, 9, 0xc9b48c, 20, 5.5, 0)); g.add(box(9, 11, 60, 0xc9b48c, 0, 5.5, -25)); g.add(box(72, 1.5, 10, 0xb9a47c, 20, 11.6, 0)); g.add(cyl(8, 8.6, 26, 0xd3c09a, 0, 13, 0, 16)); g.add(cyl(9, 9, 2, 0xb9a47c, 0, 26.8, 0, 16)); g.add(cyl(0.12, 0.12, 8, 0xdddddd, 0, 31, 0, 5)); g.add(box(3, 1.8, 0.1, 0x2f55c7, 1.5, 33.5, 0)); g.position.set(x, 0, z); g.rotation.y = rotY || 0; world.add(g); }
+export function fort(world, x, z, rotY) { const g = new THREE.Group(); g.add(box(70, 11, 9, 0xc9b48c, 20, 5.5, 0)); g.add(box(9, 11, 60, 0xc9b48c, 0, 5.5, -25)); g.add(box(72, 1.5, 10, 0xb9a47c, 20, 11.6, 0)); g.add(cyl(8, 8.6, 26, 0xd3c09a, 0, 13, 0, 16)); g.add(cyl(9, 9, 2, 0xb9a47c, 0, 26.8, 0, 16)); g.add(cyl(0.12, 0.12, 8, 0xdddddd, 0, 31, 0, 5)); g.add(box(3, 1.8, 0.1, 0x2f55c7, 1.5, 33.5, 0)); g.position.set(x, 0, z); g.rotation.y = rotY || 0; world.add(merged(g, 'fort')); }
 // A dockside crane. World coordinates, so the jib keeps its proportions.
-export function crane(world, x, z, rotY) { const g = new THREE.Group(); g.add(box(4, 1.2, 4, 0x444444, 0, 0.6, 0)); g.add(cyl(0.6, 0.8, 26, 0xe0a030, 0, 13.6, 0, 6)); g.add(box(1, 1, 24, 0xe0a030, 0, 26.5, 7)); g.add(box(1.2, 1.2, 6, 0xe0a030, 0, 26.5, -5)); g.add(box(2, 2, 2, 0x222222, 0, 25, 1.5)); g.add(cyl(0.04, 0.04, 14, 0x333333, 0, 19, 15, 4)); g.add(box(0.8, 0.8, 0.8, 0x333333, 0, 11.8, 15)); g.position.set(x, 0, z); g.rotation.y = rotY || 0; world.add(g); }
+export function crane(world, x, z, rotY) { const g = new THREE.Group(); g.add(box(4, 1.2, 4, 0x444444, 0, 0.6, 0)); g.add(cyl(0.6, 0.8, 26, 0xe0a030, 0, 13.6, 0, 6)); g.add(box(1, 1, 24, 0xe0a030, 0, 26.5, 7)); g.add(box(1.2, 1.2, 6, 0xe0a030, 0, 26.5, -5)); g.add(box(2, 2, 2, 0x222222, 0, 25, 1.5)); g.add(cyl(0.04, 0.04, 14, 0x333333, 0, 19, 15, 4)); g.add(box(0.8, 0.8, 0.8, 0x333333, 0, 11.8, 15)); g.position.set(x, 0, z); g.rotation.y = rotY || 0; world.add(merged(g, 'crane')); }
 // A tram on a short line, back and forth along x. Bounds in scale-1 coordinates.
 export function tram(scene, x0, x1, z) {
-  [-1.1, 1.1].forEach(rz => scene.add(box(x1 - x0, 0.12, 0.2, 0x555555, (x0 + x1) / 2, 0.06, z + rz)));
+  [-1.1, 1.1].forEach(rz => scene.add(box(x1 - x0, 0.12, 0.2, 0x555555, (x0 + x1) / 2, 0.06, z + rz / DS)));   // the rails stretch with the line, the tram keeps its gauge
   const g = new THREE.Group(); g.add(box(9, 2.8, 2.4, 0xf6f1e4, 0, 1.9, 0)); g.add(box(8.4, 1.0, 2.5, 0x223344, 0, 2.3, 0)); g.add(box(9.1, 0.4, 2.45, 0x2a7fd4, 0, 1.0, 0)); g.add(box(9, 0.2, 2.2, 0x9a9a9a, 0, 3.4, 0)); g.add(cyl(0.04, 0.04, 1.6, 0x333333, 0, 4.2, 0, 4));
-  g.position.set(x0 + 5, 0, z); scene.add(g); let dir = 1;
+  merged(g, 'tram'); g.position.set(x0 + 5, 0, z); scene.add(g); let dir = 1;
   G.animated.push(dt => { g.position.x += dt * 6 * dir; if (g.position.x > (x1 - 5) * DS) dir = -1; if (g.position.x < (x0 + 5) * DS) dir = 1; });
 }
 // A game of pétanque: the boules, the cochonnet, and the players arguing around them.
@@ -272,5 +346,5 @@ export function bonneMere(world, x, z) {
   const g = new THREE.Group(); g.add(box(140, 16, 100, 0x8aa860, 0, 8, 0)); g.add(box(80, 8, 70, 0xc9b48c, 0, 20, 0)); g.add(box(34, 18, 54, 0xe8dcc0, 0, 33, 6)); g.add(box(36, 2.2, 56, 0x2f6b3a, 0, 36, 6)); g.add(box(36, 2.2, 56, 0x2f6b3a, 0, 30, 6)); const dm = sph(10, 0xe8dcc0, 0, 44, 8, 14); dm.scale.set(1, 0.8, 1); g.add(dm);
   g.add(box(14, 44, 14, 0xe8dcc0, 0, 46, -24)); g.add(box(10, 9, 10, 0xd9cfb8, 0, 72.5, -24)); g.add(box(11, 1.5, 11, 0xd4af37, 0, 77.5, -24));
   const m = figure(0xd4af37, 0xd4af37, null); m.scale.setScalar(5); m.position.set(0, 78, -24); g.add(m);
-  g.position.set(x, 0, z); world.add(g);
+  g.position.set(x, 0, z); world.add(merged(g, 'bonneMere'));
 }
