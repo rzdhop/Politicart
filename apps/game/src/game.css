@@ -218,12 +218,6 @@ body{--note-h:34px;--note-room:calc(8px + var(--note-h) + 6px + env(safe-area-in
 #s-shop .shop-top h2{margin:0;}
 #s-shop .shop-cat{display:flex;flex-direction:column;gap:10px;}
 #s-shop .odds-table{margin:0 auto;}
-#s-shop .shop-trails{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;}
-#s-shop .shop-trails li{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;}
-#s-shop .shop-trails li .name{font-family:var(--font-display);font-size:16px;}
-#s-shop .shop-trails li .trail-note{margin-left:auto;font-size:12px;color:var(--muted);}
-#s-shop .shop-trails li.owned{border-color:rgba(242,193,78,.6);}
-#s-shop .shop-trails li.owned .trail-note{color:var(--gold);}
 #b-shop .coin-count{margin-left:6px;vertical-align:middle;}
 @media (max-width:480px){
   #s-shop .shop-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
