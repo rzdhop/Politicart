@@ -20,9 +20,9 @@ function harness() {
 }
 
 /** Resolve once `ok()` holds, checking every 50 ms; reject after 10 s. */
-async function until(ok) {
-  for (let t = 0; t < 10_000; t += 50) { if (ok()) return; await new Promise(r => setTimeout(r, 50)); }
-  throw new Error('condition not met within 10 s');
+async function until(ok, ms = 10_000) {
+  for (let t = 0; t < ms; t += 50) { if (ok()) return; await new Promise(r => setTimeout(r, 50)); }
+  throw new Error('condition not met within ' + ms / 1000 + ' s');
 }
 
 describe('a race in a worker', () => {
@@ -143,14 +143,13 @@ describe('a race in a worker', () => {
     const snaps = () => sent.filter(([id, m]) => id === 'alice' && m.t === 'snap').map(([, m]) => m);
     try {
       race.input('bob', { c: { throttle: true } });
-      await until(() => snaps().length > 1500);          // 75 s of racing: the AI has used items and powers
-      expect(snaps().every(m => Array.isArray(m.vfx))).toBe(true);
-      const effects = snaps().flatMap(m => m.vfx).map(decodeVfx);
-      expect(effects.length).toBeGreaterThan(20);
-      expect(effects.every(e => e && VFX_KINDS.includes(e.ty) && (e.k === undefined || (e.k >= 0 && e.k < 6)))).toBe(true);
-      expect(effects.some(e => e.ty === 'windup')).toBe(true);   // the AI telegraphs its items and powers
+      const effects = () => snaps().flatMap(m => m.vfx).map(decodeVfx);
       // the statuses travel with the karts, for every screen's auras (sl co ca ra sp rl)
-      expect(snaps().some(m => m.s.k.some(k => ['sl', 'co', 'ca', 'ra', 'sp', 'rl'].some(f => k[f] > 0)))).toBe(true);
+      const statused = () => snaps().some(m => m.s.k.some(k => ['sl', 'co', 'ca', 'ra', 'sp', 'rl'].some(f => k[f] > 0)));
+      // the AI's rolls are not seeded, so how soon it has thrown enough varies: race until it has, not for a fixed time
+      await until(() => { const e = effects(); return e.length > 20 && e.some(x => x?.ty === 'windup') && statused(); }, 25_000);
+      expect(snaps().every(m => Array.isArray(m.vfx))).toBe(true);
+      expect(effects().every(e => e && VFX_KINDS.includes(e.ty) && (e.k === undefined || (e.k >= 0 && e.k < 6)))).toBe(true);
     } finally { race.stop(); }
   }, 30_000);
 

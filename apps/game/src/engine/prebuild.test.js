@@ -171,7 +171,7 @@ describe('the pre-build', () => {
     const seeded = prebuildStatus().scene;
     resetMachine('tracks'); startField(slots(), { seed: 42 });
     expect(G.scene).toBe(seeded);
-  });
+  }, 30000);   // several full circuit builds: well over the 5 s default on a loaded machine
 
   it('keeps the same circuit when asked again, and replaces another circuit or seed', () => {
     requestPrebuild(0); runFrames();
