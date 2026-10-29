@@ -99,11 +99,11 @@ let sink = null;
 /** Route every sound to `fn(name, kartOrNull)` instead of playing it. Pass null to restore. */
 export function setSfxSink(fn) { sink = typeof fn === 'function' ? fn : null; }
 
-/** A sound for everyone in the race. */
-export function sfx(name) { if (sink) sink(name, null); else playSfx(name); }
+/** A sound for everyone in the race. Silent while a networked client replays its kart (DEC-052): the server sends the sound once. */
+export function sfx(name) { if (G.replaying) return; if (sink) sink(name, null); else playSfx(name); }
 
-/** A sound for kart k's driver only. Silent for AI karts. */
+/** A sound for kart k's driver only. Silent for AI karts, and while replaying. */
 export function sfxFor(k, name) {
-  if (!k || k.isAI) return;
+  if (!k || k.isAI || G.replaying) return;
   if (sink) sink(name, k); else if (k === G.player) playSfx(name);
 }

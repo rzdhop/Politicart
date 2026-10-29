@@ -4,8 +4,10 @@
 //
 // On start every player is told the grid and which slot is theirs. Snapshots
 // from the worker go to every player, each with only the messages and sounds
-// addressed to them. When the worker reports the result, the room goes back
-// to its lobby through io.done().
+// addressed to them and their own kart's private block and input echo
+// (DEC-052). The worker stringifies the snapshot once; each player's part is
+// spliced on as a string and goes out through io.sendRaw. When the worker
+// reports the result, the room goes back to its lobby through io.done().
 //
 // The admin has absolute power over the race (DEC-031): addGod() seats them
 // as a god kart at any moment, mid-race included, and god() runs any god
@@ -33,12 +35,15 @@ export function runRace(room, roster, io, { fast = false, hold, seed = newSeed()
   const worker = new Worker(WORKER, { workerData: { trackIdx: room.trackIdx, roster: grid, cast: castOf(CHARACTERS), fast, hold, seed } });
   let over = false;
   let seq = 0; const pending = new Map();         // god command id -> resolve
+  const sendRaw = io.sendRaw ?? ((id, text) => io.send(id, JSON.parse(text)));
   worker.on('message', m => {
     if (m.t === 'godReply') { const done = pending.get(m.id); pending.delete(m.id); done?.({ ok: m.ok, text: m.text }); return; }
     if (m.t === 'snap') {
+      const head = '{"t":"snap","s":' + m.s + ',';
       for (const [playerId, slot] of slotOf) {
-        const mine = m.per[slot] ?? { ev: [], fx: [] };
-        io.send(playerId, { t: 'snap', s: m.s, ev: mine.ev, fx: [...m.fx, ...mine.fx] });
+        const mine = m.per[slot];
+        const part = JSON.stringify({ ...mine, ev: mine?.ev ?? [], fx: mine ? [...m.fx, ...mine.fx] : m.fx });
+        sendRaw(playerId, head + part.slice(1));
       }
     } else if (m.t === 'done') {
       over = true; worker.terminate();
@@ -76,7 +81,7 @@ export function runRace(room, roster, io, { fast = false, hold, seed = newSeed()
         worker.postMessage({ t: 'god', id, cmd, actor: slotOf.get(playerId) ?? null });
       });
     },
-    input(playerId, m) { const slot = slotOf.get(playerId); if (slot !== undefined) worker.postMessage({ t: 'input', slot, c: m.c, item: m.item, power: m.power }); },
+    input(playerId, m) { const slot = slotOf.get(playerId); if (slot !== undefined) worker.postMessage({ t: 'input', slot, seq: m.seq, c: m.c, item: m.item, power: m.power }); },
     leave(playerId) { const slot = slotOf.get(playerId); if (slot === undefined) return; slotOf.delete(playerId); worker.postMessage({ t: 'leave', slot }); },
     stop() { over = true; worker.terminate(); },
   };

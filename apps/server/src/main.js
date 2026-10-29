@@ -12,6 +12,8 @@
 //                           reserved: nobody else can sign up under it
 //   POLITIKART_ADMIN_PASSWORD_HASH  its password hash (admin.js); unset or malformed,
 //                           nobody is admin
+//   POLITIKART_TEST_DELAY_MS  tests only: hold every race input back this many ms
+//                           (a distant server's latency, for the end-to-end suite); unset, none
 //
 // `npm start` also reads the repository's .env and .env.local files when
 // they exist (.env.example lists the keys); .env.local wins over .env, and
@@ -37,7 +39,9 @@ const store = await openStore({
 const admin = adminConfig({ user: process.env.POLITIKART_ADMIN_USER, hash: process.env.POLITIKART_ADMIN_PASSWORD_HASH });
 console.log(admin.enabled ? `admin: enabled for the account "${admin.user}"` : `admin: disabled (${admin.reason}); the name "${admin.user}" stays reserved`);
 await ensureAdmin(store, admin);
-const srv = await startServer({ port, host, staticDir, runRace, store, admin });
+const inputDelayMs = Math.max(0, Number(process.env.POLITIKART_TEST_DELAY_MS) || 0);
+if (inputDelayMs) console.log(`test mode: race inputs held back ${inputDelayMs} ms (POLITIKART_TEST_DELAY_MS)`);
+const srv = await startServer({ port, host, staticDir, runRace, store, admin, inputDelayMs });
 
 const lan = Object.values(networkInterfaces()).flat().filter(a => a && a.family === 'IPv4' && !a.internal).map(a => a.address);
 console.log(`Politikart -- serveur de course en équipe sur le port ${srv.port}`);

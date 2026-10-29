@@ -642,7 +642,7 @@ describe('the Workshop (admin profile)', () => {
 const HUD_IDS: Array<[string, string]> = [
   ['hud', 'DIV'], ['h-pos', 'DIV'], ['h-lap', 'DIV'], ['h-time', 'DIV'], ['minimap', 'CANVAS'],
   ['h-item', 'DIV'], ['h-power', 'DIV'], ['h-pname', 'DIV'], ['h-pbar', 'I'], ['h-pkey', 'DIV'], ['h-hint', 'DIV'],
-  ['h-speed', 'SPAN'], ['h-drift', 'I'], ['h-center', 'DIV'], ['h-toast', 'DIV'], ['h-wrong', 'DIV'],
+  ['h-speed', 'SPAN'], ['h-drift', 'I'], ['h-center', 'DIV'], ['h-toast', 'DIV'], ['h-wrong', 'DIV'], ['h-net', 'DIV'],
 ];
 
 describe('the HUD', () => {
@@ -655,6 +655,7 @@ describe('the HUD', () => {
     }
     expect(container.querySelector('#h-item .nm')?.textContent).toBe('aucun objet');
     expect(container.querySelector('#h-speed')?.textContent).toBe('0');
+    expect(container.querySelector('#h-net')?.textContent).toBe('');          // solo play: no connection to show
   });
 
   it('is hidden on the menus and registers every handle for the frame writer', () => {
@@ -676,6 +677,8 @@ describe('the HUD', () => {
     hud.wrong!.setVisible(true);
     hud.toast!.show('FIGURE !');
     hud.center!.setText('PARTEZ !');
+    hud.net!.setText('ping 48 ms · délai 100 ms');
+    expect(container.querySelector('#h-net')?.textContent).toBe('ping 48 ms · délai 100 ms');
     expect(container.querySelector('#h-speed')?.textContent).toBe('123');
     expect(container.querySelector('#h-pos')?.textContent).toBe('1er');
     expect(container.querySelector('#h-lap')?.textContent).toBe('TOUR 2/3');

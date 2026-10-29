@@ -6,9 +6,9 @@
 // spirit as input.js's setInputSource. The module keeps a small immutable
 // view -- connection status, own id, the room, the last error -- that the UI
 // store mirrors through onNet(). Race traffic does not go through that view:
-// the race start, the 20 Hz snapshots and the results go to the handlers
+// the race start, the 30 Hz snapshots and the results go to the handlers
 // registered with onRace/onSnap/onResults, which the networked race (netrace.js)
-// consumes without re-rendering React twenty times a second.
+// consumes without re-rendering React thirty times a second.
 //
 // The same connection carries the social side of an account: hello sends the
 // session token (none for a guest), and the view also holds the friend list,
@@ -19,7 +19,7 @@ let Transport = typeof WebSocket === 'undefined' ? null : WebSocket;
 let ws = null;
 let view = Object.freeze({ status: 'idle', id: null, room: null, error: null, friends: [], invite: null, notice: null });
 const viewListeners = new Set();
-const handlers = { race: null, snap: null, results: null, profile: null, kartJoin: null };
+const handlers = { race: null, snap: null, results: null, profile: null, kartJoin: null, pong: null };
 let pendingName = '';
 let pendingToken = null;
 
@@ -43,6 +43,8 @@ export function onSnap(fn) { handlers.snap = fn; }
 export function onResults(fn) { handlers.results = fn; }
 /** A kart joined the race in progress (the admin as a god). */
 export function onKartJoin(fn) { handlers.kartJoin = fn; }
+/** The server's echo of a ping (sendPing): `fn({ n, at })`. */
+export function onPong(fn) { handlers.pong = fn; }
 /**
  * `fn(profile, gained, coins, bonus)` whenever the server says who we are or
  * what a race earned: `gained` experience, `coins` politicoins, `bonus`
@@ -86,6 +88,7 @@ function onMessage(raw) {
   else if (m.t === 'snap') handlers.snap?.(m);
   else if (m.t === 'results') handlers.results?.(m);
   else if (m.t === 'kartJoin') handlers.kartJoin?.(m);
+  else if (m.t === 'pong') handlers.pong?.(m);
 }
 
 /**
@@ -140,5 +143,11 @@ export const clearInvite = () => publish({ invite: null });
 /** Forget the last notice and error (a screen was left). */
 export const clearMessages = () => publish({ notice: null, error: null });
 
-/** Controls for this tick, plus the running counts of item and power presses. */
-export const sendInput = (c, item, power) => send({ t: 'input', c, item, power });
+/**
+ * Controls for the predicted tick numbered `seq` (and every tick since the
+ * last one sent: they shared the frame's controls), plus the running counts
+ * of item and power presses (DEC-052).
+ */
+export const sendInput = (c, item, power, seq) => send({ t: 'input', seq, c, item, power });
+/** A ping the server echoes at once: `n` numbers it, `at` is our clock when it left, so the echo gives the round trip. */
+export const sendPing = (n, at) => send({ t: 'ping', n, at });

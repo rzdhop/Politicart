@@ -15,10 +15,16 @@
 // here: the consumer owns the rule that an empty toast is a no-op, exactly as
 // the original toast() did.
 
+import { G } from './state.js';
+
 let queue = [];
+
+// While a networked client re-simulates its own kart (G.replaying, DEC-052) nothing is said: the server
+// says it once, in the snapshot, and a replayed tick must not say it again.
 
 /** Push one event. `type` names the kind, `text` is what the UI shows. */
 export function emit(type, text) {
+  if (G.replaying) return;
   queue.push({ type, text });
 }
 
@@ -63,7 +69,7 @@ export function pending() {
 
 /** Toast for kart k's driver only. */
 export function say(k, text) {
-  if (!k || k.isAI) return;
+  if (!k || k.isAI || G.replaying) return;
   queue.push({ type: 'toast', text, to: k });
 }
 
@@ -72,6 +78,7 @@ export function say(k, text) {
  * affected) read `others`. Without `to`, only k's driver is told.
  */
 export function tell(k, mine, others, to) {
+  if (G.replaying) return;
   say(k, mine);
   if (!others || !to) return;
   for (const o of to) {
@@ -82,7 +89,7 @@ export function tell(k, mine, others, to) {
 
 /** Persistent hint for kart k's driver only. */
 export function hintFor(k, text) {
-  if (!k || k.isAI) return;
+  if (!k || k.isAI || G.replaying) return;
   queue.push({ type: 'hint', text, to: k });
 }
 
