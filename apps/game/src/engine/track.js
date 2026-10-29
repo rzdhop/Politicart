@@ -37,6 +37,7 @@ import { TEX, bakeSurface, surface, textures } from './textures.js';
 import { pick, rand } from './util.js';
 import { EMBANK, PAVEMENT, STILL, setDecorScale, setTerrain, still, terrainY, yAt } from './decor/context.js';
 import { BUILDERS, DECOR_SURFACES } from './decor/index.js';
+import { flushInstanced, resetInstanced } from './decor/instanced.js';
 import { ADS, JACKETS, SKINS, adBoard, crowdZone, figure, flagPole, grandstand, lamp, sedan } from './decor/street.js';
 
 // ---------- "Légers": still decor in fewer draws (PLAN 4.2) ----------
@@ -278,7 +279,7 @@ const SLICE_SAMPLES = 256, SLICE_CHILDREN = 48;
  * fields in and out around every slice).
  */
 export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', seed = 0 } = {}) {
-  textures(); STILL.length = 0;
+  textures(); STILL.length = 0; resetInstanced();
   const layout = chooseLayout(track, seed);
   G.seed = seed >>> 0; G.layout = layout; G.rng = makeRng(derive(seed, SALT_RACE)); G.hw = track.roadHalfWidth ?? CFG.roadHalfWidth;
   for (const kind of surfacesOf(track)) for (const _ of bakeSurface(kind)) yield TRACK_PHASES[0];   // baked ahead, a few rows a step
@@ -372,6 +373,7 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   const themed = (BUILDERS[track.id] ?? BUILDERS.versailles)(decor, scene);
   if (themed && typeof themed.next === 'function') for (const _ of themed) yield TRACK_PHASES[6];   // a generator builder yields between its sections
   for (const _ of spreadDecor(decor, scene, S)) yield TRACK_PHASES[6];
+  for (const _ of flushInstanced(scene)) yield TRACK_PHASES[6];   // the repeated props' batches, placed like small decor (decor/instanced.js)
   yield TRACK_PHASES[6];
   if (fold) foldStill(scene); else STILL.length = 0;
   yield TRACK_PHASES[7];
