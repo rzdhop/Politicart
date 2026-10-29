@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { addFriend, clearInvite, connect, createRoom, disconnect, getNet, inviteFriend, joinRoom, onNet, onProfile, onRace, onSnap, probeServer, sendInput, serverUrl, setTransport } from './net.js';
+import { addFriend, clearInvite, connect, createRoom, disconnect, getNet, inviteFriend, joinRoom, onNet, onPong, onProfile, onRace, onSnap, probeServer, sendInput, sendPing, serverUrl, setTransport } from './net.js';
 
 // A stand-in WebSocket: records what is sent and lets the test play the server.
 class FakeSocket {
@@ -64,8 +64,8 @@ describe('net client', () => {
     connect('ws://x/ws', 'Bob'); const s = FakeSocket.last;
     joinRoom('ABCD');
     expect(s.sent).toEqual([]);
-    s.open(); joinRoom('ABCD'); sendInput({ throttle: true }, 1, 0);
-    expect(s.sent.slice(1)).toEqual([{ t: 'join', code: 'ABCD' }, { t: 'input', c: { throttle: true }, item: 1, power: 0 }]);
+    s.open(); joinRoom('ABCD'); sendInput({ throttle: true }, 1, 0, 17); sendPing(3, 1500);
+    expect(s.sent.slice(1)).toEqual([{ t: 'join', code: 'ABCD' }, { t: 'input', seq: 17, c: { throttle: true }, item: 1, power: 0 }, { t: 'ping', n: 3, at: 1500 }]);
   });
 
   it("sends the player's kart style with create and join", () => {
@@ -75,13 +75,15 @@ describe('net client', () => {
   });
 
   it('hands race traffic to the race handlers', () => {
-    const races = [], snaps = [];
-    onRace(m => races.push(m)); onSnap(m => snaps.push(m));
+    const races = [], snaps = [], pongs = [];
+    onRace(m => races.push(m)); onSnap(m => snaps.push(m)); onPong(m => pongs.push(m));
     connect('ws://x/ws', 'C'); const s = FakeSocket.last; s.open();
     s.serve({ t: 'race', trackIdx: 1, roster: [], you: 4 });
     s.serve({ t: 'snap', s: { tk: 3 } });
+    s.serve({ t: 'pong', n: 2, at: 99 });
     expect(races[0].you).toBe(4);
     expect(snaps[0].s.tk).toBe(3);
+    expect(pongs).toEqual([{ t: 'pong', n: 2, at: 99 }]);
   });
 
   it('reports a lost connection and forgets the room', () => {
