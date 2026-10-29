@@ -55,6 +55,9 @@ export const G = {
   // True while a networked client re-simulates its own kart (predict.js, DEC-052): messages, sounds, laps,
   // the item roll and the mesh's pose are the server's word or the frame's, so the step leaves them alone.
   replaying: false,
+  // The local kart's effects for the HUD and the camera (vfx.js, DEC-053): hit flash, shake, landing dip, boost kick,
+  // lap flash, and a count of items gone from the slot. Null headless and between races.
+  fxHud: null,
 };
 Object.defineProperty(G, 'state', { enumerable: true, get: getState });
 /** The next entity id: hazards and projectiles carry one so a snapshot can name them (DEC-014); static obstacles take theirs at build. */

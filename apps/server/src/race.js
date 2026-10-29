@@ -39,7 +39,7 @@ export function runRace(room, roster, io, { fast = false, hold, seed = newSeed()
   worker.on('message', m => {
     if (m.t === 'godReply') { const done = pending.get(m.id); pending.delete(m.id); done?.({ ok: m.ok, text: m.text }); return; }
     if (m.t === 'snap') {
-      const head = '{"t":"snap","s":' + m.s + ',';
+      const head = '{"t":"snap","s":' + m.s + ',"vfx":' + JSON.stringify(m.vfx ?? []) + ',';   // the race-wide effects, stringified once with the snapshot
       for (const [playerId, slot] of slotOf) {
         const mine = m.per[slot];
         const part = JSON.stringify({ ...mine, ev: mine?.ev ?? [], fx: mine ? [...m.fx, ...mine.fx] : m.fx });

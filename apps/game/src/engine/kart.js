@@ -479,8 +479,18 @@ const chromePipe = (r, len, x, y, z, P, s) => { const p = tag(new THREE.Mesh(geo
  * glows (the template's exhaust glow), flickering on "détaillés"; the glows
  * are named 'exhaust-glow' and pushed to `live`.
  */
+// ---------- Effect anchors (vfx.js) ----------
+// Where a kart's effects attach, in kart space: its exhaust mouths `[x, y, z, r]` (the boost's flames) and `top`, a
+// point over the driver's head (the stun's stars, the statuses' orbits). Plain numbers in a map beside the kart, not
+// objects in its tree nor keys of its userData: RACE_GOLDEN pins both, and there is nothing for foldRaceLow to fold.
+const FX_ANCHORS = new WeakMap();
+const DEFAULT_ANCHORS = Object.freeze({ exhaust: Object.freeze([Object.freeze([-0.35, 0.45, -1.95, 0.1]), Object.freeze([0.35, 0.45, -1.95, 0.1])]), top: 2.4 });
+/** A built kart's effect anchors (the stock kart's for anything else). */
+export const fxAnchorsOf = k => FX_ANCHORS.get(k) ?? DEFAULT_ANCHORS;
+
 function addExhaust(k, kind, rear, side, anim, S, P, live) {
   const mouths = [];
+  FX_ANCHORS.set(k, { exhaust: kind === 'turbine' ? [[0, rear.y + 0.55, rear.z - 0.55, 0.3]] : mouths, top: DEFAULT_ANCHORS.top });
   const back = (x, y, z, len, r) => { const p = chromePipe(r, len, x, y, z, P); p.rotation.x = Math.PI / 2; k.add(p); mouths.push([x, y, z - len / 2, r]); return p; };
   if (kind === 'double') { [-1, 1].forEach(sx => { back(rear.x * sx, rear.y, rear.z, 0.5, 0.08); back(rear.x * sx, rear.y + 0.2, rear.z, 0.5, 0.08); }); }
   else if (kind === 'side') { [-1, 1].forEach(sx => back(side.x * sx, side.y, side.z, side.len, 0.1)); }
@@ -744,6 +754,7 @@ function build(def, style, stage, pilot, tier, tex, steering, lod) {
   // anim: `(dt, t, kart?) => void` per animated part, run by updateKartVisual (with the kart) and the turntable (without);
   // trail: null here, the race attaches one (trail.js) from the style.
   k.userData = { wheels, sparks, ring, driver, rotor, blades: [bl, bl2], bumpSparks, shield, anim, trail: null };
+  if (FX_ANCHORS.has(k)) FX_ANCHORS.get(k).top = driver.position.y + 1.6;   // over the driver's head, wherever its seat is
   if (stage) finishStage(k, tier, live);
   if (fold) foldRaceLow(k, live);
   return k;

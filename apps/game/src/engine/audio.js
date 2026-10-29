@@ -59,7 +59,30 @@ function playSfx(name) {
     case 'box_reveal_mythic': chord(t, 'square', [523, 659, 784, 1046, 1318], 0.11, 0.45, 0.11); chord(t, 'triangle', [262, 330], 0.3, 0.8, 0.08); break;
     case 'box_reveal_incredible': chord(t, 'square', [784, 784, 784, 1046], 0.14, 0.3, 0.14); voice(t + 0.56, 'square', 1318, 1318, 0.9, 0.14); voice(t + 0.56, 'triangle', 659, 659, 0.9, 0.1); break;   // a fanfare
     case 'coin_rain': for (let i = 0; i < 8; i++) voice(t + i * 0.06, 'sine', 1500 + ((i * 7919) % 1100), 2200 + ((i * 104729) % 600), 0.1, 0.06); break;
+    // ---- The items' and powers' own (DEC-053), routed per kart through sfxFor like every race sound.
+    case 'impact': voice(t, 'square', 190, 45, 0.18, 0.2); noise(t, 0.12, 0.22, 1800); break;                                         // a projectile or a hazard connects
+    case 'swoosh': noise(t, 0.28, 0.16, 900, 3800); voice(t, 'triangle', 500, 1400, 0.2, 0.05); break;                               // something thrown
+    case 'teleport': chord(t, 'sine', [523, 784, 1046, 1568, 2093], 0.04, 0.18, 0.08); voice(t, 'triangle', 2400, 300, 0.35, 0.05); break;
+    case 'siren': for (let i = 0; i < 4; i++) voice(t + i * 0.16, 'square', i % 2 ? 880 : 660, i % 2 ? 880 : 660, 0.15, 0.06); break;   // the BRAV-M's two tones
+    case 'gas': noise(t, 0.9, 0.14, 500, 260); voice(t, 'sine', 130, 90, 0.8, 0.05); break;                                            // a hiss settling
+    case 'pans': for (let i = 0; i < 7; i++) { voice(t + i * 0.075, 'square', 1250 + (i % 3) * 230, 900, 0.07, 0.07); voice(t + i * 0.075, 'triangle', 2600 + (i % 2) * 400, 2400, 0.05, 0.04); } break;
+    case 'gavel': [0, 0.17].forEach(d => { voice(t + d, 'triangle', 240, 80, 0.1, 0.32); noise(t + d, 0.04, 0.18, 2500); }); break;   // two knocks
+    case 'stamp': voice(t, 'square', 140, 50, 0.12, 0.26); noise(t, 0.07, 0.16, 1200); break;                                           // a rubber stamp comes down
+    case 'mow': voice(t, 'sawtooth', 95, 120, 0.9, 0.08); voice(t, 'square', 47, 60, 0.9, 0.05); noise(t, 0.9, 0.06, 3000, 1500); break;   // the mower's engine
+    case 'euro': voice(t, 'sine', 1568, 1568, 0.12, 0.1); voice(t + 0.09, 'sine', 2093, 2093, 0.3, 0.1); for (let i = 0; i < 4; i++) voice(t + 0.12 + i * 0.05, 'triangle', 2600 + i * 180, 2300, 0.06, 0.04); break;   // the till
+    case 'rally': chord(t, 'square', [392, 523, 659, 784], 0.08, 0.22, 0.09); voice(t + 0.32, 'triangle', 1046, 1046, 0.5, 0.08); break;   // a rally's fanfare
   }
+}
+/** Every sound the items and powers play besides the race's own, for the test: each a case above. */
+export const ITEM_SOUNDS = Object.freeze(['impact', 'swoosh', 'teleport', 'siren', 'gas', 'pans', 'gavel', 'stamp', 'mow', 'euro', 'rally']);
+let noiseBuf = null;
+/** White noise from `t` for `dur` seconds through a band-pass at `f0` Hz (sweeping to `f1`), fading from `vol`. */
+function noise(t, dur, vol, f0, f1 = f0) {
+  if (!noiseBuf) { noiseBuf = AC.createBuffer(1, AC.sampleRate, AC.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+  const src = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain(); src.buffer = noiseBuf;
+  f.type = 'bandpass'; f.Q.value = 1.2; f.frequency.setValueAtTime(f0, t); if (f1 !== f0) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(f); f.connect(g); g.connect(master); src.start(t); src.stop(t + dur + 0.02);
 }
 /** Every sound the Politibox plays, for the timeline's test: each a case above. */
 export const BOX_SOUNDS = Object.freeze(['box_drop', 'box_rattle', 'box_tease', 'box_burst', 'box_reveal_common', 'box_reveal_rare', 'box_reveal_mythic', 'box_reveal_incredible', 'coin_rain']);

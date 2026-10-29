@@ -9,7 +9,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The held-item slot. When it holds something it gains a gold border and glow — the HUD’s one piece of "you can act now" signalling. Gold means an item; green means a power.',
+          'The held-item slot. When it holds something it gains a gold border and glow — the HUD’s one piece of "you can act now" signalling. Gold means an item; green means a power. While an item is drawn the glyph rolls (`rolling`), and `flashUsed()` flashes the slot as the item goes.',
       },
     },
   },
@@ -22,6 +22,9 @@ type Story = StoryObj<typeof meta>;
 export const Empty: Story = { args: { icon: '·', label: 'aucun objet' } };
 
 export const Holding: Story = { args: { icon: '🚀', label: '49.3 Turbo', filled: true } };
+
+/** Drawing an item: the roulette rolls the glyph like a slot machine's reel (still under reduced motion). */
+export const Rolling: Story = { args: { icon: '🗳️', label: '…', rolling: true } };
 
 /** A long item name, which wraps rather than overflowing the square. */
 export const LongName: Story = {

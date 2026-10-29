@@ -69,6 +69,7 @@ export { TrackCard, type TrackCardProps } from './components/tracks/TrackCard';
 // HUD. The live readouts also expose imperative handles -- see handles.ts for
 // why, and read that before driving the HUD from a game loop.
 export {
+  replayClass,
   type TextReadoutHandle,
 } from './components/hud/handles';
 export {
@@ -85,6 +86,12 @@ export {
   type HudCornerPosition,
   type HudCornerProps,
 } from './components/hud/HudCorner';
+export {
+  HitVignette,
+  type HitVignetteHandle,
+  type HitVignetteProps,
+  type HitVignetteTone,
+} from './components/hud/HitVignette';
 export { HudHint, type HudHintProps } from './components/hud/HudHint';
 export { HudLayer, type HudLayerProps } from './components/hud/HudLayer';
 export {
@@ -113,6 +120,13 @@ export {
   type SpeedReadoutHandle,
   type SpeedReadoutProps,
 } from './components/hud/SpeedReadout';
+export {
+  StatusBadges,
+  badgeValue,
+  type StatusBadge,
+  type StatusBadgesHandle,
+  type StatusBadgesProps,
+} from './components/hud/StatusBadges';
 export { Toast, type ToastHandle, type ToastProps } from './components/hud/Toast';
 export {
   WrongWay,

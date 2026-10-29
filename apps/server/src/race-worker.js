@@ -31,6 +31,7 @@
 // Out: { t: 'snap', s, per: { [slot]: { ev: [[type, text]], fx: [name], ack, n, me } }, fx: [name] }
 //      s is the snapshot already stringified (encodeSnapshot), once for every player; me is the
 //      slot's private block (encodeKartPrivate); ack and n are absent until the slot's first numbered input
+//      vfx: the effects of the last few ticks, race-wide (netstate.js encodeVfx): this thread draws none (DEC-053)
 //      { t: 'done', ranking, teams }
 //      { t: 'godReply', id, ok, text }
 import { parentPort, workerData } from 'node:worker_threads';
@@ -43,6 +44,8 @@ import { useItem } from '../../game/src/engine/items.js';
 import { getState, resetMachine } from '../../game/src/engine/machine.js';
 import { encodeKartPrivate, encodeSnapshot, markTeleports } from '../../game/src/engine/netstate.js';
 import { usePower } from '../../game/src/engine/powers.js';
+import { encodeVfx } from '../../game/src/engine/netstate.js';
+import { setVfxSink } from '../../game/src/engine/vfx.js';
 import { endRace, joinField, raceOver, simStep, startField } from '../../game/src/engine/race.js';
 import { CFG, G, STEP } from '../../game/src/engine/state.js';
 import { placementPoints, teamStandings } from '../../game/src/engine/teams.js';
@@ -85,6 +88,9 @@ const loading = new Set(fast ? [] : humans.keys());
 const slotOf = new Map(G.karts.map((k, i) => [k, i]));
 let raceFx = [];
 setSfxSink((name, k) => { if (!k) { raceFx.push(name); return; } const h = humans.get(slotOf.get(k)); if (h) h.fx.push(name); });
+// Effects are only recorded here, for every client to play (vfx.js): the worker never builds one.
+let raceVfx = [];
+setVfxSink(e => { raceVfx.push(encodeVfx(e)); });
 
 const bool = v => v === true;
 parentPort.on('message', m => {
@@ -156,8 +162,8 @@ function step() {
       per[slot] = { ev: h.ev, fx: h.fx, ...(h.n ? { ack: h.ack, n: h.n } : {}), me: encodeKartPrivate(G.karts[slot]) };
       h.ev = []; h.fx = [];
     }
-    parentPort.postMessage({ t: 'snap', s: JSON.stringify(encodeSnapshot(G, tick)), per, fx: raceFx });
-    raceFx = [];
+    parentPort.postMessage({ t: 'snap', s: JSON.stringify(encodeSnapshot(G, tick)), per, fx: raceFx, vfx: raceVfx });
+    raceFx = []; raceVfx = [];
   }
   if (raceOver() || G.time > raceCap()) { finish(); return false; }
   return true;

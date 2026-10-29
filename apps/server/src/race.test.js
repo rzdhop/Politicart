@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 import { CHARACTERS } from '../../game/src/engine/data.js';
 import { buildKart } from '../../game/src/engine/kart.js';
+import { decodeVfx } from '../../game/src/engine/netstate.js';
 import { buildPilot } from '../../game/src/engine/pilot.js';
+import { VFX_KINDS } from '../../game/src/engine/vfx.js';
 import { Room } from './lobby.js';
 import { runRace } from './race.js';
 
@@ -134,6 +136,23 @@ describe('a race in a worker', () => {
       expect(await race.god({ cmd: 'boost', target: 0 })).toMatchObject({ ok: false });
     } finally { race.stop(); }
   }, 20_000);
+
+  it('sends the effects beside the sounds, recorded by a worker that builds none (DEC-053)', async () => {
+    const { room, roster, sent, io } = harness();
+    const race = runRace(room, roster, io, { fast: true, seed: 77 });
+    const snaps = () => sent.filter(([id, m]) => id === 'alice' && m.t === 'snap').map(([, m]) => m);
+    try {
+      race.input('bob', { c: { throttle: true } });
+      await until(() => snaps().length > 1500);          // 75 s of racing: the AI has used items and powers
+      expect(snaps().every(m => Array.isArray(m.vfx))).toBe(true);
+      const effects = snaps().flatMap(m => m.vfx).map(decodeVfx);
+      expect(effects.length).toBeGreaterThan(20);
+      expect(effects.every(e => e && VFX_KINDS.includes(e.ty) && (e.k === undefined || (e.k >= 0 && e.k < 6)))).toBe(true);
+      expect(effects.some(e => e.ty === 'windup')).toBe(true);   // the AI telegraphs its items and powers
+      // the statuses travel with the karts, for every screen's auras (sl co ca ra sp rl)
+      expect(snaps().some(m => m.s.k.some(k => ['sl', 'co', 'ca', 'ra', 'sp', 'rl'].some(f => k[f] > 0)))).toBe(true);
+    } finally { race.stop(); }
+  }, 30_000);
 
   it('runs to the finish when the drivers hand over to the AI, and scores the teams', async () => {
     const { room, roster, io, finished } = harness();

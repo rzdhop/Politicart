@@ -1,5 +1,7 @@
-/* Motion: the library's first keyframes, for the economy's grades and the
-   Politibox reveal.
+/* Motion: the library's keyframes, for the economy's grades, the Politibox
+   reveal and the race HUD (the countdown's beats, the position's pop, the
+   item roulette and its flash, the power's ready pulse, the toast's slide,
+   the hit vignette's flash and the status badges).
 
    Loads last so its grade rules beat any component's own border or
    background by source order. Every effect is a pseudo-element or a
@@ -199,6 +201,90 @@
   animation-fill-mode:both;
 }
 
+/* HUD (DEC-053) -------------------------------------------------------------- */
+
+/* The countdown's beats and the start: each new word lands big and settles. */
+@keyframes kr-beat {
+  0% { transform:scale(1.9); opacity:0; }
+  35% { transform:scale(.92); opacity:1; }
+  100% { transform:scale(1); opacity:1; }
+}
+
+/* A place won pops up gold-bright; a place lost drops and dims a moment. */
+@keyframes kr-pos-gain {
+  0% { transform:scale(1.45) translateY(-4px); filter:brightness(1.6); }
+  100% { transform:none; filter:none; }
+}
+
+@keyframes kr-pos-loss {
+  0% { transform:scale(.8) translateY(6px); opacity:.55; }
+  100% { transform:none; opacity:1; }
+}
+
+/* The item roulette: the glyph rolls through the reel, a little blurred. */
+@keyframes kr-reel {
+  0% { transform:translateY(-55%); opacity:.2; filter:blur(1.5px); }
+  45% { transform:translateY(0); opacity:1; filter:blur(0); }
+  100% { transform:translateY(55%); opacity:.2; filter:blur(1.5px); }
+}
+
+/* The item leaves the slot: a gold flash outward. */
+@keyframes kr-used {
+  0% { box-shadow:0 0 0 0 rgba(242,193,78,.9),0 0 30px rgba(242,193,78,.8); transform:scale(1.08); }
+  100% { box-shadow:0 0 0 14px rgba(242,193,78,0),0 0 0 rgba(242,193,78,0); transform:scale(1); }
+}
+
+/* The power's ready glow breathes; the moment it charges, it pops. */
+@keyframes kr-ready {
+  0%,100% { box-shadow:0 0 12px rgba(154,208,79,.25); }
+  50% { box-shadow:0 0 24px rgba(154,208,79,.6); }
+}
+
+@keyframes kr-charged {
+  0% { transform:scale(1.12); }
+  100% { transform:scale(1); }
+}
+
+/* The ribbon slides down into place. */
+@keyframes kr-toast-in {
+  from { transform:translateY(-14px); }
+  to { transform:translateY(0); }
+}
+
+/* The edges flash, then settle back to their level. */
+@keyframes kr-vignette {
+  0% { opacity:1; }
+  100% { opacity:var(--hit,0); }
+}
+
+/* A new status badge slides in from the left. */
+@keyframes kr-badge-in {
+  from { transform:translateX(-12px); opacity:0; }
+  to { transform:translateX(0); opacity:1; }
+}
+
+.center.beat { animation:kr-beat .45s cubic-bezier(.2,.9,.3,1.2) both; }
+
+.pos.gain { animation:kr-pos-gain .4s ease-out both; }
+
+.pos.loss { animation:kr-pos-loss .35s ease-out both; }
+
+.pos { transform-origin:left center; }
+
+.item.rolling .ico { animation:kr-reel .0833s linear infinite; }
+
+.item.used { animation:kr-used .45s ease-out both; }
+
+.power.ready { animation:kr-ready 1.6s ease-in-out infinite; }
+
+.power.ready.charged { animation:kr-charged .35s cubic-bezier(.2,.9,.3,1.2),kr-ready 1.6s ease-in-out .35s infinite; }
+
+.toast.on { animation:kr-toast-in .28s cubic-bezier(.2,.9,.3,1.2) both; }
+
+.hit-vignette.flash { animation:kr-vignette .5s ease-out both; }
+
+.status-badge.kr-badge-in { animation:kr-badge-in .25s ease-out both; }
+
 /* Where `@property` is missing, a custom property cannot interpolate and the
    ring would snap at the halfway point. Relative colour syntax shipped in the
    same releases as `@property` in every engine that has both (Chrome 119,
@@ -221,7 +307,17 @@
   .kr-tease,
   .kr-pop,
   .kr-reveal-card .grade,
-  .drop-chip:nth-child(-n+3) {
+  .drop-chip:nth-child(-n+3),
+  .center.beat,
+  .pos.gain,
+  .pos.loss,
+  .item.rolling .ico,
+  .item.used,
+  .power.ready,
+  .power.ready.charged,
+  .toast.on,
+  .hit-vignette.flash,
+  .status-badge.kr-badge-in {
     animation:none;
   }
   .grade-rare::before,

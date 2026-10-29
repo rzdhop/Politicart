@@ -2,6 +2,7 @@ import { lazy, memo, Suspense } from 'react';
 import {
   CenterAnnounce,
   DriftGauge,
+  HitVignette,
   HudCorner,
   HudHint,
   HudLayer,
@@ -12,13 +13,16 @@ import {
   PowerGauge,
   RaceTimer,
   SpeedReadout,
+  StatusBadges,
   Toast,
   WrongWay,
   type DriftGaugeHandle,
+  type HitVignetteHandle,
   type ItemSlotHandle,
   type PositionReadoutHandle,
   type PowerGaugeHandle,
   type SpeedReadoutHandle,
+  type StatusBadgesHandle,
   type TextReadoutHandle,
   type ToastHandle,
   type WrongWayHandle,
@@ -51,10 +55,14 @@ export interface HudHandles {
   wrong: WrongWayHandle | null;
   /** The team race's connection: round trip and render delay (DEC-052); empty in solo play. */
   net: TextReadoutHandle | null;
+  /** Stage 4's (DEC-053): the tinted edges and the statuses on the kart. */
+  vignette: HitVignetteHandle | null;
+  status: StatusBadgesHandle | null;
 }
 
 export const hud: HudHandles = {
   pos: null, lap: null, time: null, item: null, power: null, hint: null, speed: null, drift: null, center: null, toast: null, wrong: null, net: null,
+  vignette: null, status: null,
 };
 
 /**
@@ -67,12 +75,14 @@ export const hud: HudHandles = {
 const Readouts = memo(function Readouts() {
   return (
     <>
+      <HitVignette id="h-hit" ref={(h) => { hud.vignette = h; }} />
       <HudCorner corner="topLeft">
         <PositionReadout id="h-pos" position={6} ref={(h) => { hud.pos = h; }} />
         <LapCounter id="h-lap" ref={(h) => { hud.lap = h; }}>TOUR 1/3</LapCounter>
         <RaceTimer id="h-time" ref={(h) => { hud.time = h; }}>0:00.00</RaceTimer>
         {/* the team race's ping and delay, in the clock's quiet monospace; empty in solo play (a LatencyReadout later, PLAN stage 8) */}
         <RaceTimer id="h-net" ref={(h) => { hud.net = h; }} />
+        <StatusBadges id="h-status" ref={(h) => { hud.status = h; }} />
       </HudCorner>
       <HudCorner corner="topRight">
         <MinimapFrame id="minimap" ref={(canvas) => { attachMinimap(canvas); }} />

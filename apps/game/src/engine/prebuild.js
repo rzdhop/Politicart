@@ -44,7 +44,8 @@
 // The countdown's own priming (primeCountdown): the hazards and projectiles
 // the items make are not in the scene at start, so their materials would
 // compile at the first throw; during the 3.6 s countdown one of each is
-// primed through the scissor, a few per frame, then freed.
+// primed through the scissor, a few per frame, then freed; so are the
+// effects' layers (vfx.js), which stay.
 //
 // Headless-safe: without a renderer the build phases run and the priming is
 // skipped; nothing here touches the DOM.
@@ -63,6 +64,7 @@ import { newSeed } from './seed.js';
 import { CFG, G, getPoly } from './state.js';
 import { buildTrackPhases, TRACK_PHASES } from './track.js';
 import { buildTrail } from './trail.js';
+import { vfxRoot } from './vfx.js';
 
 /** How long a frame's slice may take, in ms: a phase that overruns it ends the slice. */
 export const BUDGET_MS = 8;
@@ -335,7 +337,7 @@ export function primeCountdown({ renderer, budget = BUDGET_MS } = {}) {
   if (!renderer || !G.scene) return false;
   if (!cd || cd.scene !== G.scene) { cd = { scene: G.scene, group: null, prime: null, done: false }; }
   if (cd.done) return false;
-  if (!cd.group) { cd.group = buildExtras(); G.scene.add(cd.group); cd.prime = primeJob(cd.group); }
+  if (!cd.group) { cd.group = buildExtras(); G.scene.add(cd.group); cd.prime = primeJob(cd.group); const fx = vfxRoot(); if (fx) cd.prime.list.push(...primeJob(fx).list); }   // and the effects' layers (vfx.js), empty until the first hit
   if (!primeSome(renderer, G.scene, camera, cd.prime, budget)) return true;
   G.scene.remove(cd.group);
   cd.group.traverse(o => { if (o.geometry) o.geometry.dispose(); });

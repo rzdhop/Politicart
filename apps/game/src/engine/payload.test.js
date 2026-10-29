@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { framePayload } from './payload.js';
+import { framePayload, statusOf } from './payload.js';
 
 const CFG = { laps: 3, powerCooldown: 24 };
 
@@ -74,5 +74,34 @@ describe('framePayload', () => {
     expect(a.rank).toBe(2);
     expect(b.rank).toBe(0);
     expect(a).not.toBe(b);
+  });
+});
+
+// What the HUD animates (DEC-053): the hit flash, the shake, the lap flash and the item-used count from vfx.js's
+// G.fxHud, the boost, and the statuses on the kart in the HUD's order.
+describe('the HUD\'s motion', () => {
+  it('reads nothing but zeros without effects (headless, between races)', () => {
+    expect(framePayload(fakeG(), CFG)).toMatchObject({ hit: 0, shake: 0, lapFlash: 0, boost: false, status: [], itemUsed: 0 });
+  });
+
+  it('passes the effects\' HUD state and the boost through', () => {
+    const G = fakeG({ fxHud: { hit: 0.7, shake: 0.4, dip: 0.2, kick: 0, lap: 0.9, used: 3 } });
+    G.player.boost = 0.5;
+    expect(framePayload(G, CFG)).toMatchObject({ hit: 0.7, shake: 0.4, lapFlash: 0.9, boost: true, itemUsed: 3 });
+  });
+
+  it('lists the statuses with their time left, the relance by its count, the loophole over the immunity it brings', () => {
+    const k = { slowed: 1.2, confused: 0, capped: 2, rabot: 0, slip: 0.3, relance: 2, shield: 10, invincible: 5, phantom: 5, fly: 0 };
+    expect(statusOf(k)).toEqual([
+      { id: 'slowed', time: 1.2 }, { id: 'capped', time: 2 }, { id: 'slip', time: 0.3 }, { id: 'relance', count: 2 }, { id: 'shield', time: 10 }, { id: 'phantom', time: 5 },
+    ]);
+    expect(statusOf({ invincible: 6, fly: 4, rabot: 4, confused: 1 })).toEqual([{ id: 'confused', time: 1 }, { id: 'rabot', time: 4 }, { id: 'immunity', time: 6 }, { id: 'fly', time: 4 }]);
+    expect(statusOf({})).toEqual([]);
+  });
+
+  it('names every status it lists in the HUD\'s table', async () => {
+    const { STATUSES } = await import('./data.js');
+    const all = statusOf({ slowed: 1, confused: 1, capped: 1, rabot: 1, slip: 1, relance: 1, shield: 1, invincible: 1, fly: 1 }).map(s => s.id);
+    for (const id of [...all, 'phantom']) expect(STATUSES[id], id).toMatchObject({ icon: expect.any(String), name: expect.any(String), good: expect.any(Boolean) });
   });
 });

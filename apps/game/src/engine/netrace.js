@@ -24,12 +24,13 @@ import { playerStyle } from './kartstyle.js';
 import { readInput } from './input.js';
 import { buildHazard, buildProjectileMesh } from './items.js';
 import { getState, transition } from './machine.js';
-import { applyKart, bracket, extrapolateKart, lerpKart } from './netstate.js';
+import { applyKart, bracket, decodeVfx, extrapolateKart, lerpKart } from './netstate.js';
 import { onKartJoin, onNet, onPong, onRace, onResults, onSnap, sendInput, sendPing } from './net.js';
 import { updateKartVisual } from './physics.js';
 import { blend, errorOffset, estimateDelay, lastSeq, predictTick, reconcile, recordTick, resetPrediction } from './predict.js';
 import { animateCrowd, joinField, placeCrossing, startField, viewStep } from './race.js';
 import { G, STEP } from './state.js';
+import { receiveVfx, replayVfx } from './vfx.js';
 
 const TICKS_PER_MS = 60 / 1000;
 const START_DELAY = 6;           // the render delay before any jitter is measured: 100 ms, six 60 Hz ticks
@@ -133,6 +134,7 @@ export function receiveSnap(m) {
   clockSample(s.tk, now());
   for (const [type, text] of m.ev ?? []) emit(type, text);
   for (const name of m.fx ?? []) sfx(name);
+  receiveVfx((m.vfx ?? []).map(decodeVfx).filter(Boolean), s.tk);   // the effects (DEC-053): played when the render clock reaches this tick
   if (s.st === 'race' && getState() === 'countdown') transition('race');
   me = m.me ?? null;
   const ks = s.k[G.netSlot], was = predicting;
@@ -262,6 +264,7 @@ export function netStep(dt) {
   const tick = renderTick(dt);
   const br = tick === null ? null : bracket(buffer, tick);
   const own = G.player;
+  if (tick !== null) replayVfx(tick);
   if (br) {
     const { a, b, f, ex } = br;
     G.time = a.t + (b.t - a.t) * f + (b.st === 'race' ? ex : 0); G.countdown = b.cd ?? 0; G.resultsAt = b.ra ?? Infinity; if (b.lp) G.laps = b.lp;
