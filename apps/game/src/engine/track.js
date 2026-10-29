@@ -177,6 +177,7 @@ function buildFeatures(scene, layout, rng) {
       G.pads.push({ i0, len: 3 }); const b = G.samples[(i0 + 3) % N]; const L = Math.hypot(b.x - a.x, b.z - a.z);
       const p = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2 - 2, L), new THREE.MeshBasicMaterial({ map: padTex() })); p.rotation.x = -Math.PI / 2;
       const holder = new THREE.Group(); holder.position.set((a.x + b.x) / 2, (a.y + b.y) / 2 + 0.09, (a.z + b.z) / 2); holder.rotation.y = Math.atan2(b.x - a.x, b.z - a.z); holder.add(p); scene.add(holder);
+      G.pads[G.pads.length - 1].mesh = p;   // the pad's own material breathes and flashes (vfx.js)
     } else if (f.t === 'crossing') {
       const yaw = Math.atan2(a.sx, a.sz); const car = sedan(scene, a.x, a.z, yaw, f.color || 0x111111, f.taxi); car.position.y = a.y;
       const street = new THREE.Mesh(new THREE.PlaneGeometry(14, 90), new THREE.MeshStandardMaterial({ map: TEX.asphalt, roughness: 1 })); street.rotation.x = -Math.PI / 2; const sh = new THREE.Group(); sh.position.set(a.x, a.y + 0.04, a.z); sh.rotation.y = yaw; sh.add(street); scene.add(sh);

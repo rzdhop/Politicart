@@ -37,6 +37,7 @@ import { newSeed } from './seed.js';
 import { CFG, G } from './state.js';
 import { buildTrack } from './track.js';
 import { buildTrail } from './trail.js';
+import { initVfx, updateVfx } from './vfx.js';
 import { clamp, lerp, rand } from './util.js';
 
 // ---------- Kart entities ----------
@@ -100,6 +101,7 @@ export function startField(slots, { seed = 0 } = {}) {
   // the lights, the sky and the air, after the track so the climate finds the lamps the decor registered (DEC-051)
   applyClimate(scene, track, G.layout?.climate ?? track.climates?.[0] ?? 'noon');
   buildMinimapBase();
+  initVfx(scene);   // the effects' pools for this race, at this detail level (a no-op headless)
 
   G.karts = slots.map(sl => { const k = makeKart(sl.def, sl.isAI, sl.style); k.team = sl.team ?? null; k.god = sl.god === true; return k; });
   const local = slots.findIndex(sl => sl.local);
@@ -161,7 +163,10 @@ function updateCamera(dt) {
   camera.lookAt(k.pos.x + fx * 5, k.y + 1.0 + (k.mesh.position.y - k.y) * 0.5, k.pos.z + fz * 5);
   // a short camera shake when the followed kart is bumped
   if (k.bump > 0) { const e = k.bump * (k.bumpPower || 1) * 0.5; camera.position.x += Math.sin(G.time * 71) * e; camera.position.y += Math.sin(G.time * 53) * e * 0.6; }
-  camera.fov = lerp(camera.fov, (k.boost > 0 ? 76 : 65) + narrow * 30, 1 - Math.exp(-dt * 5)); camera.updateProjectionMatrix();
+  // the effects' share (vfx.js): a hit's shake, a landing's dip, a boost's kick of the lens
+  const hud = G.fxHud;
+  if (hud) { const e = hud.shake * 0.35; camera.position.x += Math.sin(G.time * 67 + 1) * e; camera.position.y += Math.sin(G.time * 47) * e * 0.6 - hud.dip * 0.8; }
+  camera.fov = lerp(camera.fov, (k.boost > 0 ? 76 : 65) + narrow * 30 + (hud ? hud.kick * 6 : 0), 1 - Math.exp(-dt * 5)); camera.updateProjectionMatrix();
   if (G.sun) { const o = G.sunOffset || { x: 120, y: 200, z: 80 }; G.sun.position.set(k.pos.x + o.x, k.y + o.y, k.pos.z + o.z); G.sun.target.position.set(k.pos.x, k.y, k.pos.z); G.sun.target.updateMatrixWorld(); }
 }
 
@@ -191,6 +196,7 @@ export function stepRace(dt) {
  * and the networked race, whose karts come from snapshots (netrace.js).
  */
 export function viewStep(dt) {
+  updateVfx(dt);   // before the camera, which reads the shake and the dip it leaves in G.fxHud
   updateCamera(dt);
   updateWrongWay();
   const payload = framePayload(G, CFG);

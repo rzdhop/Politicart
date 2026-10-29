@@ -50,6 +50,9 @@ export const G = {
   // The race's climate (climate.js applyClimate): the preset applied, the sun's offset from the followed kart, the lamp heads
   // the decor registered (lit at night), and what the race allocated and frees with its scene (disposable, race.js disposeScene).
   climate: null, sunOffset: null, lamps: [], disposables: [],
+  // The local kart's effects for the HUD and the camera (vfx.js, DEC-053): hit flash, shake, landing dip, boost kick,
+  // lap flash, and a count of items gone from the slot. Null headless and between races.
+  fxHud: null,
 };
 Object.defineProperty(G, 'state', { enumerable: true, get: getState });
 /** The next entity id: hazards and projectiles carry one so a snapshot can name them (DEC-014); static obstacles take theirs at build. */
