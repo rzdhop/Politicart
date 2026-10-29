@@ -28,8 +28,14 @@ Current state only. History lives in git.
 - **E2E:** full runs after wave 2 (63/80), after 7c + stage 8 (64/83) and on
   the complete tip (64/83): every failure is in the software-WebGL
   race-start set (the 17 race specs; R-28 joins it, stalling at the green
-  light after its new checks pass; R-05 now and then). R-20 failed once in
-  the final full run and passed twice alone (1.1 min, 50 s): load.
+  light after its new checks pass; R-05 now and then), except **R-20**
+  ("the admin enters a race already running"): it fails in both full runs
+  after stage 7a and passes alone (1.1 min, 50 s). The race is capped at
+  45 s (nine laps of the E2E server's 15 s cap); a god joining mid-race
+  builds the circuit synchronously and cold (no pre-build: the seed comes
+  with the join), and the denser Élysée under a loaded software-GL run
+  no longer fits: the race ends on its own and the console unmounts under
+  the click on `#god-finish`. Follow-up below.
 - **Measured** (PLAN.md "Targets", countdown frame at 1440 under software
   GL, WebGL call hook, `main` re-measured by the same probe):
   - détaillés: 706-944 calls / 270-401k tris (`main` 1,062-1,462 /
@@ -62,7 +68,10 @@ Current state only. History lives in git.
   - catch-up boost zones (stage 4) skipped: they would change the seeded
     layouts; R-31 (`#h-net` in a team race) and a 120 ms
     `POLITIKART_TEST_DELAY_MS` multiplayer spec need a real GPU to run;
-  - a test seed hook would let R-28 prove two seeds give two names.
+  - a test seed hook would let R-28 prove two seeds give two names;
+  - the god's mid-race join (and any late joiner) builds the circuit cold:
+    sending a running room's seed to the dashboard and pre-building it
+    there would shorten a real admin's wait and give R-20 its window back.
 - **Container notes:** worktrees need `cp -al node_modules` plus the three
   package `node_modules` and a `packages/ui` build; `.worktrees/`,
   `playwright.local.config.ts` (Chromium 1243 at
