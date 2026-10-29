@@ -1,6 +1,7 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { brotliCompressSync, gzipSync } from 'node:zlib';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
@@ -31,6 +32,8 @@ function client(port) {
 const isRoom = pred => m => m.t === 'room' && pred(m.room);
 
 let srv, dir;
+/** A chunk big enough to compress (the real ones are hundreds of kB). */
+const CHUNK = 'export const chunk = ' + JSON.stringify('politikart '.repeat(400)) + ';\n';
 const races = [];
 const fakeRace = (room, roster, io) => {
   const r = { room: room.code, roster, inputs: [], left: [], io, stopped: false };
@@ -43,6 +46,12 @@ beforeAll(async () => {
   writeFileSync(join(dir, 'index.html'), '<!doctype html><title>kr</title>');
   writeFileSync(join(dir, 'app.js'), 'console.log(1)');
   for (const f of ['favicon.ico', 'favicon.svg', 'favicon-32.png', 'apple-touch-icon.png']) writeFileSync(join(dir, f), 'icon');
+  // a hashed chunk with the siblings the build's compress script writes, and one without
+  mkdirSync(join(dir, 'assets'));
+  writeFileSync(join(dir, 'assets', 'chunk-abc123.js'), CHUNK);
+  writeFileSync(join(dir, 'assets', 'chunk-abc123.js.br'), brotliCompressSync(Buffer.from(CHUNK)));
+  writeFileSync(join(dir, 'assets', 'chunk-abc123.js.gz'), gzipSync(Buffer.from(CHUNK)));
+  writeFileSync(join(dir, 'assets', 'plain-def456.js'), 'export const plain = 1;');
   srv = await startServer({ port: 0, host: '127.0.0.1', staticDir: dir, runRace: fakeRace, loginTries: 1000 });
 });
 afterAll(() => srv.close());
@@ -95,6 +104,59 @@ describe('http', () => {
   it('never serves a file outside the game build', async () => {
     const r = await fetch(url('/%2e%2e/%2e%2e/package.json'));
     expect([403, 404]).toContain(r.status);
+  });
+
+  // DEC-055: hashed assets are immutable, the rest revalidate with an ETag.
+  it('caches the hashed assets for a year and the page not at all', async () => {
+    const chunk = await fetch(url('/assets/chunk-abc123.js'), { headers: { 'accept-encoding': 'identity' } });
+    expect(chunk.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    for (const p of ['/', '/index.html', '/app.js', '/favicon.svg']) {
+      const r = await fetch(url(p), { headers: { 'accept-encoding': 'identity' } });
+      expect(r.headers.get('cache-control'), p).toBe('no-cache');
+      expect(r.headers.get('etag'), p).toMatch(/^W\/"[0-9a-f]+-[0-9a-f]+"$/);
+    }
+  });
+
+  it('answers 304 to a page the browser already has, and 200 once it changed', async () => {
+    const first = await fetch(url('/'), { headers: { 'accept-encoding': 'identity' } });
+    const etag = first.headers.get('etag');
+    const again = await fetch(url('/'), { headers: { 'accept-encoding': 'identity', 'if-none-match': etag } });
+    expect(again.status).toBe(304);
+    expect(again.headers.get('etag')).toBe(etag);
+    expect(await again.text()).toBe('');
+    const stale = await fetch(url('/'), { headers: { 'accept-encoding': 'identity', 'if-none-match': 'W/"0-0"' } });
+    expect(stale.status).toBe(200);
+    // a HEAD carries the same headers and no body
+    const head = await fetch(url('/'), { method: 'HEAD', headers: { 'accept-encoding': 'identity' } });
+    expect(head.headers.get('etag')).toBe(etag);
+    expect(head.headers.get('content-length')).toBe(String(Buffer.byteLength('<!doctype html><title>kr</title>')));
+  });
+
+  it('serves a text asset from its brotli sibling, else gzip, else as is, with Vary', async () => {
+    const raw = Buffer.byteLength(CHUNK);
+    const br = await fetch(url('/assets/chunk-abc123.js'), { headers: { 'accept-encoding': 'gzip, deflate, br' } });
+    expect(br.headers.get('content-encoding')).toBe('br');
+    expect(br.headers.get('vary')).toBe('Accept-Encoding');
+    expect(br.headers.get('content-type')).toMatch(/javascript/);
+    expect(Number(br.headers.get('content-length'))).toBeLessThan(raw);
+    expect(await br.text()).toBe(CHUNK);                                       // fetch inflates it
+    const gz = await fetch(url('/assets/chunk-abc123.js'), { headers: { 'accept-encoding': 'gzip;q=1, br;q=0' } });
+    expect(gz.headers.get('content-encoding')).toBe('gzip');
+    expect(await gz.text()).toBe(CHUNK);
+    const plain = await fetch(url('/assets/chunk-abc123.js'), { headers: { 'accept-encoding': 'identity' } });
+    expect(plain.headers.get('content-encoding')).toBeNull();
+    expect(plain.headers.get('content-length')).toBe(String(raw));
+    expect(await plain.text()).toBe(CHUNK);
+    // each encoding has its own ETag, so a cache never hands a brotli body to a client that cannot read it
+    expect(br.headers.get('etag')).not.toBe(plain.headers.get('etag'));
+    expect(br.headers.get('etag')).toContain('-br');
+    // no sibling, or a binary file: as is
+    const none = await fetch(url('/assets/plain-def456.js'), { headers: { 'accept-encoding': 'br, gzip' } });
+    expect(none.headers.get('content-encoding')).toBeNull();
+    expect(await none.text()).toBe('export const plain = 1;');
+    const icon = await fetch(url('/favicon-32.png'), { headers: { 'accept-encoding': 'br, gzip' } });
+    expect(icon.headers.get('vary')).toBeNull();
+    expect(icon.headers.get('content-encoding')).toBeNull();
   });
 });
 
