@@ -62,6 +62,8 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
 
 /** Whether the race on screen is a networked one. */
 export const isNetRace = () => active;
+/** The connection's measures as the HUD shows them (ms): the round trip (null before the first pong) and the render delay; null outside a team race. */
+export const netLatency = () => (active ? { rtt: rtt === null ? null : Math.round(rtt), delay: Math.round(delay / TICKS_PER_MS) } : null);
 
 /** The last team race's results, as the server sent them, plus our slot. */
 export const getNetResults = () => lastResults;

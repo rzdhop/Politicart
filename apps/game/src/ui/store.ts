@@ -20,7 +20,7 @@ import { getGarage, resetGarage, setGarage, setOwned } from '../engine/garage.js
 import { playOpening, skipOpening as skipBoxOpening, stopOpening } from '../engine/boxgate.js';
 import { canTransition, getState, onTransition, transition } from '../engine/machine.js';
 import * as net from '../engine/net.js';
-import { isNetRace, onNetResults, pressItem, pressPower } from '../engine/netrace.js';
+import { isNetRace, netLatency, onNetResults, pressItem, pressPower } from '../engine/netrace.js';
 import { applyGodCommand } from '../engine/godcmd.js';
 import { useItem as engineUseItem } from '../engine/items.js';
 import { usePower as engineUsePower } from '../engine/powers.js';
@@ -345,7 +345,12 @@ onTransition((to: string, from: string) => {
   const patch: Partial<UiSnapshot> = { state: to as GameState };
   if (to === 'countdown' && from !== 'paused') { patch.noteHidden = true; patch.lastGain = null; patch.godReply = null; }
   // A grid is on the track (a god entering a race mid-way joins it during the countdown, netrace.js).
-  if ((to === 'countdown' || to === 'race') && from !== 'paused') patch.raceKart = captureRaceKart();
+  if ((to === 'countdown' || to === 'race') && from !== 'paused') { patch.raceKart = captureRaceKart(); patch.raceLayout = (G.layout as { name?: string } | null)?.name || null; }
+  if (to === 'paused') patch.pauseNet = isNetRace() ? (netLatency() as NetLatency | null) : null;
+  // the circuits' figures are worked out while the roster shows, so "Choisir le circuit →" finds them ready (thumbs.js)
+  if (to === 'select') warmFigures();
+  // the lobby's player cards show the candidates' portraits: placeholders at least, the portraits once rendered (DEC-045)
+  if (to === 'lobby' && !Object.keys(snapshot.thumbs).length) refreshThumbs();
   set(patch);
   // A solo race just ended: the account earns its experience (a team race's comes from the server).
   if (to === 'lobby') soloRace = false;

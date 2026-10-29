@@ -660,7 +660,7 @@ describe('the Workshop (admin profile)', () => {
 const HUD_IDS: Array<[string, string]> = [
   ['hud', 'DIV'], ['h-pos', 'DIV'], ['h-lap', 'DIV'], ['h-time', 'DIV'], ['minimap', 'CANVAS'],
   ['h-item', 'DIV'], ['h-power', 'DIV'], ['h-pname', 'DIV'], ['h-pbar', 'I'], ['h-pkey', 'DIV'], ['h-hint', 'DIV'],
-  ['h-speed', 'SPAN'], ['h-drift', 'I'], ['h-center', 'DIV'], ['h-toast', 'DIV'], ['h-wrong', 'DIV'], ['h-net', 'DIV'],
+  ['h-speed', 'SPAN'], ['h-drift', 'I'], ['h-center', 'DIV'], ['h-toast', 'DIV'], ['h-wrong', 'DIV'], ['h-net', 'DIV'], ['hud-layout', 'DIV'],
 ];
 
 describe('the HUD', () => {
@@ -674,6 +674,8 @@ describe('the HUD', () => {
     expect(container.querySelector('#h-item .nm')?.textContent).toBe('aucun objet');
     expect(container.querySelector('#h-speed')?.textContent).toBe('0');
     expect(container.querySelector('#h-net')?.textContent).toBe('');          // solo play: no connection to show
+    expect((container.querySelector('#h-net') as HTMLElement).hidden).toBe(true);
+    expect((container.querySelector('#hud-layout') as HTMLElement).hidden).toBe(true);   // shown at the countdown and in the pause only
   });
 
   it('is hidden on the menus and registers every handle for the frame writer', () => {
@@ -695,8 +697,14 @@ describe('the HUD', () => {
     hud.wrong!.setVisible(true);
     hud.toast!.show('FIGURE !');
     hud.center!.setText('PARTEZ !');
-    hud.net!.setText('ping 48 ms · délai 100 ms');
+    hud.net!.setLatency({ rtt: 48, delay: 100 });
     expect(container.querySelector('#h-net')?.textContent).toBe('ping 48 ms · délai 100 ms');
+    expect((container.querySelector('#h-net') as HTMLElement).dataset.quality).toBe('good');
+    expect((container.querySelector('#h-net') as HTMLElement).hidden).toBe(false);
+    hud.layout!.setName('Jour de manif');
+    hud.layout!.setVisible(true);
+    expect(container.querySelector('#hud-layout .lr-name')?.textContent).toBe('Jour de manif');
+    expect((container.querySelector('#hud-layout') as HTMLElement).hidden).toBe(false);
     expect(container.querySelector('#h-speed')?.textContent).toBe('123');
     expect(container.querySelector('#h-pos')?.textContent).toBe('1er');
     expect(container.querySelector('#h-lap')?.textContent).toBe('TOUR 2/3');
