@@ -323,27 +323,39 @@ export function raceTextureTier() {
  * central-difference gradient, wrapped at the edges so it tiles, its slope
  * scaled to 512 px so the relief reads the same at every tier.
  */
-export function texturePixels(kind, size, { seed = 0, normals = true } = {}) {
+export function texturePixels(kind, size, opts = {}) {
+  const steps = texturePixelSteps(kind, size, opts);
+  for (;;) { const r = steps.next(); if (r.done) return r.value; }
+}
+
+/** texturePixels as a generator: the same bytes, with a yield every `rows` rows of each pass, so a bake can be spread over frames. */
+export function* texturePixelSteps(kind, size, { seed = 0, normals = true, rows = 32 } = {}) {
   const k = KINDS[kind];
   if (!k) throw new Error('textures: unknown kind "' + kind + '"');
   const shift = (seed | 0) * 1013, N = { s: n => n + shift, x: 0, y: 0 }, o = { h: 0, r: 0, g: 0, b: 0, rough: 1 };
   const H = new Float32Array(size * size), albedo = new Uint8ClampedArray(size * size * 4), rough = k.rough ? new Uint8ClampedArray(size * size * 4) : null;
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const i = y * size + x; N.x = x; N.y = y;
-    k.px(x / size, y / size, N, o);
-    H[i] = o.h < 0 ? 0 : o.h > 1 ? 1 : o.h;
-    albedo[i * 4] = o.r * 255; albedo[i * 4 + 1] = o.g * 255; albedo[i * 4 + 2] = o.b * 255; albedo[i * 4 + 3] = 255;
-    if (rough) { const r = o.rough * 255; rough[i * 4] = r; rough[i * 4 + 1] = r; rough[i * 4 + 2] = r; rough[i * 4 + 3] = 255; }
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x; N.x = x; N.y = y;
+      k.px(x / size, y / size, N, o);
+      H[i] = o.h < 0 ? 0 : o.h > 1 ? 1 : o.h;
+      albedo[i * 4] = o.r * 255; albedo[i * 4 + 1] = o.g * 255; albedo[i * 4 + 2] = o.b * 255; albedo[i * 4 + 3] = 255;
+      if (rough) { const r = o.rough * 255; rough[i * 4] = r; rough[i * 4 + 1] = r; rough[i * 4 + 2] = r; rough[i * 4 + 3] = 255; }
+    }
+    if (y % rows === rows - 1) yield;
   }
   if (!normals) return { albedo, normal: null, rough };
   const normal = new Uint8ClampedArray(size * size * 4), st = k.strength * (size / REF);
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const i = y * size + x;
-    const dx = H[y * size + (x + 1) % size] - H[y * size + (x - 1 + size) % size];
-    const dy = H[((y - 1 + size) % size) * size + x] - H[((y + 1) % size) * size + x];
-    let nx = -dx * st, ny = -dy * st, nz = 1;
-    const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
-    normal[i * 4] = (nx * 0.5 + 0.5) * 255; normal[i * 4 + 1] = (ny * 0.5 + 0.5) * 255; normal[i * 4 + 2] = (nz * 0.5 + 0.5) * 255; normal[i * 4 + 3] = 255;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      const dx = H[y * size + (x + 1) % size] - H[y * size + (x - 1 + size) % size];
+      const dy = H[((y - 1 + size) % size) * size + x] - H[((y + 1) % size) * size + x];
+      let nx = -dx * st, ny = -dy * st, nz = 1;
+      const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+      normal[i * 4] = (nx * 0.5 + 0.5) * 255; normal[i * 4 + 1] = (ny * 0.5 + 0.5) * 255; normal[i * 4 + 2] = (nz * 0.5 + 0.5) * 255; normal[i * 4 + 3] = 255;
+    }
+    if (y % (rows * 2) === rows * 2 - 1) yield;   // the normal pass is about half the cost of the colour pass
   }
   return { albedo, normal, rough };
 }
@@ -352,6 +364,9 @@ export function texturePixels(kind, size, { seed = 0, normals = true } = {}) {
 
 /** The maps of each kind by kind, for the current tier. */
 const cache = new Map();
+/** The kinds asked of surface() since the last takeSurfaceRequests(): what a build used, for the test that its pre-bake list is complete. */
+const requested = new Set();
+const HEADLESS = typeof document === 'undefined';
 
 /** Paint RGBA bytes into a canvas texture (blank headless: the bytes are never computed there). */
 function pixelTexture(size, bytes) {
@@ -371,15 +386,17 @@ export const TEX = {};
  * (null where the tier or the kind has none). Baked on the first call and
  * cached for the tier; the maps are shared, so a builder that needs its own
  * repeat clones the map alone (the normal map follows the map's transform).
+ * `baked` is the kind's pixels when bakeSurface computed them ahead.
  */
-export function surface(kind) {
+export function surface(kind, baked = null) {
   if (!TEX.ready) textures();
   const k = KINDS[kind];
   if (!k) throw new Error('textures: unknown kind "' + kind + '"');
+  requested.add(kind);
   let e = cache.get(kind);
   if (!e) {
-    const tier = TEX.tier, size = TEX_SIZES[tier] || TEX_SIZES.high, normals = !(tier === 'low' && DROP_ON_LOW.has(k.family));
-    let px = null;
+    const { size, normals } = bakeSize(k);
+    let px = baked;
     const pixels = () => px || (px = texturePixels(kind, size, { normals }));
     e = { map: dress(pixelTexture(size, () => pixels().albedo), 'tex:' + kind, k.repeat), normalMap: null, roughnessMap: null };
     if (normals) e.normalMap = dress(pixelTexture(size, () => pixels().normal), 'tex:' + kind + ':normal', null);
@@ -387,6 +404,37 @@ export function surface(kind) {
     cache.set(kind, e);
   }
   return e;
+}
+
+/** The bake size and whether the kind keeps its normal map, on the current tier. */
+function bakeSize(k) {
+  const tier = TEX.tier;
+  return { size: TEX_SIZES[tier] || TEX_SIZES.high, normals: !(tier === 'low' && DROP_ON_LOW.has(k.family)) };
+}
+
+/**
+ * Bake surface `kind` ahead, a few rows of pixels per step (a generator), so
+ * the builder that asks for it finds it cached instead of baking 512 px of
+ * noise in one go (the pre-build's slices, DEC-055). Nothing to do when it is
+ * cached already; headless, where textures are stubs, nothing is computed.
+ */
+export function* bakeSurface(kind) {
+  if (!TEX.ready) textures();
+  if (cache.has(kind)) return;
+  const k = KINDS[kind];
+  if (!k) throw new Error('textures: unknown kind "' + kind + '"');
+  if (HEADLESS) { surface(kind); return; }
+  const tier = TEX.tier, { size, normals } = bakeSize(k);
+  const px = yield* texturePixelSteps(kind, size, { normals });
+  if (TEX.tier !== tier || cache.has(kind)) return;   // the tier changed, or a builder baked it meanwhile: these bytes are stale or spare
+  surface(kind, px);
+  yield;
+}
+
+/** The surface kinds asked for since the last call, and forget them. */
+export function takeSurfaceRequests() {
+  const out = [...requested]; requested.clear();
+  return out;
 }
 
 /**

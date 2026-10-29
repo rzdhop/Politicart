@@ -97,7 +97,7 @@ export function requestPrebuild(trackIdx, { seed = null } = {}) {
   dropPrebuild();
   const track = TRACKS[trackIdx]; if (!track) return null;
   seed = seed === null ? newSeed() : seed >>> 0;
-  job = { key: prebuildKey({ trackIdx, seed }), trackIdx, poly: getPoly(), seed, scene: new THREE.Scene(), gen: null, phase: null, ms: {}, state: freshState(track), saved: null, built: false, lights: null, sample: null, compile: null, prime: null, primed: false, sliced: 0 };
+  job = { key: prebuildKey({ trackIdx, seed }), trackIdx, poly: getPoly(), seed, scene: new THREE.Scene(), gen: null, phase: null, ms: {}, state: freshState(track), saved: null, built: false, lights: null, sample: null, compile: null, prime: null, primed: false, sliced: 0, step: { ms: 0, phase: null } };
   return prebuildStatus();
 }
 
@@ -106,9 +106,9 @@ export function prebuiltSeed(trackIdx) {
   return job && job.trackIdx === trackIdx && job.poly === getPoly() ? job.seed : null;
 }
 
-/** What is built ahead: `{ key, trackIdx, phase, built, primed, ms, scene }`, or null. The phase names are TRACK_PHASES, then 'compile', 'prime'. */
+/** What is built ahead: `{ key, trackIdx, phase, built, primed, ms, step, scene }` (`step`: the longest single build step and its phase), or null. The phase names are TRACK_PHASES, then 'compile', 'prime'. */
 export function prebuildStatus() {
-  return job ? { key: job.key, trackIdx: job.trackIdx, seed: job.seed, phase: job.phase, built: job.built, primed: job.primed, lit: !!job.lights, sampled: !!job.sample, layout: job.state.layout ? job.state.layout.name : null, ms: { ...job.ms }, scene: job.scene, slices: job.sliced } : null;
+  return job ? { key: job.key, trackIdx: job.trackIdx, seed: job.seed, phase: job.phase, built: job.built, primed: job.primed, lit: !!job.lights, sampled: !!job.sample, layout: job.state.layout ? job.state.layout.name : null, ms: { ...job.ms }, step: { ...job.step }, scene: job.scene, slices: job.sliced } : null;
 }
 
 /** Forget the circuit built ahead, freeing its geometries. */
@@ -132,9 +132,10 @@ function buildSome(j, budget) {
   try {
     if (!j.gen) j.gen = buildTrackPhases(j.scene, TRACKS[j.trackIdx], { seed: j.seed });
     do {
-      const t1 = now(), r = j.gen.next();
+      const t1 = now(), r = j.gen.next(), dt = now() - t1;
       if (r.done) { j.built = true; j.phase = 'built'; break; }
-      j.phase = r.value; j.ms[r.value] = (j.ms[r.value] || 0) + (now() - t1);
+      j.phase = r.value; j.ms[r.value] = (j.ms[r.value] || 0) + dt;
+      if (dt > j.step.ms) j.step = { ms: dt, phase: r.value };   // the longest single step: what one slice can never go below
     } while (now() - t0 < budget);
   } finally { leave(j); }
   return j.built;

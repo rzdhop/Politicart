@@ -13,7 +13,8 @@ import { framePayload } from './payload.js';
 import { applyPrebuilt, buildExtras, dropPrebuild, HAZARD_TYPES, prebuildFrame, prebuildKey, prebuildStatus, prebuiltSeed, PROJECTILE_TYPES, requestPrebuild, takePrebuilt } from './prebuild.js';
 import { startField, startRace } from './race.js';
 import { CFG, G, getPoly, togglePoly } from './state.js';
-import { buildTrack, TRACK_PHASES } from './track.js';
+import { takeSurfaceRequests } from './textures.js';
+import { buildTrack, surfacesOf, TRACK_PHASES } from './track.js';
 
 const slots = () => CHARACTERS.slice(0, 6).map((def, i) => ({ def, isAI: i < 5, local: i === 5 }));
 /** Run the pre-build's frames headless until it reports nothing left; the number of frames it took. */
@@ -226,4 +227,17 @@ describe("the countdown's extras", () => {
     expect(countMeshes(g)).toBeGreaterThan(HAZARD_TYPES.length + PROJECTILE_TYPES.length);
     expect(G.animated).toHaveLength(1);                                         // the fake box's spin was taken back out
   });
+});
+
+describe("the circuits' surfaces", () => {
+  // A surface baked by the builder that first asks for it is 512 px of noise in one step, a stall on the circuits screen: every kind a build uses has to be in the list the pre-build bakes ahead.
+  it.each(TRACKS.map((t, i) => [t.name, i]))('%s bakes ahead every surface kind its build uses, on every layout', (_name, i) => {
+    for (const seed of [0, 1, 2, 3, 4, 5, 6, 7]) {
+      takeSurfaceRequests();
+      const scene = new THREE.Scene(); G.animated = []; G.hazards = []; G.entitySeq = 0; G.trackIdx = i; G.track = TRACKS[i];
+      buildTrack(scene, TRACKS[i], { seed });
+      const listed = new Set(surfacesOf(TRACKS[i]));
+      expect(takeSurfaceRequests().filter(k => !listed.has(k)), `seed ${seed} (${chooseLayout(TRACKS[i], seed).name})`).toEqual([]);
+    }
+  }, 60000);
 });

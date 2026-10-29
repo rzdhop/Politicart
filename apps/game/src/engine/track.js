@@ -33,10 +33,10 @@ import { bakeVertexColours, finishOf, mergeByMaterial, mergeInWorld } from './ge
 import { chooseLayout, profileHeights } from './layout.js';
 import { SALT_CYCLISTS, SALT_FEATURES, SALT_RACE, derive, makeRng } from './seed.js';
 import { CFG, G, bikeLaneOf, disposable, getPoly, nextEntityId } from './state.js';
-import { TEX, surface, textures } from './textures.js';
+import { TEX, bakeSurface, surface, textures } from './textures.js';
 import { pick, rand } from './util.js';
 import { EMBANK, PAVEMENT, STILL, setDecorScale, setTerrain, still, terrainY, yAt } from './decor/context.js';
-import { BUILDERS } from './decor/index.js';
+import { BUILDERS, DECOR_SURFACES } from './decor/index.js';
 import { ADS, JACKETS, SKINS, adBoard, crowdZone, figure, flagPole, grandstand, lamp, sedan } from './decor/street.js';
 
 // ---------- "Légers": still decor in fewer draws (PLAN 4.2) ----------
@@ -255,11 +255,19 @@ export function buildTrack(scene, track, opts = {}) {
  * after each. The pre-build (prebuild.js) runs them one or a few per frame.
  */
 export const TRACK_PHASES = Object.freeze(['textures', 'road', 'strips', 'furniture', 'features', 'cyclists', 'decor', 'fold']);
+/**
+ * Inside a heavy phase the generator also yields, under that phase's name,
+ * every SLICE_SAMPLES samples and every SLICE_CHILDREN decor pieces spread
+ * (and wherever a circuit's builder yields), so one slice of the pre-build
+ * stays a few milliseconds and never stalls the circuits screen.
+ */
+const SLICE_SAMPLES = 256, SLICE_CHILDREN = 48;
 
 /**
  * buildTrack as a generator: the same statements in the same order, with a
- * yield between phases (named as TRACK_PHASES), so the pre-build can spread
- * the work over frames while the player is still choosing (DEC-055). `fold`
+ * yield between phases (named as TRACK_PHASES; a heavy phase yields its own
+ * name several times), so the pre-build can spread the work over frames
+ * while the player is still choosing (DEC-055). `fold`
  * (default: on "légers") folds the still decor into fewer draws (foldStill).
  * `seed` is the race's (DEC-049): it picks the layout and seeds every draw
  * that shapes the race; 0 by default, so a bare build is deterministic. The
@@ -273,6 +281,7 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   textures(); STILL.length = 0;
   const layout = chooseLayout(track, seed);
   G.seed = seed >>> 0; G.layout = layout; G.rng = makeRng(derive(seed, SALT_RACE)); G.hw = track.roadHalfWidth ?? CFG.roadHalfWidth;
+  for (const kind of surfacesOf(track)) for (const _ of bakeSurface(kind)) yield TRACK_PHASES[0];   // baked ahead, a few rows a step
   yield TRACK_PHASES[0];
   // The circuit is drawn at track.scale; CFG.samples grows with it so the
   // samples stay about as far apart as before and every distance counted in
@@ -282,7 +291,10 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   const curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
   curve.arcLengthDivisions = 2000;
   const N = CFG.samples, samples = [], heights = profileHeights(track.profile, N);
-  for (let i = 0; i < N; i++) { const u = i / N; const p = curve.getPointAt(u); const t = curve.getTangentAt(u).normalize(); samples.push({ x: p.x, z: p.z, y: heights[i], tx: t.x, tz: t.z, sx: -t.z, sz: t.x, hw: G.hw, bank: 0, wind: 0, slope: 0 }); }
+  for (let i = 0; i < N; i++) {
+    const u = i / N; const p = curve.getPointAt(u); const t = curve.getTangentAt(u).normalize(); samples.push({ x: p.x, z: p.z, y: heights[i], tx: t.x, tz: t.z, sx: -t.z, sz: t.x, hw: G.hw, bank: 0, wind: 0, slope: 0 });
+    if (i % SLICE_SAMPLES === SLICE_SAMPLES - 1) yield TRACK_PHASES[1];
+  }
   const total = curve.getLength(), step = total / N;
   shapeSamples(samples, layout.features, step);
   G.samples = samples; G.N = N; G.trackLength = total;
@@ -306,14 +318,16 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(ix); g.computeVertexNormals();
     const m = new THREE.Mesh(g, disposable(new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: rough || 0.9 }))); m.receiveShadow = true; scene.add(m);
   }
-  [1, -1].forEach(sg => {
+  for (const sg of [1, -1]) {
     strip(-1.1, 0, 0.07, 0.07, 4, sg, track.kerb[0], track.kerb[1]);                  // kerb stripes
     strip(0, 0.8, 0.07, 0.35, 0, sg, track.pavement, track.pavement);                 // kerb stone
     strip(0.8, PAVEMENT, 0.35, 0.35, 0, sg, track.pavement, track.pavement);          // pavement
     strip(0.8, 0.8, 0.35, 1.25, 6, sg, track.kerb[0], 0xf6f1e4);                      // barrier wall
-  });
+    yield TRACK_PHASES[2];
+  }
   bikeLane(scene, track, strip);
   embankment(scene, samples, track.ground);
+  yield TRACK_PHASES[2];
 
   // start line + gantry
   const s0 = samples[0]; const yaw = Math.atan2(s0.tx, s0.tz), hw0 = s0.hw;
@@ -327,7 +341,9 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   // ground: a plain that follows the road's relief around it (decor/context.js terrainY), flat on a flat circuit;
   // the map cloned for its own repeat (the normal map follows it: one uvTransform in r128), none of it on "légers"
   const gs = surface(track.gravel ? 'gravel' : 'grass'), gt = disposable(gs.map.clone()); gt.needsUpdate = true; gt.repeat.set(280, 280);
-  scene.add(groundMesh(gt, gs.normalMap));
+  const ground = { mesh: null };
+  for (const _ of groundMesh(gt, gs.normalMap, ground)) yield TRACK_PHASES[2];
+  scene.add(ground.mesh);
   yield TRACK_PHASES[2];
 
   // item boxes: rows of 4 golden urns across the road, four rows unless the track lists more
@@ -338,10 +354,12 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   // shared street furniture: lamps, ad boards, crowd zones, grandstand
   for (let i = 0; i < N; i += 36) { const s = samples[i]; const sg = (i / 36) % 2 ? 1 : -1; lamp(scene, s.x + s.sx * sg * (s.hw + 5.2), s.z + s.sz * sg * (s.hw + 5.2), track.gravel ? 'plain' : 'paris', s.y); }
   for (let i = 0; i < 8; i++) adBoard(scene, Math.floor(N * (0.07 + i * 0.118)), i % 2 ? 1 : -1, ...ADS[i], getCustom().ads[i]);
+  yield TRACK_PHASES[3];
   G.crowd = [];
   grandstand(scene, 0, 1);
   crowdZone(scene, N - 30, N + 30, -1, true);
-  [0.28, 0.5, 0.74].forEach((f, i) => crowdZone(scene, Math.floor(N * f), Math.floor(N * f) + 36, i % 2 ? 1 : -1, false));
+  yield TRACK_PHASES[3];
+  for (const [i, f] of [0.28, 0.5, 0.74].entries()) { crowdZone(scene, Math.floor(N * f), Math.floor(N * f) + 36, i % 2 ? 1 : -1, false); yield TRACK_PHASES[3]; }
   yield TRACK_PHASES[3];
 
   buildFeatures(scene, layout, makeRng(derive(seed, SALT_FEATURES)));
@@ -351,12 +369,20 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   yield TRACK_PHASES[5];
   // themed decor, laid out at scale 1 and then spread out to the circuit's scale
   const decor = new THREE.Group();
-  (BUILDERS[track.id] ?? BUILDERS.versailles)(decor, scene);
-  spreadDecor(decor, scene, S);
+  const themed = (BUILDERS[track.id] ?? BUILDERS.versailles)(decor, scene);
+  if (themed && typeof themed.next === 'function') for (const _ of themed) yield TRACK_PHASES[6];   // a generator builder yields between its sections
+  for (const _ of spreadDecor(decor, scene, S)) yield TRACK_PHASES[6];
   yield TRACK_PHASES[6];
   if (fold) foldStill(scene); else STILL.length = 0;
   yield TRACK_PHASES[7];
 }
+
+/** Every surface kind a build of `track` uses: the road's, the ground's, the shared furniture's and features', and its decor's (decor/<id>.js SURFACES). */
+export function surfacesOf(track) {
+  return [...new Set([roadKindOf(track), track.gravel ? 'gravel' : 'grass', ...SHARED_SURFACES, ...(DECOR_SURFACES[track.id] ?? DECOR_SURFACES.versailles)])];
+}
+/** The surface kinds the road, its strips, the shared furniture and the features use on every circuit. */
+const SHARED_SURFACES = Object.freeze([]);
 
 /** The road's surface kind: gravel for the park, cobbles for the butte, asphalt elsewhere. */
 export const roadKindOf = track => (track.gravel ? 'gravel' : track.cobble ? 'cobble' : 'asphalt');
@@ -375,17 +401,23 @@ function embankment(scene, samples, color) {
   const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: 1, side: THREE.DoubleSide })); m.receiveShadow = true; scene.add(m);
 }
 
-/** The ground plain, 3200 m square: a grid whose heights follow the terrain within 800 m of the circuit, flat beyond (and flat throughout on a flat circuit). */
-function groundMesh(texture, normalMap = null) {
+/**
+ * The ground plain, 3200 m square: a grid whose heights follow the terrain within 800 m of the circuit, flat beyond (and flat throughout on a flat circuit).
+ * A generator that yields every few rows (the terrain's heights are the cost on a hilly circuit) and leaves the mesh in `out.mesh`.
+ */
+function* groundMesh(texture, normalMap, out) {
   const SIZE = 3200, CELLS = 128, p = [], uv = [], ix = [];
-  for (let j = 0; j <= CELLS; j++) for (let i = 0; i <= CELLS; i++) {
-    const x = -SIZE / 2 + i * SIZE / CELLS, z = -SIZE / 2 + j * SIZE / CELLS;
-    p.push(x, Math.abs(x) <= 800 && Math.abs(z) <= 800 ? terrainY(x, z) : 0, z); uv.push(i / CELLS, j / CELLS);
+  for (let j = 0; j <= CELLS; j++) {
+    for (let i = 0; i <= CELLS; i++) {
+      const x = -SIZE / 2 + i * SIZE / CELLS, z = -SIZE / 2 + j * SIZE / CELLS;
+      p.push(x, Math.abs(x) <= 800 && Math.abs(z) <= 800 ? terrainY(x, z) : 0, z); uv.push(i / CELLS, j / CELLS);
+    }
+    if (j % 16 === 15) yield;
   }
   for (let j = 0; j < CELLS; j++) for (let i = 0; i < CELLS; i++) { const a = j * (CELLS + 1) + i; ix.push(a, a + CELLS + 1, a + 1, a + 1, a + CELLS + 1, a + CELLS + 2); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(ix); g.computeVertexNormals();
   const ground = new THREE.Mesh(g, disposable(new THREE.MeshStandardMaterial({ map: texture, normalMap, roughness: 1 }))); ground.receiveShadow = true;
-  return ground;
+  out.mesh = ground;
 }
 
 /**
@@ -397,13 +429,15 @@ function groundMesh(texture, normalMap = null) {
  * ground where it stands (yAt): small ones at their own spot, big ones at
  * their centre.
  */
-function spreadDecor(decor, world, S) {
+function* spreadDecor(decor, world, S) {
   decor.updateMatrixWorld(true);
   const size = new THREE.Vector3(), centre = new THREE.Vector3(), bb = new THREE.Box3();
+  let n = 0;
   for (const child of [...decor.children]) {
     bb.setFromObject(child).getSize(size); bb.getCenter(centre);
     if (Math.max(size.x, size.z) < 14) { child.position.x *= S; child.position.z *= S; child.position.y += yAt(child.position.x, child.position.z); world.add(child); }
     else child.position.y += yAt(centre.x * S, centre.z * S);
+    if (++n % SLICE_CHILDREN === 0) yield;
   }
   decor.scale.set(S, 1, S); world.add(decor);
 }
