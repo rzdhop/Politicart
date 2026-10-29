@@ -49,6 +49,8 @@ function vn(x, y, px, py, s) {
   const a = h2(mx(xi), my(yi), s), b = h2(mx(xi + 1), my(yi), s), c = h2(mx(xi), my(yi + 1), s), d = h2(mx(xi + 1), my(yi + 1), s);
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
+/** The noise primitives, for the circuits' procedural surfaces (textures.js): the hash, the value noise and the cell bump. */
+export { h2 as hash2, vn as valueNoise };
 /** Fractal noise in [0, 1], periodic in u and v with period 1 (px, py cells per tile at the base octave). */
 export function fbm(u, v, px, py, oct = 4, s = 1) {
   let t = 0, amp = 0.5, f = 1, n = 0;
@@ -56,7 +58,7 @@ export function fbm(u, v, px, py, oct = 4, s = 1) {
   return t / n;
 }
 /** A soft round bump (1 at the centre, 0 at radius r) at the centre of each cell of a grid, for knit holes and fleece pills. */
-function cellBump(u, v, cu, cv, r, stagger, s, keep) {
+export function cellBump(u, v, cu, cv, r, stagger, s, keep) {
   let x = u * cu, y = v * cv;
   const row = Math.floor(y);
   if (stagger && row % 2) x += 0.5;
@@ -65,8 +67,9 @@ function cellBump(u, v, cu, cv, r, stagger, s, keep) {
   const d = Math.hypot(fx, fy) / r;
   return d >= 1 ? 0 : 1 - d * d * (3 - 2 * d);
 }
-const clamp01 = x => (x < 0 ? 0 : x > 1 ? 1 : x);
-const smooth = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+export const clamp01 = x => (x < 0 ? 0 : x > 1 ? 1 : x);
+/** Smoothstep: 0 below a, 1 above b. */
+export const smooth = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 
 // ---------- The kinds ----------
 //

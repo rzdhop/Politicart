@@ -35,6 +35,7 @@ let presses = { item: 0, power: 0 };
 let lastSent = 0, lastKey = '';
 let drawn = false;               // has a frame of this race been drawn yet?
 let hazards = new Map(), projectiles = new Map();
+let staticIds = new Set();       // the layout's own obstacles (DEC-049): built with the circuit, dropped when a snapshot stops listing them (mown)
 let resultsListener = null;
 let lastResults = null;
 
@@ -55,17 +56,23 @@ export function pressItem() { presses.item++; }
 export function pressPower() { presses.power++; }
 
 function clearEntities() {
-  for (const m of [...hazards.values(), ...projectiles.values()]) G.scene?.remove(m);
-  hazards = new Map(); projectiles = new Map();
+  // the static obstacles stay: they are part of the circuit the results screen keeps on show
+  for (const [id, m] of hazards) if (!staticIds.has(id)) G.scene?.remove(m);
+  for (const m of projectiles.values()) G.scene?.remove(m);
+  hazards = new Map(); projectiles = new Map(); staticIds = new Set();
 }
 
 /**
- * Start the race the server announced: same circuit, same grid, our slot
- * followed. A human slot carries that player's Garage edits, laid over the
- * candidate's default, so every client draws every kart as its driver styled
- * it; an AI slot gets the candidate's default (startField's fallback).
+ * Start the race the server announced: same circuit, same seed (DEC-049),
+ * same grid, our slot followed. A human slot carries that player's Garage
+ * edits, laid over the candidate's default, so every client draws every kart
+ * as its driver styled it; an AI slot gets the candidate's default
+ * (startField's fallback). A start without a seed comes from a server older
+ * than protocol 2: it is refused, since the two sides could not build the
+ * same race.
  */
 export function beginNetRace(m) {
+  if (!Number.isInteger(m.seed)) { emit('toast', 'SERVEUR TROP ANCIEN'); return; }
   G.trackIdx = m.trackIdx;
   const slots = m.roster.map((s, i) => {
     const def = CHARACTERS.find(c => c.id === s.charId);
@@ -74,7 +81,9 @@ export function beginNetRace(m) {
   active = true; buffer = []; newest = { tk: 0, at: now() }; presses = { item: 0, power: 0 }; lastSent = 0; lastKey = ''; drawn = false;
   lastResults = null; hazards = new Map(); projectiles = new Map();
   G.netSlot = m.you; G.netRoster = m.roster;
-  startField(slots);          // ends with the transition into 'countdown'
+  startField(slots, { seed: m.seed });          // ends with the transition into 'countdown'
+  // the circuit's own obstacles start the hazard map, by the ids the server's identical build gave them
+  for (const h of G.hazards) { hazards.set(h.id, h.mesh); staticIds.add(h.id); }
 }
 
 /** File a snapshot and replay what it brought for us. */
@@ -158,7 +167,8 @@ export function netStep(dt) {
       applyKart(k, lerpKart(ka, kb, f));
       updateKartVisual(k, dt, clamp(Math.abs(k.speed) / (42 * k.stats.speed), 0, 1));
     });
-    syncEntities(hazards, b.h, ty => { const h = buildHazard(ty); return h.g; }, (g, e) => g.position.set(e.x, 0, e.z));
+    syncEntities(hazards, b.h, ty => { const h = buildHazard(ty); return h.g; }, (g, e) => g.position.set(e.x, e.y ?? 0, e.z));
+    if (G.hazards.length) G.hazards = G.hazards.filter(h => hazards.has(h.id));   // a static obstacle the server mowed is gone here too
     const pa = new Map(a.p.map(p => [p.id, p]));
     syncEntities(projectiles, b.p, buildProjectileMesh, (g, e) => {
       const o = pa.get(e.id) ?? e;

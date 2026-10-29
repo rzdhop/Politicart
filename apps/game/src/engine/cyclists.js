@@ -1,12 +1,18 @@
 // Cyclists: the bike lane's users, and why nobody trusts them.
 //
-// buildCyclists spreads a dozen-odd riders along the bike lane that
-// track.js paints down the right-hand edge of the road (CFG.bikeLane).
-// updateCyclists moves them every simulation step. Most of the time they
-// ride their lane; every few seconds each one picks a new whim: swerve into
-// the karts' lanes, cut across the whole road, hop the kerb onto the
-// pavement, ride the wrong way, or simply stop dead. A kart that hits one
-// knocks the rider over and is shaken for a moment.
+// buildCyclists spreads the layout's riders along the bike lane that
+// track.js paints down the right-hand edge of the road (bikeLaneOf): their
+// count is the layout's and their spawns and base speeds come from the race
+// seed's cyclists stream (DEC-049), so the server and every client start the
+// same riders in the same places -- snapshots match them by index. Their
+// looks stay on Math.random. updateCyclists moves them every simulation
+// step. Most of the time they ride their lane; every few seconds each one
+// picks a new whim: swerve into the karts' lanes, cut across the whole road,
+// hop the kerb onto the pavement, ride the wrong way, stop dead, form a
+// peloton with the riders around (who swerve together), race off like a
+// delivery rider cutting across, or trundle along wide and slow like a cargo
+// bike. A kart that hits one knocks the rider over and is shaken for a
+// moment.
 //
 // Like the crossings, they are simulation state: the game server steps them
 // and sends their positions in each snapshot (netstate.js); a networked
@@ -17,14 +23,15 @@ import { sfxFor } from './audio.js';
 import { say } from './events.js';
 import { stunKart } from './items.js';
 import { box, cyl, mat, sph } from './primitives.js';
-import { CFG, G } from './state.js';
+import { G, bikeLaneOf } from './state.js';
 import { clamp, lerp, pick, rand, wrapAngle } from './util.js';
 
-const SPACING = 120;              // one rider every 120 samples (about 200 m of road)
-const HIT_R2 = 2.3 * 2.3;         // contact radius with a kart, squared
+const HIT_R = 2.3;                // contact radius with a kart; a cargo bike is wider
 const JERSEYS = [0xe63946, 0xf2c14e, 0x2a9d8f, 0x1f3a93, 0xffffff, 0xff7f11, 0x7b2cbf, 0x9ad04f];
 const SKINS = [0xf1c27d, 0xe8b48a, 0xc68642, 0x8d5524, 0xf5d6c6];
 const OUCH = ['CYCLISTE PERCUTÉ !', 'ATTENTION AU VÉLO !', 'LE CYCLISTE N’AVAIT PAS LA PRIORITÉ', 'PISTE CYCLABLE : PRIORITÉ AUX VÉLOS !'];
+/** How many riders a layout may ask for: the count is clamped to this range. */
+export const RIDERS = { min: 12, max: 28 };
 
 /** A bicycle and its rider, facing +z. */
 function buildBike() {
@@ -44,29 +51,44 @@ function buildBike() {
   return g;
 }
 
-/** Spread the riders along the bike lane of the circuit just built. */
-export function buildCyclists(scene) {
+/** The bike lane's middle at sample s, as a lateral offset. */
+const laneMid = s => { const { inner, outer } = bikeLaneOf(s.hw); return (inner + outer) / 2; };
+
+/**
+ * Spread `n` riders along the bike lane of the circuit just built: evenly,
+ * each jittered by the seeded stream `rng`, which also draws their base
+ * speeds and first whim timers. The count is clamped to RIDERS.
+ */
+export function buildCyclists(scene, rng, n = RIDERS.min) {
   G.cyclists = [];
-  const { inner, outer } = CFG.bikeLane; const mid = (inner + outer) / 2;
-  for (let d = rand(30, 60); d < G.N - 20; d += SPACING * rand(0.8, 1.2)) {
+  const count = clamp(Math.round(n), RIDERS.min, RIDERS.max), gap = (G.N - 60) / count;
+  for (let i = 0; i < count; i++) {
+    const d = (30 + i * gap + rng.rand(-0.3, 0.3) * gap + G.N) % G.N;
     const mesh = buildBike(); scene.add(mesh);
-    const base = rand(6, 9);
-    const c = { d, lat: mid + rand(-0.8, 0.8), target: mid, speed: base, want: base, base, dir: 1, timer: rand(1, 6), fallen: 0, wob: rand(0, 6.28), x: 0, z: 0, h: 0, y: 0, mesh };
+    const base = rng.rand(6, 9), mid = laneMid(G.samples[Math.floor(d) % G.N]);
+    const c = { d, lat: mid + rng.rand(-0.8, 0.8), target: mid, speed: base, want: base, base, dir: 1, timer: rng.rand(1, 6), fallen: 0, wob: rng.rand(0, 6.28), x: 0, z: 0, h: 0, y: 0, r: HIT_R, whim: 'lane', mesh };
     placeCyclist(c); G.cyclists.push(c);
   }
 }
 
-/** A new whim for rider c: ride, swerve, cross, hop off the road, stop, or ride the wrong way. */
+/** A new whim for rider c: ride, swerve, cross, hop off the road, stop, ride the wrong way, form a peloton, deliver, or haul cargo. */
 function whim(c) {
-  const { inner, outer } = CFG.bikeLane; const hw = CFG.roadHalfWidth; const mid = (inner + outer) / 2;
+  const s = G.samples[Math.floor(c.d) % G.N], hw = s.hw, { inner } = bikeLaneOf(hw), mid = laneMid(s);
   const r = Math.random();
-  c.dir = 1; c.want = c.base;
-  if (r < 0.42) { c.target = mid + rand(-1, 1); c.timer = rand(3, 7); }                 // rides the lane, more or less
-  else if (r < 0.62) { c.target = rand(-4, inner - 1.5); c.timer = rand(2, 4); }        // swerves into the karts' lanes
-  else if (r < 0.72) { c.target = -(hw - 2); c.timer = rand(4, 6); }                    // cuts across the whole road
-  else if (r < 0.82) { c.target = hw + 2.6; c.timer = rand(3, 5); }                     // hops the kerb onto the pavement
-  else if (r < 0.91) { c.want = 0; c.timer = rand(1, 2.5); }                            // stops dead
-  else { c.dir = -1; c.want = c.base * 0.7; c.timer = rand(2, 4); }                    // rides against the traffic
+  c.dir = 1; c.want = c.base; c.r = HIT_R; c.whim = 'lane';
+  if (r < 0.34) { c.target = mid + rand(-1, 1); c.timer = rand(3, 7); }                 // rides the lane, more or less
+  else if (r < 0.50) { c.whim = 'swerve'; c.target = rand(-4, inner - 1.5); c.timer = rand(2, 4); }   // swerves into the karts' lanes
+  else if (r < 0.58) { c.whim = 'cross'; c.target = -(hw - 2); c.timer = rand(4, 6); }                // cuts across the whole road
+  else if (r < 0.66) { c.whim = 'kerb'; c.target = hw + 2.6; c.timer = rand(3, 5); }                  // hops the kerb onto the pavement
+  else if (r < 0.73) { c.whim = 'stop'; c.want = 0; c.timer = rand(1, 2.5); }                         // stops dead
+  else if (r < 0.80) { c.whim = 'wrongWay'; c.dir = -1; c.want = c.base * 0.7; c.timer = rand(2, 4); }   // rides against the traffic
+  else if (r < 0.88) {
+    // a peloton: the riders within 40 samples fall in line behind c and swerve with it, for as long as it does
+    c.whim = 'peloton'; c.target = rand(-3, inner - 1.5); c.timer = rand(3, 6); c.want = c.base * 1.1;
+    for (const o of G.cyclists) { if (o === c || o.fallen > 0) continue; const gap = (c.d - o.d + G.N) % G.N; if (gap > 0 && gap < 40) { o.whim = 'peloton'; o.dir = 1; o.target = c.target; o.timer = c.timer; o.want = c.want; o.r = HIT_R; } }
+  }
+  else if (r < 0.95) { c.whim = 'delivery'; c.want = c.base * 1.9; c.target = -(hw - 3); c.timer = rand(2, 3.5); }   // a delivery rider: fast, cuts across
+  else { c.whim = 'cargo'; c.want = c.base * 0.55; c.target = mid - 1.5; c.r = 3.2; c.timer = rand(4, 7); }         // a cargo bike: slow and wide
 }
 
 /** Where rider c is, from its distance along the lane `d` and its lateral offset `lat`. */
@@ -75,10 +97,10 @@ export function placeCyclist(c) {
   const a = G.samples[i], b = G.samples[(i + 1) % N];
   const sx = lerp(a.sx, b.sx, f), sz = lerp(a.sz, b.sz, f), tx = lerp(a.tx, b.tx, f), tz = lerp(a.tz, b.tz, f);
   c.x = lerp(a.x, b.x, f) + sx * c.lat; c.z = lerp(a.z, b.z, f) + sz * c.lat;
-  // the ramps lift riders too; the kerb is a small hop
-  const hw = CFG.roadHalfWidth; let y = 0;
-  for (const r of G.ramps || []) { const rel = (i - r.i0 + N) % N; if (rel < r.len && Math.abs(c.lat) < hw) y = r.h * clamp((rel + 0.5) / r.len, 0, 1); }
-  const kerb = Math.abs(c.lat) - hw; if (kerb > 0 && kerb < 1.4) y = Math.max(y, Math.sin(kerb / 1.4 * Math.PI) * 0.7);
+  // the road's height and camber under the rider; the ramps lift riders too; the kerb is a small hop
+  const hw = a.hw; let y = lerp(a.y, b.y, f) + c.lat * a.bank;
+  for (const r of G.ramps || []) { const rel = (i - r.i0 + N) % N; if (rel < r.len && Math.abs(c.lat) < hw) y = r.y0 + r.h * clamp((rel + 0.5) / r.len, 0, 1); }
+  const kerb = Math.abs(c.lat) - hw; if (kerb > 0 && kerb < 1.4) y += Math.sin(kerb / 1.4 * Math.PI) * 0.7;
   c.y = y;
   c.h = Math.atan2(tx, tz) + (c.dir < 0 ? Math.PI : 0) + clamp((c.target - c.lat) * 0.08, -0.5, 0.5) * c.dir;
   poseCyclist(c);
@@ -102,10 +124,11 @@ export function updateCyclists(dt) {
     c.lat += clamp(c.target - c.lat, -latStep, latStep) + Math.sin(c.wob) * 0.6 * dt;
     c.d = (c.d + c.dir * c.speed * dt / step + N) % N;
     placeCyclist(c);
+    const r2 = (c.r || HIT_R) ** 2;
     for (const k of G.karts) {
-      if (k.fly > 0 || k.y > 1.2 || k.hazardGrace > 0) continue;
-      if ((k.pos.x - c.x) ** 2 + (k.pos.z - c.z) ** 2 > HIT_R2) continue;
-      c.fallen = 2.5; c.want = c.speed = 0; c.target = CFG.bikeLane.inner + 1.8;
+      if (k.fly > 0 || k.y - c.y > 1.2 || k.hazardGrace > 0) continue;
+      if ((k.pos.x - c.x) ** 2 + (k.pos.z - c.z) ** 2 > r2) continue;
+      c.fallen = 2.5; c.want = c.speed = 0; c.target = bikeLaneOf(G.samples[Math.floor(c.d) % N].hw).inner + 1.8;
       k.speed *= 0.45; k.hazardGrace = 1;
       if (stunKart(k, 0.8)) say(k, pick(OUCH)); else sfxFor(k, 'bump');
       poseCyclist(c);

@@ -5,14 +5,14 @@
 // (landmarks whose domes and wheels must stay round).
 import * as THREE from 'three';
 
-import { CFG, G, isClear } from '../state.js';
+import { G, isClear } from '../state.js';
 import { TEX } from '../textures.js';
 import { pick, rand } from '../util.js';
 import { DS, clearAt, nOf } from './context.js';
 import { building, cafe, carousel, easel, figure, funicular, house, lamp, metroEntrance, person, pigeon, sacreCoeur, sedan, stairs, tree, vines, windmill } from './street.js';
 
 export function buildMontmartre(scene, world) {
-  const hw = CFG.roadHalfWidth, S = DS;
+  const hw = G.hw, S = DS;
   // the Sacré-Cœur on its mound beyond the top of the loop, the funicular climbing to it
   sacreCoeur(world, 0, 712 * S / 3); funicular(world, -135 * S / 3, 548 * S / 3, 664 * S / 3, 10);
   // place du Tertre inside the top of the loop: cobbles, easels and their painters, tourists, mimes, pigeons, the terraces
@@ -38,5 +38,5 @@ export function buildMontmartre(scene, world) {
   // street artists and a few sedans in the lanes inside the loop
   for (let i = 0; i < nOf(6); i++) person(scene, rand(-40, 40), rand(-100, -60), rand(0, 6.28), 'sign', 0.1);
   [[-80, -100, 1.2], [90, -60, -0.3], [-20, 30, 1.6]].forEach(p => { if (clearAt(p[0], p[1], 6)) sedan(scene, p[0], p[1], p[2], pick([0x111111, 0xf6f1e4, 0x8a2b2b])); });
-  for (let i = 0; i < G.N; i += 54) { const s = G.samples[i]; const sg = (i / 54) % 2 ? 1 : -1; if (isClear(s.x + s.sx * sg * (hw + 9), s.z + s.sz * sg * (hw + 9), 7)) tree(world, s.x + s.sx * sg * (hw + 9), s.z + s.sz * sg * (hw + 9), 'round'); }
+  for (let i = 0; i < G.N; i += 54) { const s = G.samples[i]; const sg = (i / 54) % 2 ? 1 : -1; if (isClear(s.x + s.sx * sg * (hw + 9), s.z + s.sz * sg * (hw + 9), 7)) tree(world, s.x + s.sx * sg * (hw + 9), s.z + s.sz * sg * (hw + 9), 'round', s.y); }
 }

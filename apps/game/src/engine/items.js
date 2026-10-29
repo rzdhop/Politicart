@@ -25,12 +25,11 @@ import { hintFor, say, tell } from './events.js';
 import { line, plural } from './lines.js';
 import { updateProgress } from './physics.js';
 import { box, cone, cyl, mat, setCast, sph, textPlane } from './primitives.js';
-import { G } from './state.js';
+import { G, nextEntityId, roadYAt } from './state.js';
 import { foeAhead, isFoe, leadingFoe } from './teams.js';
 import { clamp, lerp, rand, wrapAngle } from './util.js';
 
-// Hazards and projectiles carry an id so a snapshot can name them (DEC-014).
-const nextEntityId = () => (G.entitySeq = (G.entitySeq || 0) + 1);
+// Hazards and projectiles carry an id so a snapshot can name them (DEC-014); the counter lives in state.js, since track.js numbers the static obstacles too (DEC-049).
 
 // ---------- Items ----------
 export function pickupItems() {
@@ -115,12 +114,16 @@ export function buildHazard(type) {
     g.add(cyl(4.2, 4.4, 0.7, 0x8a8a84, 0, 0.35, 0, 24)); g.add(cyl(3.2, 3.2, 0.4, 0x5f9a48, 0, 0.9, 0, 24)); g.add(cyl(0.4, 0.4, 5, 0xc0c0c0, 0, 3.2, 0, 8)); [-0.8, 0, 0.8].forEach(o => g.add(box(0.4, 2.4, 0.4, 0xc0c0c0, o, 6.5, 0)));
     const sign = textPlane(2.4, 1.0, 'CÉDEZ', '#fff', '#c8102e', 80); sign.position.set(0, 2.2, 4.3); g.add(sign); g.add(cyl(0.05, 0.05, 2.2, 0x555555, 0, 1.1, 4.3, 5));
     r = 5.2; life = 18; stun = 1.0;
+  } else if (type === 'obstacle') {
+    // a static obstacle a client did not build itself (it should have: they come with the layout); a plain block stands in
+    g.add(box(3, 1.2, 1.6, 0x9a9a92, 0, 0.6, 0)); r = 3.0; life = 1e9; stun = 0;
   }
   return { g, r, life, stun };
 }
 export function spawnHazard(type, x, z, extra, team) {
   const { g, r, life, stun } = buildHazard(type);
-  g.position.set(x, 0, z); G.scene.add(g); G.hazards.push({ id: nextEntityId(), type, x, z, mesh: g, life, r, stun, owner: extra || null, team: team ?? (extra ? extra.team : null) ?? null });
+  const y = roadYAt(x, z);   // on the road's surface where it is dropped (DEC-050)
+  g.position.set(x, y, z); G.scene.add(g); G.hazards.push({ id: nextEntityId(), type, x, z, y, mesh: g, life, r, stun, owner: extra || null, team: team ?? (extra ? extra.team : null) ?? null });
 }
 /** The mesh of a projectile of `type`, unplaced. Shared by the simulation and networked clients. */
 export function buildProjectileMesh(type) {
@@ -145,8 +148,9 @@ export function buildProjectileMesh(type) {
 export function spawnProjectile(type, owner, target, side) {
   const g = buildProjectileMesh(type);
   const fx = Math.sin(owner.heading), fz = Math.cos(owner.heading); const sidespawn = type === 'bravm' ? (side ?? (Math.random() < 0.5 ? 1 : -1)) * 2 : 0;
-  const p = { id: nextEntityId(), type, x: owner.pos.x + fx * 3 + (-fz) * sidespawn, z: owner.pos.z + fz * 3 + fx * sidespawn, y: type === 'motion' ? 1.5 : type === 'bravm' ? 0 : 1.0, dx: fx, dz: fz, owner, target, speed: type === 'motion' ? 85 : type === 'bravm' ? 74 : type === 'factcheck' ? 70 : 62, life: type === 'motion' ? 12 : type === 'bravm' ? 8 : 5, mesh: g, idx: owner.idx };
-  g.position.set(p.x, p.y, p.z); G.scene.add(g); G.projectiles.push(p);
+  // y is the height over the road; gy the road's height under the projectile, followed sample by sample (DEC-050)
+  const p = { id: nextEntityId(), type, x: owner.pos.x + fx * 3 + (-fz) * sidespawn, z: owner.pos.z + fz * 3 + fx * sidespawn, y: type === 'motion' ? 1.5 : type === 'bravm' ? 0 : 1.0, gy: G.samples[owner.idx]?.y || 0, dx: fx, dz: fz, owner, target, speed: type === 'motion' ? 85 : type === 'bravm' ? 74 : type === 'factcheck' ? 70 : 62, life: type === 'motion' ? 12 : type === 'bravm' ? 8 : 5, mesh: g, idx: owner.idx };
+  g.position.set(p.x, p.y + p.gy, p.z); G.scene.add(g); G.projectiles.push(p);
 }
 export function stunKart(k, dur) {
   if (k.god || k.invincible > 0 || k.fly > 0) return false;
@@ -164,15 +168,13 @@ export function updateProjectiles(dt) {
     const p = G.projectiles[i]; p.life -= dt;
     if (p.target && (p.target.finished || p.target.fly > 0)) p.target = null;
     if (p.target) { const dx = p.target.pos.x - p.x, dz = p.target.pos.z - p.z; const d = Math.hypot(dx, dz) || 1; const want = Math.atan2(dx, dz), cur = Math.atan2(p.dx, p.dz); const a = cur + clamp(wrapAngle(want - cur), -3.5 * dt, 3.5 * dt); p.dx = Math.sin(a); p.dz = Math.cos(a); if (p.type === 'motion') p.y = d > 20 ? 5 : lerp(5, 1, 1 - d / 20); }
-    else if (p.type === 'dossier' || p.type === 'factcheck') {
-      const N = G.N; let best = p.idx, bd = Infinity; for (let o = 0; o <= 14; o++) { const j = (p.idx + o) % N; const s = G.samples[j]; const d = (s.x - p.x) ** 2 + (s.z - p.z) ** 2; if (d < bd) { bd = d; best = j; } } p.idx = best;
-      const t = G.samples[(best + 8) % N]; const a = Math.atan2(t.x - p.x, t.z - p.z); p.dx = Math.sin(a); p.dz = Math.cos(a);
-    }
+    { const N = G.N; let best = p.idx, bd = Infinity; for (let o = 0; o <= 14; o++) { const j = (p.idx + o) % N; const s = G.samples[j]; const d = (s.x - p.x) ** 2 + (s.z - p.z) ** 2; if (d < bd) { bd = d; best = j; } } p.idx = best; p.gy = G.samples[best].y || 0; }
+    if (!p.target && (p.type === 'dossier' || p.type === 'factcheck')) { const t = G.samples[(p.idx + 8) % G.N]; const a = Math.atan2(t.x - p.x, t.z - p.z); p.dx = Math.sin(a); p.dz = Math.cos(a); }
     p.x += p.dx * p.speed * dt; p.z += p.dz * p.speed * dt;
-    p.mesh.position.set(p.x, p.y, p.z); p.mesh.rotation.y += dt * 9;
+    p.mesh.position.set(p.x, p.y + p.gy, p.z); p.mesh.rotation.y += dt * 9;
     let hit = false;
     if (p.mesh.userData.blink) p.mesh.userData.blink.material.color.setHex(Math.floor(G.time * 10) % 2 ? 0x3a6bff : 0xff3a4a);
-    for (const k of G.karts) { if (k.god) continue; if (k === p.owner && p.life > (p.type === 'motion' ? 11.5 : p.type === 'bravm' ? 7.4 : 4.6)) continue; if (k !== p.owner && !isFoe(p.owner, k)) continue; if (p.type === 'motion' && k !== p.target) continue; if (k.fly > 0 || k.y > 1.5) continue; const d = (k.pos.x - p.x) ** 2 + (k.pos.z - p.z) ** 2; if (d < 6.5) {
+    for (const k of G.karts) { if (k.god) continue; if (k === p.owner && p.life > (p.type === 'motion' ? 11.5 : p.type === 'bravm' ? 7.4 : 4.6)) continue; if (k !== p.owner && !isFoe(p.owner, k)) continue; if (p.type === 'motion' && k !== p.target) continue; if (k.fly > 0 || k.y - p.gy > 1.5) continue; const d = (k.pos.x - p.x) ** 2 + (k.pos.z - p.z) ** 2; if (d < 6.5) {
       // fact-checking goes through immunity, shields and tax loopholes alike
       if (p.type === 'factcheck') { k.invincible = 0; k.shield = 0; k.phantom = 0; stunKart(k, 1.2); say(k, line('item.factcheck.hit')); hit = true; break; }
       stunKart(k, p.type === 'motion' ? 2.6 : p.type === 'bravm' ? 1.7 : 1.5); say(k, line('item.' + p.type + '.hit')); hit = true; break; } }
@@ -180,7 +182,7 @@ export function updateProjectiles(dt) {
   }
   for (let i = G.hazards.length - 1; i >= 0; i--) {
     const h = G.hazards[i]; h.life -= dt; let hit = false;
-    for (const k of G.karts) { if (k.god || (k.hazardGrace > 0 && h.type !== 'obstacle' && h.type !== 'lacrymo') || k.fly > 0 || k === h.owner || (h.team != null && k.team === h.team) || k.y > 1.2) continue; const d = (k.pos.x - h.x) ** 2 + (k.pos.z - h.z) ** 2; if (d < h.r * h.r) {
+    for (const k of G.karts) { if (k.god || (k.hazardGrace > 0 && h.type !== 'obstacle' && h.type !== 'lacrymo') || k.fly > 0 || k === h.owner || (h.team != null && k.team === h.team) || k.y - (h.y || 0) > 1.2) continue; const d = (k.pos.x - h.x) ** 2 + (k.pos.z - h.z) ** 2; if (d < h.r * h.r) {
       if (h.type === 'lacrymo') { if (k.slowed <= 0) say(k, line('hazard.lacrymo.hit')); k.slowed = Math.max(k.slowed, 1.3); k.confused = Math.max(k.confused, 1.0); }
       else if (h.type === 'chatons') { k.speed *= 0.35; k.confused = Math.max(k.confused, 1.2); k.hazardGrace = 1.2; sfxFor(k, 'bump'); say(k, line('hazard.chatons.hit')); }
       else if (h.type === 'lisier') { if (k.slip <= 0) say(k, line('hazard.lisier.hit')); k.slip = Math.max(k.slip, 0.4); }

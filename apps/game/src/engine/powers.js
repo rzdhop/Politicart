@@ -116,7 +116,7 @@ export function applyPower(k, id) {
     const fx = Math.sin(k.heading), fz = Math.cos(k.heading);
     const inSwath = (x, z, side) => { const dx = x - k.pos.x, dz = z - k.pos.z; const ahead = dx * fx + dz * fz; return ahead > -2 && ahead < FAUCHAGE_RANGE && Math.abs(dx * fz - dz * fx) < side; };
     let mown = 0;
-    for (let i = G.hazards.length - 1; i >= 0; i--) { const h = G.hazards[i]; if (inSwath(h.x, h.z, CFG.roadHalfWidth + 1)) { G.scene.remove(h.mesh); G.hazards.splice(i, 1); mown++; } }
+    for (let i = G.hazards.length - 1; i >= 0; i--) { const h = G.hazards[i]; if (inSwath(h.x, h.z, G.hw + 1)) { G.scene.remove(h.mesh); G.hazards.splice(i, 1); mown++; } }
     const hit = []; for (const o of foesOf(k)) if (inSwath(o.pos.x, o.pos.z, 12) && stunKart(o, 1.0)) hit.push(o);
     if (!mown && !hit.length) { consolation(k, line('power.fauchage.none')); return; }
     sfxFor(k, 'motion'); const n = hit.length;

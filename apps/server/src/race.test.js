@@ -30,6 +30,9 @@ describe('a race in a worker', () => {
       const starts = sent.filter(([, m]) => m.t === 'race');
       expect(starts.map(([id, m]) => [id, m.you])).toEqual([['alice', 4], ['bob', 5]]);
       expect(starts[0][1].roster).toHaveLength(6);
+      // the race seed (DEC-049): one per race, the same to every player
+      expect(Number.isInteger(starts[0][1].seed)).toBe(true);
+      expect(starts[1][1].seed).toBe(starts[0][1].seed);
       race.input('alice', { c: { throttle: true } });
       race.input('bob', { c: {} });                      // idle controls, as a client sends from its first frame
       await new Promise(r => setTimeout(r, 5000));      // 3.6 s countdown, then about a second of racing
@@ -78,6 +81,7 @@ describe('a race in a worker', () => {
       expect(sent.find(([id, m]) => id === 'alice' && m.t === 'kartJoin')[1]).toMatchObject({ slot: 6, entry: { charId: 'thierry', god: true, team: null } });
       const start = sent.find(([id, m]) => id === 'rida' && m.t === 'race')[1];
       expect(start.you).toBe(6); expect(start.roster).toHaveLength(7);
+      expect(start.seed).toBe(sent.find(([id, m]) => id === 'alice' && m.t === 'race')[1].seed);   // the god builds the same race
       expect(race.grid).toHaveLength(7); expect(roster).toHaveLength(7);
       await until(() => sent.some(([id, m]) => id === 'rida' && m.t === 'snap' && m.s.k.length === 7));
       const snap = sent.filter(([id, m]) => id === 'rida' && m.t === 'snap').at(-1)[1].s;
@@ -98,7 +102,7 @@ describe('a race in a worker', () => {
 
   it('runs to the finish when the drivers hand over to the AI, and scores the teams', async () => {
     const { room, roster, io, finished } = harness();
-    const race = runRace(room, roster, io, { fast: true });
+    const race = runRace(room, roster, io, { fast: true, seed: 77 });
     race.leave('alice'); race.leave('bob');
     const { ranking, teams } = await finished;
     expect(ranking.map(r => r.rank)).toEqual([0, 1, 2, 3, 4, 5]);
