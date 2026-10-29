@@ -1229,6 +1229,28 @@ describe('the kart card and the coin line (stage 7)', () => {
     expect($(container, 'pause-kart')!.querySelectorAll('.kart-part')).toHaveLength(3);
   });
 
+  it('names the layout on the pause screen, and shows no connection in solo play (stage 8)', async () => {
+    const { container } = await renderServed({ server: false });
+    (G as unknown as { layout: unknown }).layout = { name: 'Jour de manif' };
+    raceWith({});
+    act(() => { transition('paused'); });
+    expect($(container, 'pause-layout')?.textContent).toBe('Tracé du jour : « Jour de manif »');
+    expect(($(container, 'pause-net') as HTMLElement).hidden).toBe(true);
+    (G as unknown as { layout: unknown }).layout = null;
+  });
+
+  it('puts the top three on the podium with their portraits (stage 8)', async () => {
+    const { container } = await renderServed({ server: false });
+    raceWith({});
+    act(() => { transition('race'); transition('results'); });
+    const places = [...$(container, 'r-podium')!.querySelectorAll('.podium-place')];
+    expect(places).toHaveLength(1);
+    expect(places[0]!.querySelector('.pd-name')?.textContent).toBe(CHARACTERS[0]!.name);
+    expect(places[0]!.querySelector('.pd-step')?.textContent).toBe('1er');
+    expect(places[0]!.querySelector('.pd-value')?.textContent).toBe('1:40.50');
+    expect(places[0]!.classList.contains('you')).toBe(true);
+  });
+
   it('shows a stock kart with no part and no trail line, and the card again on the results with the table intact', async () => {
     const { container } = await renderServed({ server: false });
     raceWith({});
@@ -1247,7 +1269,11 @@ describe('the kart card and the coin line (stage 7)', () => {
     act(() => { transition('race'); transition('results'); });
     await settle();
     expect(server.calls.find(c => c.url === './api/progress')).toMatchObject({ method: 'POST', auth: 'Bearer tok-player', body: { rank: 0, field: 1, finished: true, charId: 'victor' } });
-    expect($(container, 'r-xp')?.textContent).toBe('+40 XP · +60 politicoins · bonus du jour +50');
+    // the gains as a breakdown that counts up (GainBreakdown): one line per amount, the figure kept in the DOM
+    const lines = (el: Element | null) => [...(el?.querySelectorAll('.gain-line') ?? [])].map(l => l.textContent);
+    expect(lines($(container, 'r-xp'))).toEqual(['+40 XP', '+60 politicoins', '+50 bonus du jour']);
+    expect($(container, 'r-xp')?.querySelector('.gain-notes')).toBeNull();
+    expect(($(container, 'r-xp')?.querySelector('.gain-value') as HTMLElement).style.getPropertyValue('--to')).toBe('40');
     expect($(container, 'r-kart')!.querySelector('.kart-trail')?.textContent).toBe('Laser');
     expect(getSnapshot().account!.profile.coins).toBe(60);
   });
@@ -1257,7 +1283,8 @@ describe('the kart card and the coin line (stage 7)', () => {
     raceWith({});
     act(() => { transition('race'); transition('results'); });
     await settle();
-    expect($(container, 'r-xp')?.textContent).toBe('+90 XP · +45 politicoins · Niveau 2 atteint ! · niveau 2 : +200 politicoins');
+    expect([...$(container, 'r-xp')!.querySelectorAll('.gain-line')].map(l => l.textContent)).toEqual(['+90 XP', '+45 politicoins', '+200 politicoins (niveau 2)']);
+    expect($(container, 'r-xp')?.querySelector('.gain-notes')?.textContent).toBe('Niveau 2 atteint !');
   });
 
   it('says nothing about politicoins to a guest, who is invited to sign up', async () => {
