@@ -26,6 +26,25 @@
      two rules that belong to the game shell rather than the design system
      (the canvas and the select screen's layout override) are in src/game.css. -->
 
+<!-- The splash: the tricolore and the title, in CSS alone, painted by the
+     browser before any script has downloaded (DEC-055). The UI removes it
+     when it mounts (ui/App.tsx). The few tokens it needs are copied inline
+     from @politikart/ui (tokens.css, brand.css): the stylesheet arrives
+     with the entry chunk, after this has to show. The element's id keeps
+     packages/ui's parity suite retired: a bare <style> would read as the
+     game's old inline stylesheet. -->
+<style id="splash-style">
+  #splash{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#0c1230;color:#f6f1e4;font-family:"Lilita One","Arial Black",Impact,sans-serif;pointer-events:none;}
+  #splash .tricolore{display:flex;height:6px;width:min(420px,80vw);border-radius:3px;overflow:hidden;}
+  #splash .tricolore span{flex:1;}
+  #splash .tricolore span:nth-child(1){background:#1f3a93;}
+  #splash .tricolore span:nth-child(2){background:#f6f1e4;}
+  #splash .tricolore span:nth-child(3){background:#c8102e;}
+  #splash h1{margin:0;font-size:clamp(34px,8vw,64px);letter-spacing:.06em;color:#f2c14e;text-shadow:0 3px 0 rgba(0,0,0,.45);}
+  #splash p{margin:0;font-size:14px;opacity:.75;font-family:system-ui,sans-serif;}
+</style>
+<div id="splash" aria-hidden="true"><div class="tricolore"><span></span><span></span><span></span></div><h1>POLITIKART</h1><p>Chargement…</p></div>
+
 <canvas id="c"></canvas>
 
 <!-- The six screens, the HUD and the note banner are React, mounted here from

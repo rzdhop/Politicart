@@ -80,6 +80,7 @@ import { LOOK3D } from './looks.js';
 import { getState, onTransition } from './machine.js';
 import { bodyOf, buildPilot, disposePilot, MOUNT } from './pilot.js';
 import { clearCanvas, getRenderer } from './render.js';
+import { initials, placeholder, showsTurntable } from './stagegate.js';
 import { stageDrag, stageInput, takeDrag, watchMouse } from './stageinput.js';
 import { RIM, STAGE_LOOK, tintOf, withLook } from './stagelook.js';
 import { G, getPoly } from './state.js';
@@ -103,8 +104,9 @@ export const stageTier = () => textureTier(getPoly(), coarse());
 /** The geometry tier the kart and the pilot are built at ("légers" or not). */
 const buildTier = tier => (tier === 'low' ? 'low' : 'high');
 
-/** Whether menu `state` shows the stage: the roster and the Garage do; the other menus show the plain background. */
-export const showsTurntable = state => state === 'select' || state === 'garage';
+// showsTurntable (which menus show the stage) and the roster placeholders live in stagegate.js, the
+// module that loads this one on demand (DEC-055); re-exported so this stays the stage's API.
+export { initials, showsTurntable };
 
 // ---------- The camera and the framing ----------
 
@@ -1111,30 +1113,6 @@ const PT = { urls: {}, ready: {}, keys: {}, queue: [], listener: null, raf: 0, s
 /** What a candidate's portrait shows: rendered again when any of it changes. */
 const portraitKey = def => JSON.stringify([def.id, def.name, def.look, def.kart, def.livery || null, def.style || null, stageTier()]);
 
-/** "Jean-Luc Mélèche" → "JM": the first letters of the first and the last word. */
-export function initials(name) {
-  const words = String(name || '').split(/\s+/).filter(w => /\p{L}/u.test(w));
-  if (!words.length) return '?';
-  const first = w => (w.match(/\p{L}/u) || ['?'])[0].toUpperCase();
-  return words.length === 1 ? first(words[0]) : first(words[0]) + first(words[words.length - 1]);
-}
-
-/** A placeholder tile: the kart's colour, a soft light, the candidate's initials. A data URL; '' headless. */
-function placeholder(def) {
-  if (typeof document === 'undefined') return '';
-  const S = 128, cv = document.createElement('canvas'); cv.width = cv.height = S;
-  const c = cv.getContext('2d'); if (!c) return '';
-  const col = '#' + new THREE.Color(def.kart).getHexString();
-  c.fillStyle = col; c.fillRect(0, 0, S, S);
-  const g = c.createRadialGradient(S * 0.5, S * 0.32, 4, S * 0.5, S * 0.45, S * 0.75);
-  g.addColorStop(0, 'rgba(255,255,255,.35)'); g.addColorStop(1, 'rgba(12,18,48,.55)');
-  c.fillStyle = g; c.fillRect(0, 0, S, S);
-  c.fillStyle = '#fffaf0'; c.font = '52px "Lilita One", "Arial Black", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.shadowColor = 'rgba(0,0,0,.45)'; c.shadowOffsetY = 3;
-  c.fillText(initials(def.name), S / 2, S * 0.42);
-  return cv.toDataURL('image/png');
-}
-
 /**
  * The roster portraits, by character id, at once: the final portrait where
  * one is up to date, else the last one or a placeholder in the kart's
@@ -1158,7 +1136,7 @@ function plan() {
     const key = portraitKey(def);
     if (PT.keys[def.id] === key) continue;
     PT.keys[def.id] = key; PT.ready[def.id] = false;
-    if (!PT.urls[def.id]) PT.urls[def.id] = placeholder(def);
+    if (!PT.urls[def.id]) PT.urls[def.id] = (G.thumbs && G.thumbs[def.id]) || placeholder(def);   // the gate's placeholder, when it showed one first
     if (!PT.queue.includes(def.id)) PT.queue.push(def.id);
   }
   G.thumbs = PT.urls;

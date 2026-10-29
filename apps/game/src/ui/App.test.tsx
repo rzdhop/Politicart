@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The screens call the engine through the store. The engine's rendering
@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // makeThumbs hands back placeholders at once and keeps the listener the store
 // gives it; a test plays the portraits landing through that listener.
 const portraits = vi.hoisted(() => ({ listener: null as ((urls: Record<string, string>, ready: Record<string, boolean>) => void) | null, launches: 0 }));
-vi.mock('../engine/preview.js', () => ({
+vi.mock('../engine/stagegate.js', () => ({
   hasPreview: () => false,
   launch: () => { portraits.launches++; return true; },
   makeThumbs: (listener?: (urls: Record<string, string>, ready: Record<string, boolean>) => void) => { portraits.listener = listener ?? null; return { victor: 'data:image/png;base64,placeholder' }; },
@@ -28,8 +28,8 @@ vi.mock('../engine/minimap.js', () => ({
 // The Politibox scene draws on the shared canvas; the timeline's phases are
 // played here by hand through the onPhase the store hands it.
 const box = vi.hoisted(() => ({ onPhase: null as ((name: string) => void) | null, played: [] as unknown[], skips: 0 }));
-vi.mock('../engine/lootbox.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../engine/lootbox.js')>()),
+vi.mock('../engine/boxgate.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../engine/boxgate.js')>()),
   playOpening: (drop: unknown, o: { onPhase?: (name: string) => void } = {}) => { box.played.push(drop); box.onPhase = o.onPhase ?? null; box.onPhase?.('drop'); },
   skipOpening: () => { box.skips++; },
   stopOpening: () => {},
@@ -210,6 +210,9 @@ function fakeServer(o: FakeOptions = {}) {
 
 /** Let every pending request, and the renders that follow, settle. */
 async function settle() {
+  for (let i = 0; i < 10; i++) await act(async () => { await Promise.resolve(); });
+  // a lazy screen's chunk (React.lazy in App.tsx) lands on a macrotask, not a microtask
+  await act(async () => { await new Promise(r => setTimeout(r, 0)); });
   for (let i = 0; i < 10; i++) await act(async () => { await Promise.resolve(); });
 }
 
@@ -420,10 +423,22 @@ describe('the React screens', () => {
     expect(mute.textContent).toBe('Son : coupé');
   });
 
-  it('render the Workshop ids under an admin profile', async () => {
+  it('render the Workshop ids under an admin profile, the lazy screens included once their chunk lands', async () => {
     const { container } = await renderServed({ server: true, who: 'admin' });
+    // the Workshop and the dashboard are React.lazy (DEC-055): their sections stand in with their ids from the first render
+    expect(container.querySelector('#s-admin')).not.toBeNull();
+    expect(container.querySelector('#s-dashboard')).not.toBeNull();
     fireEvent.click(container.querySelector('#b-admin')!);
+    await waitFor(() => expect(container.querySelector('#admin-chars')).not.toBeNull(), { timeout: 5000 });   // the chunk's first load
+    await settle();
     for (const id of ADMIN_IDS) expect(container.querySelector('#' + id), '#' + id).not.toBeNull();
+  });
+
+  it('take down the splash index.html painted before the scripts arrived, once mounted', () => {
+    const splash = document.createElement('div'); splash.id = 'splash'; document.body.appendChild(splash);
+    expect(document.getElementById('splash')).not.toBeNull();
+    render(<App />);
+    expect(document.getElementById('splash')).toBeNull();
   });
 
   // Changed with the admin gate (R-06 redefined): the Workshop is opened by an admin profile.

@@ -46,18 +46,11 @@ export const PHASE_TIME = Object.freeze({ drop: 0.6, spin: 1.2, shake: 1.6, burs
 /** How long the prize takes to come out, by drop kind: a kart circling with its trail needs a lap. */
 export const REVEAL_TIME = Object.freeze({ char: 1.4, part: 1.2, trail: 1.6, coins: 1.0 });
 
-/** The grade colours, as the library's `--grade-<g>` tokens. */
-export const GRADE_COLOUR = Object.freeze({ common: 0xb9b3d8, rare: 0x4fa3ff, mythic: 0xb14cff, incredible: 0xffb400 });
-
-/**
- * The grade a drop shows in: the catalogue's for an item, and for coins one
- * by the amount (a big win deserves a colour too).
- */
-export function dropGrade(drop) {
-  if (!drop) return 'common';
-  if (drop.kind !== 'coins') return GRADE_COLOUR[drop.grade] === undefined ? 'common' : drop.grade;
-  return drop.amount >= 500 ? 'mythic' : drop.amount >= 50 ? 'rare' : 'common';
-}
+// The grade colours and dropGrade live in boxgate.js, the module that loads this one on demand
+// (DEC-055): the Politibox screen reads them without pulling the opening in. Re-exported, so this
+// stays the Politibox's API.
+import { dropGrade, GRADE_COLOUR } from './boxgate.js';
+export { dropGrade, GRADE_COLOUR };
 
 /**
  * The opening's timeline for `drop`: `phase(t)` names the phase at `t`
