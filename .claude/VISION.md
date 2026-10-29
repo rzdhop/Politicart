@@ -82,3 +82,18 @@ pilot who then races (DEC-043..046). It has to feel deliberate on a desktop
 GPU and stay instant everywhere else: phones draw it light, portraits arrive
 progressively, and a GPU that cannot keep up gets a still stage rather than a
 slow menu.
+
+## Races that differ, look their part and answer at once
+
+The races had to reach the bar the 3D select set. Each circuit is now a
+place of its own -- the Faubourg's palace and press scrum, the quais and
+their bridges, Versailles' fountains and terraces, the butte under the
+Sacré-Cœur, the Vieux-Port's boats and Corniche -- with real relief, its own
+width and a climate, and no two races on it the same: a seed every side
+shares draws one of three named layouts (DEC-049..051). Every item, power
+and status shows where it acts (DEC-053); in a team race your own kart
+answers on the frame of your input while the others glide behind an
+adaptive delay (DEC-052, DEC-058); and the circuit is built while you are
+still choosing it, a few milliseconds at a time, so the countdown starts at
+once (DEC-055, DEC-057). Denser decor costs fewer draws, not more
+(DEC-056, DEC-059); phones keep their light tier.

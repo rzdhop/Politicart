@@ -2,59 +2,73 @@
 
 Current state only. History lives in git.
 
-## Latest task -- OPEN 2026-10-29: the maps, races, Politibox, multiplayer and loading overhaul
+## Latest task -- closed 2026-10-29: the maps, races, Politibox, multiplayer and loading overhaul
 
 - **Branch:** `claude/racing-game-improvements-2f59ui`, cut from `main` at
-  `61ebddb` (PR #16), pushed; tip `586dc7a`. Plan in `.claude/PLAN.md`
-  (approved by the owner, answers Q1-Q6 at its top), DEC-049..056,
-  A-039..043. Workers in parallel worktrees (DEC-039), merged in order.
-- **Done and merged (wave 1):** stage 0 `9dbc57f` (baseline, `track.js`
-  split into `engine/decor/`), stage 1 `812b221` (seed, 3 named layout
-  variants per circuit, elevation profiles, per-track width, static
-  obstacle ids, deterministic cyclists), stage 2 `78c2cfd` (18 procedural
-  surfaces with normal maps by tier, six climates), stage 5 `f2a293a`
-  (chunks, splash, immutable + brotli static serving, `prebuild.js`),
-  stage 6 `cd2e367` (Politibox on the hemicycle stage, tease, bundle x5 at
-  550, drop history, sounds, reveal parts in the library).
-- **Tier 1 on `cd2e367`:** typecheck clean; game 1020, server 177, ui 387 +
-  8 skipped; build in chunks (three 528 kB, engine-race 336, react 219,
-  index 89, engine-stage 33, screens-admin 20, engine-box 16).
-- **E2E:** baseline on `9dbc57f` 60 passed / 20 failed of 80 in 28 min
-  (the software-WebGL race-start set plus two admin specs under load; list
-  in the session scratchpad). On `cd2e367` the run was interrupted at 9/9
-  passed when the owner stopped the session: **a full E2E on the tip is the
-  first thing to do next** (`npx playwright test -c playwright.local.config.ts`
-  with `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`; that local config,
-  untracked, points at the container's Chromium 1243).
-- **Visual check:** none yet. Screenshots of the select and tracks screens
-  on the tip render fine under software GL; race screenshots per circuit
-  were not captured before the stop. **The owner has not seen the new
-  textures, climates, relief or the stage Politibox on a real GPU.**
-- **Wave 2 (NOT started in code):** stage 3 (netcode: prediction,
-  reconciliation, adaptive delay, `me` block, ping, `sendRaw`; Annex B of
-  PLAN.md) and stage 4 (vfx pool, effects for every item/power/status,
-  vfx channel, HUD motion) were dispatched to worktrees `.worktrees/net`
-  (`wt/net`) and `.worktrees/vfx` (`wt/vfx`) cut from `cd2e367` and
-  stopped before any commit: both branches equal `cd2e367`. Re-dispatch
-  them from the briefs in PLAN.md (stage 3 merges first; stage 4 keeps its
-  `netstate`/`netrace`/`audio`/`payload` edits delimited).
-- **Then wave 3:** stage 7 (dense decor per circuit, three workers on
-  `engine/decor/<id>.js`, instancing, `yAt()`), stage 8 (TrackCard
-  thumbnails and meta, lobby/shop/results components, `#hud-layout`,
-  design-sync), stage 9 (integration, budgets, README, PR).
-- **Known follow-ups from the workers' reports:** AI lane/skill and item
-  rolls still on `Math.random` (`G.rng` ready); terrain under far decor
-  interiors sits at 0 (stage 7 with `yAt`); the layout name shows through
-  `#h-hint` (hidden below 600 px: stage 8 adds `#hud-layout`); the
-  pre-build misses in team races (seed unknown in the lobby: the
-  seed-independent split is the follow-up in `prebuild.js`); kart/pilot
-  geometry caches skipped (userData cloning); `data.js` `sky`/`fog` fields
-  no longer read (the climate owns the sky); the headlight cone lives
-  beside the kart (RACE_GOLDEN intact); no x5 E2E spec; `e2e/shop.spec.ts`
-  unchanged.
+  `61ebddb` (PR #16), pushed. Plan in `.claude/PLAN.md` (approved by the
+  owner, Q1-Q6; all stages done, measured targets in its table),
+  DEC-049..059, A-039..046. Workers in parallel worktrees (DEC-039), merged
+  in order: wave 1 (stages 0, 1, 2, 5, 6), then `797d582` (the pre-build
+  fix) and `decor/instanced.js`, wave 2 (`wt/net`, `wt/vfx` -> `865aba6`),
+  stage 8 (`wt/ui8` -> `ebb652a`), wave 3 (`wt/d7c`, `wt/d7b`, `wt/d7a`),
+  stage 9 (integration, budgets, records).
+- **Found and fixed by the dispatcher:** the pre-build ran whole phases per
+  step (R-25: circuits screen 140-170 ms; now 16-18 ms, DEC-057); tinted
+  instanced batches drew white (r128's program cache; own materials,
+  DEC-059); the fold ratio and the decor floor punished instancing (tests
+  now leave instanced meshes out of the ratio and floor on triangles); the
+  flat Élysée's ground was a 33k-triangle grid; "légers" ribbons now take
+  every other sample; three load- or randomness-sensitive tests made robust
+  (effects test waits for what it asserts, thumbnail steps best of three,
+  pre-build key test timeout).
+- **Tier 1 on the tip:** typecheck clean; ui 465 + 8 skipped, game 1183,
+  server 183. Build: three 528 kB, engine-race 463 kB, react 219 kB, index
+  102 kB, engine-stage 33 kB, screens-admin 20 kB, engine-box 16 kB; `.br`
+  and `.gz` siblings.
+- **E2E:** full runs after wave 2 (63/80), after 7c + stage 8 (64/83) and on
+  the complete tip (64/83): every failure is in the software-WebGL
+  race-start set (the 17 race specs; R-28 joins it, stalling at the green
+  light after its new checks pass; R-05 now and then). R-20 failed once in
+  the final full run and passed twice alone (1.1 min, 50 s): load.
+- **Measured** (PLAN.md "Targets", countdown frame at 1440 under software
+  GL, WebGL call hook, `main` re-measured by the same probe):
+  - détaillés: 706-944 calls / 270-401k tris (`main` 1,062-1,462 /
+    185-277k): draws -30 to -39 %, within 1,400 / 450k.
+  - légers: 125-182 calls / 64-79k tris, **Bourbon 96k, over the 90k
+    target by 7 %** (`main` 115-234 / 54-62k).
+  - snapshots 1.40-1.65 kB per player at 30 Hz (were 4.1-4.5 kB at 20 Hz).
+- **The owner has not seen any of it on a real GPU or phone:** the new
+  circuits and climates, the effects, the stage Politibox, the thumbnails,
+  a team race over the internet with prediction.
+- **Owner's to-do:** a race on each circuit x 3 layouts on desktop and a
+  phone (A-046: "légers" triangles are up 18-68 % on `main`, draws are
+  not); a two-browser team race on Render (A-041, A-044: 30 Hz snapshots on
+  the free instance); the Politibox x5 on a phone; judge the thumbnails
+  (A-045).
+- **Follow-ups:**
+  - Bourbon "légers" at 96k triangles at the start line (dozens of light
+    batches in 800 m cells; finer cells cost draws);
+  - AI lane/skill and item rolls still on `Math.random` (`G.rng` ready);
+  - the cyclists' 0.5 kB of each snapshot (spline distance + offset would
+    bring it under 1.5 kB);
+  - track.js: the banked turn's inner half sinks under the ground plane;
+    the crossing's car moves along its own length axis sideways; Bourbon's
+    6 m humps blend into the terrain so no arch shows; `godcmd.placeAt`
+    sets `k.y = 0` on relief;
+  - new obstacle kinds (sardine stalls, pétanque, tour groups, 2CV, café
+    chairs) need `OBSTACLE_KINDS` in track.js; fountain spray that slows
+    karts needs physics; the funicular as Montmartre's crossing;
+  - the Grand Canal plane reaches 1,275 m, past the 1,100 m sky dome;
+  - catch-up boost zones (stage 4) skipped: they would change the seeded
+    layouts; R-31 (`#h-net` in a team race) and a 120 ms
+    `POLITIKART_TEST_DELAY_MS` multiplayer spec need a real GPU to run;
+  - a test seed hook would let R-28 prove two seeds give two names.
 - **Container notes:** worktrees need `cp -al node_modules` plus the three
-  package `node_modules` and a `packages/ui` build; `.worktrees/` and
-  `playwright.local.config.ts` are in `.git/info/exclude`.
+  package `node_modules` and a `packages/ui` build; `.worktrees/`,
+  `playwright.local.config.ts` (Chromium 1243 at
+  `/opt/pw-browsers/chromium-1243/chrome-linux64/chrome`) and
+  `apps/game/src/zz/` (scratch measurements) are in `.git/info/exclude`.
+  Never `pkill -f` a pattern that the same command line contains.
 
 ## Previous task -- closed 2026-10-28: polish after the 3D select
 - **Branch:** `feature/polish-after-3d-select`, cut from `main` at `12a745c`

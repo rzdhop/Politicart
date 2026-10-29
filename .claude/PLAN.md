@@ -2,7 +2,7 @@
 
 Approved by the owner 2026-10-29 (answers Q1-Q6 in the table below). Copied from the session plan file; the status table is kept here as stages land.
 
-## Status
+## Status: all stages done (2026-10-29)
 
 | Stage | Branch / commit | Done |
 |---|---|---|
@@ -14,6 +14,11 @@ Approved by the owner 2026-10-29 (answers Q1-Q6 in the table below). Copied from
 | 5b | `797d582` | Fix found by the wave-1 E2E (R-25, circuits screen 140-170 ms): the pre-build ran whole phases per step (90-330 ms); surfaces now bake ahead a few rows a step, every heavy phase and the circuit builders (now generators) yield inside; circuits screen 16-18 ms, longest step 52-60 ms. Then `5fe947c`/`ba48803`: `decor/instanced.js` (instanced batches per 200 m cell, `fromBuilder`) for stage 7. |
 | 3 | `wt/net` → merged | Numbered inputs, local prediction + reconciliation (`predict.js`), adaptive delay (100-219 ms under 0-6 ticks of jitter), ping (`#h-net`), snapshot 4.1-4.5 kB → 1.40-1.65 kB per player, stringified once, `bufferedAmount` skip, `SNAP_EVERY = 2` (30 Hz, measured 2.80-2.95 ms CPU per race-second), `PROTOCOL` 3, `POLITIKART_TEST_DELAY_MS`; game 1045, server 182. |
 | 4 | `wt/vfx` → `865aba6` | `vfx.js` (17 kinds, 8 pooled instanced layers, ≤ 8 draws), an effect at use and impact for every item and power, persistent status visuals, AI wind-up line, 11 synthesized sounds, `vfx` channel + status fields on the wire, `HitVignette`/`StatusBadges`, HUD keyframes; integrated tip: ui 402 + 8, game 1141, server 183. |
+| 8 | `wt/ui8` → `ebb652a` | TrackCard thumbnails (`thumbs.js`, a light bird's-eye scene, sliced, 16:9) and `TrackMeta`; lobby family (`PlayerCard`, `PlayerGrid`, `TeamPicker`, `RoomCode`, `InviteRow`); `Podium`, `GainBreakdown`, `TeamStandings`; trails as `ShopCard`s with `TrailStrip`; `LatencyReadout` (`#h-net`), `LayoutReadout` (`#hud-layout`); E2E R-32, R-28; ui 465 + 8, game 1154. |
+| 7c | `wt/d7c` → `998a64d` (+ central fixes) | Shared street life (12 instanced crowd kinds, flocks that take off, 12 tree kinds that sway, instanced lamps/benches/bins/bollards, the furniture instanced), six bike kinds, the Vieux-Port (Ombrière, MuCEM, La Major, If, ~130 boats, the Corniche); then tinted batches on their own materials and the fold ratio without instanced meshes. |
+| 7b | `wt/d7b` → `bae5b77` | Versailles (château, Latona, Apollo, Colonnade, orangery at its real size, terraces, the maze's gates following the seeded chicanes) and Montmartre (the butte under the Sacré-Cœur, funicular, rue Foyatier, the Tertre on level ground, the two mills, Lapin Agile, mur des je-t'aime, terraced streets); `footing()` for flat pieces. |
+| 7a | `wt/d7a` → merged after 7b | The Élysée (palace, cour d'honneur, garde à cheval, press scrum, Faubourg shopfronts, Beauvau, a Haussmann grid, lit windows at night) and the Palais Bourbon (Assemblée on the Concorde axis, obélisque, bridges on the humps, a tunnel, bateau-mouche and Batobus, bouquinistes, Paris Plages), laid out in metres with a `Merger`. |
+| 9 | `b22b569` … `af88dd9` | Integration: test robustness (effects test waits for what it asserts, decor floor on triangles, thumbnail steps best of three, pre-build key test timeout); a flat circuit's ground as one quad and "légers" ground on 50 m cells; "légers" plain ribbons on every other sample; README, DEC-057..059, A-044..046; Tier 1 ui 465 + 8, game 1183, server 183; E2E 64/83 with nothing outside the software-WebGL race-start set (R-20 passed twice alone). |
 
 ## Owner's answers (2026-10-29)
 
@@ -43,18 +48,20 @@ What the exploration found (details in the reports; the facts the plan relies on
 - **Design system:** `packages/ui` with one story + `index.ts` export + docs description + group test per component (`stories/coverage.test.ts`); motion only in `fx.css`, off under reduced motion; element ids are a contract (DEC-009). Off-system screens: `LobbyScreen` (misuses `AdminGrid`, `ResultsTable` as player list, buttons instead of `ChoiceGroup`), `ShopScreen` (raw odds table/trail list in `game.css`), `ResultsScreen` (no podium), `TrackCard` preview is a 2D spline outline with no meta.
 - **Budgets on record:** race frame ≤ "today + 10 %" (`PLAN.md` §4.2: ≈1,550 calls / 450k tris on high, ≈365 / 66k on "légers"); measured Élysée high 1,259 / 319k, low 254–271 calls / 84k tris (DEC-047); `headless.test.js` bounds a circuit to 1,500..9,000 meshes and >8 cyclists; the "légers" fold test builds twice under a mocked `Math.random` and expects identical triangles; tracks are referenced by index (append only); `data.test.js` pins the track ids and the feature type list.
 
-## Targets (measured at stage 0, re-measured at stage 10)
+## Targets (measured at stage 0, re-measured at stage 9)
 
-| Metric | Today | Target |
-|---|---|---|
-| Local kart input→motion in a team race | ~100 ms + RTT/2 | 1 frame (predicted), corrections ≤ 2 cm/frame invisible at ≤ 150 ms RTT |
-| Remote karts at 100 ms jitter | freeze + jump | smooth (adaptive delay 2–4 snapshot intervals, short extrapolation) |
-| Snapshot size | ~3.5–5 KB (JSON) | ≤ 1.5 KB (quantised, hazards as events, owner-only HUD fields) |
-| First paint (warm cache) | whole bundle parsed | < 1 s: vendor chunk `immutable`, brotli, splash in `index.html` |
-| Race start (desktop) | 4–8 s synchronous build | track pre-built during the circuits screen / lobby; countdown starts in < 0.5 s; shaders primed before the first race frame |
-| Race frame, high (Élysée, 6 karts, 1440) | 1,259 calls / 319k tris | ≤ 1,400 calls with **3× the decor density** (instancing + folding on high too); tris ≤ 450k |
-| Race frame, "légers" | 254–271 calls / 84k tris | ≤ 300 calls / ≤ 90k tris at 2× density (phone keeps 60 fps where it does today) |
-| Decor meshes per circuit (headless, high, pre-fold) | 1,500–9,000 | pool-limited; test ceiling raised to 14,000 with instancing counted once |
+The "After" race frames are the countdown frame at 1440 x 900 under software GL, counted by a WebGL call hook (draw calls, and triangles from each call's count times its instances), the median of the last 12 frames; `main` (`61ebddb`) was re-measured by the same probe, so those two compare like for like. The "Today" column came from an earlier harness and does not.
+
+| Metric | Today | Target | After (2026-10-29) |
+|---|---|---|---|
+| Local kart input→motion in a team race | ~100 ms + RTT/2 | 1 frame (predicted), corrections ≤ 2 cm/frame invisible at ≤ 150 ms RTT | predicted on the input's frame; replay 0.45 mm median / 1.5 mm max from the server at 200 ms RTT (unit harness) |
+| Remote karts at 100 ms jitter | freeze + jump | smooth (adaptive delay 2–4 snapshot intervals, short extrapolation) | adaptive delay 100 → 219 ms under 0-6 ticks of jitter, ≤ 1 tick/s, ≤ 100 ms extrapolation |
+| Snapshot size | ~3.5–5 KB (JSON) | ≤ 1.5 KB (quantised, hazards as events, owner-only HUD fields) | 1.40-1.65 kB per player at 30 Hz (the cyclists' 0.5 kB unchanged) |
+| First paint (warm cache) | whole bundle parsed | < 1 s: vendor chunk `immutable`, brotli, splash in `index.html` | splash in `index.html`; vendor chunks immutable + brotli; index 102 kB (31.6 kB gz) |
+| Race start (desktop) | 4–8 s synchronous build | track pre-built during the circuits screen / lobby; countdown starts in < 0.5 s; shaders primed before the first race frame | pre-built on the circuits screen in steps under 10 ms in the decor; the circuits screen opens in 16-18 ms (software GL) |
+| Race frame, high (Élysée, 6 karts, 1440) | 1,259 calls / 319k tris | ≤ 1,400 calls with **3× the decor density** (instancing + folding on high too); tris ≤ 450k | countdown frame over the five circuits: 706-944 calls / 270-401k tris; `main` by the same probe 1,062-1,462 / 185-277k |
+| Race frame, "légers" | 254–271 calls / 84k tris | ≤ 300 calls / ≤ 90k tris at 2× density (phone keeps 60 fps where it does today) | 125-182 calls / 64-79k tris, Bourbon 96k (the one miss); `main` by the same probe 115-234 / 54-62k |
+| Decor meshes per circuit (headless, high, pre-fold) | 1,500–9,000 | pool-limited; test ceiling raised to 14,000 with instancing counted once | 1,664-2,106 meshes scene-wide with 6 karts (`main` 2,927-3,289) |
 
 ## Stage 0 — Dispatcher: baseline, decisions, foundation split (this session)
 

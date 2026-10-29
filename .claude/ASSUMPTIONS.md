@@ -136,7 +136,7 @@ Marked UNCONFIRMED / confirmed / invalidated.
   Built in 2-5 ms a circuit in Node; the render and the readback were only
   measured against a stand-in renderer. A slow GPU keeps the outlines (`static`).
 - **A-046 -- The denser "légers" decor keeps phones at their frame rate.**
-  UNCONFIRMED. Draws fell by a third or more; triangles rose 7-29 % scene-wide.
+  UNCONFIRMED. Per frame, draws are about as on `main` and triangles up 18-68 % (64-96k; Bourbon the most).
 - **A-042 -- 550 politicoins for five openings keeps the economy.** CONFIRMED
   by the owner (Q5, 2026-10-29); odds unchanged.
 - **A-043 -- Instancing and folding on "détaillés" keep shadows looking the same.**
