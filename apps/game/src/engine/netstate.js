@@ -1,7 +1,7 @@
 // The race on the wire: snapshots the server sends, and what a client does
 // with them (DEC-014, DEC-052).
 //
-// The server steps the simulation and, twenty times a second, encodes it
+// The server steps the simulation and, thirty times a second, encodes it
 // with encodeSnapshot(): every kart's drawable state, the hazards and
 // projectiles by id (the circuit's static obstacles by their id alone, in
 // `hs`: a client built them from the seed and drops one the list stops
@@ -24,7 +24,7 @@
 // millimetre, angles to 1e-4 rad, speeds and charges to 1e-2, timers to the
 // millisecond -- and a field at its resting value (zero, false; one for the
 // bump's power and side, 1.4 for the boost's) is left out: six karts go out
-// twenty times a second to every player.
+// thirty times a second to every player.
 import { G as Game } from './state.js';
 
 const q = (v, p) => Math.round((v || 0) * p) / p;

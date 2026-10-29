@@ -3,7 +3,7 @@
 // The engine keeps its state in module singletons (G, the state machine, the
 // event queue), so each race gets its own thread and therefore its own copy
 // of every module. The thread steps the simulation at a fixed 60 Hz, applies
-// each driver's controls, and every third tick (20 Hz) posts a snapshot plus,
+// each driver's controls, and every second tick (30 Hz) posts a snapshot plus,
 // per human slot, the messages and sounds addressed to them and what their
 // client needs to correct its predicted kart (DEC-052).
 //
@@ -48,7 +48,10 @@ import { CFG, G, STEP } from '../../game/src/engine/state.js';
 import { placementPoints, teamStandings } from '../../game/src/engine/teams.js';
 import { applyCast } from './roster.js';
 
-const SNAP_EVERY = 3;            // 60 Hz / 3 = 20 snapshots a second
+// 60 Hz / 2 = 30 snapshots a second (DEC-052): measured 0.55 ms of CPU per race-second for the snapshots
+// against 0.40 at 20 Hz, on a race costing about 2.8 ms a second in all; 45 kB/s per player, below the 84 of the
+// old 20 Hz protocol, for a render delay a third shorter
+const SNAP_EVERY = 2;
 const MAX_AHEAD = 4;             // queued controls past this many ticks ahead are caught up on at once
 const MAX_QUEUE = 16;            // controls kept while the clock holds, at most
 // A race nobody can finish still ends. POLITIKART_MAX_RACE_S shortens it (the end-to-end suite does).

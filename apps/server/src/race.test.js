@@ -38,7 +38,7 @@ describe('a race in a worker', () => {
       race.input('bob', { c: {} });                      // idle controls, as a client sends from its first frame
       await new Promise(r => setTimeout(r, 5000));      // 3.6 s countdown, then about a second of racing
       const snaps = sent.filter(([id, m]) => id === 'alice' && m.t === 'snap').map(([, m]) => m);
-      expect(snaps.length).toBeGreaterThan(60);           // ~20 Hz for 5 s
+      expect(snaps.length).toBeGreaterThan(90);           // ~30 Hz for 5 s
       const last = snaps.at(-1).s;
       expect(last.st).toBe('race');
       expect(last.k).toHaveLength(6);

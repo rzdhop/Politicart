@@ -33,7 +33,7 @@ import { G, STEP } from './state.js';
 
 const TICKS_PER_MS = 60 / 1000;
 const START_DELAY = 6;           // the render delay before any jitter is measured: 100 ms, six 60 Hz ticks
-const BUFFER = 40;               // two seconds of snapshots
+const BUFFER = 60;               // two seconds of snapshots
 const MAX_STEPS = 4;             // predicted ticks per frame at most: a slow frame shows less lead, never a jump
 const PING_MS = 1000;            // a ping a second
 const CLOCK_SLEW = 6;            // the render clock follows the server's at most 10 % fast or slow (6 ticks a second)...
@@ -50,7 +50,7 @@ let resultsListener = null;
 let lastResults = null;
 // the render clock (ticks): est is the server's tick minus ours (now x 60/1000), from the least late snapshots;
 // shown is what the frame uses, slewed towards it; devs is how late the recent snapshots were against est
-let est = null, shown = null, devs = [], delay = START_DELAY, interval = 3;
+let est = null, shown = null, devs = [], delay = START_DELAY, interval = 2;
 // the local kart: predicting once the server acknowledges our ticks; lead in ticks; me is the newest private block
 let acc = 0, predicting = false, lead = 0, me = null, prev = null;
 let handoff = null, handoffAt = null;   // the offset easing our kart from its predicted pose to the snapshots' (the finish line)
@@ -97,7 +97,7 @@ export function beginNetRace(m) {
   });
   active = true; buffer = []; presses = { item: 0, power: 0 }; drawn = false;
   lastResults = null; hazards = new Map(); projectiles = new Map(); statics = new Map();
-  est = null; shown = null; devs = []; delay = START_DELAY; interval = 3;
+  est = null; shown = null; devs = []; delay = START_DELAY; interval = 2;
   acc = 0; predicting = false; lead = 0; me = null; prev = null; handoff = null; handoffAt = null; lastPing = -Infinity; rtt = null;
   resetPrediction();
   G.netSlot = m.you; G.netRoster = m.roster;

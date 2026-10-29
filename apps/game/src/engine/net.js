@@ -6,9 +6,9 @@
 // spirit as input.js's setInputSource. The module keeps a small immutable
 // view -- connection status, own id, the room, the last error -- that the UI
 // store mirrors through onNet(). Race traffic does not go through that view:
-// the race start, the 20 Hz snapshots and the results go to the handlers
+// the race start, the 30 Hz snapshots and the results go to the handlers
 // registered with onRace/onSnap/onResults, which the networked race (netrace.js)
-// consumes without re-rendering React twenty times a second.
+// consumes without re-rendering React thirty times a second.
 //
 // The same connection carries the social side of an account: hello sends the
 // session token (none for a guest), and the view also holds the friend list,
