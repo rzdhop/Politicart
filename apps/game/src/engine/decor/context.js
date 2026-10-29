@@ -45,6 +45,9 @@ export function setTerrain(samples) {
   for (let i = 0; i < samples.length; i += 4) { const s = samples[i]; coarse.push({ x: s.x, z: s.z, y: s.y || 0 }); if (Math.abs(s.y || 0) > 1e-6) flat = false; }
 }
 
+/** Whether the circuit being built is flat throughout: its ground is then one plane. */
+export const terrainFlat = () => flat;
+
 /**
  * The terrain's height at (x, z): the road's heights within RADIUS blended by
  * inverse squared distance, fading to the flat plain past FADE. On a flat

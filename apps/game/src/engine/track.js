@@ -35,7 +35,7 @@ import { SALT_CYCLISTS, SALT_FEATURES, SALT_RACE, derive, makeRng } from './seed
 import { CFG, G, bikeLaneOf, disposable, getPoly, nextEntityId } from './state.js';
 import { TEX, bakeSurface, surface, textures } from './textures.js';
 import { pick, rand } from './util.js';
-import { EMBANK, PAVEMENT, STILL, nOf, setDecorScale, setTerrain, still, terrainY, yAt } from './decor/context.js';
+import { EMBANK, PAVEMENT, STILL, nOf, setDecorScale, setTerrain, still, terrainFlat, terrainY, yAt } from './decor/context.js';
 import { BUILDERS, DECOR_SURFACES } from './decor/index.js';
 import { flushInstanced, resetInstanced } from './decor/instanced.js';
 import { resetLife } from './decor/life.js';
@@ -443,7 +443,8 @@ function embankment(scene, samples, color) {
  * A generator that yields every few rows (the terrain's heights are the cost on a hilly circuit) and leaves the mesh in `out.mesh`.
  */
 function* groundMesh(texture, normalMap, out) {
-  const SIZE = 3200, CELLS = 128, p = [], uv = [], ix = [];
+  // a flat circuit needs one quad; "légers" takes 50 m cells, the terrain's blend being smooth over 220 m (DEC-050)
+  const SIZE = 3200, CELLS = terrainFlat() ? 1 : getPoly() === 'high' ? 128 : 64, p = [], uv = [], ix = [];
   for (let j = 0; j <= CELLS; j++) {
     for (let i = 0; i <= CELLS; i++) {
       const x = -SIZE / 2 + i * SIZE / CELLS, z = -SIZE / 2 + j * SIZE / CELLS;
