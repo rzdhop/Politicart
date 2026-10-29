@@ -7,7 +7,7 @@ import * as THREE from 'three';
 
 import { box, plane } from '../primitives.js';
 import { G, isClear } from '../state.js';
-import { TEX } from '../textures.js';
+import { TEX, surface } from '../textures.js';
 import { pick, rand } from '../util.js';
 import { DS, clearAt, nOf } from './context.js';
 import { boat, bonneMere, building, cafe, crane, ferrisWheel, ferry, fishStall, fort, house, person, petanque, pigeon, seagull, tram, tree } from './street.js';
@@ -15,7 +15,7 @@ import { boat, bonneMere, building, cafe, crane, ferrisWheel, ferry, fishStall, 
 export function buildMarseille(scene, world) {
   const hw = G.hw, S = DS;
   // the harbour south of the quai des Belges, the rive neuve across it, the mouth and its fort to the west
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(520, 34), new THREE.MeshStandardMaterial({ map: TEX.water.clone(), roughness: 0.12, metalness: 0.3 })); water.material.map.needsUpdate = true; water.material.map.repeat.set(40, 3); water.rotation.x = -Math.PI / 2; water.position.set(-50, 0.03, -212); scene.add(water);
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(520, 34), new THREE.MeshStandardMaterial({ map: TEX.water.clone(), normalMap: surface('water').normalMap, roughness: 0.12, metalness: 0.3 })); water.material.map.needsUpdate = true; water.material.map.repeat.set(40, 3); water.rotation.x = -Math.PI / 2; water.position.set(-50, 0.03, -212); scene.add(water);
   const mouth = water.clone(); mouth.geometry = new THREE.PlaneGeometry(120, 150); mouth.material = water.material; mouth.position.set(-370, 0.03, -200); scene.add(mouth);
   G.animated.push(dt => { water.material.map.offset.x += dt * 0.015; water.material.map.offset.y += dt * 0.004; });
   scene.add(box(520, 1.6, 2, 0xbfb398, -50, 0.8, -194)); scene.add(box(520, 1.6, 2, 0xbfb398, -50, 0.8, -230)); scene.add(box(2, 1.6, 36, 0xbfb398, 211, 0.8, -212));

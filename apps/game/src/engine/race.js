@@ -17,6 +17,7 @@
 import * as THREE from 'three';
 
 import { sfx } from './audio.js';
+import { applyClimate, headlightCone } from './climate.js';
 import { CHARACTERS, TRACKS } from './data.js';
 import { updateCyclists } from './cyclists.js';
 import { hintFor, say, setHint } from './events.js';
@@ -32,7 +33,7 @@ import { kartCollisions, updateKart, updateRanks } from './physics.js';
 import { setCast } from './primitives.js';
 import { camera, getRenderer } from './render.js';
 import { newSeed } from './seed.js';
-import { CFG, G, SHADOWS } from './state.js';
+import { CFG, G } from './state.js';
 import { buildTrack } from './track.js';
 import { buildTrail } from './trail.js';
 import { clamp, lerp, rand } from './util.js';
@@ -45,6 +46,12 @@ function makeKart(def, isAI, style) {
   // G.scene exists by now: startField builds it before the grid, joinField runs mid-race.
   const trail = buildTrail(style.trail);
   if (trail) { mesh.userData.trail = trail; G.scene.add(trail.group); }
+  // At night (climate.js) the kart's headlights throw a cone on the road: an unlit quad beside the kart, like the
+  // trail, that follows the kart's mesh each sim step. Never a part of the kart (its hashes are pinned, kart.test.js).
+  if (G.climate?.lampsOn) {
+    const cone = headlightCone(); mesh.userData.headlights = cone; G.scene.add(cone);
+    G.animated.push(() => { cone.position.copy(mesh.position); cone.rotation.y = mesh.rotation.y; cone.visible = mesh.visible; });
+  }
   return {
     def, style, stats: def.stats, isAI, mesh, pos: { x: 0, z: 0 }, heading: 0, speed: 0,
     drift: { active: false, dir: 0, charge: 0 }, boost: 0, boostPower: 1.4, stun: 0, invincible: 0, slowed: 0, fly: 0, relance: 0, relanceTimer: 0,
@@ -80,14 +87,12 @@ export function startRace({ seed = newSeed() } = {}) {
 export function startField(slots, { seed = 0 } = {}) {
   if (G.scene) disposeScene(G.scene);
   const track = TRACKS[G.trackIdx]; G.track = track;
-  const scene = new THREE.Scene(); scene.background = new THREE.Color(track.fog); scene.fog = new THREE.Fog(track.fog, 220, 700);
-  scene.add(new THREE.HemisphereLight(0xdfefff, 0x55663a, 0.55));
-  scene.add(new THREE.AmbientLight(0xffffff, 0.15));
-  const sun = new THREE.DirectionalLight(0xfff4d6, 1.15); sun.position.set(120, 200, 80); scene.add(sun); scene.add(sun.target);
-  sun.castShadow = SHADOWS(); sun.shadow.mapSize.set(2048, 2048); const sc = sun.shadow.camera; sc.left = -110; sc.right = 110; sc.top = 110; sc.bottom = -110; sc.near = 10; sc.far = 500; sun.shadow.bias = -0.0006;
-  G.sun = sun; G.scene = scene; G.animated = []; G.hazards = []; G.projectiles = []; G.crowd = [];
+  const scene = new THREE.Scene();
+  G.scene = scene; G.animated = []; G.hazards = []; G.projectiles = []; G.crowd = []; G.lamps = []; G.disposables = [];
   G.entitySeq = 0;   // before the track: its static obstacles take the first ids, the same on every side
   setCast(true); buildTrack(scene, track, { seed });
+  // the lights, the sky and the air, after the track so the climate finds the lamps the decor registered (DEC-051)
+  applyClimate(scene, track, G.layout?.climate ?? track.climates?.[0] ?? 'noon');
   buildMinimapBase();
 
   G.karts = slots.map(sl => { const k = makeKart(sl.def, sl.isAI, sl.style); k.team = sl.team ?? null; k.god = sl.god === true; return k; });
@@ -126,8 +131,12 @@ export function joinField(sl) {
   return k;
 }
 
-/** Free the geometry of a scene (or any object tree) that is being replaced. */
-export function disposeScene(scene) { scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+/** Free the geometry of a scene (or any object tree) that is being replaced, and what the race registered as disposable (textures, materials). */
+export function disposeScene(scene) {
+  scene.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+  for (const d of G.disposables) if (d && typeof d.dispose === 'function') d.dispose();
+  G.disposables = [];
+}
 
 // ---------- Camera & sun ----------
 function updateCamera(dt) {
@@ -147,7 +156,7 @@ function updateCamera(dt) {
   // a short camera shake when the followed kart is bumped
   if (k.bump > 0) { const e = k.bump * (k.bumpPower || 1) * 0.5; camera.position.x += Math.sin(G.time * 71) * e; camera.position.y += Math.sin(G.time * 53) * e * 0.6; }
   camera.fov = lerp(camera.fov, (k.boost > 0 ? 76 : 65) + narrow * 30, 1 - Math.exp(-dt * 5)); camera.updateProjectionMatrix();
-  if (G.sun) { G.sun.position.set(k.pos.x + 120, k.y + 200, k.pos.z + 80); G.sun.target.position.set(k.pos.x, k.y, k.pos.z); G.sun.target.updateMatrixWorld(); }
+  if (G.sun) { const o = G.sunOffset || { x: 120, y: 200, z: 80 }; G.sun.position.set(k.pos.x + o.x, k.y + o.y, k.pos.z + o.z); G.sun.target.position.set(k.pos.x, k.y, k.pos.z); G.sun.target.updateMatrixWorld(); }
 }
 
 // ---------- Wrong way ----------

@@ -47,6 +47,9 @@ export const G = {
   // random stream, and the circuit's half-width (DEC-050); entitySeq numbers hazards and
   // projectiles so snapshots can name them, static obstacles first (reset before buildTrack)
   seed: 0, layout: null, rng: null, hw: CFG.roadHalfWidth, entitySeq: 0,
+  // The race's climate (climate.js applyClimate): the preset applied, the sun's offset from the followed kart, the lamp heads
+  // the decor registered (lit at night), and what the race allocated and frees with its scene (disposable, race.js disposeScene).
+  climate: null, sunOffset: null, lamps: [], disposables: [],
 };
 Object.defineProperty(G, 'state', { enumerable: true, get: getState });
 /** The next entity id: hazards and projectiles carry one so a snapshot can name them (DEC-014); static obstacles take theirs at build. */
@@ -62,3 +65,11 @@ export function roadYAt(x, z) {
   for (let i = 0; i < G.N; i++) { const s = G.samples[i]; const d = (s.x - x) ** 2 + (s.z - z) ** 2; if (d < bd) { bd = d; best = s; } }
   return best ? best.y || 0 : 0;
 }
+
+/**
+ * Register a texture or a material the race allocated for this scene only,
+ * so race.js disposeScene frees it with the scene's geometries instead of
+ * leaking it race after race. Returns it. Never register what a cache owns
+ * (primitives.mat, textPlane, the TEX bakes): those outlive the race.
+ */
+export function disposable(x) { G.disposables.push(x); return x; }
