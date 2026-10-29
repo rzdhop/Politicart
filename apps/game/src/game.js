@@ -74,6 +74,8 @@ function updateHUD(p) {
   if (p.state === 'countdown' && p.layoutName && p.layoutName !== lastLayoutShown) { lastLayoutShown = p.layoutName; setHint('Tracé du jour : « ' + p.layoutName + ' »'); }
   else if (p.state !== 'countdown' && lastLayoutShown) { lastLayoutShown = ''; setHint('Ramassez une urne dorée pour obtenir un objet.'); }
   h.wrong.setVisible(p.wrongWay);
+  // a team race's connection (DEC-052): the round trip and how far behind the others are drawn; nothing in solo play
+  h.net?.setText(p.net ? 'ping ' + (p.net.rtt ?? '…') + ' ms · délai ' + p.net.delay + ' ms' : '');
   // the touch buttons carry the item and the power state themselves (the HUD's own slots make way for them)
   touchHud.item?.(shown.split('|')[0], !!p.item && !p.itemRolling);
   touchHud.power?.(1 - p.powerCd / p.powerCdMax, p.powerReady);
