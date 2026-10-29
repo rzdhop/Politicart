@@ -315,7 +315,8 @@ export function skipOpening() {
 /** Launch the lid and every spark and ribbon from the slot. */
 function burst() {
   run.burstDone = true;
-  S.lidVel.set((Math.random() < 0.5 ? -1 : 1) * (2 + Math.random() * 1.5), 9.5, -2.5 - Math.random());   // up, aside and away, never over the prize S.lidSpin.set(4 + Math.random() * 3, (Math.random() - 0.5) * 4, 2 + Math.random() * 2);
+  S.lidVel.set((Math.random() < 0.5 ? -1 : 1) * (2 + Math.random() * 1.5), 9.5, -2.5 - Math.random());   // up, aside and away, never over the prize
+  S.lidSpin.set(4 + Math.random() * 3, (Math.random() - 0.5) * 4, 2 + Math.random() * 2);
   const all = SPARKS + CONFETTI, oy = PEDESTAL_TOP + URN.h + 0.3;      // the slot of the urn at rest, wherever a skip caught it
   S.lid.position.set(0, URN.h, 0); S.lid.rotation.set(0, 0, 0);
   for (let i = 0; i < all; i++) {
