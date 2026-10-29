@@ -1,18 +1,19 @@
 // Kart contact, spin-outs, and the items and powers added with the five new
 // candidates, checked on a real circuit in node.
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CHARACTERS } from './data.js';
+import { CHARACTERS, ITEMS } from './data.js';
 import { drain } from './events.js';
 import { stunKart, updateProjectiles, useItem } from './items.js';
 import { LINES, setLineRng } from './lines.js';
 import { resetMachine, transition } from './machine.js';
 import { BUMP_TIME, DIRECTIVE_CAP, kartCollisions, updateKart } from './physics.js';
-import { GOD_COOLDOWN, usePower } from './powers.js';
+import { applyPower, GOD_COOLDOWN, usePower } from './powers.js';
 import { buildKart } from './kart.js';
 import { isFoe } from './teams.js';
 import { startField } from './race.js';
 import { G } from './state.js';
+import { setVfxSink, VFX_KINDS } from './vfx.js';
 
 const STEP = 1 / 60;
 const def = id => CHARACTERS.find(c => c.id === id);
@@ -349,5 +350,78 @@ describe('the god kart (DEC-030)', () => {
     for (let n = 0; n < 30 && !a.finished; n++) updateKart(a, STEP);
     expect(a.finished).toBe(true); expect(G.resultsAt).toBe(G.time + 5);   // the god still racing does not matter
     expect(b.finished).toBe(false);
+  });
+});
+
+// Every item and power shows where it starts and where it lands (DEC-053): an effect event at use, and one on each
+// kart it reaches -- by kart slot, or at the place of the hazard that caught it. Moves that only change their user
+// (a boost, a shield, a flight) show their impact as a status drawn from the kart's state (vfx.test.js).
+describe('effects at use and at impact (DEC-053)', () => {
+  let events;
+  beforeEach(() => { events = []; setVfxSink(e => events.push(e)); });
+  afterEach(() => { setVfxSink(null); vi.restoreAllMocks(); });
+
+  /** The field: a (slot 0) third, b just ahead, d leading, c just behind, two far back. */
+  function field(swap) {
+    race(swap); const [a, b, c, d, e, f] = G.karts;
+    place(a, 300, 0, 30); place(b, 306, 2, 30); place(c, 296, -2, 30); place(d, 312, -3, 30); place(e, 900, 0, 30); place(f, 1300, 0, 30);
+    [a.rank, b.rank, c.rank, d.rank, e.rank, f.rank] = [2, 1, 3, 0, 4, 5];
+    G.hazards = G.hazards.filter(h => h.type === 'obstacle'); G.projectiles = []; events.length = 0;
+    return G.karts;
+  }
+  const near = (e, k, r = 7) => Math.hypot(e.x - k.pos.x, e.z - k.pos.z) < r;
+  const at = (e, k) => e.k === G.karts.indexOf(k) || near(e, k, 2.5);
+  /** Run the projectiles and the hazards for up to `s` seconds, the karts standing still. */
+  const fly = (s = 3) => { for (let n = 0; n < s * 60 && G.projectiles.length; n++) updateProjectiles(STEP); };
+  /** Drive kart k onto the newest hazard of `type` and let it bite. */
+  const onto = (k, type) => { const h = [...G.hazards].reverse().find(x => x.type === type); k.pos.x = h.x; k.pos.z = h.z; k.y = h.y; k.hazardGrace = 0; k.speed = 30; updateProjectiles(STEP); return h; };
+
+  const ITEM_HITS = {
+    remaniement: ['b', 'd'], dossier: ['b'], motion: ['d'], bravm: ['b', 'd'], casserolade: ['b', 'c'], dissolution: ['b', 'c', 'd', 'e', 'f'], factcheck: ['b'],
+    greve: 'barricade', sondage: 'fakebox', lacrymo: 'lacrymo', referendum: ['b', 'c', 'd', 'e', 'f'],
+  };
+  it.each(Object.keys(ITEMS))('%s has an effect at use, and one on every kart it reaches', id => {
+    if (id === 'referendum') vi.spyOn(Math, 'random').mockReturnValue(0.5);   // the "non": everyone else is stunned
+    const ks = field(); const [a] = ks; const byName = { a: ks[0], b: ks[1], c: ks[2], d: ks[3], e: ks[4], f: ks[5] };
+    a.item = id; a.itemRolling = 0; useItem(a);
+    expect(events.filter(e => at(e, a) || near(e, a)).length, id + ' at use').toBeGreaterThan(0);
+    for (const e of events) expect(VFX_KINDS, id).toContain(e.ty);
+    const hits = ITEM_HITS[id]; if (!hits) return;
+    if (typeof hits === 'string') { events.length = 0; const h = onto(ks[2], hits); expect(events.some(e => near(e, { pos: { x: h.x, z: h.z } }, 3)), id + ' at impact').toBe(true); return; }
+    fly();
+    for (const n of hits) expect(events.some(e => at(e, byName[n])), id + ' on ' + n).toBe(true);
+  });
+
+  const POWER_HITS = {
+    rabot: ['b', 'c', 'd'], controle: ['c', 'e'], directive: ['b', 'c', 'd'], examen: ['b'], fauchage: ['b'], debat: ['b', 'c', 'd'], deconstruction: ['b', 'c', 'd'],
+    amendement: ['b'], megaphone: ['b', 'c'], audience: ['b'],
+    blocage: 'barricade', rondpoint: 'rondpoint', chatons: 'chatons', fakenews: 'fakebox',
+  };
+  const POWERS = CHARACTERS.map(c => c.power.id);
+  it('covers the sixteen powers', () => { expect(new Set(POWERS).size).toBe(16); });
+  it.each(POWERS)('%s has an effect at use, and one on every kart it reaches', id => {
+    const who = CHARACTERS.find(c => c.power.id === id).id;
+    const ks = field({ victor: who }); const [a] = ks; const byName = { a: ks[0], b: ks[1], c: ks[2], d: ks[3], e: ks[4], f: ks[5] };
+    ks[1].item = 'turbo';   // something for Vol d'audience to take
+    applyPower(a, id);
+    expect(events.length, id + ' at use').toBeGreaterThan(0);   // at the user, or where the power puts its hazards
+    for (const e of events) expect(VFX_KINDS, id).toContain(e.ty);
+    const hits = POWER_HITS[id]; if (!hits) return;
+    if (typeof hits === 'string') { events.length = 0; const victim = ks[2]; const h = onto(victim, hits); expect(events.some(e => near(e, { pos: { x: h.x, z: h.z } }, 4) || at(e, victim)), id + ' at impact').toBe(true); return; }
+    for (const n of hits) expect(events.some(e => at(e, byName[n])), id + ' on ' + n).toBe(true);
+  });
+
+  it('shows a blow glancing off an immune kart, and a shield parrying one', () => {
+    const [a, b] = field();
+    b.invincible = 3; expect(stunKart(b, 1)).toBe(false);
+    a.shield = 10; expect(stunKart(a, 1)).toBe(false);
+    expect(events.map(e => [e.ty, e.k])).toEqual([['shockwave', 1], ['shockwave', 0]]);
+  });
+
+  it('builds no mesh for the Mégaphone any more: an event, and nothing in the scene or the animations', () => {
+    const [a] = field({ victor: 'lulu' }); const n = G.animated.length, children = G.scene.children.length;
+    applyPower(a, 'megaphone');
+    expect(G.animated).toHaveLength(n); expect(G.scene.children).toHaveLength(children);
+    expect(events.filter(e => e.ty === 'shockwave' && e.k === 0 && e.r === 22)).toHaveLength(1);
   });
 });
