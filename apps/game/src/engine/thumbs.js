@@ -24,7 +24,8 @@
 // pre-build left of the frame, at most BUDGET_MS: the pre-build of the
 // selected circuit keeps priority). A step starts only when its last
 // measured cost still fits in the slice, so a slice stays within its
-// budget once each step has been seen once. The render step draws into a
+// budget once each step has been seen once. The shared program is compiled
+// in a step of its own before the first render. The render step draws into a
 // render target at twice the size ("légers": once, and no blocks), reads it
 // back and filters it down into the thumbnail's own canvas, which is kept
 // per circuit and detail level for the session. A GPU that takes longer
@@ -230,13 +231,13 @@ export function* thumbSteps(track, { poly = getPoly() } = {}) {
   yield 'shape';
 
   // the terrain: a grid over the picture's ground (and beyond its edges), following the road's heights
-  const coarse = samples.filter((_, i) => i % 4 === 0);
+  const coarse = samples.filter((_, i) => i % 6 === 0), flat = samples.every(p => p.y === 0);
   const halfW = THUMB_W / 2 / frame.sc * 1.15, halfD = THUMB_H / 2 / frame.sc / Math.sin(THUMB_ELEVATION) * 1.35;
   const GX = low ? 24 : 40, GZ = low ? 16 : 26, gpos = new Float32Array((GX + 1) * (GZ + 1) * 3), gidx = [];
   for (let j = 0; j <= GZ; j++) {
     for (let i = 0; i <= GX; i++) {
       const x = frame.cx - halfW + (2 * halfW * i) / GX, z = frame.cz - halfD + (2 * halfD * j) / GZ, o = (j * (GX + 1) + i) * 3;
-      gpos[o] = x; gpos[o + 1] = terrainAt(coarse, x, z) - 0.6; gpos[o + 2] = z;
+      gpos[o] = x; gpos[o + 1] = (flat ? 0 : terrainAt(coarse, x, z)) - 0.6; gpos[o + 2] = z;
     }
     if (j === GZ >> 1) yield 'terrain';
   }
@@ -279,7 +280,7 @@ export function* thumbSteps(track, { poly = getPoly() } = {}) {
       const x = s.x + s.sx * lat, z = s.z + s.sz * lat, r = Math.hypot(w, d) / 2;
       if (clear.some(c => (c.x - x) ** 2 + (c.z - z) ** 2 < (hw + 8 + r) ** 2)) continue;
       const h = look.h[0] + hash(k, 8) * (look.h[1] - look.h[0]);
-      pushBox(out, x, terrainAt(coarse, x, z) - 0.6, z, w, d, h * RELIEF * 0.5, Math.atan2(s.tz, s.tx));
+      pushBox(out, x, (flat ? 0 : terrainAt(coarse, x, z)) - 0.6, z, w, d, h * RELIEF * 0.5, Math.atan2(s.tz, s.tx));
       colors.push(look.colors[Math.floor(hash(k, 9) * look.colors.length)]);
     }
     if (out.length) {
@@ -335,7 +336,7 @@ function renderThumb(r, built, k) {
  * one in hand `{ idx, key, gen, built }`; `est`: each step's last measured
  * cost (ms); `slow`: renders past SLOW_MS; `stats`: for the test hook.
  */
-const T = { cache: new Map(), queue: [], job: null, listener: null, still: false, slow: 0, est: { shape: 1, terrain: 1, road: 1, blocks: 1, render: 3 }, stats: { slices: 0, maxSlice: 0, maxStep: 0, maxStepName: null, total: 0, started: null, done: null } };
+const T = { cache: new Map(), queue: [], job: null, listener: null, still: false, slow: 0, compiled: false, est: { shape: 1, terrain: 1, road: 1, blocks: 1, compile: 4, render: 3 }, stats: { slices: 0, maxSlice: 0, maxStep: 0, maxStepName: null, total: 0, started: null, done: null } };
 /** A stage the frame governor stood still (stagegate.js stillStage), asked when work starts. */
 let isStill = () => false;
 /** Tell the thumbnails how to ask whether the GPU is a slow one (the stage's governor); the store wires it. */
@@ -394,12 +395,16 @@ export function thumbsFrame({ renderer = null, budget = BUDGET_MS } = {}) {
       if (T.still || !renderer || !hasDom()) { settle(idx, 'static'); continue; }
       T.job = { idx, key: keyOf(TRACKS[idx]), gen: thumbSteps(TRACKS[idx]), built: null, next: 'shape' };
     }
-    const j = T.job, name = j.built ? 'render' : j.next;
+    const j = T.job, name = !j.built ? j.next : T.compiled ? 'render' : 'compile';
     if (steps > 0 && now() - t0 + (T.est[name] ?? 1) > budget) break;
     const t1 = now();
     if (!j.built) {
       const r = j.gen.next();
       if (r.done) j.built = r.value; else j.next = nextStep(r.value);
+    } else if (!T.compiled) {
+      // the one program every thumbnail uses, compiled in a slice of its own before the first render
+      renderer.compile(j.built.scene, j.built.camera);
+      T.compiled = true;
     } else {
       const k = getPoly() === 'low' ? 1 : 2;
       const canvas = renderThumb(renderer, j.built, k);
@@ -436,7 +441,7 @@ export function thumbStatus() {
 
 /** Forget every thumbnail and the queue (tests). */
 export function resetThumbs() {
-  dropJob(); T.cache.clear(); T.queue = []; T.still = false; T.slow = 0;
+  dropJob(); T.cache.clear(); T.queue = []; T.still = false; T.slow = 0; T.compiled = false;
   T.stats = { slices: 0, maxSlice: 0, maxStep: 0, maxStepName: null, total: 0, started: null, done: null };
 }
 
