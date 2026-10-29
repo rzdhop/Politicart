@@ -3,7 +3,9 @@
 //
 //   POST /api/shop/char   {id}               -> { profile, bought: { kind: 'char', id, price } }
 //   POST /api/shop/part   {category, value}  -> { profile, bought: { kind: 'part', key, price } }
-//   POST /api/box/open    {}                 -> { profile, drop }   drop = catalog.js rollBox()
+//   POST /api/box/open    {count?: 1 | 5}    -> { profile, drops: [...], drop }   each drop = catalog.js rollBox();
+//                                               count 5 is the bundle (BOX_BUNDLE.price, one charge, five rolls);
+//                                               `drop` is the first, for the clients from before the bundle
 //   GET  /api/stats/friends                  -> { friends: [{ id, name, level, stats, collection }] }
 //
 // Every route is the account's (Bearer), 401 otherwise. A POST is checked in
@@ -24,7 +26,7 @@
 // time per account is what the game does; only the coins are atomic.
 import { CHARACTERS, TRACKS } from '../../game/src/engine/data.js';
 import {
-  BOX_PRICE, canBuyChar, canBuyPart, cleanOwned, coinsForRace, collection, DAILY_COINS, EVERYTHING, levelUpCoins, partKey, priceOf, rollBox,
+  BOX_BUNDLE, BOX_PRICE, canBuyChar, canBuyPart, cleanOwned, coinsForRace, collection, DAILY_COINS, EVERYTHING, GRADES, levelUpCoins, partKey, priceOf, rollBox,
 } from '../../game/src/engine/catalog.js';
 import { levelFromXp, STARTERS, unlockedIds, unlockLevel, xpForRace } from '../../game/src/engine/progress.js';
 import { bearer } from './accounts.js';
@@ -35,6 +37,8 @@ const SHOP_WINDOW_MS = 60_000, SHOP_CALLS = 30, SHOP_CAP = 10_000;
 const TRACK_IDS = TRACKS.map(t => t.id);
 const CHAR_IDS = CHARACTERS.map(c => c.id);
 const DROP_KINDS = ['char', 'part', 'trail', 'coins'];
+/** How many of the last Politibox drops an account's stats keep (newest first). */
+export const RECENT_DROPS = 10;
 const COUNTERS = ['races', 'wins', 'podiums', 'finished', 'dnf', 'solo', 'team', 'teamWins', 'boxes', 'coinsEarned', 'coinsSpent'];
 
 /** A lap or race time worth keeping: finite seconds in 5..3600, else null. */
@@ -49,17 +53,40 @@ function table(map, keys, keep) {
   return out;
 }
 
+/** One of the last drops as the stats keep it: `{ kind, id?, grade?, amount?, at }`, from a rollBox result at time `at`. */
+export function recentDrop(drop, at) {
+  const e = { kind: drop.kind, at };
+  if (typeof drop.id === 'string') e.id = drop.id;
+  if (GRADES.includes(drop.grade)) e.grade = drop.grade;
+  if (count(drop.amount) === drop.amount) e.amount = drop.amount;
+  return e;
+}
+
+/** The stored ring of recent drops, cleaned: known kinds only, at most RECENT_DROPS, each field checked. */
+function recentOf(list) {
+  const out = [];
+  if (!Array.isArray(list)) return out;
+  for (const d of list) {
+    if (!isPlain(d) || !DROP_KINDS.includes(d.kind)) continue;
+    out.push(recentDrop(d, Number.isFinite(d.at) && d.at > 0 ? d.at : 0));
+    if (out.length === RECENT_DROPS) break;
+  }
+  return out;
+}
+
 /**
  * An account's stats, repaired field by field: every counter a whole number
  * from 0, the per-circuit best times in 5..3600 s, the per-candidate counts
- * and the Politibox drops by kind, `lastDaily` a 'YYYY-MM-DD' (UTC) or null,
- * `lastRaceAt` a time or null. Unknown keys are dropped. Never throws.
+ * and the Politibox drops by kind, the ring of the last RECENT_DROPS drops
+ * (newest first), `lastDaily` a 'YYYY-MM-DD' (UTC) or null, `lastRaceAt` a
+ * time or null. Unknown keys are dropped. Never throws.
  */
 export function normaliseStats(s) {
   const src = isPlain(s) ? s : {};
   const out = {};
   for (const k of COUNTERS) out[k] = count(src[k]);
   out.drops = { char: 0, part: 0, trail: 0, coins: 0, ...table(src.drops, DROP_KINDS, v => count(v) === v) };
+  out.recent = recentOf(src.recent);
   out.bestLap = table(src.bestLap, TRACK_IDS, v => seconds(v) !== null);
   out.bestTime = table(src.bestTime, TRACK_IDS, v => seconds(v) !== null);
   out.byChar = table(src.byChar, CHAR_IDS, v => count(v) === v && v > 0);
@@ -215,18 +242,31 @@ export function economyApi(store, { profile, onProfile = () => {}, isAdmin = () 
       const after = await recordAndTell(r, s => { s.coinsSpent += price; });
       reply(res, 200, { profile: await profile(after), bought: { kind: 'part', key, price } });
     },
-    'POST /api/box/open': async (res, user) => {
+    'POST /api/box/open': async (res, user, b) => {
+      const n = b.count === undefined ? 1 : b.count;
+      if (n !== 1 && n !== BOX_BUNDLE.count) return fail(res, [400, 'Nombre d’ouvertures inconnu.']);
+      const price = n === 1 ? BOX_PRICE : BOX_BUNDLE.price;
       const mine = await owned(user);           // seeds a pre-economy account before anything is granted
-      const paid = await store.spendCoins(user.id, BOX_PRICE);
+      const paid = await store.spendCoins(user.id, price);   // one charge for the whole bundle: short of it, nothing is rolled
       if (!paid) return fail(res, REFUSED.coins);
-      const drop = rollBox(rng, mine);
+      // the bundle's later rolls see what its earlier ones granted, so a second copy inside it is a duplicate
+      const held = { chars: [...mine.chars], parts: [...mine.parts], trails: [...mine.trails] };
+      const drops = [], at = now();
       let after = paid, earned = 0;
-      if (drop.kind === 'coins') earned = drop.amount;
-      else if (drop.duplicate) earned = drop.refund;
-      else after = (await store.grant(user.id, { kind: drop.kind + 's', item: drop.id })) ?? after;
+      for (let i = 0; i < n; i++) {
+        const drop = rollBox(rng, held);
+        drops.push(drop);
+        if (drop.kind === 'coins') earned += drop.amount;
+        else if (drop.duplicate) earned += drop.refund;
+        else { after = (await store.grant(user.id, { kind: drop.kind + 's', item: drop.id })) ?? after; held[drop.kind + 's'].push(drop.id); }
+      }
       if (earned) after = (await store.addCoins(user.id, earned)) ?? after;
-      after = await recordAndTell(after, s => { s.boxes++; s.drops[drop.kind]++; s.coinsSpent += BOX_PRICE; s.coinsEarned += earned; });
-      reply(res, 200, { profile: await profile(after), drop });
+      after = await recordAndTell(after, s => {
+        s.boxes += n; for (const d of drops) s.drops[d.kind]++;
+        s.coinsSpent += price; s.coinsEarned += earned;
+        s.recent = [...drops.map(d => recentDrop(d, at)).reverse(), ...s.recent].slice(0, RECENT_DROPS);   // newest first
+      });
+      reply(res, 200, { profile: await profile(after), drop: drops[0], drops });
     },
     'GET /api/stats/friends': async (res, user) => {
       const links = (await store.links(user.id)).filter(l => l.status === 'friend');

@@ -96,8 +96,8 @@ watchMouse();
 const media = q => typeof matchMedia === 'function' && matchMedia(q).matches;
 /** A phone or a tablet: the 'phone' texture tier on "détaillés", and no parallax. */
 const coarse = () => media('(hover: none) and (pointer: coarse)');
-/** The player asked for less motion: swaps cut, no confetti, no idle spin, no parallax. */
-const calm = () => media('(prefers-reduced-motion: reduce)');
+/** The player asked for less motion: swaps cut, no confetti, no idle spin, no parallax (the Politibox reads it too). */
+export const calm = () => media('(prefers-reduced-motion: reduce)');
 
 /** The stage tier for the game's detail level on this device: 'high' | 'phone' | 'low'. */
 export const stageTier = () => textureTier(getPoly(), coarse());
@@ -327,8 +327,8 @@ const TRAIL_PREROLL = 1.5;
 /** Stream the stage trail back by dt: the kart "drives" forward and the trail's group goes back by as much. */
 function runTrail(tr, dt) { tr.run += TRAIL_RUN * dt; tr.k.pos.z = tr.run; tr.trail.group.position.z = -tr.run; tr.trail.update(tr.k, dt); }
 
-/** Free a kart's own geometries and materials (the shared stage materials and textures stay cached). */
-function disposeKart(kart) {
+/** Free a kart's own geometries and materials (the shared stage materials and textures stay cached); the Politibox frees its bare part kart with it. */
+export function disposeKart(kart) {
   kart.traverse(o => { if (o.isMesh) { o.geometry.dispose(); if (o.material.userData && o.material.userData.own) o.material.dispose(); } });
   if (kart.parent) kart.parent.remove(kart);
 }
@@ -608,8 +608,13 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
 const GOV = { still: null, costs: [], last: -Infinity, drew: false, clean: true };
 const SLOW_MS = 100, FAST_MS = 50, COSTS = 5;
 
-/** Read the last frame's cost and decide whether the stage moves. */
-function govern(t, r) {
+/**
+ * Read the last frame's cost and decide whether the stage moves. Called at
+ * the start of every frame that may draw a stage scene: the select stage's
+ * (renderPreview) and the Politibox's (lootbox.js), which share the one
+ * verdict since they draw the same hemicycle in the same look.
+ */
+export function govern(t, r) {
   if (GOV.drew && GOV.clean && !(typeof document !== 'undefined' && document.hidden)) {
     GOV.costs.push(t - GOV.last); if (GOV.costs.length > COSTS) GOV.costs.shift();
   }
@@ -622,14 +627,27 @@ function govern(t, r) {
   if (CAPTURE_MOTION) GOV.still = false;
 }
 
-/** Whether the stage stands still for the GPU's sake: the governor's verdict, or its first guess before it has one. */
-function stillStage(r = getRenderer()) {
+/**
+ * Whether the stage stands still for the GPU's sake: the governor's verdict,
+ * or its first guess before it has one. Headless (no document, so no
+ * renderer) a stage is never still: the tests' openings play whole.
+ */
+export function stillStage(r = null) {
   if (CAPTURE_MOTION) return (GOV.still = false);   // the test-only capture switch (launch section)
-  if (GOV.still === null) GOV.still = softwareGpu(r);
+  if (GOV.still === null) GOV.still = typeof document === 'undefined' ? false : softwareGpu(r || getRenderer());
   return GOV.still;
 }
 /** Whether the stage moves on its own: not for a player who asked for less motion, nor on a GPU that cannot keep up. */
-const moving = () => !calm() && !stillStage();
+export const moving = () => !calm() && !stillStage();
+/**
+ * Tell the governor another stage scene drew this frame (the Politibox's,
+ * which has its own draw): the frame's cost counts, unless it also compiled
+ * a program (`programs`: renderer.info.programs.length before the draw).
+ */
+export function drewFrame(r, programs) {
+  GOV.drew = true;
+  if (r.info.programs.length !== programs) GOV.clean = false;
+}
 
 /** Whether the renderer names a software rasteriser (the governor's first guess, before it has measured). */
 function softwareGpu(r) {

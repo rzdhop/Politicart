@@ -65,7 +65,11 @@ export interface Stats {
   boxes: number; coinsEarned: number; coinsSpent: number;
   bestLap: Record<string, number>; bestTime: Record<string, number>; byChar: Record<string, number>;
   drops: Record<string, number>; lastDaily: string | null; lastRaceAt: number | null;
+  /** The last ten Politibox drops, newest first (economy.js RECENT_DROPS); absent on a profile from before the bundle. */
+  recent?: RecentDrop[];
 }
+/** One of the last Politibox drops as the server's stats keep it. */
+export interface RecentDrop { kind: DropKind; id?: string; grade?: Grade; amount?: number; at: number }
 /** How much of the catalogue an account holds (engine/catalog.js collection). */
 export interface Collection { have: number; total: number; pct: number }
 /** A friend's figures, as GET /api/stats/friends lists them. */
@@ -110,16 +114,21 @@ export interface Gain { gained: number; coins: number; daily: boolean; levelUpCo
 export interface RaceKart { charId: string; style: KartStyle }
 
 export type Grade = 'common' | 'rare' | 'mythic' | 'incredible';
+export type DropKind = 'char' | 'part' | 'trail' | 'coins';
 /** What a Politibox held (engine/catalog.js rollBox): politicoins, or an item, refunded when it was already owned. */
 export type Drop =
   | { kind: 'coins'; amount: number }
   | { kind: 'char' | 'part' | 'trail'; id: string; grade: Grade; duplicate: boolean; refund: number };
-/** Where the opening is, for the DOM half (the library's RevealStage). */
-export type RevealPhase = 'idle' | 'opening' | 'burst' | 'reveal';
+/** Where the opening is, for the DOM half (the library's RevealStage); `tease` is the rarity build-up, `next` the pause between two openings of a bundle. */
+export type RevealPhase = 'idle' | 'opening' | 'tease' | 'burst' | 'reveal' | 'next';
 export type ShopTab = 'box' | 'chars' | 'parts';
-/** The Boutique: where it was opened from, the tab on show, the last call's outcome, and the Politibox being opened. */
-export interface ShopView { from: 'title' | 'select'; tab: ShopTab; busy: boolean; error: string | null; notice: string | null; drop: Drop | null; phase: RevealPhase }
-type ShopReply = { ok: boolean; status: number; error?: string; profile?: Profile; drop?: Drop };
+/**
+ * The Boutique: where it was opened from, the tab on show, the last call's
+ * outcome, and the Politibox being opened: every drop of the run (one, or
+ * the bundle's five), the one on screen (`drop` = `drops[index]`) and its phase.
+ */
+export interface ShopView { from: 'title' | 'select'; tab: ShopTab; busy: boolean; error: string | null; notice: string | null; drop: Drop | null; drops: Drop[]; index: number; phase: RevealPhase }
+type ShopReply = { ok: boolean; status: number; error?: string; profile?: Profile; drop?: Drop; drops?: Drop[] };
 export type AdminStatus = 'idle' | 'saved';
 /** What the roster API answers (engine/account.js fetchRoster / saveRoster). */
 type RosterReply = { ok: boolean; status: number; error?: string; field?: string; roster?: unknown };
@@ -278,7 +287,7 @@ let snapshot: UiSnapshot = {
   dashboard: { stats: null, users: [], connections: [], rooms: [], query: '', busy: false, error: null, notice: null, updatedAt: null },
   godConsole: false,
   godReply: null,
-  shop: { from: 'title', tab: 'box', busy: false, error: null, notice: null, drop: null, phase: 'idle' },
+  shop: { from: 'title', tab: 'box', busy: false, error: null, notice: null, drop: null, drops: [], index: 0, phase: 'idle' },
   friendStats: null,
   friendShown: null,
   friendStatsError: null,
@@ -494,8 +503,13 @@ function sessionExpired() {
 function shop(patch: Partial<ShopView>) { set({ shop: { ...snapshot.shop, ...patch } }); }
 
 /** The engine's opening phases, as the DOM half shows them. */
-const REVEAL_OF: Record<string, RevealPhase> = { drop: 'opening', spin: 'opening', shake: 'opening', burst: 'burst', reveal: 'reveal', hold: 'reveal' };
-const onBoxPhase = (name: string) => { if (getState() === 'lootbox') shop({ phase: REVEAL_OF[name] ?? 'opening' }); };
+const REVEAL_OF: Record<string, RevealPhase> = { drop: 'opening', spin: 'opening', tease: 'tease', burst: 'burst', reveal: 'reveal', next: 'next', hold: 'reveal' };
+/** A phase entered, for opening `index` of the run (0 for a single box): the card shows that opening's drop. */
+const onBoxPhase = (name: string, index = snapshot.shop.index) => {
+  if (getState() !== 'lootbox') return;
+  const i = Math.max(0, Math.min(index, snapshot.shop.drops.length - 1));
+  shop({ phase: REVEAL_OF[name] ?? 'opening', index: i, drop: snapshot.shop.drops[i] ?? snapshot.shop.drop });
+};
 
 /**
  * One shop call with the account's token: busy while it runs, and on an
@@ -894,15 +908,20 @@ export const actions = {
   async buyPart(category: string, value: string) {
     if (await shopCall(t => account.shop.buyPart(t, category, value, { base: remoteServer }))) shop({ notice: 'Acquis !' });
   },
-  /** Open a Politibox: the server charges and rolls; the opening plays on the canvas, from the shop or again from the result. */
-  async openBox() {
-    const r = await shopCall(t => account.shop.openBox(t, { base: remoteServer }));
-    if (!r?.drop) return;
+  /**
+   * Open a Politibox, or five at once (`count` 5, the bundle at
+   * BOX_BUNDLE.price): the server charges and rolls; the opening plays on
+   * the canvas, from the shop or again from the result, one reveal per drop.
+   */
+  async openBox(count: 1 | 5 = 1) {
+    const r = await shopCall(t => account.shop.openBox(t, { count, base: remoteServer }));
+    const drops = r?.drops ?? (r?.drop ? [r.drop] : []);
+    if (!drops.length) return;
     const st = getState();
     if (st !== 'shop' && st !== 'lootbox') return;          // left the shop while the server answered
-    shop({ drop: r.drop, phase: 'opening' });
+    shop({ drops, drop: drops[0]!, index: 0, phase: 'opening' });
     if (st === 'shop') transition('lootbox');
-    playOpening(r.drop, { onPhase: onBoxPhase });
+    playOpening(drops, { onPhase: onBoxPhase });
   },
   /** A tap on the stage: hurry the opening along (to the burst, then to the prize). */
   skipOpening() { if (getState() === 'lootbox') skipBoxOpening(); },
@@ -910,7 +929,7 @@ export const actions = {
   boxDone() {
     stopOpening();
     if (getState() === 'lootbox') transition('shop');
-    shop({ phase: 'idle', drop: null, error: null, notice: null });
+    shop({ phase: 'idle', drop: null, drops: [], index: 0, error: null, notice: null });
     setPreview(G.charIdx);
   },
 };

@@ -27,10 +27,10 @@ vi.mock('../engine/minimap.js', () => ({
 }));
 // The Politibox scene draws on the shared canvas; the timeline's phases are
 // played here by hand through the onPhase the store hands it.
-const box = vi.hoisted(() => ({ onPhase: null as ((name: string) => void) | null, played: [] as unknown[], skips: 0 }));
+const box = vi.hoisted(() => ({ onPhase: null as ((name: string, index?: number) => void) | null, played: [] as unknown[], skips: 0 }));
 vi.mock('../engine/boxgate.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../engine/boxgate.js')>()),
-  playOpening: (drop: unknown, o: { onPhase?: (name: string) => void } = {}) => { box.played.push(drop); box.onPhase = o.onPhase ?? null; box.onPhase?.('drop'); },
+  playOpening: (drop: unknown, o: { onPhase?: (name: string, index?: number) => void } = {}) => { box.played.push(drop); box.onPhase = o.onPhase ?? null; box.onPhase?.('drop', 0); },
   skipOpening: () => { box.skips++; },
   stopOpening: () => {},
   renderLootbox: () => {},
@@ -132,6 +132,8 @@ interface FakeOptions {
   stats?: Record<string, unknown>;
   /** What the next Politibox holds. */
   drop?: unknown;
+  /** What the next bundle holds (five), instead of `drop` five times. */
+  drops?: unknown[];
   /** What a solo race report pays (POST /api/progress): experience, politicoins, bonuses, and the level the profile comes back at. */
   progress?: { gained: number; coins: number; bonus: { daily: boolean; levelUp: boolean; levelUpCoins: number }; level?: number };
 }
@@ -167,12 +169,19 @@ function fakeServer(o: FakeOptions = {}) {
     // The economy, priced like the catalogue (lucie 300, wheels:gold 400, a box 120); bodies never carry a price.
     if (url === './api/shop/char' || url === './api/shop/part' || url === './api/box/open') {
       if (!who) return answer(401, { error: 'Session expirée.' });
-      const price = url === './api/box/open' ? 120 : url === './api/shop/char' ? ({ lucie: 300 } as Record<string, number>)[(body as { id: string }).id] ?? 9999 : 400;
+      const count = url === './api/box/open' ? ((body as { count?: number }).count ?? 1) : 1;
+      const price = url === './api/box/open' ? (count === 5 ? 550 : 120) : url === './api/shop/char' ? ({ lucie: 300 } as Record<string, number>)[(body as { id: string }).id] ?? 9999 : 400;
       if (state.coins < price) return answer(402, { error: 'Pas assez de politicoins.' });
       state.coins -= price;
       if (url === './api/shop/char') state.owned.chars.push((body as { id: string }).id);
       if (url === './api/shop/part') state.owned.parts.push((body as { category: string; value: string }).category + ':' + (body as { value: string }).value);
-      if (url === './api/box/open') { const d = (o.drop ?? { kind: 'coins', amount: 50 }) as { kind: string; amount?: number; refund?: number }; state.coins += d.amount ?? d.refund ?? 0; return answer(200, { profile: me(who), drop: d }); }
+      if (url === './api/box/open') {
+        // the bundle answers `drops` (o.drops, or the one drop five times) and `drop`, the first, as the server does
+        const one = (o.drop ?? { kind: 'coins', amount: 50 }) as { kind: string; amount?: number; refund?: number };
+        const drops = (o.drops ?? Array.from({ length: count }, () => one)) as typeof one[];
+        for (const d of drops) state.coins += d.amount ?? d.refund ?? 0;
+        return answer(200, { profile: me(who), drop: drops[0], drops });
+      }
       return answer(200, { profile: me(who), bought: {} });
     }
     if (url === './api/logout') { if (auth) state.sessions.delete(auth.slice(7)); return answer(200, {}); }
@@ -757,7 +766,7 @@ describe('the admin dashboard (DEC-030)', () => {
 });
 
 /** The Boutique and the Politibox's contract ids (DEC-009), on a game server only. */
-const SHOP_IDS = ['b-shop', 's-shop', 'coins', 'shop-tab-box', 'shop-tab-chars', 'shop-tab-parts', 'shop-char-lucie', 'b-buy-char-lucie', 'shop-part-wheels-gold', 'b-buy-part-wheels-gold', 'b-open-box', 'shop-error', 'shop-notice', 'b-shop-back', 's-lootbox', 'lb-stage'];
+const SHOP_IDS = ['b-shop', 's-shop', 'coins', 'shop-tab-box', 'shop-tab-chars', 'shop-tab-parts', 'shop-char-lucie', 'b-buy-char-lucie', 'shop-part-wheels-gold', 'b-buy-part-wheels-gold', 'b-open-box', 'b-open-box-five', 'box-odds', 'shop-error', 'shop-notice', 'b-shop-back', 's-lootbox', 'lb-stage'];
 
 describe('the Boutique and the Politibox (DEC-032..037)', () => {
   beforeEach(() => { box.onPhase = null; box.played = []; box.skips = 0; });
@@ -769,7 +778,8 @@ describe('the Boutique and the Politibox (DEC-032..037)', () => {
     fireEvent.click($(container, 'b-open-box')!);
     await settle();
     act(() => { box.onPhase?.('reveal'); });
-    for (const id of ['box-result', 'box-grade', 'b-box-again', 'b-box-back']) expect($(container, id), '#' + id).not.toBeNull();
+    for (const id of ['box-result', 'box-grade', 'b-box-again', 'b-box-five', 'b-box-back', 'box-history']) expect($(container, id), '#' + id).not.toBeNull();
+    expect($(container, 'box-count')).toBeNull();                   // one box: no counter
   });
 
   it('are absent from the static build, title button included', async () => {
@@ -858,23 +868,78 @@ describe('the Boutique and the Politibox (DEC-032..037)', () => {
     await settle();
     expect(server.calls.find(c => c.url === './api/box/open')).toMatchObject({ method: 'POST', body: {}, auth: 'Bearer tok-player' });
     expect(getState()).toBe('lootbox');
-    expect(box.played).toEqual([drop]);
+    expect(box.played).toEqual([[drop]]);
     expect($(container, 's-lootbox')!.hidden).toBe(false);
     expect($(container, 'box-result')).toBeNull();                 // still opening
+    expect(container.querySelector('.lb-hint')?.textContent).toBe('Touchez pour passer');
     fireEvent.click($(container, 'lb-stage')!);
     expect(box.skips).toBe(1);
+    act(() => { box.onPhase?.('tease'); });
+    expect(container.querySelector('.kr-tease')).not.toBeNull();
+    expect(container.querySelector('.kr-reveal')?.className).toContain('kr-reveal-mythic');
+    expect(container.querySelector('.lb-hint')).not.toBeNull();   // a tap still hurries the tease along
     act(() => { box.onPhase?.('burst'); });
     expect(container.querySelector('.kr-flash')).not.toBeNull();
+    expect(container.querySelector('.lb-hint')).toBeNull();
     act(() => { box.onPhase?.('reveal'); });
     expect($(container, 'box-result')?.textContent).toBe('Pièce : Roues doréesDoublon : +400 politicoins remboursés');
+    expect($(container, 'box-refund')?.textContent).toBe('Doublon : +400 politicoins remboursés');
     expect($(container, 'box-grade')?.getAttribute('data-grade')).toBe('mythic');
     expect($(container, 'box-grade')?.textContent).toBe('Mythique');
-    // 150 - 120 + 400 refunded: enough for another
+    expect(container.querySelector('#s-lootbox .reveal-card')?.getAttribute('data-kind')).toBe('part');
+    // 150 - 120 + 400 refunded: enough for another, not for five
     expect(getSnapshot().account!.profile.coins).toBe(430);
     expect(disabled(container, 'b-box-again')).toBe(false);
+    expect(disabled(container, 'b-box-five')).toBe(true);
+    expect($(container, 'b-box-five')?.textContent).toBe('Ouvrir ×5 · 550');
     fireEvent.click($(container, 'b-box-back')!);
     expect(getState()).toBe('shop');
     expect($(container, 'coins')?.textContent).toBe('430');
+  });
+
+  it('open five at once: one call with count 5, the counter and one card per reveal, the history under the card', async () => {
+    const drops = [
+      { kind: 'coins', amount: 5 }, { kind: 'char', id: 'lucie', grade: 'common', duplicate: false, refund: 0 },
+      { kind: 'trail', id: 'laser', grade: 'incredible', duplicate: false, refund: 0 }, { kind: 'coins', amount: 500 }, { kind: 'coins', amount: 10 },
+    ];
+    const recent = [{ kind: 'coins', amount: 10, at: 5 }, { kind: 'part', id: 'wheels:gold', grade: 'mythic', at: 4 }, { kind: 'trail', id: 'laser', grade: 'incredible', at: 3 }];
+    const { container, server } = await renderServed({ server: true, who: 'player', coins: 600, drops, stats: { recent } });
+    fireEvent.click($(container, 'b-shop')!);
+    // the shop: the odds as the library's table, the bundle button at its price, the history
+    expect(container.querySelector('#box-odds')?.className).toBe('odds-table');
+    expect(container.querySelector('#box-odds caption')?.textContent).toContain('cinq pour 550');
+    expect([...container.querySelectorAll('#box-odds tbody tr')].map(r => r.textContent)).toEqual(['Candidat·e2 %', 'Pièce ou traînée4 %', 'Politicoins94 %', '5 politicoins40 %', '10 politicoins30 %', '50 politicoins16 %', '100 politicoins6 %', '500 politicoins2 %']);
+    expect($(container, 'b-open-box-five')?.textContent).toBe('Ouvrir ×5 · 550');
+    expect(disabled(container, 'b-open-box-five')).toBe(false);
+    expect([...container.querySelectorAll('#shop-history .drop-chip')].map(c => c.textContent + '|' + c.getAttribute('data-grade'))).toEqual(['10 politicoins|common', 'Roues dorées|mythic', 'Laser|incredible']);
+
+    fireEvent.click($(container, 'b-open-box-five')!);
+    await settle();
+    expect(server.calls.find(c => c.url === './api/box/open')).toMatchObject({ method: 'POST', body: { count: 5 }, auth: 'Bearer tok-player' });
+    expect(getState()).toBe('lootbox');
+    expect(box.played).toEqual([drops]);
+    expect($(container, 'box-count')?.textContent).toBe('1 / 5');
+    act(() => { box.onPhase?.('reveal', 0); });
+    expect($(container, 'box-result')?.textContent).toBe('5 politicoins');
+    act(() => { box.onPhase?.('next', 0); });
+    expect(container.querySelector('.kr-reveal-card')?.className).toBe('kr-reveal-card kr-sink');
+    act(() => { box.onPhase?.('drop', 1); });
+    expect($(container, 'box-result')).toBeNull();
+    expect($(container, 'box-count')?.textContent).toBe('2 / 5');
+    act(() => { box.onPhase?.('reveal', 2); });
+    expect($(container, 'box-count')?.textContent).toBe('3 / 5');
+    expect($(container, 'box-result')?.textContent).toBe('Traînée : Laser');
+    expect($(container, 'box-grade')?.getAttribute('data-grade')).toBe('incredible');
+    act(() => { box.onPhase?.('hold', 4); });
+    expect($(container, 'box-result')?.textContent).toBe('10 politicoins');
+    expect([...container.querySelectorAll('#box-history .drop-chip')].map(c => c.textContent)).toEqual(['10 politicoins', 'Roues dorées', 'Laser']);
+    // 600 - 550 + 515 (the shop's counter stays mounted under the stage)
+    expect($(container, 'coins')?.textContent).toBe('565');
+    expect(getSnapshot().account!.profile.coins).toBe(565);
+    expect(disabled(container, 'b-box-five')).toBe(false);
+    fireEvent.click($(container, 'b-box-back')!);
+    expect(getState()).toBe('shop');
+    expect(getSnapshot().shop.drops).toEqual([]);
   });
 
   it('keep "Encore une !" disabled under the price of a box', async () => {

@@ -414,3 +414,26 @@ path, no `force`), which also sent:
 listed 249 files (260 before), none under `screenshots/`. The template has no
 screenshots now; fresh captures would show the pun names, but under
 SwiftShader its hall renders as a dark silhouette, so none were made here.
+
+## To re-sync: the Politibox reveal parts (2026-10-29)
+
+Stage 6 of the overhaul (PLAN.md, DEC-054) added to `components/economy/`,
+each with a story carrying a docs description, an export with its Props
+type and `economy.test.tsx` coverage; none is in the Design System artifact yet:
+
+- `RevealStage`: `phase` gains `tease` and `next`, plus `count`/`index`
+  and a counter chip (`counterProps`, `formatCounter`). The stories gain
+  `Tease` and `Bundle`; the interactive one steps through six phases.
+- `RevealCard` (new): the result card with a `KindGlyph` (also exported),
+  caption, name, refund line, grade badge; part props `resultProps`,
+  `badgeProps`, `refundProps`.
+- `DropHistory` (new): the last drops as grade-coloured chips.
+- `OddsTable` (new): the odds as a table with a caption, row headers and
+  `sub` rows.
+- `economy.css` gained the static looks (`.kr-tease`, `.kr-counter`,
+  `.reveal-card`, `.drop-history`/`.drop-chip`, `.odds-table`), `fx.css`
+  the keyframes `kr-tease`, `kr-sink`, `kr-chip-in` and keeps the grade
+  sweep off `.drop-chip` as off `.grade-dot`; all off under reduced motion.
+- `RevealStage` stories render a fixed overlay, so their preview needs
+  the same `position: relative; height; transform: translateZ(0)` frame
+  as the `Screen` stories (see "Traps hit" above).

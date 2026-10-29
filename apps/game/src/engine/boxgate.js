@@ -22,7 +22,7 @@ export function dropGrade(drop) {
 }
 
 let mod = null, loading = null;
-/** The opening asked for while the chunk loads: `{ drop, opts }`, or null once played or stopped. */
+/** The opening asked for while the chunk loads: `{ drops, opts }`, or null once played or stopped. */
 let pending = null;
 
 /** Start loading the Politibox chunk (once); resolves to lootbox.js's exports. */
@@ -30,7 +30,7 @@ export function loadBox() {
   if (!loading) {
     loading = import('./lootbox.js').then(m => {
       mod = m;
-      if (pending) { const { drop, opts } = pending; pending = null; m.playOpening(drop, opts); }
+      if (pending) { const { drops, opts } = pending; pending = null; m.playOpening(drops, opts); }
       return m;
     });
   }
@@ -39,10 +39,14 @@ export function loadBox() {
 /** Whether lootbox.js is loaded. */
 export const boxLoaded = () => !!mod;
 
-/** Play the opening of `drop` (lootbox.js playOpening); deferred until the chunk is here. */
-export function playOpening(drop, opts = {}) {
-  if (mod) { mod.playOpening(drop, opts); return; }
-  pending = { drop, opts };
+/**
+ * Play the opening of `drops` (one drop, or a bundle's list; lootbox.js
+ * playOpening, with its `{ onPhase(name, index), cut }` options passed
+ * through); deferred until the chunk is here.
+ */
+export function playOpening(drops, opts = {}) {
+  if (mod) { mod.playOpening(drops, opts); return; }
+  pending = { drops, opts };
   loadBox();
 }
 /** Hurry the opening along (lootbox.js skipOpening); nothing to hurry before it plays. */

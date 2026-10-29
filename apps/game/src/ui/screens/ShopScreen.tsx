@@ -3,8 +3,10 @@ import {
   Button,
   CoinCount,
   Disclaimer,
+  DropHistory,
   GradeBadge,
   Heading,
+  OddsTable,
   Panel,
   Row,
   Screen,
@@ -13,11 +15,12 @@ import {
 } from '@politikart/ui';
 
 import {
-  BOX_ODDS, BOX_PRICE, CHAR_GRADE, CHAR_PRICE, COIN_DROPS, PART_CATEGORIES, PART_GRADE, PART_PRICE, REFUND, TRAIL_GRADE, TRAIL_OPTIONS,
+  BOX_BUNDLE, BOX_ODDS, BOX_PRICE, CHAR_GRADE, CHAR_PRICE, COIN_DROPS, PART_CATEGORIES, PART_GRADE, PART_PRICE, REFUND, TRAIL_GRADE, TRAIL_OPTIONS,
   ownsChar, ownsPart, ownsTrail,
 } from '../../engine/catalog.js';
 import { CHARACTERS } from '../../engine/data.js';
 import { STARTERS, unlockLevel } from '../../engine/progress.js';
+import { historyItems } from '../drops';
 import { GRADE_LABELS, optionLabel, PART_CHOICES, trailLabel } from '../kartChoices';
 import { actions, ownedOf, type Grade, type ShopTab, type UiSnapshot } from '../store';
 import type { Character } from '../types';
@@ -56,31 +59,35 @@ function PartGlyph({ category, grade }: { category: string; grade: Grade }) {
   );
 }
 
-/** The Politibox: what it costs, what it may hold, and the button. */
+/** The Politibox odds as the library's table rows: the kinds, then the coin tiers under their line. */
+const ODDS_ROWS = [
+  { key: 'char', label: 'Candidat·e', odds: BOX_ODDS.char },
+  { key: 'part', label: 'Pièce ou traînée', odds: BOX_ODDS.part },
+  { key: 'coins', label: 'Politicoins', odds: 1 - BOX_ODDS.char - BOX_ODDS.part },
+  ...(COIN_DROPS as unknown as [number, number][]).map(([amount, odds]) => ({ key: 'coins-' + amount, label: fr(amount) + ' politicoins', odds, sub: true })),
+];
+const ODDS_CAPTION = 'Une urne dorée à ' + fr(BOX_PRICE) + ' politicoins, ou cinq pour ' + fr(BOX_BUNDLE.price) + '. On y trouve un·e candidat·e ' + pct(BOX_ODDS.char)
+  + ' du temps, une pièce de kart ou une traînée ' + pct(BOX_ODDS.part) + ' du temps, et le reste du temps des politicoins. '
+  + 'Un doublon est remboursé selon sa rareté (de ' + fr(REFUND.rare) + ' à ' + fr(REFUND.incredible) + ' politicoins).';
+
+/** The Politibox: what it costs, what it may hold, the two buttons (one box, five), and the account's last drops. */
 function BoxPanel({ ui, coins, guest }: { ui: UiSnapshot; coins: number; guest: boolean }) {
-  const coinShare = 1 - BOX_ODDS.char - BOX_ODDS.part;
   return (
     <div role="tabpanel" id="shop-panel-box" aria-labelledby="shop-tab-box" hidden={ui.shop.tab !== 'box'} style={{ ...COLUMN, gap: 12 }}>
       <Heading level={3} style={{ fontSize: 24 }}>La Politibox</Heading>
-      <p className="box-text">
-        {'Une urne dorée à ' + fr(BOX_PRICE) + ' politicoins. On y trouve un·e candidat·e ' + pct(BOX_ODDS.char)
-          + ' du temps, une pièce de kart ou une traînée ' + pct(BOX_ODDS.part) + ' du temps, et le reste du temps des politicoins. '
-          + 'Un doublon est remboursé selon sa rareté (de ' + fr(REFUND.rare) + ' à ' + fr(REFUND.incredible) + ' politicoins).'}
-      </p>
-      <table id="box-odds" className="box-odds">
-        <tbody>
-          <tr><th scope="row">Candidat·e</th><td>{pct(BOX_ODDS.char)}</td></tr>
-          <tr><th scope="row">Pièce ou traînée</th><td>{pct(BOX_ODDS.part)}</td></tr>
-          <tr><th scope="row">Politicoins</th><td>{pct(coinShare)}</td></tr>
-          {(COIN_DROPS as unknown as [number, number][]).map(([amount, odds]) => (
-            <tr key={amount} className="sub"><th scope="row">{fr(amount) + ' politicoins'}</th><td>{pct(odds)}</td></tr>
-          ))}
-        </tbody>
-      </table>
-      <Button id="b-open-box" disabled={guest || ui.shop.busy || coins < BOX_PRICE} onClick={() => { void actions.openBox(); }}>
-        {'Ouvrir une Politibox · ' + fr(BOX_PRICE)}
-      </Button>
+      <OddsTable id="box-odds" caption={ODDS_CAPTION} rows={ODDS_ROWS} format={pct} />
+      <Row>
+        <Button id="b-open-box" disabled={guest || ui.shop.busy || coins < BOX_PRICE} onClick={() => { void actions.openBox(1); }}>
+          {'Ouvrir une Politibox · ' + fr(BOX_PRICE)}
+        </Button>
+        <Button id="b-open-box-five" variant="ghost" disabled={guest || ui.shop.busy || coins < BOX_BUNDLE.price} onClick={() => { void actions.openBox(5); }}>
+          {'Ouvrir ×' + BOX_BUNDLE.count + ' · ' + fr(BOX_BUNDLE.price)}
+        </Button>
+      </Row>
       {!guest && coins < BOX_PRICE ? <Disclaimer>Gagnez des politicoins en course : chaque place rapporte, et la première course du jour un bonus.</Disclaimer> : null}
+      {guest ? null : (
+        <DropHistory id="shop-history" title="Derniers tirages" emptyLabel="Aucun tirage pour l’instant." drops={historyItems(ui.account?.profile.stats?.recent)} />
+      )}
     </div>
   );
 }

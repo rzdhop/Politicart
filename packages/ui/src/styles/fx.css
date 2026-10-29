@@ -59,6 +59,24 @@
   100% { transform:scale(1); opacity:1; }
 }
 
+/* The tease's pulse: the vignette breathes at the grade's rate (--kr-rate, economy.css). */
+@keyframes kr-tease {
+  0%,100% { opacity:.12; }
+  50% { opacity:.55; }
+}
+
+/* The card leaving between two openings of a bundle. */
+@keyframes kr-sink {
+  from { transform:translateY(0); opacity:1; }
+  to { transform:translateY(28px); opacity:0; }
+}
+
+/* A new history chip slides in from the left. */
+@keyframes kr-chip-in {
+  from { transform:translateX(-10px); opacity:0; }
+  to { transform:translateX(0); opacity:1; }
+}
+
 /* Grades ------------------------------------------------------------------- */
 
 .grade-rare,
@@ -136,15 +154,21 @@
   z-index:-1;
 }
 
-/* A part dot is too small for any of this: colour only. */
-.grade-dot {
+/* A part dot is too small for any of this, and ten history chips would be
+   noise under a result card: colour only. */
+.grade-dot,
+.drop-chip {
   animation:none;
   background-image:none;
   overflow:visible;
 }
 
 .grade-dot::before,
-.grade-dot::after { content:none; }
+.grade-dot::after,
+.drop-chip::before,
+.drop-chip::after { content:none; }
+
+.drop-chip.grade-incredible { border-color:var(--grade-incredible); }
 
 /* Reveal -------------------------------------------------------------------- */
 
@@ -154,6 +178,15 @@
 .kr-flash::after { animation:kr-flash .45s ease-out both; }
 
 .kr-rise { animation:kr-rise .55s cubic-bezier(.2,.9,.3,1.2) both; }
+
+.kr-sink { animation:kr-sink .4s ease-in both; }
+
+.kr-tease { animation:kr-tease var(--kr-rate,.5s) ease-in-out infinite; }
+
+/* The three newest chips slide in, one after the other. */
+.drop-chip:nth-child(-n+3) { animation:kr-chip-in .35s ease-out both; }
+.drop-chip:nth-child(2) { animation-delay:.06s; }
+.drop-chip:nth-child(3) { animation-delay:.12s; }
 
 .kr-pop { animation:kr-pop .5s cubic-bezier(.2,.9,.3,1.2) both; }
 
@@ -184,13 +217,19 @@
   .kr-flash::before,
   .kr-flash::after,
   .kr-rise,
+  .kr-sink,
+  .kr-tease,
   .kr-pop,
-  .kr-reveal-card .grade {
+  .kr-reveal-card .grade,
+  .drop-chip:nth-child(-n+3) {
     animation:none;
   }
   .grade-rare::before,
   .grade-incredible::after { will-change:auto; }
   .grade-mythic::before { opacity:.7; }
   .kr-rise,
-  .kr-pop { transform:none; opacity:1; }
+  .kr-pop,
+  .drop-chip:nth-child(-n+3) { transform:none; opacity:1; }
+  .kr-sink { transform:none; opacity:0; }
+  .kr-tease { opacity:.3; }
 }

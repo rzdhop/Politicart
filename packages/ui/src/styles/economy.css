@@ -328,6 +328,207 @@
   box-shadow:0 0 48px -8px var(--kr-flash);
 }
 
+/* The tease: a vignette in the grade colour over the dim (its pulse is fx.css's). */
+.kr-tease {
+  position:absolute;
+  inset:0;
+  background:radial-gradient(ellipse at center,transparent 38%,var(--kr-flash) 150%);
+  opacity:.35;
+  --kr-rate:.5s;
+}
+
+.kr-reveal-rare .kr-tease { --kr-rate:.333s; }
+.kr-reveal-mythic .kr-tease { --kr-rate:.222s; }
+.kr-reveal-incredible .kr-tease { --kr-rate:.167s; }
+
+/* A bundle's counter, top centre, clear of the taps. */
+.kr-counter {
+  position:absolute;
+  top:max(16px,env(safe-area-inset-top,0px));
+  left:50%;
+  transform:translateX(-50%);
+  font-family:var(--font-display);
+  font-size:15px;
+  letter-spacing:.08em;
+  color:var(--gold);
+  background:rgba(12,18,48,.7);
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:6px 14px;
+  pointer-events:none;
+  font-variant-numeric:tabular-nums;
+}
+
+/* The card on its way out between two openings takes no tap. */
+.kr-reveal-card.kr-sink { pointer-events:none; }
+
+/* RevealCard ---------------------------------------------------------------- */
+
+.reveal-card {
+  position:relative;
+  cursor:default;
+  width:100%;
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:12px;
+  text-align:center;
+}
+
+.reveal-card:hover { transform:none; }
+
+.reveal-card .reveal-glyph {
+  display:inline-flex;
+  width:56px;
+  height:56px;
+  color:var(--grade-color,var(--gold));
+  filter:drop-shadow(0 0 10px var(--grade-color,var(--gold)));
+}
+
+.reveal-card .reveal-glyph svg,
+.kind-glyph {
+  width:100%;
+  height:100%;
+}
+
+.reveal-card .reveal-caption {
+  margin:0;
+  font-size:14px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.14em;
+}
+
+.reveal-card .reveal-result {
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+}
+
+.reveal-card .reveal-name {
+  margin:0;
+  font-family:var(--font-display);
+  font-size:26px;
+  line-height:1.1;
+  letter-spacing:.02em;
+}
+
+.reveal-card .reveal-refund {
+  margin:0;
+  font-size:13px;
+  color:var(--gold);
+}
+
+/* DropHistory --------------------------------------------------------------- */
+
+.drop-history {
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  width:100%;
+  box-sizing:border-box;
+}
+
+.drop-history .drop-history-title,
+.drop-history .drop-history-empty {
+  margin:0;
+  font-size:12px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.12em;
+}
+
+.drop-history .drop-history-empty { text-transform:none; letter-spacing:normal; font-size:13px; }
+
+.drop-history .drop-history-list {
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  justify-content:center;
+}
+
+.drop-chip {
+  --grade-color:var(--grade-common);
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-size:12.5px;
+  font-weight:700;
+  color:var(--grade-color);
+  border:1px solid var(--grade-color);
+  border-radius:999px;
+  padding:4px 10px 4px 7px;
+  background:rgba(12,18,48,.6);
+  white-space:nowrap;
+}
+
+.drop-chip .kind-glyph {
+  width:16px;
+  height:16px;
+  flex:none;
+}
+
+.drop-chip.grade-common { border-color:rgba(185,179,216,.45); color:var(--muted); }
+
+/* OddsTable ----------------------------------------------------------------- */
+
+.odds-table {
+  border-collapse:collapse;
+  width:min(560px,100%);
+  font-size:15px;
+}
+
+.odds-table caption {
+  caption-side:top;
+  text-align:left;
+  padding:0 0 12px;
+  color:var(--fg);
+  line-height:1.45;
+  font-size:15px;
+}
+
+.odds-table th,
+.odds-table td {
+  padding:6px 0;
+  border-bottom:1px solid var(--line);
+}
+
+.odds-table th {
+  text-align:left;
+  font-family:var(--font-body);
+  font-weight:normal;
+  text-transform:none;
+  letter-spacing:normal;
+  color:var(--fg);
+  padding-right:18px;
+}
+
+.odds-table td {
+  text-align:right;
+  font-family:var(--font-display);
+  color:var(--gold);
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+
+.odds-table thead th {
+  font-family:var(--font-display);
+  font-size:12px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+
+.odds-table thead th:last-child { text-align:right; }
+
+.odds-table tr.odds-sub th { padding-left:16px; color:var(--muted); font-size:13px; }
+.odds-table tr.odds-sub td { color:var(--muted); font-size:13px; }
+
 /* Tabs ---------------------------------------------------------------------- */
 
 .tabs {
