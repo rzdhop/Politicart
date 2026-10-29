@@ -265,3 +265,56 @@ export const KART_PARTS = [
   { id: 'underglow', label: 'Néons', value: 'Aucun', grade: 'common' },
   { id: 'sticker', label: 'Autocollant', value: 'Tricolore', grade: 'common' },
 ] as const;
+
+/** A circuit's figures, as the circuits screen shows them under a card (TrackMeta). */
+export const TRACK_FIGURES = [
+  { key: 'length', label: 'Longueur', value: '2,9 km' },
+  { key: 'climb', label: 'Dénivelé', value: '22 m' },
+  { key: 'width', label: 'Largeur', value: '22 m' },
+  { key: 'laps', label: 'Tours', value: '3' },
+];
+
+/** The same, with the player's best lap on the circuit. */
+export const TRACK_FIGURES_BEST = [...TRACK_FIGURES, { key: 'best', label: 'Meilleur tour', value: '0:58.50', tone: 'best' as const }];
+
+export const TRACK_LAYOUTS = ['Place du Tertre', 'Fête des vendanges', 'Nuit blanche'];
+
+export const TRACK_CLIMATES = [
+  { id: 'dusk', icon: '🌆', label: 'Crépuscule' },
+  { id: 'night', icon: '🌙', label: 'Nuit' },
+  { id: 'dawn', icon: '🌅', label: 'Aube' },
+];
+
+/**
+ * A stand-in for a rendered circuit thumbnail: a bird's-eye sketch of a
+ * road loop over grass with blocks of houses, as the game's 3D thumbnail
+ * frames it (16:9). Static, for reproducible screenshots.
+ */
+export function TrackThumbnail() {
+  return (
+    <svg viewBox="0 0 320 180" width="100%" height="100%" style={{ display: 'block' }} aria-hidden="true">
+      <rect width="320" height="180" fill="#5f8a4a" />
+      <path d="M0 140 L320 120 L320 180 L0 180 Z" fill="#557d43" />
+      {[[30, 20], [70, 14], [230, 18], [270, 28], [40, 150], [250, 150], [140, 80], [176, 92]].map(([x, y], i) => (
+        <g key={i}>
+          <rect x={x} y={y! + 4} width="22" height="12" fill="#9c8f78" />
+          <rect x={x} y={y} width="22" height="8" fill="#e3d6bd" />
+        </g>
+      ))}
+      <path
+        d="M60 120 C30 80 60 40 120 42 C180 44 190 70 240 62 C285 56 295 110 250 128 C200 148 90 150 60 120 Z"
+        fill="none"
+        stroke="#f6f1e4"
+        strokeWidth="16"
+      />
+      <path
+        d="M60 120 C30 80 60 40 120 42 C180 44 190 70 240 62 C285 56 295 110 250 128 C200 148 90 150 60 120 Z"
+        fill="none"
+        stroke="#4a4b50"
+        strokeWidth="11"
+      />
+      <rect x="54" y="112" width="16" height="4" fill="#fff" />
+      <rect x="44" y="104" width="4" height="12" fill="#f2c14e" />
+    </svg>
+  );
+}
