@@ -7,6 +7,8 @@ import * as THREE from 'three';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { CLIMATE_IDS, CLIMATES, applyClimate, headlightCone, pickClimate, sunOffset } from './climate.js';
+import { TRACKS } from './data.js';
+import { chooseLayout } from './layout.js';
 import { resetMachine } from './machine.js';
 import { simStep, startRace } from './race.js';
 import { G } from './state.js';
@@ -146,10 +148,14 @@ describe('applyClimate, headless', () => {
 describe('a race under a climate', () => {
   beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; G.trackIdx = 0; G.layout = null; });
 
+  // The layout draws the climate from the track's list with the race seed (DEC-049): the first seed that lands on `id`.
+  const seedFor = id => { for (let s = 0; s < 4096; s++) if (chooseLayout(TRACKS[0], s).climate === id) return s; throw new Error('no seed for ' + id); };
+
   it('is lit by the climate\'s three lights and nothing else, lamps registered by the decor', () => {
-    startRace();
+    startRace({ seed: seedFor('golden') });
     expect(lightsOf(G.scene)).toEqual(['HemisphereLight', 'AmbientLight', 'DirectionalLight']);
-    expect(G.climate.id).toBe('noon');
+    expect(G.climate.id).toBe('golden');
+    expect(G.layout.climate).toBe('golden');
     expect(G.lamps.length).toBeGreaterThan(20);
     expect(named(G.scene, 'sky')).toHaveLength(1);
     expect(named(G.scene, 'lampGlow')).toHaveLength(0);
@@ -157,9 +163,7 @@ describe('a race under a climate', () => {
   });
 
   it('at night lights the lamps and gives every kart a headlight cone that follows it', () => {
-    G.layout = { climate: 'night' };
-    startRace();
-    G.layout = null;
+    startRace({ seed: seedFor('night') });
     expect(G.climate.id).toBe('night');
     expect(lightsOf(G.scene)).toEqual(['HemisphereLight', 'AmbientLight', 'DirectionalLight']);
     expect(named(G.scene, 'lampGlow')).toHaveLength(1);
