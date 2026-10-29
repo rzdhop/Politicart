@@ -301,7 +301,7 @@ describe('RevealCard', () => {
     expect(card?.className).toBe('card reveal-card reveal-card-char grade-rare');
     expect(card?.getAttribute('data-kind')).toBe('char');
     expect(card?.getAttribute('data-grade')).toBe('rare');
-    expect(card?.querySelector('.reveal-glyph svg')?.className.baseVal).toBe('kind-glyph kind-glyph-char');
+    expect(card?.querySelector('.reveal-glyph svg')?.getAttribute('class')).toBe('kind-glyph kind-glyph-char');
     expect(card?.querySelector('.reveal-caption')?.textContent).toBe('La Politibox vous offre');
     expect(card?.querySelector('.reveal-name')?.textContent).toBe('Candidat : Lucie Vasseur');
     expect(card?.querySelector('.grade')?.textContent).toBe('Rare');
