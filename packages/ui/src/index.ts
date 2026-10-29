@@ -152,6 +152,11 @@ export { NoteBanner, type NoteBannerProps } from './components/misc/NoteBanner';
 // motion is fx.css, keyed on the `grade-<g>` classes these set.
 export { CoinCount, type CoinCountProps } from './components/economy/CoinCount';
 export {
+  DropHistory,
+  type DropHistoryItem,
+  type DropHistoryProps,
+} from './components/economy/DropHistory';
+export {
   GRADES,
   type Grade,
   GradeBadge,
@@ -163,6 +168,13 @@ export {
   type KartPart,
   type KartTrail,
 } from './components/economy/KartCard';
+export { type OddsRow, OddsTable, type OddsTableProps } from './components/economy/OddsTable';
+export {
+  type DropKind,
+  KindGlyph,
+  RevealCard,
+  type RevealCardProps,
+} from './components/economy/RevealCard';
 export {
   RevealStage,
   type RevealPhase,

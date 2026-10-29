@@ -2,8 +2,11 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CoinCount } from './CoinCount';
+import { DropHistory } from './DropHistory';
 import { GRADES, GradeBadge } from './GradeBadge';
 import { KartCard } from './KartCard';
+import { OddsTable } from './OddsTable';
+import { RevealCard } from './RevealCard';
 import { RevealStage } from './RevealStage';
 import { ShopCard } from './ShopCard';
 import { Tabs } from './Tabs';
@@ -245,6 +248,159 @@ describe('RevealStage', () => {
     expect(container.querySelector('.kr-flash')).toBeNull();
     expect(container.firstElementChild?.id).toBe('box-stage');
     expect(container.firstElementChild?.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('pulses a vignette in tease, the rate set by the grade class, with no card', () => {
+    const { container } = render(
+      <RevealStage grade="incredible" phase="tease">
+        <p>Lucie</p>
+      </RevealStage>,
+    );
+    expect(container.firstElementChild?.className).toBe('kr-reveal kr-reveal-incredible kr-reveal-phase-tease');
+    expect(container.querySelector('.kr-tease')?.getAttribute('aria-hidden')).toBe('true');
+    expect(container.querySelector('.kr-flash')).toBeNull();
+    expect(screen.queryByText('Lucie')).toBeNull();
+  });
+
+  it('sinks the card away in next, inert, and shows the bundle counter through its phases', () => {
+    const { container, rerender } = render(
+      <RevealStage grade="rare" phase="next" count={5} index={1} counterProps={{ id: 'box-count' }}>
+        <p>Lucie</p>
+      </RevealStage>,
+    );
+    const card = container.querySelector('.kr-reveal-card');
+    expect(card?.className).toBe('kr-reveal-card kr-sink');
+    expect(card?.getAttribute('aria-hidden')).toBe('true');
+    expect(card?.textContent).toBe('Lucie');
+    expect(container.querySelector('#box-count')?.className).toBe('kr-counter');
+    expect(container.querySelector('#box-count')?.textContent).toBe('2 / 5');
+    rerender(
+      <RevealStage grade="rare" phase="opening" count={5} index={4} formatCounter={(i, n) => `${i + 1} sur ${n}`}>
+        <p>Lucie</p>
+      </RevealStage>,
+    );
+    expect(container.querySelector('.kr-counter')?.textContent).toBe('5 sur 5');
+    expect(container.querySelector('.kr-reveal-card')).toBeNull();
+    rerender(
+      <RevealStage grade="rare" phase="reveal" count={1}>
+        <p>Lucie</p>
+      </RevealStage>,
+    );
+    expect(container.querySelector('.kr-counter')).toBeNull();
+  });
+});
+
+describe('RevealCard', () => {
+  it('renders the glyph, the caption, the name and the badge, carrying the kind and the grade', () => {
+    const { container } = render(
+      <RevealCard kind="char" name="Candidat : Lucie Vasseur" grade="rare" gradeLabel="Rare" caption="La Politibox vous offre" id="card">
+        <button>Encore une !</button>
+      </RevealCard>,
+    );
+    const card = container.querySelector('#card');
+    expect(card?.className).toBe('card reveal-card reveal-card-char grade-rare');
+    expect(card?.getAttribute('data-kind')).toBe('char');
+    expect(card?.getAttribute('data-grade')).toBe('rare');
+    expect(card?.querySelector('.reveal-glyph svg')?.className.baseVal).toBe('kind-glyph kind-glyph-char');
+    expect(card?.querySelector('.reveal-caption')?.textContent).toBe('La Politibox vous offre');
+    expect(card?.querySelector('.reveal-name')?.textContent).toBe('Candidat : Lucie Vasseur');
+    expect(card?.querySelector('.grade')?.textContent).toBe('Rare');
+    expect(card?.querySelector('.reveal-refund')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Encore une !' })).toBeDefined();
+  });
+
+  it('puts the ids on the result block, the refund line and the badge through part props, the result text being name then refund', () => {
+    const { container } = render(
+      <RevealCard
+        kind="part"
+        name="Pièce : Roues dorées"
+        grade="mythic"
+        gradeLabel="Mythique"
+        refund="Doublon : +400 politicoins remboursés"
+        resultProps={{ id: 'box-result' }}
+        refundProps={{ id: 'box-refund' }}
+        badgeProps={{ id: 'box-grade' }}
+      />,
+    );
+    expect(container.querySelector('#box-result')?.textContent).toBe('Pièce : Roues doréesDoublon : +400 politicoins remboursés');
+    expect(container.querySelector('#box-refund')?.className).toBe('reveal-refund');
+    expect(container.querySelector('#box-grade')?.getAttribute('data-grade')).toBe('mythic');
+    expect(container.querySelector('#box-result .reveal-glyph')).toBeNull();
+  });
+
+  it('draws one glyph per kind', () => {
+    const { container } = render(
+      <>
+        {(['char', 'part', 'trail', 'coins'] as const).map((k) => (
+          <RevealCard key={k} kind={k} name={k} grade="common" />
+        ))}
+      </>,
+    );
+    expect([...container.querySelectorAll('.kind-glyph')].map((g) => g.getAttribute('class'))).toEqual([
+      'kind-glyph kind-glyph-char',
+      'kind-glyph kind-glyph-part',
+      'kind-glyph kind-glyph-trail',
+      'kind-glyph kind-glyph-coins',
+    ]);
+    expect(container.querySelector('.reveal-caption')).toBeNull();
+  });
+});
+
+describe('DropHistory', () => {
+  const DROPS = [
+    { kind: 'coins' as const, grade: 'common' as const, label: '10 politicoins' },
+    { kind: 'part' as const, grade: 'mythic' as const, label: 'Roues dorées' },
+    { kind: 'trail' as const, grade: 'incredible' as const, label: 'Laser' },
+  ];
+
+  it('lists the drops as grade-coloured chips with their glyph, in the order given', () => {
+    const { container } = render(<DropHistory title="Derniers tirages" drops={DROPS} listProps={{ id: 'box-history' }} />);
+    expect(container.querySelector('.drop-history-title')?.textContent).toBe('Derniers tirages');
+    const chips = [...container.querySelectorAll('#box-history .drop-chip')];
+    expect(chips.map((c) => c.className)).toEqual(['drop-chip grade-common', 'drop-chip grade-mythic', 'drop-chip grade-incredible']);
+    expect(chips.map((c) => c.getAttribute('data-kind'))).toEqual(['coins', 'part', 'trail']);
+    expect(chips.map((c) => c.querySelector('.drop-chip-label')?.textContent)).toEqual(['10 politicoins', 'Roues dorées', 'Laser']);
+    expect(chips.map((c) => c.querySelector('.kind-glyph')?.getAttribute('class'))).toEqual(['kind-glyph kind-glyph-coins', 'kind-glyph kind-glyph-part', 'kind-glyph kind-glyph-trail']);
+    expect(container.querySelector('.drop-history-empty')).toBeNull();
+  });
+
+  it('caps the chips at max, and reads the empty label when there is nothing', () => {
+    const { container, rerender } = render(<DropHistory drops={DROPS} max={2} emptyLabel="Aucun tirage" />);
+    expect(container.querySelectorAll('.drop-chip')).toHaveLength(2);
+    expect(container.querySelector('.drop-history-title')).toBeNull();
+    rerender(<DropHistory drops={[]} emptyLabel="Aucun tirage" id="h" className="wide" />);
+    expect(container.querySelector('.drop-history-list')).toBeNull();
+    expect(container.querySelector('.drop-history-empty')?.textContent).toBe('Aucun tirage');
+    expect(container.querySelector('#h')?.className).toBe('drop-history wide');
+    rerender(<DropHistory drops={[]} />);
+    expect(container.firstElementChild?.innerHTML).toBe('');
+  });
+});
+
+describe('OddsTable', () => {
+  const ROWS = [
+    { label: 'Candidat·e', odds: 0.02 },
+    { label: 'Politicoins', odds: 0.94 },
+    { label: '5 politicoins', odds: 0.4, sub: true },
+  ];
+
+  it('is a table of row headers and percentages, the sub rows marked, with a caption', () => {
+    const { container } = render(<OddsTable id="box-odds" caption="Une urne dorée." rows={ROWS} />);
+    const table = container.querySelector('table#box-odds');
+    expect(table?.className).toBe('odds-table');
+    expect(table?.querySelector('caption')?.textContent).toBe('Une urne dorée.');
+    expect(table?.querySelector('thead')).toBeNull();
+    const rows = [...table!.querySelectorAll('tbody tr')];
+    expect(rows.map((r) => r.querySelector('th')?.getAttribute('scope'))).toEqual(['row', 'row', 'row']);
+    expect(rows.map((r) => r.textContent)).toEqual(['Candidat·e2 %', 'Politicoins94 %', '5 politicoins40 %']);
+    expect(rows.map((r) => r.className)).toEqual(['', '', 'odds-sub']);
+  });
+
+  it('takes a formatter and column headings', () => {
+    const { container } = render(<OddsTable rows={ROWS} headers={['Lot', 'Chances']} format={(o) => `${o * 100} pour cent`} />);
+    expect([...container.querySelectorAll('thead th')].map((h) => h.textContent)).toEqual(['Lot', 'Chances']);
+    expect(container.querySelector('tbody td')?.textContent).toBe('2 pour cent');
+    expect(container.querySelector('caption')).toBeNull();
   });
 });
 
