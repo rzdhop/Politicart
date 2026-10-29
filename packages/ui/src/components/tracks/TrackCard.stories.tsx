@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-import { TrackPreview } from '../../stories/fixtures';
+import { TRACK_CLIMATES, TRACK_FIGURES_BEST, TRACK_LAYOUTS, TrackPreview, TrackThumbnail } from '../../stories/fixtures';
 import { CardGrid } from './CardGrid';
 import { TrackCard } from './TrackCard';
+import { TrackMeta } from './TrackMeta';
 
 const meta = {
   title: 'Tracks/TrackCard',
@@ -18,7 +19,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'A selectable card for one circuit. The whole card is the hit target rather than a link buried in it, and it reports `aria-pressed` so the current choice is announced.',
+          'A selectable card for one circuit: its name, a 16:9 preview (the circuit’s outline while its rendered bird’s-eye thumbnail is on its way, with a light sweep, then the thumbnail), a description and a `TrackMeta`. The whole card is the hit target rather than a link buried in it, and it reports `aria-pressed` so the current choice is announced.',
       },
     },
   },
@@ -38,6 +39,23 @@ export const Default: Story = {
 
 export const Selected: Story = {
   args: { ...Default.args, selected: true },
+};
+
+/** The rendered thumbnail and the circuit's figures, as the circuits screen shows them. */
+export const WithThumbnailAndMeta: Story = {
+  args: {
+    name: 'Montmartre — La Butte',
+    description: 'Montée pavée vers le Sacré-Cœur, place du Tertre et ses peintres.',
+    preview: <TrackThumbnail />,
+    thumb: 'ready',
+    meta: <TrackMeta items={TRACK_FIGURES_BEST} layouts={TRACK_LAYOUTS} layoutsLabel="Tracés" climates={TRACK_CLIMATES} climatesLabel="Climats" />,
+    selected: true,
+  },
+};
+
+/** The outline stands in while the thumbnail renders: the frame carries a slow sweep. */
+export const ThumbnailPending: Story = {
+  args: { ...Default.args, thumb: 'pending' },
 };
 
 /** Name only: no preview, no description. */

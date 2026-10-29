@@ -26,6 +26,16 @@ import { DS, STILL, yAt } from './context.js';
 
 /** The side of the square cells copies are grouped by, in world metres. */
 export const CELL = 200;
+/**
+ * The tinted copies' materials, by the material their prop baked to: r128
+ * keeps one shader program per material and does not look again at whether
+ * the next mesh drawn with it has per-copy colours, so a material shared by a
+ * tinted and an untinted batch draws one of them wrong. Tinted batches get a
+ * copy that only they use.
+ */
+const TINTED = new WeakMap();
+const tintedOf = m => { if (!TINTED.has(m)) TINTED.set(m, m.clone()); return TINTED.get(m); };
+
 /** The batches of the circuit being built, in the order they were opened; flushInstanced empties it. */
 const BATCHES = [];
 
@@ -106,7 +116,7 @@ export function instanced(build, { world = false, tint = false, pad = 2, cell = 
           const sphere = box.getBoundingSphere(new THREE.Sphere());
           sphere.radius += part.radius * Math.max(...group.map(c => c.scale)) + pad;
           g.boundingSphere = sphere;
-          const mesh = new THREE.InstancedMesh(g, part.material, group.length);
+          const mesh = new THREE.InstancedMesh(g, tint ? tintedOf(part.material) : part.material, group.length);
           mesh.castShadow = part.cast; mesh.receiveShadow = part.receive;
           mesh.frustumCulled = true;   // r128 turns it off for instanced meshes; the cell's own bounds make it right
           mesh.name = 'instanced:' + (part.material.name || part.material.type);

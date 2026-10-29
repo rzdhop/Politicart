@@ -12,7 +12,9 @@
 // peloton with the riders around (who swerve together), race off like a
 // delivery rider cutting across, or trundle along wide and slow like a cargo
 // bike. A kart that hits one knocks the rider over and is shaken for a
-// moment.
+// moment. They ride six kinds of machine (BIKE_KINDS: a road bike, a cargo
+// bike, an electric scooter, a delivery rider's, a tandem, a Vélib'), drawn
+// on Math.random like the rest of their looks.
 //
 // Like the crossings, they are simulation state: the game server steps them
 // and sends their positions in each snapshot (netstate.js); a networked
@@ -33,21 +35,67 @@ const OUCH = ['CYCLISTE PERCUTÉ !', 'ATTENTION AU VÉLO !', 'LE CYCLISTE N’AV
 /** How many riders a layout may ask for: the count is clamped to this range. */
 export const RIDERS = { min: 12, max: 28 };
 
-/** A bicycle and its rider, facing +z. */
-function buildBike() {
-  const g = new THREE.Group(); const jersey = pick(JERSEYS);
-  const wg = new THREE.TorusGeometry(0.42, 0.06, 6, 16); wg.rotateY(Math.PI / 2);
-  [0.62, -0.62].forEach(z => { const w = new THREE.Mesh(wg, mat(0x1a1a1a)); w.position.set(0, 0.48, z); g.add(w); });
-  g.add(box(0.07, 0.07, 1.0, 0xb0b4bb, 0, 0.78, 0.05));                         // top tube
-  g.add(box(0.07, 0.5, 0.07, 0xb0b4bb, 0, 0.6, -0.2));                          // seat tube
-  g.add(box(0.07, 0.6, 0.07, 0xb0b4bb, 0, 0.75, 0.55));                         // fork
-  g.add(box(0.6, 0.06, 0.06, 0x333333, 0, 1.08, 0.5));                          // handlebar
-  g.add(box(0.2, 0.08, 0.3, 0x222222, 0, 0.92, -0.22));                         // saddle
-  g.add(box(0.36, 0.55, 0.2, 0x2b2b35, 0, 1.15, -0.15));                        // legs
-  const torso = cyl(0.2, 0.24, 0.7, jersey, 0, 1.55, 0.02, 8); torso.rotation.x = 0.45; g.add(torso);
-  g.add(sph(0.18, pick(SKINS), 0, 1.98, 0.22, 10));                             // head
-  const helmet = sph(0.21, jersey === 0xffffff ? 0xe63946 : 0xffffff, 0, 2.06, 0.2, 10); helmet.scale.y = 0.7; g.add(helmet);
-  [0.18, -0.18].forEach(x => { const arm = box(0.08, 0.08, 0.55, jersey, x, 1.45, 0.32); arm.rotation.x = 0.35; g.add(arm); });
+/** The bikes' kinds (cosmetic only: their count, spawns and speeds are the seeded stream's, their looks Math.random's). */
+export const BIKE_KINDS = Object.freeze(['course', 'cargo', 'trottinette', 'livreur', 'tandem', 'velib']);
+/** How often each kind turns up. */
+const BIKE_MIX = [['course', 3], ['cargo', 1.5], ['trottinette', 2], ['livreur', 2], ['tandem', 0.8], ['velib', 3]];
+const pickBike = () => { let r = Math.random() * BIKE_MIX.reduce((t, [, w]) => t + w, 0); for (const [k, w] of BIKE_MIX) { r -= w; if (r <= 0) return k; } return 'velib'; };
+
+/** Two wheels of radius r at z = front and back, into g. */
+function wheels(g, r, front, back, t = 0.06) { const wg = new THREE.TorusGeometry(r, t, 6, 16); wg.rotateY(Math.PI / 2); [front, back].forEach(z => { const w = new THREE.Mesh(wg, mat(0x1a1a1a)); w.position.set(0, r + 0.06, z); g.add(w); }); }
+/** A rider sitting on a saddle at (0, sy, sz), leaning forward by `lean` radians, hands at z = hz; `helmet` a colour or null. */
+function rider(g, jersey, sy, sz, lean, hz, helmet) {
+  g.add(box(0.36, 0.55, 0.2, 0x2b2b35, 0, sy + 0.23, sz + 0.07));                                          // legs
+  const torso = cyl(0.2, 0.24, 0.7, jersey, 0, sy + 0.63, sz + 0.24, 8); torso.rotation.x = lean; g.add(torso);
+  const hy = sy + 0.63 + Math.cos(lean) * 0.43, hzz = sz + 0.24 + Math.sin(lean) * 0.43;
+  g.add(sph(0.18, pick(SKINS), 0, hy, hzz, 10));                                                            // head
+  if (helmet !== null) { const h = sph(0.21, helmet, 0, hy + 0.08, hzz - 0.02, 10); h.scale.y = 0.7; g.add(h); }
+  [0.18, -0.18].forEach(x => { const arm = box(0.08, 0.08, Math.max(0.3, hz - sz - 0.1), jersey, x, sy + 0.5, (sz + hz) / 2 + 0.1); arm.rotation.x = 0.35; g.add(arm); });
+}
+/** A bicycle (or an electric scooter) of `kind` and its rider(s), facing +z. */
+function buildBike(kind = pickBike()) {
+  const g = new THREE.Group(); const jersey = pick(JERSEYS), helmet = jersey === 0xffffff ? 0xe63946 : 0xffffff;
+  g.userData.bike = kind;
+  if (kind === 'trottinette') {
+    // standing on the deck of an electric scooter, small wheels, a tall stem
+    wheels(g, 0.2, 0.5, -0.45, 0.05);
+    g.add(box(0.16, 0.06, 1.0, 0x2b2b35, 0, 0.32, 0)); g.add(box(0.05, 1.0, 0.05, 0x9a9a9a, 0, 0.82, 0.48)); g.add(box(0.5, 0.05, 0.05, 0x333333, 0, 1.3, 0.48));
+    g.add(box(0.3, 0.8, 0.2, 0x3a5488, 0, 0.76, -0.05));
+    const torso = cyl(0.2, 0.24, 0.7, jersey, 0, 1.52, 0.05, 8); torso.rotation.x = 0.12; g.add(torso);
+    g.add(sph(0.18, pick(SKINS), 0, 2.0, 0.1, 10));
+    [0.18, -0.18].forEach(x => { const arm = box(0.08, 0.08, 0.5, jersey, x, 1.45, 0.28); arm.rotation.x = 0.45; g.add(arm); });
+    return g;
+  }
+  if (kind === 'tandem') {
+    // one long frame, two saddles, two riders in the same jersey
+    wheels(g, 0.42, 0.95, -0.95);
+    g.add(box(0.07, 0.07, 1.9, 0xc8102e, 0, 0.78, 0)); g.add(box(0.07, 0.07, 1.6, 0xc8102e, 0, 0.55, -0.1));
+    for (const z of [0.15, -0.75]) { g.add(box(0.07, 0.5, 0.07, 0xc8102e, 0, 0.6, z)); g.add(box(0.2, 0.08, 0.3, 0x222222, 0, 0.92, z - 0.02)); }
+    g.add(box(0.07, 0.6, 0.07, 0xc8102e, 0, 0.75, 0.88)); g.add(box(0.6, 0.06, 0.06, 0x333333, 0, 1.08, 0.85));
+    rider(g, jersey, 0.92, 0.13, 0.4, 0.85, helmet); rider(g, jersey, 0.92, -0.77, 0.25, 0.0, helmet);
+    return g;
+  }
+  if (kind === 'cargo') {
+    // a bakfiets: a wooden box between the rider and the front wheel, a child in it
+    wheels(g, 0.3, 1.45, -0.62); g.add(box(0.07, 0.07, 2.0, 0x2a2f33, 0, 0.42, 0.4));
+    g.add(box(0.8, 0.5, 0.9, 0x8b5a2b, 0, 0.75, 0.85)); g.add(box(0.07, 0.6, 0.07, 0x2a2f33, 0, 0.72, -0.2)); g.add(box(0.07, 0.7, 0.07, 0x2a2f33, 0, 0.9, 0.35)); g.add(box(0.6, 0.06, 0.06, 0x333333, 0, 1.25, 0.32));
+    g.add(box(0.2, 0.08, 0.3, 0x222222, 0, 1.02, -0.22)); g.add(sph(0.14, pick(SKINS), 0, 1.15, 0.85, 8));
+    rider(g, jersey, 1.02, -0.22, 0.12, 0.32, null);
+    return g;
+  }
+  // the two-wheelers on a diamond or step-through frame
+  const frame = kind === 'velib' ? pick([0x7bc043, 0x2a8fd6]) : kind === 'livreur' ? 0x2a2f33 : kind === 'course' ? pick([0xe63946, 0xf2c14e, 0x1f3a93, 0xffffff]) : 0xb0b4bb;
+  wheels(g, kind === 'velib' ? 0.38 : 0.42, 0.62, -0.62, kind === 'course' ? 0.04 : 0.06);
+  if (kind === 'velib') { g.add(box(0.07, 0.07, 0.9, frame, 0, 0.5, 0.1)); const dn = box(0.07, 0.07, 0.6, frame, 0, 0.75, 0.42); dn.rotation.x = -0.9; g.add(dn); g.add(box(0.5, 0.3, 0.35, 0x2a2f33, 0, 1.0, 0.72)); g.add(box(0.14, 0.04, 0.9, frame, 0, 0.88, -0.55)); }
+  else g.add(box(0.07, 0.07, 1.0, frame, 0, 0.78, 0.05));                                                   // top tube
+  g.add(box(0.07, 0.5, 0.07, frame, 0, 0.6, -0.2));                                                          // seat tube
+  g.add(box(0.07, 0.6, 0.07, frame, 0, 0.75, 0.55));                                                         // fork
+  g.add(box(kind === 'course' ? 0.42 : 0.6, 0.06, 0.06, 0x333333, 0, kind === 'velib' ? 1.15 : 1.08, 0.5));   // handlebar
+  g.add(box(0.2, 0.08, 0.3, 0x222222, 0, 0.92, -0.22));                                                      // saddle
+  if (kind === 'course') rider(g, jersey, 0.92, -0.22, 0.95, 0.5, helmet);
+  else if (kind === 'livreur') { const bag = pick([0x00b8a9, 0xff7f11, 0xe63946]); rider(g, bag, 0.92, -0.22, 0.45, 0.5, 0x222222); g.add(box(0.55, 0.55, 0.5, bag, 0, 1.75, -0.45)); }
+  else if (kind === 'velib') rider(g, jersey, 0.92, -0.22, 0.12, 0.5, null);
+  else rider(g, jersey, 0.92, -0.22, 0.45, 0.5, helmet);
   return g;
 }
 

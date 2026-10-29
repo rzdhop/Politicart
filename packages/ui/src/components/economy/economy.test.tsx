@@ -10,6 +10,7 @@ import { RevealCard } from './RevealCard';
 import { RevealStage } from './RevealStage';
 import { ShopCard } from './ShopCard';
 import { Tabs } from './Tabs';
+import { TrailStrip } from './TrailStrip';
 
 describe('GradeBadge', () => {
   it('sets the grade class, the data attribute and the accessible name from the label', () => {
@@ -455,5 +456,23 @@ describe('Tabs', () => {
     const list = screen.getByRole('tablist');
     expect(list.className).toBe('tabs wide');
     expect(list.id).toBe('shop-tabs');
+  });
+});
+
+describe('TrailStrip', () => {
+  it('names the trail as a picture and carries its kind', () => {
+    const { container } = render(<TrailStrip trail="confetti" label="Confettis" />);
+    const strip = container.firstElementChild as HTMLElement;
+    expect(strip.className).toBe('trail-strip');
+    expect(strip.dataset.trail).toBe('confetti');
+    expect(screen.getByRole('img', { name: 'Confettis' })).toBe(strip);
+    expect(strip.querySelector('.ts-stream')).not.toBeNull();
+    expect(strip.querySelector('.ts-kart')).not.toBeNull();
+  });
+
+  it('is decorative without a label', () => {
+    const { container } = render(<TrailStrip trail="laser" />);
+    expect(container.firstElementChild?.getAttribute('aria-hidden')).toBe('true');
+    expect(container.firstElementChild?.getAttribute('role')).toBeNull();
   });
 });

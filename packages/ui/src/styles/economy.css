@@ -600,3 +600,102 @@
   .shop-card .shop-foot { flex-direction:column; align-items:stretch; }
   .shop-card .shop-foot .btn { width:100%; }
 }
+
+/* TrailStrip (stage 8): a kart's trail, previewed in CSS. The stream is a
+   background layer that fx.css scrolls; here it stands still. */
+
+.trail-strip {
+  position:relative;
+  display:block;
+  width:100%;
+  height:100%;
+  min-height:56px;
+  overflow:hidden;
+  border-radius:8px;
+  background:linear-gradient(#3a3b40,#2c2d31);
+}
+
+.trail-strip::after {
+  content:'';
+  position:absolute;
+  left:0;
+  right:0;
+  top:50%;
+  height:2px;
+  background:repeating-linear-gradient(90deg,rgba(246,241,228,.5) 0 14px,transparent 14px 30px);
+  transform:translateY(16px);
+}
+
+.trail-strip .ts-kart {
+  position:absolute;
+  right:10%;
+  top:50%;
+  width:34px;
+  height:16px;
+  margin-top:-8px;
+  border-radius:6px 9px 9px 6px;
+  background:var(--gold);
+  box-shadow:-4px 7px 0 -3px #0c1230,10px 7px 0 -3px #0c1230;
+}
+
+.trail-strip .ts-stream {
+  position:absolute;
+  left:0;
+  right:calc(10% + 30px);
+  top:50%;
+  height:22px;
+  margin-top:-11px;
+  background-repeat:repeat-x;
+  -webkit-mask:linear-gradient(90deg,transparent,#000 45%);
+  mask:linear-gradient(90deg,transparent,#000 45%);
+}
+
+.trail-strip[data-trail=ribbon] .ts-stream {
+  height:12px;
+  margin-top:-6px;
+  background-image:linear-gradient(#1f3a93 0 33%,#fffaf0 33% 66%,#c8102e 66%);
+  background-size:40px 100%;
+}
+
+.trail-strip[data-trail=smoke] .ts-stream {
+  height:30px;
+  margin-top:-15px;
+  background-image:
+    radial-gradient(circle at 20px 15px,rgba(210,210,215,.8) 0 9px,transparent 10px),
+    radial-gradient(circle at 46px 11px,rgba(170,170,180,.7) 0 7px,transparent 8px),
+    radial-gradient(circle at 34px 21px,rgba(190,190,198,.6) 0 6px,transparent 7px);
+  background-size:60px 30px;
+}
+
+.trail-strip[data-trail=sparkles] .ts-stream {
+  background-image:
+    radial-gradient(circle at 8px 6px,#fff3b0 0 1.6px,transparent 2.4px),
+    radial-gradient(circle at 26px 16px,#f2c14e 0 2px,transparent 2.8px),
+    radial-gradient(circle at 40px 8px,#fff 0 1.2px,transparent 2px);
+  background-size:48px 22px;
+}
+
+.trail-strip[data-trail=confetti] .ts-stream {
+  height:28px;
+  margin-top:-14px;
+  background-image:
+    linear-gradient(30deg,transparent 45%,#ff4fd8 45% 55%,transparent 55%),
+    linear-gradient(-40deg,transparent 45%,#4fa3ff 45% 55%,transparent 55%),
+    linear-gradient(70deg,transparent 46%,#f2c14e 46% 54%,transparent 54%),
+    linear-gradient(10deg,transparent 46%,#9ad04f 46% 54%,transparent 54%);
+  background-size:22px 14px,26px 18px,18px 28px,30px 12px;
+  background-position:0 0,7px 9px,13px 2px,4px 15px;
+}
+
+.trail-strip[data-trail=laser] .ts-stream {
+  height:6px;
+  margin-top:-3px;
+  border-radius:3px;
+  background-image:linear-gradient(90deg,#ff4fd8,#4fa3ff 50%,#ff4fd8);
+  background-size:80px 100%;
+  box-shadow:0 0 10px 2px rgba(79,163,255,.65);
+}
+
+.trail-strip[data-trail=none] .ts-stream { display:none; }
+
+.shop-card .shop-image .trail-strip { min-height:0; }

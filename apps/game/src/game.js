@@ -27,8 +27,9 @@ import { setInputSource } from './engine/input.js';
 import { getState, onTransition } from './engine/machine.js';
 import { renderLootbox } from './engine/boxgate.js';
 import { isNetRace, netStep } from './engine/netrace.js';
-import { launching, renderPreview, showsTurntable, stageInfo, warmStage } from './engine/stagegate.js';
+import { launching, renderPreview, showsTurntable, stageInfo, stageStill, warmStage } from './engine/stagegate.js';
 import { prebuildFrame, prebuildStatus, primeCountdown } from './engine/prebuild.js';
+import { BUDGET_MS as THUMB_BUDGET_MS, setStillProbe, thumbsFrame, thumbStatus } from './engine/thumbs.js';
 import { endRace, renderRace, stepRace } from './engine/race.js';
 import { clearCanvas, getRenderer } from './engine/render.js';
 import { G } from './engine/state.js';
@@ -70,12 +71,11 @@ function updateHUD(p) {
   if (p.powerReady !== lastPowerReady || p.god !== lastGod) { lastPowerReady = p.powerReady; lastGod = p.god; h.power.setReady(p.powerReady); h.power.setKeyHint(p.god ? 'F · MODE DIEU' : p.powerReady ? 'F · PRÊT !' : 'F · recharge'); }
   h.power.setName(p.powerName);
   h.center.setText(p.announce);
-  // the layout the seed drew (DEC-049) reads under the countdown, through the hint line; the engine's own hint takes over at the green light
-  if (p.state === 'countdown' && p.layoutName && p.layoutName !== lastLayoutShown) { lastLayoutShown = p.layoutName; setHint('Tracé du jour : « ' + p.layoutName + ' »'); }
-  else if (p.state !== 'countdown' && lastLayoutShown) { lastLayoutShown = ''; setHint('Ramassez une urne dorée pour obtenir un objet.'); }
+  // the layout the seed drew (DEC-049): its own readout under the countdown (shown at the countdown and in the pause, see onTransition below)
+  if (p.layoutName !== lastLayoutShown) { lastLayoutShown = p.layoutName; h.layout?.setName(p.layoutName); }
   h.wrong.setVisible(p.wrongWay);
-  // a team race's connection (DEC-052): the round trip and how far behind the others are drawn; nothing in solo play
-  h.net?.setText(p.net ? 'ping ' + (p.net.rtt ?? '…') + ' ms · délai ' + p.net.delay + ' ms' : '');
+  // a team race's connection (DEC-052): the round trip and how far behind the others are drawn, coloured by the round trip; hidden in solo play
+  h.net?.setLatency(p.net ? { rtt: p.net.rtt ?? null, delay: p.net.delay } : null);
   // the touch buttons carry the item and the power state themselves (the HUD's own slots make way for them)
   touchHud.item?.(shown.split('|')[0], !!p.item && !p.itemRolling);
   touchHud.power?.(1 - p.powerCd / p.powerCdMax, p.powerReady);
@@ -100,6 +100,7 @@ function updateHudMotion(p) {
 // is this writer's frame clock.
 const banners = createBannerQueue();
 function setHint(t) { if (hud.hint) hud.hint.setText(t); }
+const HINT = 'Ramassez une urne dorée pour obtenir un objet.';
 function toast(t) { banners.push(t); }
 function tickToast(dt) { const r = banners.tick(dt); if (!r || !hud.toast) return; if (r.show) hud.toast.show(r.show); else if (r.hide) hud.toast.hide(); }
 
@@ -169,7 +170,9 @@ if (isCoarsePointer()) actions.togglePoly();
 // catch-up after a pause, so the first frame back is not a 0.05 s jump.
 onTransition((to, from) => {
   if (from === 'paused') lastFrame = performance.now();
-  if (to === 'countdown' && from !== 'paused') { banners.clear(); if (hud.toast) hud.toast.hide(); }   // a new race starts with a clean ribbon
+  // the layout's name shows under the countdown and while paused, never during the race itself
+  hud.layout?.setVisible(to === 'countdown' || to === 'paused');
+  if (to === 'countdown' && from !== 'paused') { banners.clear(); if (hud.toast) hud.toast.hide(); setHint(HINT); }   // a new race starts with a clean ribbon and the opening hint
 });
 
 // ---------- Screens: mount ----------
@@ -193,6 +196,10 @@ let lastFrame = performance.now();
  */
 let titleIdle = 0;
 const WARM_AFTER = 0.8;
+/** The work a menu frame may do ahead (the pre-build, then the thumbnails), ms. */
+const FRAME_SHARE_MS = 12;
+// The thumbnails stand aside on a GPU the select stage's governor stood still (DEC-046).
+setStillProbe(stageStill);
 function frame(now) {
   requestAnimationFrame(frame);
   // clamped both ways: the first rAF timestamp can predate lastFrame, and a negative step would run time backwards (PLAN 1.2 A.1)
@@ -207,7 +214,12 @@ function frame(now) {
   if (state === 'lootbox') { renderLootbox(dt); return; }
   // The chosen circuit is built ahead, a slice per frame, while the player sits on the circuits, in the lobby or on the
   // results (engine/prebuild.js, DEC-055); the stage's launch keeps its frames to itself. Drawn over or cleared below.
-  if (state === 'tracks' || state === 'lobby' || state === 'results') prebuildFrame({ renderer: getRenderer(), budget: launching() ? 0 : undefined });
+  if (state === 'tracks' || state === 'lobby' || state === 'results') {
+    const t0 = performance.now(), launch = launching();
+    prebuildFrame({ renderer: getRenderer(), budget: launch ? 0 : undefined });
+    // the circuits' thumbnails get what the pre-build left of the frame's share, at most their own budget (engine/thumbs.js)
+    if (state === 'tracks' && !launch) { const left = Math.min(THUMB_BUDGET_MS, FRAME_SHARE_MS - (performance.now() - t0)); thumbsFrame({ renderer: getRenderer(), budget: left >= 1.5 ? left : 0 }); }
+  }
   if (showsTurntable(state) || (state === 'tracks' && launching())) { renderPreview(dt); return; }
   if (state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'dashboard' || state === 'shop') { clearCanvas(); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
@@ -234,4 +246,5 @@ requestAnimationFrame(frame);
 // stage() is read-only too: the select stage as its last frame drew it (preview.js stageInfo): the candidate,
 // the podium's yaw, the frame's draw calls, triangles and programs, the model's box on screen, the portraits.
 // prebuild() is read-only: the circuit being built ahead (prebuild.js prebuildStatus), its phase and timings.
-window.__kr = { endRace, karts: () => (G.karts || []).map(k => ({ charId: k.def.id, style: { ...k.style } })), stage: () => stageInfo(), prebuild: () => prebuildStatus() };
+// thumbs() is read-only: the circuits' thumbnails (thumbs.js thumbStatus): how many are rendered, the slices' cost.
+window.__kr = { endRace, karts: () => (G.karts || []).map(k => ({ charId: k.def.id, style: { ...k.style } })), stage: () => stageInfo(), prebuild: () => prebuildStatus(), thumbs: () => thumbStatus() };

@@ -11,6 +11,9 @@ Approved by the owner 2026-10-29 (answers Q1-Q6 in the table below). Copied from
 | 5 | `wt/load` → `f2a293a` | Chunks (three / react / engine-race / engine-stage / engine-box / screens-admin), CSS splash, immutable + brotli/gzip static serving with ETag, `prebuild.js` slices with shader priming, countdown priming; game 1002. |
 | 6 | `wt/box` → `cd2e367` | Politibox on the hemicycle stage: tease by grade, bundle ×5 at 550, ring of the last ten drops, nine sounds, RevealStage/RevealCard/DropHistory/OddsTable; wave 1 tip: game 1020, server 177, ui 387. |
 | 2 | `wt/look` → `78c2cfd` | 18 procedural surfaces with normal maps by tier, six climates, cached signs and kart canvases, per-race disposal; game 989 on the integrated tip. |
+| 5b | `797d582` | Fix found by the wave-1 E2E (R-25, circuits screen 140-170 ms): the pre-build ran whole phases per step (90-330 ms); surfaces now bake ahead a few rows a step, every heavy phase and the circuit builders (now generators) yield inside; circuits screen 16-18 ms, longest step 52-60 ms. Then `5fe947c`/`ba48803`: `decor/instanced.js` (instanced batches per 200 m cell, `fromBuilder`) for stage 7. |
+| 3 | `wt/net` → merged | Numbered inputs, local prediction + reconciliation (`predict.js`), adaptive delay (100-219 ms under 0-6 ticks of jitter), ping (`#h-net`), snapshot 4.1-4.5 kB → 1.40-1.65 kB per player, stringified once, `bufferedAmount` skip, `SNAP_EVERY = 2` (30 Hz, measured 2.80-2.95 ms CPU per race-second), `PROTOCOL` 3, `POLITIKART_TEST_DELAY_MS`; game 1045, server 182. |
+| 4 | `wt/vfx` → `865aba6` | `vfx.js` (17 kinds, 8 pooled instanced layers, ≤ 8 draws), an effect at use and impact for every item and power, persistent status visuals, AI wind-up line, 11 synthesized sounds, `vfx` channel + status fields on the wire, `HitVignette`/`StatusBadges`, HUD keyframes; integrated tip: ui 402 + 8, game 1141, server 183. |
 
 ## Owner's answers (2026-10-29)
 
