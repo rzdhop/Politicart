@@ -35,6 +35,7 @@ export function updateProgress(k) {
   const N = G.N; let best = k.idx, bestD = Infinity;
   for (let o = -16; o <= 16; o++) { const i = (k.idx + o + N) % N; const s = G.samples[i]; const d = (k.pos.x - s.x) ** 2 + (k.pos.z - s.z) ** 2; if (d < bestD) { bestD = d; best = i; } }
   const prev = k.idx; k.idx = best;
+  if (G.replaying) { k.progress = k.lap + best / N; return; }   // a networked client's replay (DEC-052): laps and the finish are the server's
   if (prev > N * 0.8 && best < N * 0.2) {
     k.lap++;
     if (k.lap > k.maxLap) {
@@ -158,11 +159,12 @@ export function updateKart(k, dt) {
   k.bump = Math.max(0, (k.bump || 0) - dt); k.bumpCd = Math.max(0, (k.bumpCd || 0) - dt);
   k.shield = Math.max(0, (k.shield || 0) - dt); k.rabot = Math.max(0, (k.rabot || 0) - dt); k.capped = Math.max(0, (k.capped || 0) - dt);
   if (k.relance > 0) { k.relanceTimer -= dt; if (k.relanceTimer <= 0) { k.relance--; k.relanceTimer = 1.1; k.boost = 0.7; k.boostPower = 1.45; sfxFor(k, 'boost'); } }
-  if (k.god && !k.item && k.itemRolling <= 0 && !k.pendingItem) { k.pendingItem = rollItem(k.rank); k.itemRolling = GOD_ITEM_DELAY; }   // creative mode: the next item is always on its way
-  if (k.itemRolling > 0) { k.itemRolling -= dt; if (k.itemRolling <= 0) { k.item = k.pendingItem; k.pendingItem = null; if (!k.isAI) { sfxFor(k, 'pick'); hintFor(k, ITEMS[k.item].hint); } else k.itemTimer = rand(0.8, 4); } }
+  if (!G.replaying && k.god && !k.item && k.itemRolling <= 0 && !k.pendingItem) { k.pendingItem = rollItem(k.rank); k.itemRolling = GOD_ITEM_DELAY; }   // creative mode: the next item is always on its way
+  // the roll is the server's: a replay keeps the item the snapshot names
+  if (k.itemRolling > 0 && !G.replaying) { k.itemRolling -= dt; if (k.itemRolling <= 0) { k.item = k.pendingItem; k.pendingItem = null; if (!k.isAI) { sfxFor(k, 'pick'); hintFor(k, ITEMS[k.item].hint); } else k.itemTimer = rand(0.8, 4); } }
 
   k.rampSlope = onRamp ? onRamp.slope : k.air ? 0 : Math.atan(s.slope);           // the mesh pitches with the plank or the road
-  updateKartVisual(k, dt, sf);
+  if (!G.replaying) updateKartVisual(k, dt, sf);                                  // a replayed tick is not drawn: the frame poses the kart once (netrace.js)
 }
 
 /**

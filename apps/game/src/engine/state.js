@@ -21,6 +21,8 @@ import { getState } from './machine.js';
 export const CFG = { roadHalfWidth: 15, samples: 1800, laps: 3, numAI: 5, powerCooldown: 24, bikeLane: { inner: 10.3, outer: 13.9 } };
 /** The bike lane's lateral offsets on a road of half-width `hw`: 4.7 m to 1.1 m in from the right-hand kerb. */
 export const bikeLaneOf = hw => ({ inner: hw - 4.7, outer: hw - 1.1 });
+/** The simulation's fixed step: the server's race worker ticks at 60 Hz, and a networked client predicts its own kart at the same step (DEC-052). */
+export const STEP = 1 / 60;
 
 /**
  * Graphics detail. 'high' adds segments and shadows, 'low' lightens both.
@@ -50,6 +52,9 @@ export const G = {
   // The race's climate (climate.js applyClimate): the preset applied, the sun's offset from the followed kart, the lamp heads
   // the decor registered (lit at night), and what the race allocated and frees with its scene (disposable, race.js disposeScene).
   climate: null, sunOffset: null, lamps: [], disposables: [],
+  // True while a networked client re-simulates its own kart (predict.js, DEC-052): messages, sounds, laps,
+  // the item roll and the mesh's pose are the server's word or the frame's, so the step leaves them alone.
+  replaying: false,
 };
 Object.defineProperty(G, 'state', { enumerable: true, get: getState });
 /** The next entity id: hazards and projectiles carry one so a snapshot can name them (DEC-014); static obstacles take theirs at build. */
