@@ -49,6 +49,18 @@
     "AdminGrid": {
       "cardMode": "column"
     },
+    "HitVignette": {
+      "cardMode": "column"
+    },
+    "LayoutReadout": {
+      "cardMode": "column"
+    },
+    "DropHistory": {
+      "cardMode": "column"
+    },
+    "OddsTable": {
+      "cardMode": "column"
+    },
     "Screen": {
       "cardMode": "single",
       "primaryStory": "TitleScreen"
