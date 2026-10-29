@@ -29,6 +29,7 @@ import { transition } from './machine.js';
 import { buildMinimapBase, drawMinimap } from './minimap.js';
 import { framePayload } from './payload.js';
 import { kartCollisions, updateKart, updateRanks } from './physics.js';
+import { applyPrebuilt, takePrebuilt } from './prebuild.js';
 import { setCast } from './primitives.js';
 import { camera, getRenderer } from './render.js';
 import { CFG, G, SHADOWS } from './state.js';
@@ -72,17 +73,21 @@ export function startRace() {
  * kart (DEC-030: neutral, untouchable, no cooldown); the `local` slot becomes G.player,
  * the kart this screen follows. Solo play passes five AI and the player
  * last; the game server and its clients pass the lobby's roster (DEC-014).
+ * `seed` is the race's layout seed (0 until the seeded layouts land): part
+ * of the key a circuit built ahead must match (prebuild.js, DEC-055).
  */
-export function startField(slots) {
+export function startField(slots, { seed = 0 } = {}) {
   if (G.scene) disposeScene(G.scene);
   const track = TRACKS[G.trackIdx]; G.track = track;
-  const scene = new THREE.Scene(); scene.background = new THREE.Color(track.fog); scene.fog = new THREE.Fog(track.fog, 220, 700);
+  // DEC-055: the circuit built ahead while the player chose (prebuild.js), when it is this one at this detail and seed; else built below as before.
+  const pre = takePrebuilt({ trackIdx: G.trackIdx, seed });
+  const scene = pre ? pre.scene : new THREE.Scene(); scene.background = new THREE.Color(track.fog); scene.fog = new THREE.Fog(track.fog, 220, 700);
   scene.add(new THREE.HemisphereLight(0xdfefff, 0x55663a, 0.55));
   scene.add(new THREE.AmbientLight(0xffffff, 0.15));
   const sun = new THREE.DirectionalLight(0xfff4d6, 1.15); sun.position.set(120, 200, 80); scene.add(sun); scene.add(sun.target);
   sun.castShadow = SHADOWS(); sun.shadow.mapSize.set(2048, 2048); const sc = sun.shadow.camera; sc.left = -110; sc.right = 110; sc.top = 110; sc.bottom = -110; sc.near = 10; sc.far = 500; sun.shadow.bias = -0.0006;
   G.sun = sun; G.scene = scene; G.animated = []; G.hazards = []; G.projectiles = []; G.crowd = [];
-  setCast(true); buildTrack(scene, track);
+  if (pre) applyPrebuilt(pre); else { setCast(true); buildTrack(scene, track); }
   buildMinimapBase();
 
   G.karts = slots.map(sl => { const k = makeKart(sl.def, sl.isAI, sl.style); k.team = sl.team ?? null; k.god = sl.god === true; return k; });

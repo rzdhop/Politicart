@@ -148,8 +148,29 @@ function bikeLane(scene, track, strip) {
 
 // ---------- Track construction ----------
 /** Build circuit `track` into `scene`. `fold` (default: on "légers") folds the still decor into fewer draws (foldStill). */
-export function buildTrack(scene, track, { fold = getPoly() === 'low' } = {}) {
+export function buildTrack(scene, track, opts = {}) {
+  for (const _phase of buildTrackPhases(scene, track, opts)) { /* every phase, at once */ }
+}
+
+/**
+ * The names of buildTrack's phases, in order: what buildTrackPhases yields
+ * after each. The pre-build (prebuild.js) runs them one or a few per frame.
+ */
+export const TRACK_PHASES = Object.freeze(['textures', 'road', 'strips', 'furniture', 'features', 'cyclists', 'decor', 'fold']);
+
+/**
+ * buildTrack as a generator: the same statements in the same order, with a
+ * yield between phases (named as TRACK_PHASES), so the pre-build can spread
+ * the work over frames while the player is still choosing (DEC-055). The
+ * output is the build's, phase by phase or all at once: no draw of
+ * Math.random, no registration into G moves. Between two phases the scene
+ * is half built and G's samples, crowd, hazards and the rest are the ones
+ * this build is filling: the caller owns G meanwhile (prebuild.js swaps the
+ * fields in and out around every slice).
+ */
+export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low' } = {}) {
   textures(); STILL.length = 0;
+  yield TRACK_PHASES[0];
   // The circuit is drawn at track.scale; CFG.samples grows with it so the
   // samples stay about as far apart as before and every distance counted in
   // samples (feature lengths, AI look-ahead, power offsets) keeps its meaning.
@@ -171,6 +192,7 @@ export function buildTrack(scene, track, { fold = getPoly() === 'low' } = {}) {
   const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); rg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); rg.setIndex(idx); rg.computeVertexNormals();
   // the cobbles are tinted down: the pale stones would otherwise wash out next to the pavement
   const road = new THREE.Mesh(rg, new THREE.MeshStandardMaterial({ map: roadTex, color: track.cobble ? 0x8f8a82 : 0xffffff, roughness: 0.95, side: THREE.DoubleSide })); road.receiveShadow = true; scene.add(road);
+  yield TRACK_PHASES[1];
 
   function strip(inner, outer, y0, y1, period, sideSign, c1, c2, rough) {
     const p = [], col = [], ix = []; const A = new THREE.Color(c1), B = new THREE.Color(c2);
@@ -200,6 +222,7 @@ export function buildTrack(scene, track, { fold = getPoly() === 'low' } = {}) {
   const gt = (track.gravel ? TEX.gravel : TEX.grass).clone(); gt.needsUpdate = true; gt.repeat.set(280, 280);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(3200, 3200), new THREE.MeshStandardMaterial({ map: gt, roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
   cloudsAndSky(scene, track.sky[0], track.sky[1]);
+  yield TRACK_PHASES[2];
 
   // item boxes: rows of 4 golden urns across the wide road, four rows unless the track lists more
   G.itemBoxes = [];
@@ -213,15 +236,20 @@ export function buildTrack(scene, track, { fold = getPoly() === 'low' } = {}) {
   grandstand(scene, 0, 1);
   crowdZone(scene, N - 30, N + 30, -1, true);
   [0.28, 0.5, 0.74].forEach((f, i) => crowdZone(scene, Math.floor(N * f), Math.floor(N * f) + 36, i % 2 ? 1 : -1, false));
+  yield TRACK_PHASES[3];
 
   buildFeatures(scene, track);
+  yield TRACK_PHASES[4];
   buildCyclists(scene);
   for (const c of G.cyclists) still(c.mesh);   // a rider moves and falls as a whole
+  yield TRACK_PHASES[5];
   // themed decor, laid out at scale 1 and then spread out to the circuit's scale
   const decor = new THREE.Group();
   (BUILDERS[track.id] ?? BUILDERS.versailles)(decor, scene);
   spreadDecor(decor, scene, S);
+  yield TRACK_PHASES[6];
   if (fold) foldStill(scene); else STILL.length = 0;
+  yield TRACK_PHASES[7];
 }
 
 /** The road's surface texture: gravel for the park, cobbles for the butte, asphalt elsewhere. */

@@ -26,6 +26,7 @@ import { useItem as engineUseItem } from '../engine/items.js';
 import { usePower as engineUsePower } from '../engine/powers.js';
 import { CHARACTERS, TRACKS } from '../engine/data.js';
 import { hasPreview, launch, makeThumbs, setPreview } from '../engine/stagegate.js';
+import { requestPrebuild } from '../engine/prebuild.js';
 import { STARTERS } from '../engine/progress.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
@@ -327,7 +328,11 @@ onTransition((to: string, from: string) => {
   if (to === 'results' && from === 'race' && soloRace) reportSoloRace();
 });
 
-net.onNet((view: NetView) => set({ net: view }));
+net.onNet((view: NetView) => {
+  set({ net: view });
+  // The lobby's circuit is built ahead while the players get ready (prebuild.js, DEC-055); the race itself keys on the seed.
+  if (view.room && view.room.phase === 'lobby' && getState() === 'lobby') requestPrebuild(view.room.trackIdx);
+});
 onNetResults((r: NetResults) => set({ netResults: r }));
 
 /**
@@ -546,6 +551,7 @@ export const actions = {
   selectTrack(i: number) {
     G.trackIdx = i;
     set({ trackIdx: i });
+    requestPrebuild(i);   // built ahead while the player reads the cards (prebuild.js, DEC-055)
   },
   /** "Graphismes": the stage is rebuilt at the new tier (the old one disposed), and the portraits with it. */
   togglePoly() {
