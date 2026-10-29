@@ -172,7 +172,8 @@ body{--note-h:34px;--note-room:calc(8px + var(--note-h) + 6px + env(safe-area-in
 #s-select>:first-child{margin-top:0;}
 /* Upright phones: the circuit cards stack, so their previews stay short. */
 @media (max-width:600px){
-  #s-tracks .card canvas{max-height:24vh;object-fit:contain;}
+  #s-tracks .card .track-thumb{max-height:24vh;}
+  #s-tracks .card .track-thumb canvas{object-fit:contain;}
 }
 /* Phones held sideways: the title, the circuits and the other menus shrink to the short side. */
 @media (max-height:520px) and (orientation:landscape){
@@ -181,8 +182,10 @@ body{--note-h:34px;--note-room:calc(8px + var(--note-h) + 6px + env(safe-area-in
   #s-title .controls{font-size:12px;gap:4px 14px;}
   #s-tracks .card{padding:8px;gap:6px;}
   #s-tracks .card .name{font-size:15px;}
-  #s-tracks .card canvas{max-height:30vh;object-fit:contain;}
+  #s-tracks .card .track-thumb{max-height:30vh;}
+  #s-tracks .card .track-thumb canvas{object-fit:contain;}
   #s-tracks .card .desc{font-size:11px;line-height:1.25;}
+  #s-tracks .card .track-layouts{display:none;}   /* the figures stay; the layouts' names are the countdown's to tell */
   #s-tracks>h2,#s-results>h2,#s-lobby>h2,#s-admin>h2{font-size:22px!important;}
   #s-results .results-table{font-size:13px;}
   #s-results .results-table td,#s-results .results-table th{padding:3px 8px;}
