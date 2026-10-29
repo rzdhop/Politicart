@@ -165,7 +165,7 @@ describe('a networked race on the client', () => {
     for (const s of SNAPS.slice(0, 20)) receiveSnap({ s, ev: [], fx: [] });
     netStep(1 / 60);
     expect(G.scene.children).toContain(mesh);                                       // still listed: still there
-    const mown = SNAPS.slice(20, 40).map(s => ({ ...s, h: s.h.filter(h => h.id !== victim.id) }));   // the server's fauchage removed it
+    const mown = SNAPS.slice(20, 40).map(s => ({ ...s, hs: s.hs.filter(id => id !== victim.id) }));   // the server's fauchage removed it
     for (const s of mown) receiveSnap({ s, ev: [], fx: [] });
     netStep(1 / 60);
     expect(G.scene.children).not.toContain(mesh);

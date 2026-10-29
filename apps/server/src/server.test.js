@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 
 import { startServer } from './server.js';
+import { openFileStore } from './store.js';
 
 // A client that records every message and can wait for one matching a test.
 function client(port) {
@@ -77,7 +78,7 @@ describe('http', () => {
   it('answers the probe the client uses to show the Multijoueur button', async () => {
     const r = await fetch(url('/api/kr'));
     expect(r.status).toBe(200);
-    expect(await r.json()).toMatchObject({ kr: 'server', protocol: 2 });
+    expect(await r.json()).toMatchObject({ kr: 'server', protocol: 3 });
   });
 
   it('lets a page on another origin read the probe', async () => {
@@ -362,5 +363,73 @@ describe('friends', () => {
     g.send({ t: 'friendAdd', name: ua.name });
     expect((await g.next(m => m.t === 'error')).msg).toMatch(/Connectez-vous/);
     a.close(); b.close(); g.close();
+  });
+});
+
+// DEC-052: a race's controls and the round-trip pings go past the per-connection queue,
+// snapshots go out already stringified and skip a socket that has not drained.
+describe('race traffic', () => {
+  /** A server of its own (options for startServer), an account in a room of its own, and the race started there. */
+  async function racing(opts = {}) {
+    const store = opts.store ?? openFileStore(null);
+    const own = await startServer({ port: 0, host: '127.0.0.1', staticDir: dir, runRace: fakeRace, loginTries: 1000, ...opts, store });
+    const r = await fetch(`http://127.0.0.1:${own.port}/api/register`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Pilote' + (++seq), password: 'secret1' }) });
+    const { token } = await r.json();
+    const c = client(own.port); await c.open;
+    c.send({ t: 'hello', token }); const welcome = await c.next(m => m.t === 'welcome', 5000);
+    c.send({ t: 'create' }); await c.next(isRoom(() => true));
+    c.send({ t: 'start' }); await c.next(isRoom(room => room.phase === 'race'));
+    return { own, c, token, welcome, race: races.at(-1) };
+  }
+
+  it('answers a ping at once with its number and time', async () => {
+    const c = await hello('Pingueur');
+    c.send({ t: 'ping', n: 7, at: 1234.5 });
+    expect(await c.next(m => m.t === 'pong')).toEqual({ t: 'pong', n: 7, at: 1234.5 });
+    c.close();
+  });
+
+  it('hands an input to the race, and answers a ping, while a slow hello is still being looked up', async () => {
+    const base = openFileStore(null); let slow = false;
+    const store = { ...base, sessionUser: t => (slow ? new Promise(ok => setTimeout(() => ok(base.sessionUser(t)), 400)) : base.sessionUser(t)) };
+    const { own, c, token, race } = await racing({ store });
+    try {
+      slow = true;
+      c.send({ t: 'hello', token });                                    // a re-login: the store takes 400 ms
+      c.send({ t: 'input', seq: 1, c: { throttle: true } });
+      c.send({ t: 'ping', n: 1, at: 1 });
+      await c.next(m => m.t === 'pong', 300);                           // well before the hello's answer
+      expect(race.inputs.map(([, m]) => m)).toEqual([{ t: 'input', seq: 1, c: { throttle: true } }]);
+      expect(c.seen.some(m => m.t === 'welcome')).toBe(false);
+      await c.next(m => m.t === 'welcome', 2000);
+    } finally { c.close(); await own.close(); }
+  });
+
+  it('holds inputs back by POLITIKART_TEST_DELAY_MS when it is set, and only then', async () => {
+    const { own, c, race } = await racing({ inputDelayMs: 150 });
+    try {
+      const t = Date.now();
+      c.send({ t: 'input', seq: 1, c: {} });
+      c.send({ t: 'ping', n: 1, at: 1 }); await c.next(m => m.t === 'pong');   // pings are not held back
+      expect(race.inputs).toHaveLength(0);
+      for (let n = 0; n < 40 && !race.inputs.length; n++) await new Promise(ok => setTimeout(ok, 25));
+      expect(race.inputs).toHaveLength(1);
+      expect(Date.now() - t).toBeGreaterThanOrEqual(140);
+    } finally { c.close(); await own.close(); }
+  });
+
+  it('sends a stringified snapshot as it is, and skips it for a socket over the backlog limit', async () => {
+    const open = await racing();
+    try {
+      open.race.io.sendRaw(open.welcome.id, '{"t":"snap","s":{"tk":3},"ev":[],"fx":[]}');
+      expect(await open.c.next(m => m.t === 'snap')).toEqual({ t: 'snap', s: { tk: 3 }, ev: [], fx: [] });
+    } finally { open.c.close(); await open.own.close(); }
+    const full = await racing({ maxBuffered: -1 });                     // every socket counts as backed up
+    try {
+      full.race.io.sendRaw(full.welcome.id, '{"t":"snap","s":{"tk":3},"ev":[],"fx":[]}');
+      full.race.io.send(full.welcome.id, { t: 'notice', msg: 'après' });  // the other messages still go
+      await full.c.next(m => m.t === 'notice' && m.msg === 'après');
+      expect(full.c.seen.some(m => m.t === 'snap')).toBe(false);
+    } finally { full.c.close(); await full.own.close(); }
   });
 });

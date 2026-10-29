@@ -4,7 +4,7 @@
 // grid it was sent (startField, its own slot as G.player) and from then on
 // simulates nothing: each frame it blends the two snapshots around a render
 // tick ~100 ms behind the newest one (netstate.js), writes the result into
-// its karts, poses the meshes, mirrors hazards, projectiles, ballot boxes,
+// its karts (its own with the private block only it is sent), poses the meshes, mirrors hazards, projectiles, ballot boxes,
 // crossings and cyclists, and runs the same view half as solo play (camera, HUD payload,
 // minimap). Its own controls go to the server 30 times a second; item and
 // power presses travel as running counts, so a lost or repeated message can
@@ -35,7 +35,8 @@ let presses = { item: 0, power: 0 };
 let lastSent = 0, lastKey = '';
 let drawn = false;               // has a frame of this race been drawn yet?
 let hazards = new Map(), projectiles = new Map();
-let staticIds = new Set();       // the layout's own obstacles (DEC-049): built with the circuit, dropped when a snapshot stops listing them (mown)
+let statics = new Map();         // the layout's own obstacles (DEC-049), id -> mesh: built with the circuit, dropped when a snapshot stops naming them (mown)
+let me = null;                   // our kart's private block, from the newest snapshot (netstate.js encodeKartPrivate)
 let resultsListener = null;
 let lastResults = null;
 
@@ -57,9 +58,9 @@ export function pressPower() { presses.power++; }
 
 function clearEntities() {
   // the static obstacles stay: they are part of the circuit the results screen keeps on show
-  for (const [id, m] of hazards) if (!staticIds.has(id)) G.scene?.remove(m);
+  for (const m of hazards.values()) G.scene?.remove(m);
   for (const m of projectiles.values()) G.scene?.remove(m);
-  hazards = new Map(); projectiles = new Map(); staticIds = new Set();
+  hazards = new Map(); projectiles = new Map(); statics = new Map();
 }
 
 /**
@@ -79,11 +80,11 @@ export function beginNetRace(m) {
     return { def, isAI: s.isAI, team: s.team, god: s.god === true, local: i === m.you, ...(s.style ? { style: playerStyle(def, s.style) } : {}) };
   });
   active = true; buffer = []; newest = { tk: 0, at: now() }; presses = { item: 0, power: 0 }; lastSent = 0; lastKey = ''; drawn = false;
-  lastResults = null; hazards = new Map(); projectiles = new Map();
+  lastResults = null; hazards = new Map(); projectiles = new Map(); statics = new Map(); me = null;
   G.netSlot = m.you; G.netRoster = m.roster;
   startField(slots, { seed: m.seed });          // ends with the transition into 'countdown'
-  // the circuit's own obstacles start the hazard map, by the ids the server's identical build gave them
-  for (const h of G.hazards) { hazards.set(h.id, h.mesh); staticIds.add(h.id); }
+  // the circuit's own obstacles, by the ids the server's identical build gave them
+  for (const h of G.hazards) statics.set(h.id, h.mesh);
 }
 
 /** File a snapshot and replay what it brought for us. */
@@ -93,6 +94,7 @@ export function receiveSnap(m) {
   if (buffer.length && s.tk <= buffer[buffer.length - 1].tk) return;   // out of order: drop
   buffer.push(s); if (buffer.length > BUFFER) buffer.shift();
   newest = { tk: s.tk, at: now() };
+  me = m.me ?? null;
   for (const [type, text] of m.ev ?? []) emit(type, text);
   for (const name of m.fx ?? []) sfx(name);
 }
@@ -160,15 +162,19 @@ export function netStep(dt) {
   const br = bracket(buffer, renderTick);
   if (br) {
     const { a, b, f } = br;
-    G.time = a.t + (b.t - a.t) * f; G.countdown = b.cd; G.resultsAt = b.ra ?? Infinity; if (b.lp) G.laps = b.lp;
+    G.time = a.t + (b.t - a.t) * f; G.countdown = b.cd ?? 0; G.resultsAt = b.ra ?? Infinity; if (b.lp) G.laps = b.lp;
     if (b.st === 'race' && getState() === 'countdown') transition('race');
     G.karts.forEach((k, i) => {
       const ka = a.k[i], kb = b.k[i]; if (!ka || !kb) return;
-      applyKart(k, lerpKart(ka, kb, f));
+      applyKart(k, lerpKart(ka, kb, f), i === G.netSlot ? me : undefined);
       updateKartVisual(k, dt, clamp(Math.abs(k.speed) / (42 * k.stats.speed), 0, 1));
     });
     syncEntities(hazards, b.h, ty => { const h = buildHazard(ty); return h.g; }, (g, e) => g.position.set(e.x, e.y ?? 0, e.z));
-    if (G.hazards.length) G.hazards = G.hazards.filter(h => hazards.has(h.id));   // a static obstacle the server mowed is gone here too
+    if (b.hs) {                                        // a static obstacle the server mowed is gone here too
+      const kept = new Set(b.hs);
+      for (const [id, mesh] of statics) if (!kept.has(id)) { G.scene.remove(mesh); statics.delete(id); }
+      if (G.hazards.length) G.hazards = G.hazards.filter(h => statics.has(h.id));
+    }
     const pa = new Map(a.p.map(p => [p.id, p]));
     syncEntities(projectiles, b.p, buildProjectileMesh, (g, e) => {
       const o = pa.get(e.id) ?? e;
