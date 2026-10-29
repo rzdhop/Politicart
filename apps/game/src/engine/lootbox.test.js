@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { setSfxSink } from './audio.js';
+import { BOX_SOUNDS, setSfxSink } from './audio.js';
 import { PODIUM } from './hemicycle.js';
 import {
   BLACKOUT, boxIndex, boxInfo, boxPhase, boxScene, dropGrade, frameBoxCamera, GRADE_COLOUR, makeTimeline, OPENING, PHASE_TIME, PHASES, playOpening, REVEAL_TIME,
@@ -215,6 +215,7 @@ describe('an opening', () => {
     expect(heard).toContain('box_burst');
     expect(heard.indexOf('box_burst')).toBeGreaterThan(heard.lastIndexOf('box_tease'));
     expect(heard.slice(heard.indexOf('box_burst'))).toEqual(['box_burst', 'box_reveal_rare', 'coin_rain']);
+    for (const n of heard) expect(BOX_SOUNDS, n).toContain(n);
     heard.length = 0;
     playOpening(DROPS.trail);   // incredible: a faster pulse, its own fanfare
     skipOpening(); skipOpening();

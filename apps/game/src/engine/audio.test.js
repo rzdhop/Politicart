@@ -2,7 +2,7 @@
 // play locally (and silently here: there is no AudioContext in node).
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { setSfxSink, sfx, sfxFor } from './audio.js';
+import { BOX_SOUNDS, setSfxSink, sfx, sfxFor } from './audio.js';
 
 afterEach(() => setSfxSink(null));
 
@@ -21,6 +21,10 @@ describe('sound routing', () => {
   });
 
   it('plays nothing and throws nothing without a sink or an audio context', () => {
-    expect(() => { sfx('boost'); sfxFor({ isAI: false }, 'hit'); }).not.toThrow();
+    expect(() => { sfx('boost'); sfxFor({ isAI: false }, 'hit'); for (const n of BOX_SOUNDS) sfx(n); }).not.toThrow();
+  });
+
+  it('names the nine Politibox sounds the opening plays', () => {
+    expect(BOX_SOUNDS).toEqual(['box_drop', 'box_rattle', 'box_tease', 'box_burst', 'box_reveal_common', 'box_reveal_rare', 'box_reveal_mythic', 'box_reveal_incredible', 'coin_rain']);
   });
 });

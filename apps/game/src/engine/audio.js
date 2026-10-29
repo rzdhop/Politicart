@@ -49,8 +49,29 @@ function playSfx(name) {
     case 'count': o.type = 'square'; o.frequency.setValueAtTime(440, t); env(0.12, 0.2); break;
     case 'go': o.type = 'square'; o.frequency.setValueAtTime(880, t); env(0.16, 0.6); break;
     case 'finish': [0, 0.15, 0.3, 0.45].forEach((d, i) => { const o2 = AC.createOscillator(), g2 = AC.createGain(); o2.type = 'square'; o2.frequency.value = [523, 659, 784, 1046][i]; g2.gain.setValueAtTime(0.12, t + d); g2.gain.exponentialRampToValueAtTime(0.001, t + d + 0.4); o2.connect(g2); g2.connect(master); o2.start(t + d); o2.stop(t + d + 0.42); }); break;
+    // ---- The Politibox (DEC-054): played from lootbox.js's timeline through sfx(), solo screen, no kart to route by.
+    case 'box_drop': voice(t, 'triangle', 110, 38, 0.25, 0.28); voice(t, 'square', 70, 40, 0.08, 0.1); break;                        // the urn lands: a thud
+    case 'box_rattle': o.type = 'square'; o.frequency.setValueAtTime(300, t); o.frequency.setValueAtTime(180, t + 0.03); o.frequency.setValueAtTime(260, t + 0.06); env(0.07, 0.1); break;
+    case 'box_tease': o.type = 'sine'; o.frequency.setValueAtTime(880, t); o.frequency.exponentialRampToValueAtTime(1320, t + 0.05); env(0.08, 0.12); break;   // one pulse of the build-up
+    case 'box_burst': voice(t, 'sawtooth', 1400, 90, 0.45, 0.2); voice(t, 'square', 220, 60, 0.3, 0.1); break;                        // the lid flies
+    case 'box_reveal_common': chord(t, 'triangle', [523, 659], 0.18, 0.3, 0.1); break;
+    case 'box_reveal_rare': chord(t, 'square', [523, 659, 784], 0.12, 0.35, 0.1); break;
+    case 'box_reveal_mythic': chord(t, 'square', [523, 659, 784, 1046, 1318], 0.11, 0.45, 0.11); chord(t, 'triangle', [262, 330], 0.3, 0.8, 0.08); break;
+    case 'box_reveal_incredible': chord(t, 'square', [784, 784, 784, 1046], 0.14, 0.3, 0.14); voice(t + 0.56, 'square', 1318, 1318, 0.9, 0.14); voice(t + 0.56, 'triangle', 659, 659, 0.9, 0.1); break;   // a fanfare
+    case 'coin_rain': for (let i = 0; i < 8; i++) voice(t + i * 0.06, 'sine', 1500 + ((i * 7919) % 1100), 2200 + ((i * 104729) % 600), 0.1, 0.06); break;
   }
 }
+/** Every sound the Politibox plays, for the timeline's test: each a case above. */
+export const BOX_SOUNDS = Object.freeze(['box_drop', 'box_rattle', 'box_tease', 'box_burst', 'box_reveal_common', 'box_reveal_rare', 'box_reveal_mythic', 'box_reveal_incredible', 'coin_rain']);
+/** One oscillator of its own: `type` from f0 to f1 Hz over `dur` seconds, starting at `t`, fading from `vol`. */
+function voice(t, type, f0, f1, dur, vol) {
+  const o = AC.createOscillator(), g = AC.createGain(); o.type = type;
+  o.frequency.setValueAtTime(f0, t); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02);
+}
+/** An arpeggio: `notes` Hz one every `gap` seconds, each `dur` long. */
+function chord(t, type, notes, gap, dur, vol) { notes.forEach((f, i) => voice(t + i * gap, type, f, f, dur, vol)); }
 export function updateEngine() { if (!engineGain) return; const k = G.player; const racing = G.state === 'race' || G.state === 'countdown'; engineGain.gain.value = racing && !muted ? 0.045 + Math.abs(k.speed) / 900 : 0; engineOsc.frequency.value = 55 + Math.abs(k.speed) * 2.6 + (k.boost > 0 ? 60 : 0) + (k.fly > 0 ? 40 : 0); }
 /**
  * Mute or unmute, returning the new state.
