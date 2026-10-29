@@ -1,6 +1,6 @@
 // Paris props for the Élysée and the Palais Bourbon (stage 7): the street
 // furniture both circuits repeat by the hundred (plane trees, bollards,
-// candelabra, Morris columns, benches, police panels, pigeons, flashes), the
+// candelabra, Morris columns, benches, police panels, flashes), the
 // Haussmann blocks that line their roads, the garde républicaine's horses,
 // and the helpers that keep all of it cheap:
 //
@@ -15,6 +15,7 @@
 //   per finish instead of one material per building as street.js building()
 //   makes.
 //
+// The people and the pigeons are street.js's instanced crowd and flocks.
 // Everything here is cosmetic and draws on Math.random (util.js), never on
 // the race's seeded streams.
 import * as THREE from 'three';
@@ -27,7 +28,7 @@ import { surface } from '../textures.js';
 import { pick, rand } from '../util.js';
 import { DS, EMBANK, PAVEMENT, nOf, still, terrainY } from './context.js';
 import { fromBuilder, instanced } from './instanced.js';
-import { SKINS, cafe, figure, lampMat, metroEntrance, sedan } from './street.js';
+import { cafe, crowd, flock, lampMat, metroEntrance, sedan } from './street.js';
 
 export const high = () => getPoly() === 'high';
 /** Whether the race's climate lights the lamps (dusk, night): the shop windows and some flats glow then. */
@@ -362,8 +363,6 @@ export const benchProp = () => { const g = new THREE.Group(); g.add(box(1.9, 0.0
 export const vaubanProp = () => { const g = new THREE.Group(); [1.05, 0.55].forEach(y => g.add(box(2.4, 0.07, 0.07, 0x9a9a9a, 0, y, 0))); [-1.2, 1.2].forEach(x => { g.add(cyl(0.05, 0.05, 1.1, 0x9a9a9a, x, 0.55, 0, 5)); g.add(box(0.1, 0.06, 0.8, 0x9a9a9a, x, 0.03, 0)); }); for (let x = -1; x <= 1; x += 0.25) g.add(box(0.03, 0.5, 0.03, 0x9a9a9a, x, 0.8, 0)); return g; };
 /** A brass stanchion of a red-carpet rope. */
 export const stanchionProp = () => { const g = new THREE.Group(); g.add(cyl(0.05, 0.05, 1.0, 0xd4af37, 0, 0.5, 0, 6)); g.add(cyl(0.22, 0.22, 0.05, 0xd4af37, 0, 0.03, 0, 8)); g.add(part(ball(0.08), 0xd4af37, 0, 1.04, 0)); return g; };
-/** A pigeon on the pavement: a few facets. */
-export const pigeonProp = () => { const g = new THREE.Group(); const b = part(new THREE.IcosahedronGeometry(0.2, 0), 0x8a8a92, 0, 0.2, 0); b.scale.set(1.4, 0.8, 1); g.add(b); g.add(part(new THREE.IcosahedronGeometry(0.11, 0), 0x6a6a74, 0.22, 0.38, 0)); g.add(cone(0.035, 0.1, 0xe0a030, 0.33, 0.37, 0, 3).rotateZ(-Math.PI / 2)); return g; };
 /** A Paris candelabrum: foot, fluted post, lantern; its glass head is the shared lamp glow (street.js lampMat). Head at LAMP_RISE. */
 export const LAMP_RISE = 5.9;
 export const lampProp = () => {
@@ -463,8 +462,8 @@ export function fleuriste(x, z, rotY, y = groundY(x, z)) {
 /**
  * The street life of a Paris circuit built in world units: the build's kit
  * and footprints, the instanced batches its builder fills (trees, bollards,
- * candelabra, benches, Wallace fountains, Morris columns, pigeons, police
- * panels, black berlines), and helpers: `spot(i, side, lat)` a point `lat`
+ * candelabra, benches, Wallace fountains, Morris columns, police panels,
+ * black berlines), and helpers: `spot(i, side, lat)` a point `lat`
  * metres past the road's edge at sample i (with the ground's height and the
  * yaw that faces the road), `photographer()` a press figure whose flash
  * fires, `roadside()` the furniture along both edges of the road, `finish()`
@@ -472,12 +471,11 @@ export function fleuriste(x, z, rotY, y = groundY(x, z)) {
  */
 export function paris(scene, world) {
   const N = G.N, flashSpots = [];
-  const walkers = [0x3b4a6b, 0x8a2b2b, 0x2e7d5b, 0xe0b040, 0x5a5a5a, 0x222222].map(c => batch(fromBuilder(g => { const f = figure(c, pick(SKINS), null); g.add(f); }), { world: true }));
   const trees = { plane: batch(treeProp('plane'), { world: true }), chestnut: batch(treeProp('chestnut'), { world: true }), curtain: batch(treeProp('curtain'), { world: true }) };
   const P = {
     k: kit(), fp: footprints(), trees, flashSpots,
     bollards: batch(bollardProp, { world: true }), lamps: lampRow({ world: true }), benches: batch(benchProp, { world: true }), wallaces: batch(wallaceProp, { world: true }),
-    morris: batch(morrisProp, { world: true }), pigeons: batch(pigeonProp, { world: true }), vauban: batch(vaubanProp, { world: true }), berlines: batch(fromBuilder(g => sedan(g, 0, 0, 0, 0x111111)), { world: true }),
+    morris: batch(morrisProp, { world: true }), vauban: batch(vaubanProp, { world: true }), berlines: batch(fromBuilder(g => sedan(g, 0, 0, 0, 0x111111)), { world: true }),
     /** A world coordinate in the scale-1 decor group, for street.js props the spread puts back where they belong. */
     s1: v => v / DS,
     /** A plain lit material of `color` (one per call: for the few big planes). */
@@ -486,11 +484,15 @@ export function paris(scene, world) {
     flat: (g, w, d, x, z, m, y = 0.03) => { const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d), m); p.rotation.x = -Math.PI / 2; p.position.set(x, y, z); p.receiveShadow = true; g.add(p); return p; },
     tree: (kind, x, z, y = groundY(x, z)) => trees[kind].add(x, z, { y, rotY: rand(0, 6.28), scale: rand(0.85, 1.15) }),
     spot(i, sg, lat) { const s = G.samples[((i % N) + N) % N], l = sg * (s.hw + lat), x = s.x + s.sx * l, z = s.z + s.sz * l; return { s, x, z, y: groundAt(x, z, lat), face: Math.atan2(-s.sx * sg, -s.sz * sg) }; },
-    photographer(parent, x, z, rot, y = 0) {
-      const f = figure(pick([0x222222, 0x3b4a6b, 0x5a5a5a, 0x6b4a2b]), pick(SKINS), 'press'); f.position.set(x, y, z); f.rotation.y = rot; parent.add(f);
-      G.crowd.push({ g: f, ph: rand(0, 6), amp: 0.08, base: y }); flashSpots.push({ x: x + Math.sin(rot) * 0.75, z: z + Math.cos(rot) * 0.75, y: y + 1.32 });
-      return f;
+    /** A press photographer facing `rot` at world (x, z), on the ground at y: an instanced crowd figure with its camera (street.js crowd), and the spot of its flash. */
+    photographer(x, z, rot, y = 0) {
+      crowd(world, x, z, { kind: 'camera', world: true, y, rotY: rot, amp: 0.06, jacket: pick([0x222222, 0x3b4a6b, 0x5a5a5a, 0x6b4a2b]) });
+      flashSpots.push({ x: x + Math.sin(rot) * 0.85, z: z + Math.cos(rot) * 0.85, y: y + 1.76 });
     },
+    /** A passer-by at world (x, z) on the ground at y (street.js crowd: the street's mix of kinds unless `kind`). */
+    walker: (x, z, y, { rotY, kind, amp = 0 } = {}) => crowd(world, x, z, { world: true, y, rotY, kind, amp }),
+    /** A few pigeons pecking round world (x, z), that take off when a kart passes (street.js flock). */
+    pigeons: (x, z, y, n = 5) => flock(world, x, z, { n, world: true, y, radius: 2.5 }),
     /**
      * Along both edges of the road: plane trees (and clipped ones), Wallace
      * fountains, Morris columns, benches, Métro entrances at `metro`, café
@@ -512,8 +514,8 @@ export function paris(scene, world) {
       for (const f of metro) along(1, f, 0, 9, -1, p => metroEntrance(scene, P.s1(p.x), P.s1(p.z), p.face + Math.PI));
       for (const [f, name, c] of cafes) along(1, f, 0, 11.5, -1, p => cafe(scene, P.s1(p.x), P.s1(p.z), p.face, name, c, 3));
       for (const f of fleurs) along(1, f, 0, 11, 1, p => { const fl = fleuriste(p.x, p.z, p.face, p.y); world.add(fl); compact(fl); });
-      for (let n = 0; n < nOf(50); n++) { const at = Math.floor(rand(0, N)), sg = pick([1, -1]); if (skip(at, sg)) continue; const p = P.spot(at, sg, rand(2, 5.5)); P.pigeons.add(p.x, p.z, { y: p.y, rotY: rand(0, 6.28) }); }
-      for (let n = 0; n < (high() ? 90 : 24); n++) { const at = Math.floor(rand(0, N)), sg = pick([1, -1]); if (skip(at, sg)) continue; const p = P.spot(at, sg, rand(1.6, 5.6)); if (clear(p.x, p.z, 1)) pick(walkers).add(p.x, p.z, { y: p.y, rotY: rand(0, 6.28) }); }   // passers-by, standing
+      for (let n = 0; n < nOf(12); n++) { const at = Math.floor(rand(0, N)), sg = pick([1, -1]); if (skip(at, sg)) continue; const p = P.spot(at, sg, rand(2.5, 5)); P.pigeons(p.x, p.z, p.y); }
+      for (let n = 0; n < (high() ? 90 : 24); n++) { const at = Math.floor(rand(0, N)), sg = pick([1, -1]); if (skip(at, sg)) continue; const p = P.spot(at, sg, rand(1.6, 5.6)); if (clear(p.x, p.z, 1)) P.walker(p.x, p.z, p.y); }   // passers-by
       yield;
     },
     finish() { flashes(flashSpots, { world: true }); },

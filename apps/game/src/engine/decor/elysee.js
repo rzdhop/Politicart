@@ -16,14 +16,13 @@
 // flats are lit (elysee-props.js kit, litWindows).
 import * as THREE from 'three';
 
-import { cone, cyl, mat, tag, textPlane } from '../primitives.js';
+import { cyl, mat, tag, textPlane } from '../primitives.js';
 import { G, disposable } from '../state.js';
 import { surface } from '../textures.js';
 import { pick, rand } from '../util.js';
 import { DS, nOf, still } from './context.js';
-import { fromBuilder } from './instanced.js';
 import { Merger, batch, blockClear, compact, fleuriste, groundY, haussmann, high, horseman, lineWithBlocks, litWindows, mansardGeo, paris, signMat, slab, stanchionProp, uvBox } from './elysee-props.js';
-import { JACKETS, SKINS, busStop, cafe, figure, fountain, gate, hedgeWall, kiosk, metroEntrance, person, sedan } from './street.js';
+import { SKINS, busStop, cafe, figure, fountain, gate, hedgeWall, kiosk, metroEntrance } from './street.js';
 
 /** The surface kinds (textures.js) this decor bakes, beyond the road's and the ground's: the pre-build bakes them ahead, a slice at a time. */
 export const SURFACES = Object.freeze(['palace', 'cobble', 'facade', 'water', 'zinc', 'awning', 'asphalt']);
@@ -83,12 +82,13 @@ function palais(world, k, x, z, rotY) {
 }
 
 export function* buildElysee(scene, world) {
-  const P = paris(scene, world), { k, fp, s1, tree, spot, photographer, plain, flat, bollards, lamps, benches, wallaces, morris, pigeons, vauban, berlines } = P, hw = G.hw, N = G.N;
+  const P = paris(scene, world), { k, fp, s1, tree, spot, photographer, walker, pigeons, plain, flat, bollards, lamps, benches, wallaces, morris, vauban, berlines } = P, hw = G.hw, N = G.N;
 
   // ---- the palace, its cour d'honneur and its wings (world units, inside the loop) ----
   const PZ = 222, CZ0 = 12, CZ1 = 204;
   fp.add({ x: 0, z: (CZ0 + 352) / 2, w: 300, d: 352 - CZ0 + 12, rotY: 0 });   // the palace, its court and its garden
   palais(world, k, 0, PZ, Math.PI);
+  yield;
   const court = new THREE.Group(); court.name = 'elysee:cour-honneur';
   const pav = flat(court, 104, CZ1 - CZ0, 0, (CZ0 + CZ1) / 2, k.cobble); const uv = pav.geometry.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 104 / 5, uv.getY(i) * (CZ1 - CZ0) / 5);
   flat(court, 4.2, CZ1 - CZ0 - 6, 0, (CZ0 + CZ1) / 2 + 3, plain(0xa3121f, 1), 0.06);                                                 // the red carpet to the perron
@@ -148,14 +148,14 @@ export function* buildElysee(scene, world) {
   [[-330, -12.2, 0], [-300, -12.2, 0], [300, 0.2, Math.PI], [330, 0.2, Math.PI], [-80, 0.2, Math.PI], [140, -12.2, 0]].forEach(([x, z, r]) => berlines.add(x, z, { y: 0, rotY: r }));
   yield;
   const press = new THREE.Group(); press.name = 'elysee:presse';
-  for (let i = 0; i < 16; i++) photographer(press, rand(-13, 13), rand(2.6, 6.0), rand(-0.3, 0.3));
+  for (let i = 0; i < 16; i++) photographer(rand(-13, 13), rand(2.6, 6.0), rand(-0.3, 0.3), 0.16);
   for (let x = -14; x <= 14; x += 2.4) vauban.add(x, 1.4, { y: 0 });
   press.add(slab(1.1, 0.7, 0.5, 0x222222, -16, 1.6, 4)); [[-0.3, -0.3], [0.3, -0.3], [0, 0.35]].forEach(([dx, dz]) => press.add(cyl(0.03, 0.03, 1.5, 0x333333, -16 + dx, 0.75, 4 + dz, 4)));   // a TV camera on its tripod
   const van = new THREE.Group(); van.add(slab(6, 2.6, 2.4, 0xf6f1e4, 0, 1.7, 0)); van.add(slab(1.6, 1.6, 2.3, 0xf6f1e4, 3.6, 1.2, 0)); van.add(cyl(1.0, 0.3, 0.4, 0xdddddd, -1, 3.4, 0, 10)); van.add(slab(6.02, 0.5, 2.42, 0xc8102e, 0, 1.2, 0)); van.position.set(34, 0, -1.5); press.add(van);
   world.add(press); compact(press);
   yield;
-  for (let i = 0; i < nOf(26); i++) { const z = pick([rand(-19, -15), rand(2.5, 7)]); person(scene, s1(rand(-360, 360)), s1(z), rand(0, 6.28), null, 0.05); }
-  for (let i = 0; i < nOf(40); i++) pigeons.add(rand(-300, 300), pick([rand(-18, -15), rand(3, 7)]), { y: 0.16, rotY: rand(0, 6.28) });
+  for (let i = 0; i < nOf(40); i++) walker(rand(-360, 360), pick([rand(-19, -15), rand(2.5, 7)]), 0.16);
+  for (let i = 0; i < nOf(8); i++) pigeons(rand(-300, 300), pick([rand(-18, -15.5), rand(3, 6.5)]), 0.16);
   yield;
 
   // ---- Place Beauvau, opposite the gate: the square, the ministry behind its gate, police vans and panels ----
@@ -216,13 +216,13 @@ export function* buildElysee(scene, world) {
   const pad = G.pads.reduce((best, p) => { const s = G.samples[p.i0]; const d = Math.hypot(s.x, s.z - PZ); return !best || d < best.d ? { p, d } : best; }, null)?.p;
   if (pad) {
     const tapis = new THREE.Group(); tapis.name = 'elysee:tapis-rouge';
-    const carpet = new THREE.Mesh(roadRibbon(pad.i0 - 4, 11, s => -(s.hw - 1.6), s => s.hw - 1.6, 0.075), new THREE.MeshStandardMaterial({ color: 0xa3121f, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+    const carpet = new THREE.Mesh(roadRibbon(pad.i0 - 4, 11, s => -(s.hw - 1.6), s => s.hw - 1.6, 0.075), new THREE.MeshStandardMaterial({ color: 0xa3121f, roughness: 1, metalness: 0, }));
     carpet.name = 'elysee:tapis-rouge:carpet'; carpet.receiveShadow = true; world.add(carpet);
     const stanchions = batch(stanchionProp, { world: true });
     for (const sg of [1, -1]) {
       for (let rel = -4; rel <= 7; rel += 2) { const p = spot(pad.i0 + rel, sg, 1.8), y = p.y; stanchions.add(p.x, p.z, { y }); if (rel < 7) { const q = spot(pad.i0 + rel + 2, sg, 1.8); tapis.add(slab(Math.hypot(q.x - p.x, q.z - p.z), 0.06, 0.06, 0xa3121f, (p.x + q.x) / 2, y + 0.85, (p.z + q.z) / 2, Math.atan2(-(q.z - p.z), q.x - p.x))); } }
       const u = spot(pad.i0 + 9, sg, 2.6), us = figure(0x111111, pick(SKINS), null); us.position.set(u.x, u.y, u.z); us.rotation.y = u.face; tapis.add(us);
-      for (let n = 0; n < 4; n++) { const p = spot(pad.i0 - 3 + n * 3, sg, 3.6 + rand(0, 1.2)); photographer(tapis, p.x, p.z, p.face + rand(-0.4, 0.4), p.y); }
+      for (let n = 0; n < 4; n++) { const p = spot(pad.i0 - 3 + n * 3, sg, 3.6 + rand(0, 1.2)); photographer(p.x, p.z, p.face + rand(-0.4, 0.4), p.y); }
     }
     world.add(tapis); compact(tapis);
   }
@@ -235,8 +235,8 @@ export function* buildElysee(scene, world) {
     [1.9, -1.9].forEach((dz, i) => { const h = horseman(i ? 0x2a1a10 : 0x4a2e1a); h.position.set(0, 0, dz); h.rotation.y = -Math.PI / 2; h.scale.setScalar(0.95); escort.add(h); });
     cr.mesh.add(escort); compact(escort);   // inside the car's hit radius: the escort rides where the cortège already strikes
     const s = cr.s, side = new THREE.Group(); side.name = 'elysee:presse-carrefour';
-    for (const sg of [1, -1]) for (let n = 0; n < 4; n++) { const lat = sg * (s.hw + 3 + rand(0, 2)), along = rand(-12, -6) * (n % 2 ? 1 : -1); photographer(side, s.x + s.sx * lat + s.tx * along, s.z + s.sz * lat + s.tz * along, Math.atan2(-s.sx * sg, -s.sz * sg) + rand(-0.3, 0.3), s.y + 0.35); }
-    for (let i = 0; i < nOf(8); i++) { const sg = i % 2 ? 1 : -1; const f = figure(pick(JACKETS), pick(SKINS), null); f.position.set(s.x + s.sx * sg * (hw + 2.5 + rand(0, 2)) + s.tx * rand(-3, 3), s.y, s.z + s.sz * sg * (hw + 2.5 + rand(0, 2)) + s.tz * rand(-3, 3)); f.rotation.y = Math.atan2(-s.sx * sg, -s.sz * sg); side.add(f); G.crowd.push({ g: f, ph: rand(0, 6), amp: 0.08, base: s.y }); }
+    for (const sg of [1, -1]) for (let n = 0; n < 4; n++) { const lat = sg * (s.hw + 3 + rand(0, 2)), along = rand(-12, -6) * (n % 2 ? 1 : -1); photographer(s.x + s.sx * lat + s.tx * along, s.z + s.sz * lat + s.tz * along, Math.atan2(-s.sx * sg, -s.sz * sg) + rand(-0.3, 0.3), s.y + 0.35); }
+    for (let i = 0; i < 10; i++) { const sg = i % 2 ? 1 : -1, lat = sg * (hw + 2.5 + rand(0, 2)), al = rand(-3, 3); walker(s.x + s.sx * lat + s.tx * al, s.z + s.sz * lat + s.tz * al, s.y + 0.35, { rotY: Math.atan2(-s.sx * sg, -s.sz * sg), amp: 0.08 }); }   // pedestrians waiting to cross
     world.add(side); compact(side);
   }
   // ---- a one-way narrow street where the layout pinches the road: the signs, bollards along the pinched kerb ----

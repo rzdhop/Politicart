@@ -22,7 +22,7 @@ import { TEX, surface } from '../textures.js';
 import { pick, rand } from '../util.js';
 import { nOf, still } from './context.js';
 import { Merger, batch, blockClear, clear, compact, groundY, haussmann, high, lineWithBlocks, litWindows, paris, slab, statueInto } from './elysee-props.js';
-import { JACKETS, SKINS, cafe, figure, kiosk, person } from './street.js';
+import { JACKETS, SKINS, cafe, figure, kiosk } from './street.js';
 
 /** The surface kinds (textures.js) this decor bakes, beyond the road's and the ground's: the pre-build bakes them ahead, a slice at a time. */
 export const SURFACES = Object.freeze(['water', 'facade', 'palace', 'zinc', 'awning', 'cobble']);
@@ -110,7 +110,7 @@ function assemblee(k) {
 }
 
 export function* buildBourbon(scene, world) {
-  const P = paris(scene, world), { k, fp, s1, tree, spot, photographer, plain, flat, lamps, benches, pigeons } = P, N = G.N;
+  const P = paris(scene, world), { k, fp, s1, tree, spot, photographer, walker, pigeons, plain, flat, lamps, benches } = P, N = G.N;
   const T0 = Math.floor(0.068 * N), T1 = Math.floor(0.104 * N);   // the tunnel under the upper quai
   const inTunnel = (i, pad = 4) => i > T0 - pad && i < T1 + pad;
 
@@ -118,14 +118,14 @@ export function* buildBourbon(scene, world) {
   const river = new THREE.Group(); river.name = 'bourbon:seine';
   const wt = TEX.water.clone(); wt.needsUpdate = true;
   const wm = disposable(new THREE.MeshStandardMaterial({ map: wt, normalMap: surface('water').normalMap, roughness: 0.15, metalness: 0.3 }));
-  { const X0 = -2000, X1 = 2000, DX = 50, rows = [QZ - 1, (QZ + FZ) / 2, FZ + 1], p = [], uv = [], ix = [], cols = (X1 - X0) / DX + 1;
+  { const X0 = -900, X1 = 900, DX = 50, rows = [QZ - 1, (QZ + FZ) / 2, FZ + 1], p = [], uv = [], ix = [], cols = (X1 - X0) / DX + 1;
     for (const z of rows) for (let c = 0; c < cols; c++) { const x = X0 + c * DX; p.push(x, groundY(x, z) + 0.3, z); uv.push(x / 24, z / 24); }
     for (let r = 0; r < rows.length - 1; r++) for (let c = 0; c < cols - 1; c++) { const a = r * cols + c; ix.push(a, a + 1, a + cols, a + 1, a + cols + 1, a + cols); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(ix); g.computeVertexNormals();
     const w = new THREE.Mesh(g, wm); w.receiveShadow = true; river.add(w); }
   G.animated.push(dt => { wt.offset.x += dt * 0.01; });
   const QM = new Merger().at(0, 0, 0);
-  for (const z of [QZ, FZ]) for (let x = -1980; x < 1980; x += 40) if (Math.abs(x + 20 - AX) > 37 && Math.abs(x + 20 - PX) > 37) QM.box(40.2, 1.1, 0.8, 0xbfb398, x + 20, groundY(x + 20, z) + 0.75, z);
+  for (const z of [QZ, FZ]) for (let x = z === QZ ? -1000 : -880; x < (z === QZ ? 960 : 840); x += 40) if (Math.abs(x + 20 - AX) > 37 && Math.abs(x + 20 - PX) > 37) QM.box(40.2, 1.1, 0.8, 0xbfb398, x + 20, groundY(x + 20, z) + 0.75, z);
   world.add(still(QM.into(river)));
   const waterY = (x, z) => groundY(x, z) + 0.3;
   yield;
@@ -174,63 +174,64 @@ export function* buildBourbon(scene, world) {
 
   // ---- the right bank: plane trees, lamps and a row of blocks along the quai ----
   { const RM = new Merger(), rb = new THREE.Group(); rb.name = 'bourbon:rive-droite';
-    for (let x = high() ? -1500 : -900; x < (high() ? 1500 : 900); x += rand(46, 62)) { if (Math.abs(x - AX) < 160 || Math.abs(x - PX) < 34) continue; const w = rand(40, 56); haussmann(RM, k, x, groundY(x, -603), -603, w, 24, rand(19, 24), 0, { detail: high() && Math.abs(x) < 700, shops: high() }); }
+    for (let x = high() ? -840 : -780; x < (high() ? 840 : 780); x += rand(46, 62)) { if (Math.abs(x - AX) < 160 || Math.abs(x - PX) < 34) continue; const w = rand(40, 56); haussmann(RM, k, x, groundY(x, -603), -603, w, 24, rand(19, 24), 0, { detail: high() && Math.abs(x) < 700, shops: high() }); }
     RM.into(rb); world.add(rb); still(rb);
-    for (let x = -1100; x < 1100; x += high() ? 18 : 72) if (Math.abs(x - AX) > 150 && Math.abs(x - PX) > 24) tree('curtain', x, -575);
-    for (let x = -1080; x < 1100; x += high() ? 40 : 120) if (Math.abs(x - AX) > 40 && Math.abs(x - PX) > 40) lamps.add(x, FZ - 3, { y: groundY(x, FZ - 3) }); }
+    for (let x = -900; x < 900; x += high() ? 18 : 72) if (Math.abs(x - AX) > 150 && Math.abs(x - PX) > 24) tree('curtain', x, -575);
+    for (let x = -900; x < 900; x += high() ? 40 : 120) if (Math.abs(x - AX) > 40 && Math.abs(x - PX) > 40) lamps.add(x, FZ - 3, { y: groundY(x, FZ - 3) }); }
   yield;
 
   // ---- the quai: the bouquinistes against the parapet, Paris Plages, lamps, trees, benches, fishermen, joggers ----
   const box = [batch(bouquinisteProp(true), { world: true }), batch(bouquinisteProp(true), { world: true }), batch(bouquinisteProp(false), { world: true })];
-  const plage = x => (x > 420 && x < 820) || (x > -1000 && x < -620);
+  const plage = x => (x > 420 && x < 820) || (x > -900 && x < -560);
   const quai = (x, z, m) => clear(x, z, m) && Math.abs(x - AX) > 22 && Math.abs(x - PX) > 22;
-  for (let x = -1100; x < 1100; x += high() ? 2.5 : 10) { if (plage(x) || !quai(x, QZ + 1.5, 4)) continue; if (Math.random() < 0.12) { x += rand(6, 16); continue; } box[Math.floor(rand(0, 3))].add(x, QZ + 1.4, { y: groundY(x, QZ + 1.4), rotY: 0 }); }
+  for (let x = -1000; x < 1000; x += high() ? 2.5 : 10) { if (plage(x) || !quai(x, QZ + 1.5, 4)) continue; if (Math.random() < 0.12) { x += rand(6, 16); continue; } box[Math.floor(rand(0, 3))].add(x, QZ + 1.4, { y: groundY(x, QZ + 1.4), rotY: 0 }); }
   yield;
-  for (let x = -1080; x < 1100; x += high() ? 30 : 60) if (quai(x, QZ + 4, 3)) lamps.add(x, QZ + 4, { y: groundY(x, QZ + 4) });
-  for (let x = -1090; x < 1100; x += high() ? 16 : 48) if (!plage(x) && quai(x, QZ + 20, 7)) tree('curtain', x, QZ + 20);
-  for (let x = -1070; x < 1100; x += high() ? 34 : 68) if (!plage(x) && quai(x, QZ + 9, 4)) benches.add(x, QZ + 9, { y: groundY(x, QZ + 9), rotY: Math.PI });
+  for (let x = -1000; x < 1000; x += high() ? 30 : 60) if (quai(x, QZ + 4, 3)) lamps.add(x, QZ + 4, { y: groundY(x, QZ + 4) });
+  for (let x = -1000; x < 1000; x += high() ? 16 : 48) if (!plage(x) && quai(x, QZ + 20, 7)) tree('curtain', x, QZ + 20);
+  for (let x = -1000; x < 1000; x += high() ? 34 : 68) if (!plage(x) && quai(x, QZ + 9, 4)) benches.add(x, QZ + 9, { y: groundY(x, QZ + 9), rotY: Math.PI });
   yield;
   const pa = [0xe63946, 0x1f8ac0, 0xf2c14e].map(c => batch(parasolProp(c), { world: true })), tr = [0xe63946, 0x1f8ac0, 0xf6f1e4].map(c => batch(transatProp(c), { world: true })), planters = batch(() => slab(1.4, 1, 1.4, 0xb5795c, 0, 0.5, 0), { world: true });
-  for (const [a, b] of [[420, 820], [-1000, -620]]) {
+  for (const [a, b] of [[420, 820], [-900, -560]]) {
     const sand = new THREE.Group(); sand.name = 'bourbon:paris-plages';
     flat(sand, b - a, 26, (a + b) / 2, QZ + 14, plain(0xe8d6a8, 1), groundY((a + b) / 2, QZ + 14) + 0.05);
     const sg = textPlane(8, 1.4, 'PARIS PLAGES', '#1f8ac0', '#fffaf0', 72); sg.position.set(a + 12, groundY(a + 12, QZ + 27) + 3, QZ + 27); sg.rotation.y = Math.PI; sand.add(sg); sand.add(cyl(0.08, 0.08, 3, 0xdddddd, a + 8, groundY(a + 8, QZ + 27) + 1.5, QZ + 27, 6)); sand.add(cyl(0.08, 0.08, 3, 0xdddddd, a + 16, groundY(a + 16, QZ + 27) + 1.5, QZ + 27, 6));
     world.add(sand); compact(sand);
     for (let x = a + 14; x < b - 8; x += high() ? 9 : 27) { const z = QZ + rand(8, 22), y = groundY(x, z); pa[Math.floor(rand(0, 3))].add(x, z, { y }); tr[Math.floor(rand(0, 3))].add(x + 1.8, z - 0.5, { y, rotY: rand(2.8, 3.5) }); if (high() && Math.random() < 0.6) tr[Math.floor(rand(0, 3))].add(x - 1.6, z - 0.4, { y, rotY: rand(2.8, 3.5) }); }
     for (let x = a + 30; x < b; x += 60) { const y = groundY(x, QZ + 25); planters.add(x, QZ + 25, { y }); tree('plane', x, QZ + 25, y + 1); }
-    for (let n = 0; n < nOf(8); n++) { const x = rand(a + 10, b - 10), z = QZ + rand(10, 20); const f = person(scene, s1(x), s1(z), rand(2.5, 3.8), null, 0); f.rotation.x = -1.2; f.position.y = 0.4; }   // sunbathers
+    for (let n = 0; n < nOf(12); n++) { const x = rand(a + 10, b - 10), z = QZ + rand(10, 20); walker(x, z, groundY(x, z), { kind: pick(['cap', 'bag', 'jeans', 'child']) }); }   // on the sand
   }
   yield;
   const fish = new THREE.Group(); fish.name = 'bourbon:pecheurs';
-  for (let n = 0; n < 6; n++) { const x = rand(-1300, 1300); if (!quai(x, QZ + 1.8, 4) || plage(x)) continue; const y = groundY(x, QZ + 1.8), f = figure(pick(JACKETS), pick(SKINS), null); f.position.set(x, y, QZ + 1.8); f.rotation.y = Math.PI; fish.add(f); G.crowd.push({ g: f, ph: rand(0, 6), amp: 0.03, base: y }); const rod = cyl(0.02, 0.03, 4.5, 0x3a2a1a, x + 0.3, y + 2.6, QZ - 0.6, 4); rod.rotation.x = -1.0; fish.add(rod); }
+  for (let n = 0; n < 6; n++) { const x = rand(-950, 950); if (!quai(x, QZ + 1.8, 4) || plage(x)) continue; const y = groundY(x, QZ + 1.8); walker(x, QZ + 1.8, y, { rotY: Math.PI, kind: pick(['cap', 'beret', 'elder']) }); const rod = cyl(0.02, 0.03, 4.5, 0x3a2a1a, x + 0.3, y + 2.6, QZ - 0.6, 4); rod.rotation.x = -1.0; fish.add(rod); }
   world.add(fish); compact(fish);
   const runners = [];
-  for (let n = 0; n < nOf(10); n++) { const f = figure(pick(JACKETS), pick(SKINS), null), x = rand(-1200, 1200), z = QZ + rand(5, 12); f.userData.v = rand(3, 4.5) * (n % 2 ? 1 : -1); f.rotation.y = f.userData.v > 0 ? Math.PI / 2 : -Math.PI / 2; f.position.set(x, groundY(x, z), z); world.add(f); runners.push(f); }
-  G.animated.push(dt => { for (const j of runners) { j.position.x += j.userData.v * dt; if (j.position.x > 1250) j.position.x = -1250; if (j.position.x < -1250) j.position.x = 1250; } });
-  for (let n = 0; n < nOf(30); n++) { const x = rand(-1200, 1200), z = QZ + rand(3, 14); if (quai(x, z, 2)) pigeons.add(x, z, { y: groundY(x, z), rotY: rand(0, 6.28) }); }
-  for (let n = 0; n < nOf(16); n++) { const x = rand(-1000, 1000), z = QZ + rand(2.6, 4.5); if (quai(x, z, 3) && !plage(x)) person(scene, s1(x), s1(z), Math.PI + rand(-0.5, 0.5), null, 0.04); }
+  for (let n = 0; n < nOf(10); n++) { const f = figure(pick(JACKETS), pick(SKINS), null), x = rand(-950, 950), z = QZ + rand(5, 12); f.userData.v = rand(3, 4.5) * (n % 2 ? 1 : -1); f.rotation.y = f.userData.v > 0 ? Math.PI / 2 : -Math.PI / 2; f.position.set(x, groundY(x, z), z); world.add(f); runners.push(f); }
+  G.animated.push(dt => { for (const j of runners) { j.position.x += j.userData.v * dt; if (j.position.x > 1000) j.position.x = -1000; if (j.position.x < -1000) j.position.x = 1000; } });
+  for (let n = 0; n < nOf(10); n++) { const x = rand(-950, 950), z = QZ + rand(3, 14); if (quai(x, z, 2)) pigeons(x, z, groundY(x, z)); }
+  for (let n = 0; n < nOf(28); n++) { const x = rand(-950, 950), z = QZ + rand(2.6, 4.5); if (quai(x, z, 3) && !plage(x)) walker(x, z, groundY(x, z), { rotY: Math.PI + rand(-0.5, 0.5) }); }   // browsing the boxes
   kiosk(scene, s1(380), s1(QZ + 12), 0x2e8b57, 'JOURNAUX', Math.PI); cafe(scene, s1(-300), s1(QZ + 12), Math.PI, 'CAFÉ DU QUAI', 0x2e8b57, 3);
   yield;
 
   // ---- péniches moored at random spots along both banks; the bateau-mouche and the Batobus on the river ----
   const moored = [];
   for (let n = 0, tries = 0; n < nOf(7) && tries < 40; tries++) {
-    const near = n % 2 === 0, x = rand(-1300, 1300), z = near ? QZ - 6 : FZ + 6;
+    const near = n % 2 === 0, x = rand(-850, 850), z = near ? QZ - 6 : FZ + 6;
     if (Math.abs(x - AX) < 50 || Math.abs(x - PX) < 50 || moored.some(m => Math.abs(m - x) < 40)) continue;
     moored.push(x); world.add(peniche(x, z, Math.random() < 0.5 ? 0 : Math.PI, waterY(x, z) - 0.6)); n++;
   }
   for (const [kind, z, v] of [['bateau-mouche', -440, 6.5], ['batobus', -500, -5]]) {
-    const b = riverBoat(kind), x0 = rand(-900, 900); b.position.set(x0, waterY(x0, z), z); b.rotation.y = v > 0 ? 0 : Math.PI; world.add(b);
-    const ys = []; for (let x = -1600; x <= 1600; x += 40) ys.push(waterY(x, z));
-    G.animated.push(dt => { const p = b.position; p.x += v * dt; if (p.x > 1500) p.x = -1500; if (p.x < -1500) p.x = 1500; const f = (p.x + 1600) / 40, i = Math.floor(f); p.y = ys[i] + (ys[i + 1] - ys[i]) * (f - i) - 0.2 + Math.sin(G.time * 1.3 + z) * 0.06; });
+    const b = riverBoat(kind), x0 = rand(-800, 800); b.position.set(x0, waterY(x0, z), z); b.rotation.y = v > 0 ? 0 : Math.PI; world.add(b);
+    const ys = []; for (let x = -1600; x <= 1600; x += 40) ys.push(Math.abs(x) < 1000 ? waterY(x, z) : 0.3);
+    G.animated.push(dt => { const p = b.position; p.x += v * dt; if (p.x > 900) p.x = -900; if (p.x < -900) p.x = 900; const f = (p.x + 1600) / 40, i = Math.floor(f); p.y = ys[i] + (ys[i + 1] - ys[i]) * (f - i) - 0.2 + Math.sin(G.time * 1.3 + z) * 0.06; });
   }
   yield;
 
   // ---- the Assemblée nationale on the axis of the bridge, its lawn behind, the press on its steps ----
+  yield;
   const as = assemblee(k); as.position.set(AX, groundY(AX, -193), -193); as.rotation.y = Math.PI; world.add(as);
   const press = new THREE.Group(); press.name = 'bourbon:presse';
   for (const x of [-9, 9]) { const gd = figure(0x1f2a5e, pick(SKINS), 'guard'); gd.position.set(AX + x, groundY(AX + x, -251), -251); press.add(gd); }
-  for (let n = 0; n < 10; n++) { const x = AX + rand(-14, 14), z = -193 - rand(56, 60); photographer(press, x, z, rand(-0.3, 0.3), groundY(x, z)); }
+  for (let n = 0; n < 10; n++) { const x = AX + rand(-14, 14), z = -193 - rand(56, 60); photographer(x, z, rand(-0.3, 0.3), groundY(x, z)); }
   world.add(press); compact(press);
   yield;
   fp.add({ x: AX, z: -130, w: 300, d: 210, rotY: 0 }); fp.add({ x: AX, z: -268, w: 150, d: 40, rotY: 0 });   // the Assemblée, its lawn, its forecourt to the quai
@@ -256,9 +257,10 @@ export function* buildBourbon(scene, world) {
       const s = G.samples[i], yaw = Math.atan2(s.tx, s.tz), hw = s.hw + 7;
       TM.box(2 * hw + 6, 4.4, 1.6, 0xb8ab90, s.x, s.y + 14.2, s.z, yaw);
       for (const sg of [1, -1]) TM.box(2.4, 16.4, 2.4, 0xb8ab90, s.x + s.sx * sg * (hw + 0.4), s.y + 8.2, s.z + s.sz * sg * (hw + 0.4), yaw);
-      const sg = textPlane(14, 1.2, 'VOIE GEORGES-POMPIDOU', '#1f3a93', '#fff', 64); sg.position.set(s.x + s.tx * out * 0.85, s.y + 13.6, s.z + s.tz * out * 0.85); sg.rotation.y = yaw + (out < 0 ? Math.PI : 0); t.add(sg);
+      const sg = textPlane(16, 1.4, 'VOIE GEORGES-POMPIDOU', '#1f3a93', '#fff', 46); sg.position.set(s.x + s.tx * out * 0.85, s.y + 13.6, s.z + s.tz * out * 0.85); sg.rotation.y = yaw + (out < 0 ? Math.PI : 0); t.add(sg);
     }
     TM.into(t); world.add(t); still(t);
+    yield;
     // the band of haze: three veils across the road inside, thicker at dawn
     const veil = new THREE.MeshBasicMaterial({ color: 0xdfe4ea, transparent: true, opacity: G.layout?.climate === 'dawn' ? 0.22 : 0.12, depthWrite: false, side: THREE.DoubleSide });
     for (const f of [0.3, 0.5, 0.7]) { const s = G.samples[Math.floor(T0 + (T1 - T0) * f)], v = new THREE.Mesh(new THREE.PlaneGeometry(2 * (s.hw + 6.5), 12.4), veil); v.name = 'bourbon:tunnel:haze'; v.position.set(s.x, s.y + 6.2, s.z); v.rotation.y = Math.atan2(s.tx, s.tz); world.add(v); }
@@ -276,8 +278,8 @@ export function* buildBourbon(scene, world) {
     const st = high() ? 2 : 4;
     for (let j = 0; j < span.length - st; j += st) for (const sg of [1, -1]) {
       const p = spot(span[j], sg, 1.3), q = spot(span[j + st], sg, 1.3), len = Math.hypot(q.x - p.x, q.z - p.z), yaw = Math.atan2(q.x - p.x, q.z - p.z), rx = Math.atan2(q.s.y - p.s.y, len), mx = (p.x + q.x) / 2, mz = (p.z + q.z) / 2, y = (p.s.y + q.s.y) / 2 + 0.35;
-      BM.box(0.4, 0.8, len + 0.05, 0xe2d8c2, mx, y + 0.55, mz, yaw, -rx); if (high()) BM.box(0.55, 0.16, len + 0.1, 0xd3c7ad, mx, y + 1.02, mz, yaw, -rx);
-      if (j % 8 === 0) BM.box(0.6, 1.3, 0.6, 0xd3c7ad, p.x, p.s.y + 0.35 + 0.65, p.z, yaw);
+      BM.box(0.4, 1.3, len + 0.05, 0xe2d8c2, mx, y + 0.75, mz, yaw, -rx); BM.box(0.6, 0.2, len + 0.1, 0xd3c7ad, mx, y + 1.5, mz, yaw, -rx);   // the balustrade over the kerb's wall
+      if (j % 8 === 0) BM.box(0.7, 1.9, 0.7, 0xd3c7ad, p.x, p.s.y + 0.35 + 0.95, p.z, yaw);
       if (j % (high() ? 12 : 24) === 0) lamps.add(p.x, p.z, { y: p.s.y + 0.35 });
     }
     for (const i of [span[0], span[span.length - 1]]) for (const sg of [1, -1]) {
@@ -286,6 +288,7 @@ export function* buildBourbon(scene, world) {
       statueInto(BM, p.x, y + 14.85, p.z, 1.8, 0xd4af37, p.face, true);
     }
     world.add(still(BM.into(pont)));
+    yield;
   }
   yield;
 
