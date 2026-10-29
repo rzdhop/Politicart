@@ -98,12 +98,19 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyM') actions.toggleMute(false);
   // The admin's god console over the race (DEC-031); the action ignores everyone else.
   if (e.code === 'KeyG' && ['race', 'countdown', 'paused'].includes(G.state)) actions.toggleGodConsole();
-  if (e.code === 'Enter' && G.state === 'title') $('b-play').click();
-  if (e.code === 'Enter' && G.state === 'results') $('b-again').click();
+  // Enter is the screen's shortcut only where no other button has the focus: a focused button keeps Enter (the
+  // browser presses it). A focused roster tile belongs to the roster, so Enter there still goes on; its own click,
+  // which would only pick the same candidate again, is cancelled.
+  const focused = e.target instanceof Element ? e.target.closest('button, a[href], [role="button"]') : null;
+  const onTile = !!focused?.matches('#roster .tile');   // the tiles only: the roster's footer holds Retour and Garage
+  const screenEnter = e.code === 'Enter' && (!focused || onTile);
+  if (screenEnter && onTile) e.preventDefault();
+  if (screenEnter && G.state === 'title') $('b-play').click();
+  if (screenEnter && G.state === 'results') $('b-again').click();
   // The roster: ← → the next candidate, ↑ ↓ the one a row (four tiles) away, wrapping; Enter does what "Choisir le circuit →" does.
   const roster = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -4, ArrowDown: 4 }[e.code];
   if (G.state === 'select' && roster) actions.stepChar(roster);
-  if (G.state === 'select' && e.code === 'Enter') $('b-next1').click();
+  if (G.state === 'select' && screenEnter) $('b-next1').click();
   // The Politibox: the space bar hurries the opening, like a tap on the stage.
   if (G.state === 'lootbox' && e.code === 'Space') actions.skipOpening();
 });

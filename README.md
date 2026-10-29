@@ -160,7 +160,7 @@ Both orientations work: in portrait the camera widens and pulls back. Phones sta
 "Jouer" opens the casting on a 3D stage: the Assemblée's hemicycle at night, its red benches climbing away under a sky that glows in the candidate's colour, and in the middle a lit podium on which the chosen candidate's kart turns, its pilot at the wheel. The pilots are caricatures built from each candidate's own look (hair, build, suit fabric, face, glasses, pose and props), and they carry the game's pun names, titles and lines only. The pilot you pick on the podium is the one who races.
 
 - **Turn the podium** by dragging it, with a mouse or a finger (it keeps turning a little when you let go, then spins slowly on its own); a vertical swipe on a phone still scrolls the screen.
-- **On a keyboard**, ← → pick the next candidate, ↑ ↓ the one a row away, and Entrée does what **Choisir le circuit →** does.
+- **On a keyboard**, ← → pick the next candidate, ↑ ↓ the one a row away, and Entrée does what **Choisir le circuit →** does (unless another button, such as Retour or Garage, has the focus: Entrée then presses that one).
 - **The go launch**: on "Choisir le circuit →" the circuits show at once, and behind their cards the kart drives off down the aisle, away from the camera, in a burst of confetti (about 1.4 s). It does not play when the system asks for reduced motion.
 - **The Garage** opens on the same podium: every change shows on the kart at once, the pilot staying seated and the trail streaming behind it.
 - **Portraits** come progressively: the roster shows all sixteen tiles at once on placeholders (the candidate's kart colour and initials), and each tile gets its rendered portrait in the next seconds, one per frame.
