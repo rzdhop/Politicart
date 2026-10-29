@@ -31,8 +31,8 @@
      when it mounts (ui/App.tsx). The few tokens it needs are copied inline
      from @politikart/ui (tokens.css, brand.css): the stylesheet arrives
      with the entry chunk, after this has to show. The element's id keeps
-     packages/ui's parity suite retired: a bare <style> would read as the
-     game's old inline stylesheet. -->
+     packages/ui's parity suite retired: a style element without one would
+     read as the game's old inline stylesheet. -->
 <style id="splash-style">
   #splash{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#0c1230;color:#f6f1e4;font-family:"Lilita One","Arial Black",Impact,sans-serif;pointer-events:none;}
   #splash .tricolore{display:flex;height:6px;width:min(420px,80vw);border-radius:3px;overflow:hidden;}
