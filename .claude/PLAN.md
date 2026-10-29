@@ -8,6 +8,8 @@ Approved by the owner 2026-10-29 (answers Q1-Q6 in the table below). Copied from
 |---|---|---|
 | 0 | `9dbc57f` | Baseline (game 879, server 169, ui 369; E2E 60/80 with the 20 software-WebGL race-start failures; bundle 1,186 kB JS), DEC-049..056, A-039..043, `track.js` split into `engine/decor/`. |
 | 1 | `wt/circuit` → `812b221` | Seed, layouts (3 named variants per circuit), elevation profiles, per-track width, static obstacle ids, deterministic cyclists; game 920, server 170. |
+| 5 | `wt/load` → `f2a293a` | Chunks (three / react / engine-race / engine-stage / engine-box / screens-admin), CSS splash, immutable + brotli/gzip static serving with ETag, `prebuild.js` slices with shader priming, countdown priming; game 1002. |
+| 6 | `wt/box` → `cd2e367` | Politibox on the hemicycle stage: tease by grade, bundle ×5 at 550, ring of the last ten drops, nine sounds, RevealStage/RevealCard/DropHistory/OddsTable; wave 1 tip: game 1020, server 177, ui 387. |
 | 2 | `wt/look` → `78c2cfd` | 18 procedural surfaces with normal maps by tier, six climates, cached signs and kart canvases, per-race disposal; game 989 on the integrated tip. |
 
 ## Owner's answers (2026-10-29)
