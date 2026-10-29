@@ -10,11 +10,11 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 
-import { BOX_PRICE, DAILY_COINS, EVERYTHING, RACE_COINS, REFUND, levelUpCoins } from '../../game/src/engine/catalog.js';
+import { BOX_BUNDLE, BOX_PRICE, DAILY_COINS, EVERYTHING, RACE_COINS, REFUND, levelUpCoins } from '../../game/src/engine/catalog.js';
 import { STARTERS } from '../../game/src/engine/progress.js';
 import { hashPassword } from './accounts.js';
 import { ensureAdmin } from './admin.js';
-import { levelUpBonus, normaliseStats, ownedOf, settleRace, utcDay } from './economy.js';
+import { levelUpBonus, normaliseStats, ownedOf, RECENT_DROPS, settleRace, utcDay } from './economy.js';
 import { startServer } from './server.js';
 import { openFileStore } from './store.js';
 
@@ -224,6 +224,69 @@ describe('the Politibox', () => {
     expect(j.profile.stats).toMatchObject({ boxes: 4, drops: { char: 2, part: 1, trail: 1, coins: 0 }, coinsSpent: 4 * BOX_PRICE, coinsEarned: REFUND.common });
   });
 
+  it('answers the bundle shape for one box too: drops is the one drop, kept in the recent ring', async () => {
+    const u = await account({ coins: BOX_PRICE });
+    rolls.push(0.5, 0.86);
+    const j = await (await post('/api/box/open', {}, u.token)).json();
+    expect(j.drops).toEqual([{ kind: 'coins', amount: 50 }]);
+    expect(j.drop).toEqual(j.drops[0]);
+    expect(j.profile.stats.recent).toEqual([{ kind: 'coins', amount: 50, at: expect.any(Number) }]);
+  });
+
+  it('opens five for the bundle price in one charge, rolling five times, and refuses anything else', async () => {
+    expect(BOX_BUNDLE).toEqual({ count: 5, price: 550 });
+    const u = await account({ coins: BOX_BUNDLE.price });
+    for (const count of [2, 3, 10, '5', 0, -5, null]) {
+      expect((await post('/api/box/open', { count }, u.token)).status, String(count)).toBe(400);
+    }
+    expect((await store.user(u.id)).coins).toBe(BOX_BUNDLE.price);
+    // lucie, lucie again (a duplicate inside the bundle), wheels:chrome, the laser trail, 500 coins
+    rolls.push(0.01, 0, 0.01, 0, 0.03, 0, 0.05, 0.99999, 0.5, 0.99);
+    const j = await (await post('/api/box/open', { count: 5 }, u.token)).json();
+    expect(j.drops).toEqual([
+      { kind: 'char', id: 'lucie', grade: 'common', duplicate: false, refund: 0 },
+      { kind: 'char', id: 'lucie', grade: 'common', duplicate: true, refund: REFUND.common },
+      { kind: 'part', id: 'wheels:chrome', grade: 'rare', duplicate: false, refund: 0 },
+      { kind: 'trail', id: 'laser', grade: 'incredible', duplicate: false, refund: 0 },
+      { kind: 'coins', amount: 500 },
+    ]);
+    expect(j.drop).toEqual(j.drops[0]);
+    expect(j.profile.coins).toBe(REFUND.common + 500);
+    expect(j.profile.owned).toEqual({ chars: ['lucie'], parts: ['wheels:chrome'], trails: ['laser'] });
+    expect(j.profile.stats).toMatchObject({ boxes: 5, drops: { char: 2, part: 1, trail: 1, coins: 1 }, coinsSpent: BOX_BUNDLE.price, coinsEarned: REFUND.common + 500 });
+    // the ring: newest first
+    expect(j.profile.stats.recent.map(d => d.kind)).toEqual(['coins', 'trail', 'part', 'char', 'char']);
+    expect(j.profile.stats.recent[0]).toEqual({ kind: 'coins', amount: 500, at: expect.any(Number) });
+    expect(j.profile.stats.recent[1]).toEqual({ kind: 'trail', id: 'laser', grade: 'incredible', at: expect.any(Number) });
+    expect(j.profile.stats.recent[3]).toEqual({ kind: 'char', id: 'lucie', grade: 'common', at: expect.any(Number) });
+    expect(rolls).toEqual([]);
+  });
+
+  it('is atomic: one politicoin short of the bundle, nothing is charged, rolled or granted', async () => {
+    const u = await account({ coins: BOX_BUNDLE.price - 1 });
+    rolls.push(0.01, 0);
+    const r = await post('/api/box/open', { count: 5 }, u.token);
+    expect(r.status).toBe(402);
+    expect((await store.user(u.id)).coins).toBe(BOX_BUNDLE.price - 1);
+    expect((await store.user(u.id)).owned).toEqual({ chars: [], parts: [], trails: [] });   // seeded (A-029), nothing granted
+    expect(rolls).toEqual([0.01, 0]);
+    rolls.length = 0;
+    // enough for one box though
+    expect((await post('/api/box/open', { count: 1 }, u.token)).status).toBe(200);
+  });
+
+  it('keeps the last ten drops only, the newest first, across bundles and single boxes', async () => {
+    const u = await account({ coins: 3 * BOX_BUNDLE.price + BOX_PRICE });
+    const amounts = [];
+    for (let i = 0; i < 3; i++) for (const v of [0.1, 0.55, 0.86, 0.96, 0.99]) { rolls.push(0.5, v); amounts.push([5, 10, 50, 100, 500][[0.1, 0.55, 0.86, 0.96, 0.99].indexOf(v)]); }
+    for (let i = 0; i < 3; i++) expect((await post('/api/box/open', { count: 5 }, u.token)).status).toBe(200);
+    rolls.push(0.5, 0.86);
+    const j = await (await post('/api/box/open', {}, u.token)).json();
+    expect(j.profile.stats.boxes).toBe(16);
+    expect(j.profile.stats.recent).toHaveLength(RECENT_DROPS);
+    expect(j.profile.stats.recent.map(d => d.amount)).toEqual([50, ...amounts.slice(-9).reverse()]);
+  });
+
   it('pays every coin tier', async () => {
     const tiers = [[0.1, 5], [0.55, 10], [0.86, 50], [0.96, 100], [0.99, 500]];
     const u = await account({ coins: tiers.length * BOX_PRICE });
@@ -358,7 +421,7 @@ describe('settleRace', () => {
     expect(after.stats).toEqual({
       races: 6, wins: 1, podiums: 3, finished: 5, dnf: 1, solo: 5, team: 1, teamWins: 1, boxes: 0,
       coinsEarned: 60 + (35 + levelUpCoins(2)) + (18 + 20) + 45 + 5 + (25 + levelUpCoins(3)), coinsSpent: 0,   // 120 xp at the second race, 280 at the last
-      drops: { char: 0, part: 0, trail: 0, coins: 0 },
+      drops: { char: 0, part: 0, trail: 0, coins: 0 }, recent: [],
       bestLap: { elysee: 39 }, bestTime: { elysee: 120 }, byChar: { victor: 5 },
       lastDaily: utcDay(DAY), lastRaceAt: DAY,
     });
@@ -409,8 +472,15 @@ describe('normaliseStats', () => {
   it('repairs every field and drops what it does not know', () => {
     expect(normaliseStats(null)).toEqual({
       races: 0, wins: 0, podiums: 0, finished: 0, dnf: 0, solo: 0, team: 0, teamWins: 0, boxes: 0, coinsEarned: 0, coinsSpent: 0,
-      drops: { char: 0, part: 0, trail: 0, coins: 0 }, bestLap: {}, bestTime: {}, byChar: {}, lastDaily: null, lastRaceAt: null,
+      drops: { char: 0, part: 0, trail: 0, coins: 0 }, recent: [], bestLap: {}, bestTime: {}, byChar: {}, lastDaily: null, lastRaceAt: null,
     });
+    const ring = normaliseStats({ recent: [
+      { kind: 'coins', amount: 50, at: 5 }, { kind: 'hat', id: 'x', at: 5 }, 'junk', { kind: 'char', id: 'lucie', grade: 'bogus', amount: -1, at: 'now' },
+      ...Array.from({ length: 12 }, (_, i) => ({ kind: 'part', id: 'wheels:gold', grade: 'mythic', at: i + 1 })),
+    ] }).recent;
+    expect(ring).toHaveLength(10);
+    expect(ring.slice(0, 2)).toEqual([{ kind: 'coins', amount: 50, at: 5 }, { kind: 'char', id: 'lucie', at: 0 }]);
+    expect(ring[2]).toEqual({ kind: 'part', id: 'wheels:gold', grade: 'mythic', at: 1 });
     const s = normaliseStats({
       races: 3, wins: -1, podiums: 1.5, dnf: '2', junk: 1,
       drops: { char: 2, part: -1, hat: 4 }, bestLap: { elysee: 41, bourbon: 2, nowhere: 30 }, bestTime: 'fast',

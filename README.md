@@ -51,7 +51,7 @@ Every race also pays **politicoins**: 60 for a win down to 12 from sixth place, 
 | `POST /api/progress` | `{rank, field, finished, trackId?, charId?, time?, bestLap?}` | `{profile, gained, coins, bonus}`: the experience, the politicoins and the bonuses included (`daily`, `levelUp`, `levelUpCoins`) |
 | `POST /api/shop/char` | `{id}` | `{profile, bought}`; 403 below the candidate's level, 402 short of coins, 409 already owned |
 | `POST /api/shop/part` | `{category, value}` | `{profile, bought}`; commons are free and trails are never sold (400) |
-| `POST /api/box/open` | `{}` | `{profile, drop}`: 120 politicoins for a Politibox; a duplicate is refunded by grade |
+| `POST /api/box/open` | `{count?: 1 \| 5}` | `{profile, drops, drop}`: 120 politicoins for a Politibox, 550 for five (`count: 5`, one charge, five rolls, `drop` the first); a duplicate is refunded by grade; the last ten drops stay in `profile.stats.recent` |
 | `GET /api/stats/friends` | | `{friends}`: each friend's level, stats and collection, never their balance |
 | `POST /api/admin/coins` | `{id, amount}` | `{user}`: the admin gives 0 to 100 000 politicoins |
 

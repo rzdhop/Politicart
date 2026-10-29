@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  BOX_ODDS, BOX_PRICE, canBuyChar, canBuyPart, CHAR_GRADE, CHAR_PRICE, cleanOwned, COIN_DROPS, coinsForRace, collection, DAILY_COINS,
+  BOX_BUNDLE, BOX_ODDS, BOX_PRICE, canBuyChar, canBuyPart, CHAR_GRADE, CHAR_PRICE, cleanOwned, COIN_DROPS, coinsForRace, collection, DAILY_COINS,
   DNF_COINS, drivableIds, emptyOwned, EVERYTHING, GRADE_LABEL, GRADES, gradeOf, levelUpCoins, ownedStyle, ownsChar, ownsPart, ownsTrail,
   PART_CATEGORIES, PART_GRADE, PART_OPTIONS, PART_PRICE, parsePartKey, partKey, priceOf, RACE_COINS, REFUND, refundOf, rollBox,
   TEAM_WIN_COINS, TRAIL_GRADE, TRAIL_OPTIONS,
@@ -57,6 +57,8 @@ describe('tables', () => {
     expect(PART_PRICE).toEqual({ common: 0, rare: 150, mythic: 400, incredible: 1000 });
     expect(REFUND).toEqual({ common: 50, rare: 150, mythic: 400, incredible: 1000 });
     expect(BOX_PRICE).toBe(120);
+    expect(BOX_BUNDLE).toEqual({ count: 5, price: 550 });               // five for about 8 % off (Q5), the odds unchanged
+    expect(BOX_BUNDLE.price).toBeLessThan(BOX_BUNDLE.count * BOX_PRICE);
     expect(BOX_ODDS).toEqual({ char: 0.02, part: 0.04 });
     expect(COIN_DROPS.reduce((s, [, odds]) => s + odds, 0)).toBeCloseTo(1 - BOX_ODDS.char - BOX_ODDS.part, 10);
     expect([RACE_COINS, DNF_COINS, TEAM_WIN_COINS, DAILY_COINS]).toEqual([[60, 45, 35, 25, 18, 12], 5, 20, 50]);
