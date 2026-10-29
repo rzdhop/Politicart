@@ -69,6 +69,7 @@ describe('instanced decor batches', () => {
     plain.add(0, 0); const i = tinted.add(0, 0, { color: 0xff0000 }); tinted.add(5, 5);
     const scene = new THREE.Scene(); flush(scene);
     expect(plain.meshes.every(m => m.instanceColor === null)).toBe(true);
+    tinted.meshes.forEach((m, i) => { expect(m.material).not.toBe(plain.meshes[i].material); });   // a program of their own (r128)
     const c = new THREE.Color(); const mesh = tinted.meshes[0];
     expect(mesh.instanceColor).not.toBeNull();
     c.fromArray(mesh.instanceColor.array, i * 3); expect(c.getHex()).toBe(0xff0000);
