@@ -2,8 +2,61 @@
 
 Current state only. History lives in git.
 
-## Latest task -- closed 2026-10-28: polish after the 3D select
+## Latest task -- OPEN 2026-10-29: the maps, races, Politibox, multiplayer and loading overhaul
 
+- **Branch:** `claude/racing-game-improvements-2f59ui`, cut from `main` at
+  `61ebddb` (PR #16), pushed; tip `586dc7a`. Plan in `.claude/PLAN.md`
+  (approved by the owner, answers Q1-Q6 at its top), DEC-049..056,
+  A-039..043. Workers in parallel worktrees (DEC-039), merged in order.
+- **Done and merged (wave 1):** stage 0 `9dbc57f` (baseline, `track.js`
+  split into `engine/decor/`), stage 1 `812b221` (seed, 3 named layout
+  variants per circuit, elevation profiles, per-track width, static
+  obstacle ids, deterministic cyclists), stage 2 `78c2cfd` (18 procedural
+  surfaces with normal maps by tier, six climates), stage 5 `f2a293a`
+  (chunks, splash, immutable + brotli static serving, `prebuild.js`),
+  stage 6 `cd2e367` (Politibox on the hemicycle stage, tease, bundle x5 at
+  550, drop history, sounds, reveal parts in the library).
+- **Tier 1 on `cd2e367`:** typecheck clean; game 1020, server 177, ui 387 +
+  8 skipped; build in chunks (three 528 kB, engine-race 336, react 219,
+  index 89, engine-stage 33, screens-admin 20, engine-box 16).
+- **E2E:** baseline on `9dbc57f` 60 passed / 20 failed of 80 in 28 min
+  (the software-WebGL race-start set plus two admin specs under load; list
+  in the session scratchpad). On `cd2e367` the run was interrupted at 9/9
+  passed when the owner stopped the session: **a full E2E on the tip is the
+  first thing to do next** (`npx playwright test -c playwright.local.config.ts`
+  with `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`; that local config,
+  untracked, points at the container's Chromium 1243).
+- **Visual check:** none yet. Screenshots of the select and tracks screens
+  on the tip render fine under software GL; race screenshots per circuit
+  were not captured before the stop. **The owner has not seen the new
+  textures, climates, relief or the stage Politibox on a real GPU.**
+- **Wave 2 (NOT started in code):** stage 3 (netcode: prediction,
+  reconciliation, adaptive delay, `me` block, ping, `sendRaw`; Annex B of
+  PLAN.md) and stage 4 (vfx pool, effects for every item/power/status,
+  vfx channel, HUD motion) were dispatched to worktrees `.worktrees/net`
+  (`wt/net`) and `.worktrees/vfx` (`wt/vfx`) cut from `cd2e367` and
+  stopped before any commit: both branches equal `cd2e367`. Re-dispatch
+  them from the briefs in PLAN.md (stage 3 merges first; stage 4 keeps its
+  `netstate`/`netrace`/`audio`/`payload` edits delimited).
+- **Then wave 3:** stage 7 (dense decor per circuit, three workers on
+  `engine/decor/<id>.js`, instancing, `yAt()`), stage 8 (TrackCard
+  thumbnails and meta, lobby/shop/results components, `#hud-layout`,
+  design-sync), stage 9 (integration, budgets, README, PR).
+- **Known follow-ups from the workers' reports:** AI lane/skill and item
+  rolls still on `Math.random` (`G.rng` ready); terrain under far decor
+  interiors sits at 0 (stage 7 with `yAt`); the layout name shows through
+  `#h-hint` (hidden below 600 px: stage 8 adds `#hud-layout`); the
+  pre-build misses in team races (seed unknown in the lobby: the
+  seed-independent split is the follow-up in `prebuild.js`); kart/pilot
+  geometry caches skipped (userData cloning); `data.js` `sky`/`fog` fields
+  no longer read (the climate owns the sky); the headlight cone lives
+  beside the kart (RACE_GOLDEN intact); no x5 E2E spec; `e2e/shop.spec.ts`
+  unchanged.
+- **Container notes:** worktrees need `cp -al node_modules` plus the three
+  package `node_modules` and a `packages/ui` build; `.worktrees/` and
+  `playwright.local.config.ts` are in `.git/info/exclude`.
+
+## Previous task -- closed 2026-10-28: polish after the 3D select
 - **Branch:** `feature/polish-after-3d-select`, cut from `main` at `12a745c`
   (PR #13, the 3D character-select stage). Workers in parallel worktrees
   (DEC-039), merged in order: `wt/kart` (`da1ff93`), `wt/ui` (`42e57c7`),
