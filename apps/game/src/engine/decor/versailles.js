@@ -79,13 +79,13 @@ export function* buildVersailles(scene, world) {
   yield;
 
   // inside the loop: Latona, the tapis vert between its statues and vases, Apollo, the Colonnade and the bosquets
-  const LZ = 100 / S, lat = latone(water, jets); lat.g.position.set(0, footing(0, LZ * S, 56, 56).y, LZ * S); world.add(lat.g); sprays.push(lat.spray);
+  const LZ = 100 / S, lat = latone(water, jets); lat.g.position.set(0, footing(0, LZ * S, 56, 56).y, LZ * S); world.add(lat.g); sprays.push(...lat.spray);
   for (let i = 0; i < 8; i += dense ? 1 : 2) { const a = i / 8 * Math.PI * 2; statues.add(Math.cos(a) * 12.5, LZ + Math.sin(a) * 12.5, { rotY: -a + Math.PI / 2 }); }
   scene.add(plane(26, 100, 0x4f8f3f, 0, -20));
   for (let z = -64; z <= 24; z += dense ? 8 : 16) { (z % 16 ? vases : statues).add(-18, z, { rotY: Math.PI / 2 }); (z % 16 ? vases : statues).add(18, z, { rotY: -Math.PI / 2 }); T[z % 16 ? 'ball' : 'cone'].add(-24, z + 4); T[z % 16 ? 'ball' : 'cone'].add(24, z + 4); }
   yield;
-  const apo = apollon(water, jets); apo.g.position.set(0, at(0, -95), -95 * S); world.add(apo.g); sprays.push(apo.spray);
-  G.animated.push(() => { const k = 1 + Math.sin(G.time * 3) * 0.05; for (const s of sprays) s.scale.y = k; });
+  const apo = apollon(water, jets); apo.g.position.set(0, at(0, -95), -95 * S); world.add(apo.g); sprays.push(...apo.spray);
+  G.animated.push(() => { sprays.forEach((s, i) => { s.scale.y = 1 + Math.sin(G.time * 3 + i * 0.7) * 0.08; }); });   // each jet on its own beat
   yield;
   { const f = footing(62 * S, -25 * S, 80, 80); if (clearAt(62, -25, 20) && f.spread < 2) { const c = colonnade(water, hedges); c.position.set(62 * S, f.y, -25 * S); world.add(c); } }
   yield;
@@ -110,8 +110,8 @@ export function* buildVersailles(scene, world) {
   const swans = []; for (let i = 0; i < nOf(10); i++) { const s = merged(g => { swan(g, 0, 0).rotation.y = 0; }); s.position.set(rand(-14, 14), 0, rand(-215, -400)); s.rotation.y = rand(0, 6.28); scene.add(s); swans.push(s); }
   G.animated.push(dt => { for (const s of swans) { s.position.z += Math.cos(s.rotation.y) * dt * 0.6; s.position.x += Math.sin(s.rotation.y) * dt * 0.6; if (Math.abs(s.position.x) > 16 * DS || s.position.z > -200 * DS || s.position.z < -420 * DS) s.rotation.y += Math.PI; } });
   const canalY = yAt(0, -305 * S) + 0.03, boats = [];
-  for (let i = 0; i < nOf(3); i++) { const b = gondola(); b.position.set((i - 1) * 30, canalY, rand(-1200, -640)); b.userData.dir = i % 2 ? 1 : -1; world.add(b); boats.push(b); }
-  G.animated.push(dt => { for (const b of boats) { b.position.z += b.userData.dir * dt * 2.2; if (b.position.z > -600 || b.position.z < -1230) b.userData.dir *= -1; b.rotation.y = b.userData.dir > 0 ? 0 : Math.PI; } });
+  for (let i = 0; i < nOf(3); i++) { const b = gondola(); b.position.set((i - 1) * 30, canalY, rand(-1040, -640)); b.userData.dir = i % 2 ? 1 : -1; world.add(b); boats.push(b); }
+  G.animated.push(dt => { for (const b of boats) { b.position.z += b.userData.dir * dt * 2.2; if (b.position.z > -600 || b.position.z < -1060) b.userData.dir *= -1; b.rotation.y = b.userData.dir > 0 ? 0 : Math.PI; } });
   const rowing = batch(rowboat); for (let i = 0; i < 6; i++) rowing.add((i - 2.5) * 5.5, -192 - (i % 2) * 3, { rotY: Math.PI / 2 + rand(-0.2, 0.2) });
   yield;
 
@@ -195,9 +195,13 @@ export function* buildVersailles(scene, world) {
 
   // the visitors: courtiers and tourists on the tapis vert, along the water terrace and before the orangery; guards, gardeners at work
   const stroll = (x, z) => visitor(scene, x, z, null, { wet, base: at(x, z) });
-  for (let i = 0; i < nOf(14); i++) stroll(rand(-11, 11), rand(-60, 24));
-  for (let i = 0; i < nOf(10); i++) stroll(rand(-90, 90), rand(150, 158));
-  for (let i = 0; i < nOf(6); i++) { const x = OX + rand(-40, 40), z = OZ - rand(32, 38); visitor(world, x, z, null, { wet, base: yAt(x, z), world: true }); }
+  for (let i = 0; i < nOf(24); i++) stroll(rand(-11, 11), rand(-60, 24));
+  for (let i = 0; i < nOf(16); i++) stroll(rand(-90, 90), rand(150, 158));
+  for (let i = 0; i < nOf(16); i++) {   // leaning on the terraces' balustrades, looking down at the race
+    const [fa, fb] = TERRACES[i % 2], s = G.samples[Math.floor(rand(fa, fb) * N)], sg = i % 4 < 2 ? 1 : -1, l = s.hw + 8.5, x = s.x + s.sx * sg * l, z = s.z + s.sz * sg * l;
+    if (isClear(x, z, 7.5)) visitor(world, x, z, Math.atan2(-s.sx * sg, -s.sz * sg), { wet, base: yAt(x, z), world: true });
+  }
+  for (let i = 0; i < nOf(10); i++) { const x = OX + rand(-40, 40), z = OZ - rand(32, 38); visitor(world, x, z, null, { wet, base: yAt(x, z), world: true }); }
   for (let i = 0; i < 6; i++) guards.add(-30 + i * 12, 74, { rotY: Math.PI });
   for (let i = 0; i < nOf(10); i++) { const x = rand(-100, 100), z = rand(-130, 100); if (clearAt(x, z, 6) && Math.abs(x) > 30) gardeners.add(x, z, { rotY: rand(0, 6.28) }); }
   yield;

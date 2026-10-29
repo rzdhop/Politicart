@@ -176,10 +176,9 @@ export function broderie(w, d, palette) {
 }
 /**
  * The Latona fountain, in world units at the origin: the round basin, four marble tiers rising to Latona and her
- * children in gold, gilded frogs round the rim and the first tier, and their jets arcing in (one mesh, which pulses).
+ * children in gold, gilded frogs round the rim and the first tier, and their jets arcing in, each pulsing on its own.
  */
 export function latone(water, jets) {
-  let spray = null;
   const g = merged(p => {
     const S = rs(40, 20);
     p.add(cyl(27, 27.6, 1.2, STONE, 0, 0.6, 0, S)); p.add(disc(26, water, 0.95, S));
@@ -187,18 +186,18 @@ export function latone(water, jets) {
     p.add(box(2.6, 2.2, 2.6, MARBLE, 0, 6.5, 0));
     const latona = figure(GOLD, GOLD, null); latona.scale.setScalar(1.8); latona.position.y = 7.6; p.add(latona);
     [-1, 1].forEach(s => { const c = figure(GOLD, GOLD, null); c.scale.setScalar(0.9); c.position.set(s * 1.1, 7.6, 0.7); p.add(c); });
-    spray = new THREE.Group(); spray.name = 'jets'; p.add(spray);
+    const spray = new THREE.Group(); spray.name = 'jets'; p.add(spray);
     const frog = (r, a, y) => { const f = sph(0.55, GOLD, Math.cos(a) * r, y, Math.sin(a) * r, 8); f.scale.set(1, 0.6, 1.3); f.rotation.y = -a; p.add(f); };
     for (let i = 0; i < rs(24, 12); i++) { const a = i / rs(24, 12) * Math.PI * 2; frog(24.5, a, 1.3); spray.add(inward(jets, 9, 24.5, a, 1.3, 0.9)); }
     for (let i = 0; i < 12; i++) { const a = (i + 0.5) / 12 * Math.PI * 2; frog(14.2, a, 2.2); }
     const top = new THREE.Mesh(new THREE.ConeGeometry(0.5, 9, 8), jets); top.position.y = 12.5; spray.add(top);
-  }, o => o.name === 'jets');
+  }, o => o.parent?.name === 'jets');
   g.name = 'versailles:latone';
-  return { g, spray: g.getObjectByName('jets') ?? spray };
+  return { g, spray: g.children.filter(o => o.material === jets) };
 }
 /**
  * The Apollo basin, world units at the origin: the great stone ring, the water, Apollo's chariot rising out of it
- * drawn by four gilded horses, tritons blowing their conches round it, and the jets (one mesh, which pulses).
+ * drawn by four gilded horses, tritons blowing their conches round it, and the jets, each pulsing on its own.
  */
 export function apollon(water, jets) {
   const g = merged(p => {
@@ -216,9 +215,9 @@ export function apollon(water, jets) {
     const spray = new THREE.Group(); spray.name = 'jets'; p.add(spray);
     [[0, 0, 14], [-6, -8, 9], [6, -8, 9], [-9, 4, 8], [9, 4, 8]].forEach(([x, z, h]) => { const j = new THREE.Mesh(new THREE.ConeGeometry(0.35, h, 6), jets); j.position.set(x, h / 2 + 0.9, z); spray.add(j); });
     for (let i = 0; i < 4; i++) spray.add(inward(jets, 7, 13, Math.PI / 4 + i * Math.PI / 2, 3.6, 0.8));
-  }, o => o.name === 'jets');
+  }, o => o.parent?.name === 'jets');
   g.name = 'versailles:apollon';
-  return { g, spray: g.getObjectByName('jets') };
+  return { g, spray: g.children.filter(o => o.material === jets) };
 }
 /**
  * The Colonnade bosquet, world units at the origin: a ring of paired pink-marble columns under an entablature of
