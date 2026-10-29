@@ -8,6 +8,8 @@ import {
   HudLayer,
   ItemSlot,
   LapCounter,
+  LatencyReadout,
+  LayoutReadout,
   MinimapFrame,
   PositionReadout,
   PowerGauge,
@@ -19,6 +21,9 @@ import {
   type DriftGaugeHandle,
   type HitVignetteHandle,
   type ItemSlotHandle,
+  type Latency,
+  type LatencyReadoutHandle,
+  type LayoutReadoutHandle,
   type PositionReadoutHandle,
   type PowerGaugeHandle,
   type SpeedReadoutHandle,
@@ -53,8 +58,10 @@ export interface HudHandles {
   center: TextReadoutHandle | null;
   toast: ToastHandle | null;
   wrong: WrongWayHandle | null;
-  /** The team race's connection: round trip and render delay (DEC-052); empty in solo play. */
-  net: TextReadoutHandle | null;
+  /** The team race's connection: round trip and render delay (DEC-052), coloured by the round trip; hidden in solo play. */
+  net: LatencyReadoutHandle | null;
+  /** The layout the race's seed drew (DEC-049), under the countdown and in the pause. */
+  layout: LayoutReadoutHandle | null;
   /** Stage 4's (DEC-053): the tinted edges and the statuses on the kart. */
   vignette: HitVignetteHandle | null;
   status: StatusBadgesHandle | null;
@@ -62,8 +69,11 @@ export interface HudHandles {
 
 export const hud: HudHandles = {
   pos: null, lap: null, time: null, item: null, power: null, hint: null, speed: null, drift: null, center: null, toast: null, wrong: null, net: null,
-  vignette: null, status: null,
+  vignette: null, status: null, layout: null,
 };
+
+/** The connection's line, in French. */
+export const formatNet = ({ rtt, delay }: Latency) => 'ping ' + (rtt ?? '…') + ' ms · délai ' + delay + ' ms';
 
 /**
  * The readouts, rendered exactly once. Memoised with no props so the layer's
@@ -80,8 +90,8 @@ const Readouts = memo(function Readouts() {
         <PositionReadout id="h-pos" position={6} ref={(h) => { hud.pos = h; }} />
         <LapCounter id="h-lap" ref={(h) => { hud.lap = h; }}>TOUR 1/3</LapCounter>
         <RaceTimer id="h-time" ref={(h) => { hud.time = h; }}>0:00.00</RaceTimer>
-        {/* the team race's ping and delay, in the clock's quiet monospace; empty in solo play (a LatencyReadout later, PLAN stage 8) */}
-        <RaceTimer id="h-net" ref={(h) => { hud.net = h; }} />
+        {/* the team race's ping and delay, coloured by the round trip; hidden and empty in solo play */}
+        <LatencyReadout id="h-net" format={formatNet} ref={(h) => { hud.net = h; }} />
         <StatusBadges id="h-status" ref={(h) => { hud.status = h; }} />
       </HudCorner>
       <HudCorner corner="topRight">
@@ -106,6 +116,7 @@ const Readouts = memo(function Readouts() {
         <DriftGauge value={0} fillProps={{ id: 'h-drift' }} ref={(h) => { hud.drift = h; }} />
       </HudCorner>
       <CenterAnnounce id="h-center" ref={(h) => { hud.center = h; }} />
+      <LayoutReadout id="hud-layout" label="Tracé du jour" hidden ref={(h) => { hud.layout = h; }} />
       <Toast id="h-toast" ref={(h) => { hud.toast = h; }} />
       <WrongWay id="h-wrong" hidden ref={(h) => { hud.wrong = h; }}>SENS INTERDIT !</WrongWay>
     </>

@@ -4,7 +4,6 @@ import {
   CoinCount,
   Disclaimer,
   DropHistory,
-  GradeBadge,
   Heading,
   OddsTable,
   Panel,
@@ -12,6 +11,8 @@ import {
   Screen,
   ShopCard,
   Tabs,
+  TrailStrip,
+  type TrailKind,
 } from '@politikart/ui';
 
 import {
@@ -167,21 +168,29 @@ function PartsPanel({ ui, coins, guest }: { ui: UiSnapshot; coins: number; guest
           </section>
         );
       })}
+      {/* The trails are the Politibox's alone (DEC-036): a card each with its preview streaming behind a kart, no price, the reason on the button. */}
       <section id="shop-trails" className="shop-cat">
         <Heading level={3} style={{ fontSize: 20, textAlign: 'left' }}>Traînées</Heading>
-        <ul className="shop-trails">
+        <div className="shop-grid">
           {TRAIL_OPTIONS.filter(t => t !== 'none').map(t => {
             const grade = TRAIL_GRADE[t as keyof typeof TRAIL_GRADE] as Grade;
-            const mine = ownsTrail(owned, t);
             return (
-              <li key={t} id={'shop-trail-' + t} className={mine ? 'owned' : undefined}>
-                <GradeBadge grade={grade} label={GRADE_LABELS[grade]} size="sm" />
-                <span className="name">{trailLabel(t)}</span>
-                <span className="trail-note">{mine ? '✓ Acquise' : 'Politibox uniquement'}</span>
-              </li>
+              <ShopCard
+                key={t}
+                id={'shop-trail-' + t}
+                title={trailLabel(t)}
+                subtitle="Traînée"
+                grade={grade}
+                gradeLabel={GRADE_LABELS[grade]}
+                image={<TrailStrip trail={t as TrailKind} label={trailLabel(t)} />}
+                owned={ownsTrail(owned, t)}
+                locked="Politibox uniquement"
+                ownedLabel="Acquise"
+                buyProps={{ id: 'b-trail-' + t }}
+              />
             );
           })}
-        </ul>
+        </div>
       </section>
     </div>
   );

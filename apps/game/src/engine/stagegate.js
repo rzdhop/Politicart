@@ -50,6 +50,8 @@ export const launching = () => (mod ? mod.launching() : false);
 export function launch() { return mod ? mod.launch() : false; }
 /** The stage as its last frame drew it (preview.js stageInfo); null before it exists. */
 export const stageInfo = () => (mod ? mod.stageInfo() : null);
+/** Whether the select stage stands still for a GPU that cannot keep up (preview.js stillStage, DEC-046); false before the chunk is here. */
+export const stageStill = () => (mod ? mod.stillStage() : false);
 /** Whether the stage exists yet (preview.js hasPreview). */
 export const hasPreview = () => (mod ? mod.hasPreview() : false);
 /** Put candidate `i` on the podium (preview.js setPreview); remembered until the chunk lands. */

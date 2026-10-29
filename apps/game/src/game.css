@@ -172,7 +172,8 @@ body{--note-h:34px;--note-room:calc(8px + var(--note-h) + 6px + env(safe-area-in
 #s-select>:first-child{margin-top:0;}
 /* Upright phones: the circuit cards stack, so their previews stay short. */
 @media (max-width:600px){
-  #s-tracks .card canvas{max-height:24vh;object-fit:contain;}
+  #s-tracks .card .track-thumb{max-height:24vh;}
+  #s-tracks .card .track-thumb canvas{object-fit:contain;}
 }
 /* Phones held sideways: the title, the circuits and the other menus shrink to the short side. */
 @media (max-height:520px) and (orientation:landscape){
@@ -181,8 +182,10 @@ body{--note-h:34px;--note-room:calc(8px + var(--note-h) + 6px + env(safe-area-in
   #s-title .controls{font-size:12px;gap:4px 14px;}
   #s-tracks .card{padding:8px;gap:6px;}
   #s-tracks .card .name{font-size:15px;}
-  #s-tracks .card canvas{max-height:30vh;object-fit:contain;}
+  #s-tracks .card .track-thumb{max-height:30vh;}
+  #s-tracks .card .track-thumb canvas{object-fit:contain;}
   #s-tracks .card .desc{font-size:11px;line-height:1.25;}
+  #s-tracks .card .track-layouts{display:none;}   /* the figures stay; the layouts' names are the countdown's to tell */
   #s-tracks>h2,#s-results>h2,#s-lobby>h2,#s-admin>h2{font-size:22px!important;}
   #s-results .results-table{font-size:13px;}
   #s-results .results-table td,#s-results .results-table th{padding:3px 8px;}
@@ -218,12 +221,6 @@ body{--note-h:34px;--note-room:calc(8px + var(--note-h) + 6px + env(safe-area-in
 #s-shop .shop-top h2{margin:0;}
 #s-shop .shop-cat{display:flex;flex-direction:column;gap:10px;}
 #s-shop .odds-table{margin:0 auto;}
-#s-shop .shop-trails{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;}
-#s-shop .shop-trails li{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;}
-#s-shop .shop-trails li .name{font-family:var(--font-display);font-size:16px;}
-#s-shop .shop-trails li .trail-note{margin-left:auto;font-size:12px;color:var(--muted);}
-#s-shop .shop-trails li.owned{border-color:rgba(242,193,78,.6);}
-#s-shop .shop-trails li.owned .trail-note{color:var(--gold);}
 #b-shop .coin-count{margin-left:6px;vertical-align:middle;}
 @media (max-width:480px){
   #s-shop .shop-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
