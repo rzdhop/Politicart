@@ -25,11 +25,12 @@ import { drain, resolveFor } from './engine/events.js';
 import { loadGarage } from './engine/garage.js';
 import { setInputSource } from './engine/input.js';
 import { getState, onTransition } from './engine/machine.js';
-import { renderLootbox } from './engine/lootbox.js';
+import { renderLootbox } from './engine/boxgate.js';
 import { isNetRace, netStep } from './engine/netrace.js';
-import { launching, renderPreview, showsTurntable, stageInfo, warmStage } from './engine/preview.js';
+import { launching, renderPreview, showsTurntable, stageInfo, warmStage } from './engine/stagegate.js';
+import { prebuildFrame, prebuildStatus, primeCountdown } from './engine/prebuild.js';
 import { endRace, renderRace, stepRace } from './engine/race.js';
-import { clearCanvas } from './engine/render.js';
+import { clearCanvas, getRenderer } from './engine/render.js';
 import { G } from './engine/state.js';
 import { $, clamp, fmtTime } from './engine/util.js';
 import { hud } from './ui/Hud.tsx';
@@ -188,6 +189,9 @@ function frame(now) {
   // but for the circuits' first 1.4 s after "Choisir le circuit →": the stage draws the kart
   // driving off behind the cards, then clears to that background itself (preview.js launch, Q3).
   if (state === 'lootbox') { renderLootbox(dt); return; }
+  // The chosen circuit is built ahead, a slice per frame, while the player sits on the circuits, in the lobby or on the
+  // results (engine/prebuild.js, DEC-055); the stage's launch keeps its frames to itself. Drawn over or cleared below.
+  if (state === 'tracks' || state === 'lobby' || state === 'results') prebuildFrame({ renderer: getRenderer(), budget: launching() ? 0 : undefined });
   if (showsTurntable(state) || (state === 'tracks' && launching())) { renderPreview(dt); return; }
   if (state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'dashboard' || state === 'shop') { clearCanvas(); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
@@ -197,6 +201,8 @@ function frame(now) {
   for (const e of drain()) { const text = resolveFor(e, G.player); if (text === null) continue; if (e.type === 'toast') toast(text); else if (e.type === 'hint') setHint(text); }
   tickToast(dt);
   updateHUD(payload); updateEngine();
+  // The countdown primes the items' materials, a few per frame, so the first throw never stutters (prebuild.js).
+  if (state === 'countdown') primeCountdown({ renderer: getRenderer() });
   renderRace();
 }
 requestAnimationFrame(frame);
@@ -211,4 +217,5 @@ requestAnimationFrame(frame);
 // reached this screen (nothing in the DOM shows a kart's style).
 // stage() is read-only too: the select stage as its last frame drew it (preview.js stageInfo): the candidate,
 // the podium's yaw, the frame's draw calls, triangles and programs, the model's box on screen, the portraits.
-window.__kr = { endRace, karts: () => (G.karts || []).map(k => ({ charId: k.def.id, style: { ...k.style } })), stage: () => stageInfo() };
+// prebuild() is read-only: the circuit being built ahead (prebuild.js prebuildStatus), its phase and timings.
+window.__kr = { endRace, karts: () => (G.karts || []).map(k => ({ charId: k.def.id, style: { ...k.style } })), stage: () => stageInfo(), prebuild: () => prebuildStatus() };

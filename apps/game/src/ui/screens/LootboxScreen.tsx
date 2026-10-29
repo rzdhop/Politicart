@@ -13,7 +13,7 @@ import {
 
 import { BOX_PRICE } from '../../engine/catalog.js';
 import { CHARACTERS } from '../../engine/data.js';
-import { dropGrade } from '../../engine/lootbox.js';
+import { dropGrade } from '../../engine/boxgate.js';
 import { GRADE_LABELS, partPhrase, trailLabel } from '../kartChoices';
 import { actions, type Drop, type Grade, type UiSnapshot } from '../store';
 import type { Character } from '../types';

@@ -15,7 +15,9 @@
 //   /api/admin/users/unban, /api/admin/users/logout, /api/admin/rooms/close,
 //   /api/admin/connections/kick, /api/admin/coins
 //                 -> the admin's dashboard (dashboard.js), admin only
-//   GET /*        -> apps/game/dist, read-only, no directory escapes
+//   GET /*        -> apps/game/dist, read-only, no directory escapes; hashed
+//                    assets immutable, the rest with ETag/304, text assets from
+//                    their precompressed siblings (DEC-055)
 //   WS  /ws       -> the lobby protocol below; races run in a worker
 //
 // Client -> server: hello {name, token?} | create | join {code} | set {team,
@@ -64,6 +66,62 @@ const MIME = {
 
 // 2 since DEC-049: the race start message carries the seed, and a client refuses one without it.
 export const PROTOCOL = 2;
+
+// ---- the built game's files (DEC-055)
+/** The text assets the build precompresses (apps/game/scripts/compress.mjs): served from their `.br` or `.gz` sibling when the client takes it. */
+const PRECOMPRESSED = new Set(['.js', '.mjs', '.css', '.html', '.svg', '.json', '.txt', '.xml', '.webmanifest']);
+/** Whether an Accept-Encoding header takes `name` (a listed token with a non-zero q, or `*`). */
+export function acceptsEncoding(header, name) {
+  let star = false;
+  for (const part of String(header ?? '').split(',')) {
+    const [token, ...params] = part.trim().split(';'); if (!token) continue;
+    const q = params.map(p => p.trim()).find(p => p.startsWith('q='));
+    const taken = q === undefined || Number(q.slice(2)) > 0;
+    if (token.trim().toLowerCase() === name) return taken;
+    if (token.trim() === '*') star = taken;
+  }
+  return star;
+}
+/** Whether an If-None-Match header names `etag` (weak comparison, `*` included). */
+const matchesEtag = (header, etag) => String(header ?? '').split(',').some(t => { t = t.trim(); return t === '*' || t.replace(/^W\//, '') === etag.replace(/^W\//, ''); });
+/**
+ * Serve one file of the build. Vite names everything under /assets/ with a
+ * content hash, so those are cached for a year and never revalidated
+ * (`immutable`); the page and the other unhashed files carry a weak ETag and
+ * `no-cache`, so a browser asks every time and gets a 304 while nothing
+ * changed. A text asset goes out from its precompressed sibling (brotli
+ * first, then gzip) when Accept-Encoding allows and the sibling is as new as
+ * the file, with Vary so caches keep one copy per encoding.
+ */
+function serveFile(req, res, file, rel) {
+  let st; try { st = statSync(file); } catch { st = null; }
+  if (!st || !st.isFile()) {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end(rel === '/index.html' ? 'The game is not built yet: run `npm run build -w @politikart/game`.' : 'Not found');
+    return;
+  }
+  const ext = extname(file).toLowerCase(), hashed = rel.startsWith('/assets/');
+  const headers = { 'content-type': MIME[ext] ?? 'application/octet-stream', 'cache-control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache' };
+  let body = file, size = st.size, enc = null;
+  if (PRECOMPRESSED.has(ext)) {
+    headers.vary = 'Accept-Encoding';
+    for (const [name, suffix] of [['br', '.br'], ['gzip', '.gz']]) {
+      if (!acceptsEncoding(req.headers['accept-encoding'], name)) continue;
+      let cs; try { cs = statSync(file + suffix); } catch { continue; }
+      if (cs.isFile() && cs.mtimeMs >= st.mtimeMs) { body = file + suffix; size = cs.size; enc = name; break; }
+    }
+  }
+  if (enc) headers['content-encoding'] = enc;
+  headers.etag = 'W/"' + st.size.toString(16) + '-' + Math.floor(st.mtimeMs).toString(16) + (enc ? '-' + enc : '') + '"';
+  if (matchesEtag(req.headers['if-none-match'], headers.etag)) {
+    const { 'content-type': _ct, 'content-encoding': _ce, ...kept } = headers;
+    res.writeHead(304, kept); res.end(); return;
+  }
+  headers['content-length'] = size;
+  res.writeHead(200, headers);
+  if (req.method === 'HEAD') { res.end(); return; }
+  createReadStream(body).pipe(res);
+}
 
 /**
  * Start a game server. `runRace(room, roster, io)` starts a race and returns
@@ -121,15 +179,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
     if (rel.endsWith('/')) rel += 'index.html';
     const file = normalize(join(root, rel));
     if (file !== root && !file.startsWith(root + sep)) { res.writeHead(403).end(); return; }
-    let st; try { st = statSync(file); } catch { st = null; }
-    if (!st || !st.isFile()) {
-      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-      res.end(rel === '/index.html' ? 'The game is not built yet: run `npm run build -w @politikart/game`.' : 'Not found');
-      return;
-    }
-    res.writeHead(200, { 'content-type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream', 'content-length': st.size });
-    if (req.method === 'HEAD') { res.end(); return; }
-    createReadStream(file).pipe(res);
+    serveFile(req, res, file, rel);
   });
 
   const wss = new WebSocketServer({ server: http, path: '/ws', maxPayload: 16 * 1024 });
