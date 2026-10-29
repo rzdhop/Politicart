@@ -1,7 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
+import { GainBreakdown } from './GainBreakdown';
+import { Podium } from './Podium';
 import { ResultsTable, type ResultsRow } from './ResultsTable';
+import { TeamStandings } from './TeamStandings';
 
 const ROWS: ResultsRow[] = [
   {
@@ -97,5 +100,77 @@ describe('ResultsTable bodyProps', () => {
   it('renders a plain tbody when bodyProps is omitted', () => {
     const { container } = render(<ResultsTable rows={ROWS} />);
     expect(container.querySelector('tbody')?.attributes).toHaveLength(0);
+  });
+});
+
+describe('Podium', () => {
+  it('lists the first three in finishing order, each on its numbered step', () => {
+    const { container } = render(
+      <Podium
+        placeLabel={(n) => n + (n === 1 ? 'er' : 'e')}
+        entries={[
+          { name: 'A', portrait: 'a.png', value: '1:00', you: true },
+          { name: 'B', detail: 'b' },
+          { name: 'C' },
+          { name: 'D' },
+        ]}
+      />,
+    );
+    const places = [...container.querySelectorAll('.podium > li')] as HTMLElement[];
+    expect(places.map((p) => p.dataset.place)).toEqual(['1', '2', '3']);
+    expect(places.map((p) => p.querySelector('.pd-step')?.textContent)).toEqual(['1er', '2e', '3e']);
+    expect(places[0]!.className).toBe('podium-place you');
+    expect(places[0]!.querySelector('img')?.getAttribute('src')).toBe('a.png');
+    expect(places[0]!.querySelector('.pd-value')?.textContent).toBe('1:00');
+    expect(places[1]!.querySelector('.pd-detail')?.textContent).toBe('b');
+    expect(places[2]!.querySelector('.pd-detail')).toBeNull();
+    expect(container.querySelector('.podium')?.tagName).toBe('OL');
+  });
+});
+
+describe('GainBreakdown', () => {
+  it('writes each amount after a plus, with its label, and carries the count-up target', () => {
+    const { container } = render(
+      <GainBreakdown id="g" lines={[{ key: 'xp', label: 'XP', value: 40 }, { key: 'c', label: 'politicoins', value: 1200, tone: 'coin' }]} format={(v) => v.toLocaleString('fr-FR')} notes={['Niveau 2 atteint !']} />,
+    );
+    const lines = [...container.querySelectorAll('.gain-line')] as HTMLElement[];
+    expect(lines.map((l) => l.textContent)).toEqual(['+40 XP', '+1\u202f200 politicoins']);
+    expect(lines.map((l) => l.className)).toEqual(['gain-line tone-xp', 'gain-line tone-coin']);
+    const value = lines[1]!.querySelector('.gain-value') as HTMLElement;
+    expect(value.className).toBe('gain-value kr-count');
+    expect(value.style.getPropertyValue('--to')).toBe('1200');
+    expect(value.style.getPropertyValue('--i')).toBe('1');
+    expect(container.querySelector('.gain-notes')?.textContent).toBe('Niveau 2 atteint !');
+    expect(container.querySelector('#g')?.textContent).toContain('XP');
+  });
+
+  it('draws no notes list without notes', () => {
+    const { container } = render(<GainBreakdown lines={[{ label: 'XP', value: 5 }]} />);
+    expect(container.querySelector('.gain-notes')).toBeNull();
+  });
+});
+
+describe('TeamStandings', () => {
+  it('is a table row per team, best first, with a bar as long as its share of the best score', () => {
+    const { container } = render(
+      <TeamStandings
+        bodyProps={{ id: 'teams' }}
+        teams={[{ name: 'Bleu', points: 24, detail: '3 pilotes', color: 'blue', you: true }, { name: 'Rouge', points: 12, color: 'red' }]}
+      />,
+    );
+    const rows = [...container.querySelectorAll('#teams tr')] as HTMLElement[];
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.className).toBe('you');
+    expect(rows[0]!.textContent).toBe('1Bleu3 pilotes24 pts');
+    expect(rows[1]!.style.getPropertyValue('--team')).toBe('red');
+    expect((rows[0]!.querySelector('.ts-bar i') as HTMLElement).style.width).toBe('100%');
+    expect((rows[1]!.querySelector('.ts-bar i') as HTMLElement).style.width).toBe('50%');
+    expect(container.querySelector('table')?.className).toBe('results-table team-standings');
+  });
+
+  it('keeps an empty bar for a team without points', () => {
+    const { container } = render(<TeamStandings teams={[{ name: 'Bleu', points: 0 }]} pointsLabel={(p) => p + ' points'} />);
+    expect((container.querySelector('.ts-bar i') as HTMLElement).style.width).toBe('0%');
+    expect(container.querySelector('td.t')?.textContent).toBe('0 points');
   });
 });

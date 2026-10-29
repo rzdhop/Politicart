@@ -420,6 +420,24 @@ describe('the React screens', () => {
     expect(container.querySelectorAll('#trackcards .card.sel')).toHaveLength(1);
   });
 
+  it('give every circuit card its figures, its three layouts, its climates and a thumbnail frame on its way (stage 8)', () => {
+    const { container } = render(<App />);
+    fireEvent.click(container.querySelector('#b-play')!);
+    fireEvent.click(container.querySelector('#b-next1')!);
+    for (const t of TRACKS as unknown as { id: string; variants: { name: string }[]; climates: string[] }[]) {
+      const card = container.querySelector('#track-card-' + t.id)!;
+      expect(card, t.id).not.toBeNull();
+      expect([...card.querySelectorAll('.track-chip .tc-label')].map(n => n.textContent)).toEqual(['Longueur', 'Dénivelé', 'Largeur', 'Tours']);
+      expect(card.querySelector('.track-chip .tc-value')?.textContent).toMatch(/^\d+,\d km$/);
+      expect([...card.querySelectorAll('.tl-name')].map(n => n.textContent)).toEqual(t.variants.map(v => v.name));
+      expect(card.querySelectorAll('.track-climate')).toHaveLength(t.climates.length);
+      // no renderer here: the outline stays up, the thumbnail still on its way (engine/thumbs.js runs from game.js's frame)
+      expect(card.querySelector('.track-thumb')?.getAttribute('data-thumb')).toBe('pending');
+      expect(card.querySelector('.track-thumb canvas')?.getAttribute('width')).toBe('320');
+    }
+    expect(container.querySelector('#track-card-elysee .track-chip:nth-child(2) .tc-value')?.textContent).toBe('plat');
+  });
+
   it('flip the graphics and sound button labels', () => {
     const { container } = render(<App />);
     const poly = container.querySelector('#b-poly')!;
@@ -642,7 +660,7 @@ describe('the Workshop (admin profile)', () => {
 const HUD_IDS: Array<[string, string]> = [
   ['hud', 'DIV'], ['h-pos', 'DIV'], ['h-lap', 'DIV'], ['h-time', 'DIV'], ['minimap', 'CANVAS'],
   ['h-item', 'DIV'], ['h-power', 'DIV'], ['h-pname', 'DIV'], ['h-pbar', 'I'], ['h-pkey', 'DIV'], ['h-hint', 'DIV'],
-  ['h-speed', 'SPAN'], ['h-drift', 'I'], ['h-center', 'DIV'], ['h-toast', 'DIV'], ['h-wrong', 'DIV'], ['h-net', 'DIV'],
+  ['h-speed', 'SPAN'], ['h-drift', 'I'], ['h-center', 'DIV'], ['h-toast', 'DIV'], ['h-wrong', 'DIV'], ['h-net', 'DIV'], ['hud-layout', 'DIV'],
 ];
 
 describe('the HUD', () => {
@@ -656,6 +674,8 @@ describe('the HUD', () => {
     expect(container.querySelector('#h-item .nm')?.textContent).toBe('aucun objet');
     expect(container.querySelector('#h-speed')?.textContent).toBe('0');
     expect(container.querySelector('#h-net')?.textContent).toBe('');          // solo play: no connection to show
+    expect((container.querySelector('#h-net') as HTMLElement).hidden).toBe(true);
+    expect((container.querySelector('#hud-layout') as HTMLElement).hidden).toBe(true);   // shown at the countdown and in the pause only
   });
 
   it('is hidden on the menus and registers every handle for the frame writer', () => {
@@ -677,8 +697,14 @@ describe('the HUD', () => {
     hud.wrong!.setVisible(true);
     hud.toast!.show('FIGURE !');
     hud.center!.setText('PARTEZ !');
-    hud.net!.setText('ping 48 ms · délai 100 ms');
+    hud.net!.setLatency({ rtt: 48, delay: 100 });
     expect(container.querySelector('#h-net')?.textContent).toBe('ping 48 ms · délai 100 ms');
+    expect((container.querySelector('#h-net') as HTMLElement).dataset.quality).toBe('good');
+    expect((container.querySelector('#h-net') as HTMLElement).hidden).toBe(false);
+    hud.layout!.setName('Jour de manif');
+    hud.layout!.setVisible(true);
+    expect(container.querySelector('#hud-layout .lr-name')?.textContent).toBe('Jour de manif');
+    expect((container.querySelector('#hud-layout') as HTMLElement).hidden).toBe(false);
     expect(container.querySelector('#h-speed')?.textContent).toBe('123');
     expect(container.querySelector('#h-pos')?.textContent).toBe('1er');
     expect(container.querySelector('#h-lap')?.textContent).toBe('TOUR 2/3');
@@ -1203,6 +1229,28 @@ describe('the kart card and the coin line (stage 7)', () => {
     expect($(container, 'pause-kart')!.querySelectorAll('.kart-part')).toHaveLength(3);
   });
 
+  it('names the layout on the pause screen, and shows no connection in solo play (stage 8)', async () => {
+    const { container } = await renderServed({ server: false });
+    (G as unknown as { layout: unknown }).layout = { name: 'Jour de manif' };
+    raceWith({});
+    act(() => { transition('paused'); });
+    expect($(container, 'pause-layout')?.textContent).toBe('Tracé du jour : « Jour de manif »');
+    expect(($(container, 'pause-net') as HTMLElement).hidden).toBe(true);
+    (G as unknown as { layout: unknown }).layout = null;
+  });
+
+  it('puts the top three on the podium with their portraits (stage 8)', async () => {
+    const { container } = await renderServed({ server: false });
+    raceWith({});
+    act(() => { transition('race'); transition('results'); });
+    const places = [...$(container, 'r-podium')!.querySelectorAll('.podium-place')];
+    expect(places).toHaveLength(1);
+    expect(places[0]!.querySelector('.pd-name')?.textContent).toBe(CHARACTERS[0]!.name);
+    expect(places[0]!.querySelector('.pd-step')?.textContent).toBe('1er');
+    expect(places[0]!.querySelector('.pd-value')?.textContent).toBe('1:40.50');
+    expect(places[0]!.classList.contains('you')).toBe(true);
+  });
+
   it('shows a stock kart with no part and no trail line, and the card again on the results with the table intact', async () => {
     const { container } = await renderServed({ server: false });
     raceWith({});
@@ -1221,7 +1269,11 @@ describe('the kart card and the coin line (stage 7)', () => {
     act(() => { transition('race'); transition('results'); });
     await settle();
     expect(server.calls.find(c => c.url === './api/progress')).toMatchObject({ method: 'POST', auth: 'Bearer tok-player', body: { rank: 0, field: 1, finished: true, charId: 'victor' } });
-    expect($(container, 'r-xp')?.textContent).toBe('+40 XP · +60 politicoins · bonus du jour +50');
+    // the gains as a breakdown that counts up (GainBreakdown): one line per amount, the figure kept in the DOM
+    const lines = (el: Element | null) => [...(el?.querySelectorAll('.gain-line') ?? [])].map(l => l.textContent);
+    expect(lines($(container, 'r-xp'))).toEqual(['+40 XP', '+60 politicoins', '+50 bonus du jour']);
+    expect($(container, 'r-xp')?.querySelector('.gain-notes')).toBeNull();
+    expect(($(container, 'r-xp')?.querySelector('.gain-value') as HTMLElement).style.getPropertyValue('--to')).toBe('40');
     expect($(container, 'r-kart')!.querySelector('.kart-trail')?.textContent).toBe('Laser');
     expect(getSnapshot().account!.profile.coins).toBe(60);
   });
@@ -1231,7 +1283,8 @@ describe('the kart card and the coin line (stage 7)', () => {
     raceWith({});
     act(() => { transition('race'); transition('results'); });
     await settle();
-    expect($(container, 'r-xp')?.textContent).toBe('+90 XP · +45 politicoins · Niveau 2 atteint ! · niveau 2 : +200 politicoins');
+    expect([...$(container, 'r-xp')!.querySelectorAll('.gain-line')].map(l => l.textContent)).toEqual(['+90 XP', '+45 politicoins', '+200 politicoins (niveau 2)']);
+    expect($(container, 'r-xp')?.querySelector('.gain-notes')?.textContent).toBe('Niveau 2 atteint !');
   });
 
   it('says nothing about politicoins to a guest, who is invited to sign up', async () => {

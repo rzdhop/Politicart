@@ -17,6 +17,8 @@ import { buildTrack, roadTexOf } from './track.js';
 import { POOL } from './trail.js';
 
 const STEP = 1 / 60;
+/** Visible instanced meshes under a scene. */
+const countInstanced = scene => { let n = 0; scene.traverseVisible(o => { if (o.isInstancedMesh) n++; }); return n; };
 
 describe('headless engine', () => {
   beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; });
@@ -326,7 +328,9 @@ describe('the "légers" decor', () => {
     const folded = build(i, true), plain = build(i, false);
     expect(countTriangles(folded.scene)).toBe(countTriangles(plain.scene));
     sameLook(look(folded.scene), look(plain.scene), TRACKS[i].id);
-    expect(countMeshes(folded.scene, true)).toBeLessThanOrEqual(countMeshes(plain.scene, true) / 2);
+    // instanced batches (decor/instanced.js) are one draw a cell on both tiers and never fold: they stay out of the ratio
+    const foldable = scene => countMeshes(scene, true) - countInstanced(scene);
+    expect(foldable(folded.scene)).toBeLessThanOrEqual(foldable(plain.scene) / 2);
     for (const o of folded.moving) { let p = o; while (p.parent) p = p.parent; expect(p).toBe(folded.scene); expect(countMeshes(o)).toBeGreaterThan(0); }
     run(folded, 90); run(plain, 90);
     sameLook(look(folded.scene), look(plain.scene), TRACKS[i].id + ' after 1.5 s');

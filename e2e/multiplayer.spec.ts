@@ -62,11 +62,11 @@ test.describe('Multijoueur', () => {
     await guest.locator('#lobby-code').fill(code!);
     await guest.locator('#b-mp-join').click();
 
-    for (const p of [host, guest]) await expect(p.locator('#lobby-players tr')).toHaveCount(2);
-    await expect(host.locator('#lobby-players tr').nth(0)).toContainText(alice);
-    await expect(host.locator('#lobby-players tr').nth(1)).toContainText('(invité·e)');
-    await expect(host.locator('#lobby-players tr').nth(0)).toContainText('Bleu');
-    await expect(host.locator('#lobby-players tr').nth(1)).toContainText('Rouge');
+    for (const p of [host, guest]) await expect(p.locator('#lobby-players .player-card')).toHaveCount(2);
+    await expect(host.locator('#lobby-players .player-card').nth(0)).toContainText(alice);
+    await expect(host.locator('#lobby-players .player-card').nth(1)).toContainText('(invité·e)');
+    await expect(host.locator('#lobby-players .player-card').nth(0)).toContainText('Bleu');
+    await expect(host.locator('#lobby-players .player-card').nth(1)).toContainText('Rouge');
     // Each row names the candidate's grade and the player's trail (DEC-036, A-032): nobody here owns one, so a dash on both screens.
     for (const p of [host, guest]) {
       await expect(p.locator('#lobby-players .grade[data-grade="common"]')).toHaveCount(2);     // two starters, both common
@@ -112,7 +112,7 @@ test.describe('Multijoueur', () => {
     await expect(host.locator('#r-xp')).toContainText('XP');          // the account earned experience
     await guest.locator('#b-again').click();
     await expect(guest.locator('#s-lobby')).toBeVisible();
-    await expect(guest.locator('#lobby-players tr')).toHaveCount(2);
+    await expect(guest.locator('#lobby-players .player-card')).toHaveCount(2);
   });
 
   test('two accounts become friends, and one invites the other into a room', async ({ browser }) => {
@@ -141,8 +141,8 @@ test.describe('Multijoueur', () => {
     await expect(c.locator('#invite-text')).toHaveText(an + ' vous invite dans sa salle ' + code);
     await c.locator('#b-invite-join').click();
     await expect(c.locator('#s-lobby')).toBeVisible();
-    await expect(c.locator('#lobby-players tr')).toHaveCount(2);
-    await expect(a.locator('#lobby-players tr').nth(1)).toContainText(cn);
+    await expect(c.locator('#lobby-players .player-card')).toHaveCount(2);
+    await expect(a.locator('#lobby-players .player-card').nth(1)).toContainText(cn);
   });
 
   test("each player's Garage edits reach the other player's screen", async ({ browser }) => {
@@ -170,7 +170,7 @@ test.describe('Multijoueur', () => {
     expect(code).toBeTruthy();
     await guest.locator('#lobby-code').fill(code!);
     await guest.locator('#b-mp-join').click();
-    for (const p of [host, guest]) await expect(p.locator('#lobby-players tr')).toHaveCount(2);
+    for (const p of [host, guest]) await expect(p.locator('#lobby-players .player-card')).toHaveCount(2);
     await guest.locator('#b-mp-ready').click();
     await host.locator('#b-mp-start').click();
     for (const p of [host, guest]) await expect(p.locator('#hud')).toBeVisible();

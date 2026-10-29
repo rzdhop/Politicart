@@ -10,6 +10,8 @@ import { HudHint } from './HudHint';
 import { HudLayer } from './HudLayer';
 import { ItemSlot, type ItemSlotHandle } from './ItemSlot';
 import { LapCounter } from './LapCounter';
+import { LatencyReadout, latencyQuality, type LatencyReadoutHandle } from './LatencyReadout';
+import { LayoutReadout, type LayoutReadoutHandle } from './LayoutReadout';
 import { MinimapFrame } from './MinimapFrame';
 import { PositionReadout, type PositionReadoutHandle } from './PositionReadout';
 import { PowerGauge, type PowerGaugeHandle } from './PowerGauge';
@@ -421,5 +423,56 @@ describe('HUD motion through the handles', () => {
     ref.current?.setReady(true);
     expect(gauge.classList.contains('ready')).toBe(true);
     expect(gauge.classList.contains('charged')).toBe(true);
+  });
+});
+
+describe('LatencyReadout', () => {
+  it('rates the round trip', () => {
+    expect([null, 40, 89, 90, 169, 170, 400, Number.NaN].map(latencyQuality)).toEqual(['unknown', 'good', 'good', 'fair', 'fair', 'poor', 'poor', 'unknown']);
+  });
+
+  it('is hidden and empty without a connection, and shows the measures with their quality', () => {
+    const { container, rerender } = render(<LatencyReadout id="net" />);
+    const el = container.querySelector('#net') as HTMLElement;
+    expect(el.className).toBe('latency');
+    expect(el.hidden).toBe(true);
+    expect(el.textContent).toBe('');
+    rerender(<LatencyReadout id="net" latency={{ rtt: 120, delay: 100 }} />);
+    expect(el.hidden).toBe(false);
+    expect(el.textContent).toBe('ping 120 ms · delay 100 ms');
+    expect(el.dataset.quality).toBe('fair');
+  });
+
+  it('writes through its handle with the caller’s format, and hides again for null', () => {
+    const ref = createRef<LatencyReadoutHandle>();
+    const { container } = render(<LatencyReadout ref={ref} format={(l) => `ping ${l.rtt ?? '…'} ms · délai ${l.delay} ms`} />);
+    const el = container.firstElementChild as HTMLElement;
+    ref.current?.setLatency({ rtt: 48, delay: 100 });
+    expect(el.textContent).toBe('ping 48 ms · délai 100 ms');
+    expect(el.dataset.quality).toBe('good');
+    expect(el.hidden).toBe(false);
+    ref.current?.setLatency({ rtt: null, delay: 83 });
+    expect(el.textContent).toBe('ping … ms · délai 83 ms');
+    expect(el.dataset.quality).toBe('unknown');
+    ref.current?.setLatency(null);
+    expect(el.hidden).toBe(true);
+    expect(el.textContent).toBe('');
+  });
+});
+
+describe('LayoutReadout', () => {
+  it('shows the caption and the name, and the handle rewrites the name alone and toggles it', () => {
+    const ref = createRef<LayoutReadoutHandle>();
+    const { container } = render(<LayoutReadout id="lay" ref={ref} label="Tracé du jour" hidden />);
+    const el = container.querySelector('#lay') as HTMLElement;
+    expect(el.className).toBe('layout-readout');
+    expect(el.hidden).toBe(true);
+    ref.current?.setName('Jour de manif');
+    ref.current?.setVisible(true);
+    expect(el.hidden).toBe(false);
+    expect(el.querySelector('.lr-label')?.textContent).toBe('Tracé du jour');
+    expect(el.querySelector('.lr-name')?.textContent).toBe('Jour de manif');
+    ref.current?.setVisible(false);
+    expect(el.hidden).toBe(true);
   });
 });

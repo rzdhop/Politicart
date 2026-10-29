@@ -20,13 +20,14 @@ import { getGarage, resetGarage, setGarage, setOwned } from '../engine/garage.js
 import { playOpening, skipOpening as skipBoxOpening, stopOpening } from '../engine/boxgate.js';
 import { canTransition, getState, onTransition, transition } from '../engine/machine.js';
 import * as net from '../engine/net.js';
-import { isNetRace, onNetResults, pressItem, pressPower } from '../engine/netrace.js';
+import { isNetRace, netLatency, onNetResults, pressItem, pressPower } from '../engine/netrace.js';
 import { applyGodCommand } from '../engine/godcmd.js';
 import { useItem as engineUseItem } from '../engine/items.js';
 import { usePower as engineUsePower } from '../engine/powers.js';
 import { CHARACTERS, TRACKS } from '../engine/data.js';
 import { hasPreview, launch, makeThumbs, setPreview } from '../engine/stagegate.js';
 import { requestPrebuild } from '../engine/prebuild.js';
+import { onThumbs as onTrackThumbs, warmFigures } from '../engine/thumbs.js';
 import { STARTERS } from '../engine/progress.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
@@ -113,6 +114,11 @@ export interface Gain { gained: number; coins: number; daily: boolean; levelUpCo
 /** The kart this screen drives in the race on screen (or the last one): its candidate and the full style it was built with. */
 export interface RaceKart { charId: string; style: KartStyle }
 
+/** A circuit's thumbnail on the circuits screen (engine/thumbs.js): on its way, rendered (with its canvas), or the placeholder for good. */
+export interface TrackThumb { state: 'pending' | 'ready' | 'static'; canvas: HTMLCanvasElement | null }
+/** A team race's connection as the pause screen shows it (netrace.js netLatency): round trip (null before the first pong) and render delay, ms. */
+export interface NetLatency { rtt: number | null; delay: number }
+
 export type Grade = 'common' | 'rare' | 'mythic' | 'incredible';
 export type DropKind = 'char' | 'part' | 'trail' | 'coins';
 /** What a Politibox held (engine/catalog.js rollBox): politicoins, or an item, refunded when it was already owned. */
@@ -197,6 +203,12 @@ export interface UiSnapshot {
   lastGain: Gain | null;
   /** The local kart of the race on screen, for the kart card on the pause and results screens; null before the first race. */
   raceKart: RaceKart | null;
+  /** The layout the race on screen was drawn with (DEC-049), for the pause screen; null before the first race. */
+  raceLayout: string | null;
+  /** The connection when the race was paused, null in solo play. */
+  pauseNet: NetLatency | null;
+  /** The circuits' thumbnails by track id (engine/thumbs.js), filled in while the circuits screen shows. */
+  trackThumbs: Record<string, TrackThumb>;
   /** The admin's dashboard (DEC-030). */
   dashboard: DashboardView;
   /** The admin's god console is open over the race (DEC-031). */
@@ -284,6 +296,9 @@ let snapshot: UiSnapshot = {
   accountError: null,
   lastGain: null,
   raceKart: null,
+  raceLayout: null,
+  pauseNet: null,
+  trackThumbs: {},
   dashboard: { stats: null, users: [], connections: [], rooms: [], query: '', busy: false, error: null, notice: null, updatedAt: null },
   godConsole: false,
   godReply: null,
@@ -330,7 +345,12 @@ onTransition((to: string, from: string) => {
   const patch: Partial<UiSnapshot> = { state: to as GameState };
   if (to === 'countdown' && from !== 'paused') { patch.noteHidden = true; patch.lastGain = null; patch.godReply = null; }
   // A grid is on the track (a god entering a race mid-way joins it during the countdown, netrace.js).
-  if ((to === 'countdown' || to === 'race') && from !== 'paused') patch.raceKart = captureRaceKart();
+  if ((to === 'countdown' || to === 'race') && from !== 'paused') { patch.raceKart = captureRaceKart(); patch.raceLayout = (G.layout as { name?: string } | null)?.name || null; }
+  if (to === 'paused') patch.pauseNet = isNetRace() ? (netLatency() as NetLatency | null) : null;
+  // the circuits' figures are worked out while the roster shows, so "Choisir le circuit →" finds them ready (thumbs.js)
+  if (to === 'select') warmFigures();
+  // the lobby's player cards show the candidates' portraits: placeholders at least, the portraits once rendered (DEC-045)
+  if (to === 'lobby' && !Object.keys(snapshot.thumbs).length) refreshThumbs();
   set(patch);
   // A solo race just ended: the account earns its experience (a team race's comes from the server).
   if (to === 'lobby') soloRace = false;
@@ -343,6 +363,7 @@ net.onNet((view: NetView) => {
   if (view.room && view.room.phase === 'lobby' && getState() === 'lobby') requestPrebuild(view.room.trackIdx);
 });
 onNetResults((r: NetResults) => set({ netResults: r }));
+onTrackThumbs((view: Record<string, TrackThumb>) => set({ trackThumbs: view }));
 
 /**
  * Tell the Garage what the player owns (DEC-035), and redraw what shows

@@ -35,10 +35,11 @@ import { SALT_CYCLISTS, SALT_FEATURES, SALT_RACE, derive, makeRng } from './seed
 import { CFG, G, bikeLaneOf, disposable, getPoly, nextEntityId } from './state.js';
 import { TEX, bakeSurface, surface, textures } from './textures.js';
 import { pick, rand } from './util.js';
-import { EMBANK, PAVEMENT, STILL, setDecorScale, setTerrain, still, terrainY, yAt } from './decor/context.js';
+import { EMBANK, PAVEMENT, STILL, nOf, setDecorScale, setTerrain, still, terrainY, yAt } from './decor/context.js';
 import { BUILDERS, DECOR_SURFACES } from './decor/index.js';
 import { flushInstanced, resetInstanced } from './decor/instanced.js';
-import { ADS, JACKETS, SKINS, adBoard, crowdZone, figure, flagPole, grandstand, lamp, sedan } from './decor/street.js';
+import { resetLife } from './decor/life.js';
+import { ADS, JACKETS, SKINS, adBoard, bench, crowdZone, figure, flagPole, flock, grandstand, lampAt, litterBin, sedan } from './decor/street.js';
 
 // ---------- "Légers": still decor in fewer draws (PLAN 4.2) ----------
 // The decor is built part by part, one mesh and so one draw call each: a
@@ -353,15 +354,8 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   const boxGeo = new THREE.OctahedronGeometry(1.1, 0); const boxMat = new THREE.MeshStandardMaterial({ color: 0xffd34d, emissive: 0x6a4a00, transparent: true, opacity: 0.9, roughness: 0.3, metalness: 0.4 });
   (track.boxRows || [0.18, 0.42, 0.66, 0.88]).forEach(f => { const s = samples[Math.floor(f * N)]; const sp = s.hw * 0.4; [-1.5, -0.5, 0.5, 1.5].forEach(o => { const m = new THREE.Mesh(boxGeo, boxMat); m.position.set(s.x + s.sx * o * sp, roadY(s, o * sp) + 1.4, s.z + s.sz * o * sp); scene.add(m); G.itemBoxes.push({ x: m.position.x, z: m.position.z, mesh: m, active: true, timer: 0 }); }); });
 
-  // shared street furniture: lamps, ad boards, crowd zones, grandstand
-  for (let i = 0; i < N; i += 36) { const s = samples[i]; const sg = (i / 36) % 2 ? 1 : -1; lamp(scene, s.x + s.sx * sg * (s.hw + 5.2), s.z + s.sz * sg * (s.hw + 5.2), track.gravel ? 'plain' : 'paris', s.y); }
-  for (let i = 0; i < 8; i++) adBoard(scene, Math.floor(N * (0.07 + i * 0.118)), i % 2 ? 1 : -1, ...ADS[i], getCustom().ads[i]);
-  yield TRACK_PHASES[3];
-  G.crowd = [];
-  grandstand(scene, 0, 1);
-  crowdZone(scene, N - 30, N + 30, -1, true);
-  yield TRACK_PHASES[3];
-  for (const [i, f] of [0.28, 0.5, 0.74].entries()) { crowdZone(scene, Math.floor(N * f), Math.floor(N * f) + 36, i % 2 ? 1 : -1, false); yield TRACK_PHASES[3]; }
+  // shared street furniture: lamps, ad boards, crowd zones, grandstand, benches, pigeons
+  for (const _ of furnish(scene, track, layout)) yield TRACK_PHASES[3];
   yield TRACK_PHASES[3];
 
   buildFeatures(scene, layout, makeRng(derive(seed, SALT_FEATURES)));
@@ -378,6 +372,46 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   yield TRACK_PHASES[6];
   if (fold) foldStill(scene); else STILL.length = 0;
   yield TRACK_PHASES[7];
+}
+
+// ---------- Shared street furniture (stage 7) ----------
+/**
+ * The furniture every circuit gets, a generator yielding between its parts:
+ * instanced lamps every 24 samples on alternate sides (the climate lights
+ * their heads at night through G.lamps), the eight ad boards, the grandstand
+ * at the line and four crowd zones (instanced spectators behind a merged
+ * rail), then benches with a bin between the lamps and pigeon flocks on the
+ * pavements, kept off the crowds, the boards and the crossings. Everything
+ * repeated is an instanced batch (decor/street.js, crowd.js, flock.js),
+ * flushed after the decor.
+ */
+function* furnish(scene, track, layout) {
+  const N = G.N, samples = G.samples, hi = getPoly() === 'high';
+  resetLife();
+  // the samples taken: crowds, grandstand, boards, the crossing's street
+  const busy = new Uint8Array(N), take = (from, to) => { for (let i = from; i < to; i++) busy[((i % N) + N) % N] = 1; };
+  const zones = [[N - 30, N + 30, -1, true], ...[0.28, 0.5, 0.74].map((f, i) => [Math.floor(N * f), Math.floor(N * f) + 36, i % 2 ? 1 : -1, false])];
+  for (const [a, b] of zones) take(a - 4, b + 4);
+  take(-36, 36);
+  for (let i = 0; i < 8; i++) { const at = Math.floor(N * (0.07 + i * 0.118)); take(at - 4, at + 5); }
+  for (const f of layout.features || []) if (f.t === 'crossing') { const at = Math.floor(f.f * N); take(at - 12, at + 13); }
+  const side = (s, sg, d) => ({ x: s.x + s.sx * sg * (s.hw + d), z: s.z + s.sz * sg * (s.hw + d), y: s.y + sg * (s.hw + d) * (s.bank || 0) });
+  for (let i = 0, k = 0; i < N; i += hi ? 24 : 36, k++) { const s = samples[i], sg = k % 2 ? 1 : -1, p = side(s, sg, 5.2); lampAt(scene, p.x, p.z, track.gravel ? 'plain' : 'paris', { world: true, y: p.y }); }
+  for (let i = 0; i < 8; i++) adBoard(scene, Math.floor(N * (0.07 + i * 0.118)), i % 2 ? 1 : -1, ...ADS[i], getCustom().ads[i]);
+  yield;
+  G.crowd = [];
+  grandstand(scene, 0, 1);
+  crowdZone(scene, ...zones[0]);
+  yield;
+  for (const z of zones.slice(1)) { crowdZone(scene, ...z); yield; }
+  // a bench and its bin between two lamps, facing the road; pigeons pecking further on
+  for (let i = 12; i < N; i += hi ? 24 : 48) {
+    if (busy[i]) continue;
+    const s = samples[i], sg = (Math.floor(i / 24) % 2) ? -1 : 1, p = side(s, sg, 4.4), b = side(s, sg, 4.6);
+    bench(scene, p.x, p.z, Math.atan2(-s.sx * sg, -s.sz * sg), { world: true, y: p.y });
+    if (hi) litterBin(scene, b.x + s.tx * 1.8, b.z + s.tz * 1.8, { world: true, y: b.y });
+  }
+  for (let i = 75, k = 0; i < N; i += hi ? 150 : 225, k++) { if (busy[i]) continue; const s = samples[i], sg = k % 2 ? 1 : -1, p = side(s, sg, 3.6); flock(scene, p.x, p.z, { world: true, y: p.y, n: nOf(8), radius: 2.2 }); }
 }
 
 /** Every surface kind a build of `track` uses: the road's, the ground's, the shared furniture's and features', and its decor's (decor/<id>.js SURFACES). */
