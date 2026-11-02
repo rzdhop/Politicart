@@ -26,7 +26,7 @@ const LANDMARKS = {
   bourbon: ['bourbon:assemblee', 'bourbon:presse', 'bourbon:obelisque', 'bourbon:concorde', 'bourbon:seine', 'bourbon:pont-concorde', 'bourbon:pont-alexandre-iii', 'bourbon:pylones', 'bourbon:tunnel', 'bourbon:pont-route', 'bourbon:bateau-mouche', 'bourbon:batobus', 'bourbon:paris-plages', 'bourbon:peniche', 'bourbon:rive-droite'],
 };
 /** What lies on the road on purpose: the cour pavée's cobbles, the red carpet, the tunnel's haze, the escort riding with the crossing's car. */
-const ON_ROAD = /:pavers|:carpet|:haze|escorte/;
+const ON_ROAD = /:pavers|:carpet|:haze|escorte|^road:/;   // road: the urnes and the coins (ballotbox.js, coins.js)
 
 const setPoly = p => { if (getPoly() !== p) togglePoly(); };
 afterEach(() => setPoly('high'));

@@ -25,6 +25,7 @@
 // millisecond -- and a field at its resting value (zero, false; one for the
 // bump's power and side, 1.4 for the boost's) is left out: six karts go out
 // thirty times a second to every player.
+import { TALLIES } from './goals.js';
 import { G as Game } from './state.js';
 
 const q = (v, p) => Math.round((v || 0) * p) / p;
@@ -66,6 +67,9 @@ export function encodeKartPrivate(k, ramps = Game.ramps) {
   put(o, 'sl', ms(k.slowed)); put(o, 'co', ms(k.confused)); put(o, 'sp', ms(k.slip)); put(o, 'ra', ms(k.rabot)); put(o, 'ca', ms(k.capped));
   put(o, 'rl', k.relance || 0); put(o, 'rt', ms(k.relanceTimer)); put(o, 'bo', cm(k.boostPower ?? 1.4), 1.4);
   const ramp = k.rampPrev ? ramps.indexOf(k.rampPrev) : -1; if (ramp >= 0) o.rp = ramp;
+  // the run's own (DEC-063..065): the item's uses left, the grace after a spin, the coins carried and picked, the goals and the tallies, the section
+  put(o, 'iu', k.itemUses || 0); put(o, 'hgr', ms(k.hitGrace)); put(o, 'cc', k.coins || 0); put(o, 'pk', k.pickups || 0); put(o, 'gl', k.goalsDone || 0); put(o, 'sc', k.section || 0);
+  if (k.tally && TALLIES.some(t => k.tally[t])) o.ty = TALLIES.map(t => k.tally[t] || 0);
   return o;
 }
 
@@ -84,6 +88,7 @@ export function applyKartPrivate(k, me, ramps = Game.ramps) {
   k.slowed = me.sl ?? 0; k.confused = me.co ?? 0; k.slip = me.sp ?? 0; k.rabot = me.ra ?? 0; k.capped = me.ca ?? 0;
   k.relance = me.rl ?? 0; k.relanceTimer = me.rt ?? 0; k.boostPower = me.bo ?? 1.4; k.rampPrev = me.rp === undefined ? null : ramps[me.rp] ?? null;
   k.lap = me.lap; k.maxLap = me.ml ?? 0;
+  k.hitGrace = me.hgr ?? 0; k.coins = me.cc ?? 0;
 }
 
 /**
@@ -98,6 +103,8 @@ export function applyKartDiscrete(k, s, me) {
   if (!me) { applyKartStatus(k, s); return; }   // ours has them from its private block, ticked on by the replay
   k.item = me.it ?? null; k.itemRolling = me.ir ?? 0; k.lap = me.lap; k.maxLap = me.ml ?? 0; k.progress = me.pr ?? k.lap;
   k.finishTime = me.ft ?? 0; k.bestLap = me.bl ?? Infinity;
+  k.itemUses = me.iu ?? (k.item ? 1 : 0); k.pickups = me.pk ?? 0; k.goalsDone = me.gl ?? 0; k.section = me.sc ?? 0;
+  k.tally = Object.fromEntries(TALLIES.map((t, i) => [t, me.ty?.[i] ?? 0]));
 }
 
 /** Write a travelled kart state into a client-side kart object: motion and discrete state, and the private block `me` when there is one. */
@@ -172,12 +179,14 @@ export function encodeSnapshot(G, tick) {
   const snap = { tk: tick, t: ms(G.time), st: G.state, lp: G.laps };
   if (G.countdown > 0) snap.cd = ms(G.countdown);                     // through the countdown only
   if (Number.isFinite(G.resultsAt)) snap.ra = ms(G.resultsAt);         // once the results are on their way
+  if (G.eventBanner) snap.ev = G.eventBanner.id;                        // a live event's banner, while it shows (raceevents.js)
   return {
     ...snap,
     k: G.karts.map(encodeKart),
     h, hs,
     p: G.projectiles.map(p => ({ id: p.id, ty: p.type, x: cm(p.x), y: cm(p.y + (p.gy || 0)), z: cm(p.z) })),
     b: G.itemBoxes.map(b => (b.active ? 1 : 0)).join(''),
+    cn: (G.coins || []).map(c => (c.active ? 1 : 0)).join(''),
     c: G.crossings.map(c => ms(c.t)),
     // [x, z, heading, y], and a 1 at the end for a rider on the ground
     cy: (G.cyclists || []).map(c => (c.fallen > 0 ? [cm(c.x), cm(c.z), cm(c.h), cm(c.y), 1] : [cm(c.x), cm(c.z), cm(c.h), cm(c.y)])),

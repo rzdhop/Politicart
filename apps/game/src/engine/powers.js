@@ -83,7 +83,7 @@ export function applyPower(k, id) {
   }
   if (id === 'controle') {
     const behind = foesOf(k).filter(o => o.rank > k.rank && o.rank <= k.rank + 2);
-    const hit = []; for (const o of behind) { o.speed *= 0.5; if (stunKart(o, 1.2)) hit.push(o); } const n = hit.length;
+    const hit = []; for (const o of behind) { o.speed *= 0.5; if (stunKart(o, 1.2, k)) hit.push(o); } const n = hit.length;
     if (n) { sfxFor(k, 'stamp'); heard(hit, 'stamp'); spawnVfx('aura', { kart: k, color: 0x3a6bff }); impact(hit, 'flash', 0x3a6bff); impact(hit, 'papers'); tell(k, line('power.controle.use', { n, s: plural(n) }), line('power.controle.hit'), hit); }
     else consolation(k, line('power.controle.none'));
     return;
@@ -109,7 +109,7 @@ export function applyPower(k, id) {
   }
   if (id === 'examen') {
     const a = foeAhead(k, G.karts); const t = a && !a.finished ? a : null;
-    if (t) { t.item = null; stunKart(t, 1.8); sfxFor(k, 'gavel'); sfxFor(t, 'gavel'); spawnVfx('aura', { kart: k, color: 0xc8102e }); spawnVfx('flash', { kart: t, color: 0xff3a4a, r: 1 }); spawnVfx('papers', { kart: t }); tell(k, line('power.examen.use', { name: t.def.name.toUpperCase() }), line('power.examen.hit'), [t]); }
+    if (t) { t.item = null; stunKart(t, 1.8, k); sfxFor(k, 'gavel'); sfxFor(t, 'gavel'); spawnVfx('aura', { kart: k, color: 0xc8102e }); spawnVfx('flash', { kart: t, color: 0xff3a4a, r: 1 }); spawnVfx('papers', { kart: t }); tell(k, line('power.examen.use', { name: t.def.name.toUpperCase() }), line('power.examen.hit'), [t]); }
     else consolation(k, line('power.examen.none'));
     return;
   }
@@ -120,7 +120,7 @@ export function applyPower(k, id) {
     let mown = 0;
     spawnVfx('swath', { kart: k, dir: k.heading, r: FAUCHAGE_RANGE });
     for (let i = G.hazards.length - 1; i >= 0; i--) { const h = G.hazards[i]; if (inSwath(h.x, h.z, G.hw + 1)) { spawnVfx('impact', { x: h.x, y: h.y || 0, z: h.z, color: 0x5f9a48 }); G.scene.remove(h.mesh); G.hazards.splice(i, 1); mown++; } }
-    const hit = []; for (const o of foesOf(k)) if (inSwath(o.pos.x, o.pos.z, 12) && stunKart(o, 1.0)) hit.push(o);
+    const hit = []; for (const o of foesOf(k)) if (inSwath(o.pos.x, o.pos.z, 12) && stunKart(o, 1.0, k)) hit.push(o);
     sfxFor(k, 'mow');
     if (!mown && !hit.length) { consolation(k, line('power.fauchage.none')); return; }
     impact(hit, 'impact', 0x5f9a48); const n = hit.length;
@@ -151,7 +151,7 @@ export function applyPower(k, id) {
     else consolation(k, line('power.amendement.none'));
   }
   else if (id === 'megaphone') {
-    const hit = []; for (const o of foesOf(k)) { const dx = o.pos.x - k.pos.x, dz = o.pos.z - k.pos.z; const d = Math.hypot(dx, dz); if (d < 22) { const push = (22 - d) * 0.45; o.pos.x += dx / d * push; o.pos.z += dz / d * push; o.speed *= 0.3; if (stunKart(o, 0.9)) hit.push(o); } } const n = hit.length;
+    const hit = []; for (const o of foesOf(k)) { const dx = o.pos.x - k.pos.x, dz = o.pos.z - k.pos.z; const d = Math.hypot(dx, dz); if (d < 22) { const push = (22 - d) * 0.45; o.pos.x += dx / d * push; o.pos.z += dz / d * push; o.speed *= 0.3; if (stunKart(o, 0.9, k)) hit.push(o); } } const n = hit.length;
     spawnVfx('shockwave', { kart: k, color: 0xf2c14e, r: 22 }); impact(hit, 'impact', 0xf2c14e);   // the sound wave, an event and nothing more (the worker builds no mesh)
     sfxFor(k, 'motion'); tell(k, line('power.megaphone.use', { n, s: plural(n) }), line('power.megaphone.hit', { name }), hit);
   }

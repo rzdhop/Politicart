@@ -239,13 +239,35 @@ export const LINES = {
         'RÉFÉRENDUM : NON, ET C’EST POUR VOUS !',
       ],
       nul: [
-        'RÉFÉRENDUM : 12 % DE PARTICIPATION, RÉSULTAT ANNULÉ',
-        'RÉFÉRENDUM : PERSONNE N’EST VENU VOTER',
-        'RÉFÉRENDUM : ABSTENTION RECORD, RÉSULTAT ANNULÉ',
-        'RÉFÉRENDUM : 12 % DE VOTANTS, ON OUBLIE',
-        'RÉFÉRENDUM : LE PEUPLE ÉTAIT À LA PLAGE',
+        'RÉFÉRENDUM : VOTE BLANC, VOUS REPARTEZ QUAND MÊME',
+        'RÉFÉRENDUM : PERSONNE N’EST VENU VOTER, ON FONCE',
+        'RÉFÉRENDUM : ABSTENTION RECORD, PETIT BOOST DE CONSOLATION',
+        'RÉFÉRENDUM : 12 % DE VOTANTS, ON PASSE À AUTRE CHOSE',
+        'RÉFÉRENDUM : LE PEUPLE ÉTAIT À LA PLAGE, VOUS AUSSI',
       ],
     },
+    turbo3: { use: [
+      '49.3 EN RAFALE : ET UN DE PLUS !',
+      '49.3 À RÉPÉTITION : LE PARLEMENT CRAQUE',
+      'ENCORE UN 49.3 : LA SÉANCE EST LEVÉE',
+      '49.3 EN SÉRIE : RECORD BATTU',
+      '49.3 : ON NE COMPTE PLUS',
+    ] },
+    dossier3: { use: [
+        'TRIPLE FUITE : MEDIAPART DÉBORDÉ',
+        'NOUVELLE FUITE : LE DOSSIER S’ÉPAISSIT',
+        'FUITE EN CASCADE : LA RÉDACTION EXULTE',
+        'ENCORE UN DOSSIER : LES RÉVÉLATIONS CONTINUENT',
+        'TRIPLE FUITE : L’ÉTÉ SERA CHAUD',
+      ],
+    },
+    reserve: { use: [
+      'RÉSERVE PARLEMENTAIRE : ARROSAGE DORÉ',
+      'RÉSERVE PARLEMENTAIRE : LA CAGNOTTE EST OUVERTE',
+      'RÉSERVE PARLEMENTAIRE : SUBVENTION EXPRESS',
+      'JACKPOT : LA RÉSERVE COULE À FLOTS',
+      'RÉSERVE PARLEMENTAIRE : C’EST CADEAU',
+    ] },
   },
   power: {
     debat: {
@@ -554,6 +576,15 @@ export const LINES = {
       'CORTÈGE : VOUS ÊTES RENVERSÉ·E !',
       'LA MANIF VOUS PASSE DESSUS !',
     ] },
+  },
+  rear: {
+    parry: [
+      'PARÉ ! VOTRE OBJET ENCAISSE LE COUP',
+      'PARÉ ! L’ATTAQUE FINIT DANS LA BARRICADE',
+      'BOUCLIER ARRIÈRE : COUP ÉVITÉ',
+      'PARÉ ! VOTRE OBJET VOUS COUVRE',
+      'PARÉ ! ON NE VOUS PREND PAS PAR DERRIÈRE',
+    ],
   },
   shield: {
     parry: [

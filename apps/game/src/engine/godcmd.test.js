@@ -90,6 +90,7 @@ describe('god commands', () => {
   });
 
   it('add a lap, finishing a kart that reaches the end, and change the race’s length', () => {
+    G.laps = 3;   // a race is one long lap now (DEC-061); the admin can still make it three, which this test drives
     const k = G.karts[3]; k.isAI = false;
     applyGodCommand({ cmd: 'lap', target: 3, delta: 1 }); applyGodCommand({ cmd: 'lap', target: 3, delta: 1 });
     expect(k.lap).toBe(2); expect(k.finished).toBe(false);

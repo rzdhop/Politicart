@@ -30,7 +30,8 @@ function build(i, level, { random = 3, seed = 7 } = {}) {
   mockRandom(random); buildTrack(scene, TRACKS[i], { seed }); vi.restoreAllMocks();
   return { scene, animated: G.animated, crowd: crowdCount(), birds: birdCount() };
 }
-const instancedIn = scene => { const out = []; scene.traverse(o => { if (o.isInstancedMesh) out.push(o); }); return out; };
+/** The decor's instanced batches: the urnes and coins on the road (ballotbox.js, coins.js, named road:) are not decor. */
+const instancedIn = scene => { const out = []; scene.traverse(o => { if (o.isInstancedMesh && !o.name.startsWith('road:')) out.push(o); }); return out; };
 const run = (animated, steps) => { for (let n = 0; n < steps; n++) { G.time += STEP; for (const f of animated) f(STEP); } };
 
 afterEach(() => { MOTION.on = false; if (getPoly() !== 'high') togglePoly(); G.karts = []; });

@@ -111,7 +111,19 @@ export {
   ItemSlot,
   type ItemSlotHandle,
   type ItemSlotProps,
+  type ItemTier,
 } from './components/hud/ItemSlot';
+export {
+  CoinMeter,
+  type CoinMeterHandle,
+  type CoinMeterProps,
+} from './components/hud/CoinMeter';
+export {
+  GoalTracker,
+  type Goal,
+  type GoalTrackerHandle,
+  type GoalTrackerProps,
+} from './components/hud/GoalTracker';
 export { LapCounter, type LapCounterProps } from './components/hud/LapCounter';
 export {
   FAIR_MS,
@@ -169,6 +181,11 @@ export {
   type GainBreakdownProps,
   type GainLine,
 } from './components/results/GainBreakdown';
+export {
+  RunSummary,
+  type RunGoal,
+  type RunSummaryProps,
+} from './components/results/RunSummary';
 export { Podium, type PodiumEntry, type PodiumProps } from './components/results/Podium';
 export {
   ResultsTable,

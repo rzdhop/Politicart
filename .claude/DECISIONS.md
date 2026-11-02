@@ -1275,3 +1275,76 @@ kart is stunned; the camera's position and aim come from it. The spin stays
 a physics heading (no change to snapshots or prediction): only the view
 ignores it. `startField` resets the yaw to the start line's tangent.
 `camera.test.js` pins the hold, the short way round and a smooth swing back.
+
+## DEC-062 -- One long lap, cut into four themed sections
+
+**Context.** The owner chose "1 long lap, circuits extended ~1.5x" (DEC-061
+draws them larger) for short, varied runs of about 2.5 minutes.
+
+**Decision.** `CFG.laps` = 1 (the admin can still set more, DEC-031).
+`sections.js` names four sections per circuit (fractions of the lap); a
+human entering the next one hears its name and the split, the lap counter
+reads "TOUR UNIQUE · SECTEUR 2/4" (still "TOUR x/y" past one lap, for the
+E2E checks on `#h-lap`).
+
+## DEC-063 -- Hits are shorter, a spin ends on a boost, the back gets help
+
+**Context.** "Fun, not frustrating": stuns ran 0.7-2.6 s, killed the boost
+and the drift charge and could chain; Référendum's abstention slowed its
+own user.
+
+**Decision.** `stunKart` stuns for `softStun(d) = min(1.2, 0.35 + 0.45 d)`;
+a spinning kart keeps more of its speed (`STUN_DRAG` 1.6/s, was 3); when a
+spin runs out the kart gets `RECOVER_BOOST` and `HIT_GRACE` (1 s with no
+new stun: no stun-lock). Humans get a little top speed by place
+(`CATCH_UP`, up to +7 % in last). The vote blanc now gives a small boost.
+A stunned kart drops 3 coins (DEC-064). Values are physics constants, the
+snapshot carries the grace for the local prediction.
+
+## DEC-064 -- The run pays: coins on the road, three goals, a podium streak
+
+**Context.** "Runs have to be rewarding": a race paid only by place.
+
+**Decision.** `coins.js` lays lines of politicoins from the race seed (one
+instanced draw); a kart carries up to 10 (+0.8 % top speed each), every
+coin picked counts (`k.pickups`). `goals.js` draws three goals from the
+seed (never "podium" and "win" together) out of nine, counted from a
+per-kart tally (super mini-turbos, tricks, pads, hits dealt, items, coins,
+hits taken) or judged at the line. `settleRace` pays pickups (capped 60),
+`GOAL_XP`/`GOAL_COINS` per goal (capped 3) and a podium streak
+(`streakCoins`: +20 % of the place's coins per podium in a row after the
+first, 5 steps max; `podiumStreak`, `bestStreak` in the stats). A solo
+race reports pickups and goals (no anti-cheat, as before, but capped); a
+team race's come from the server's own simulation. The HUD shows a
+`CoinMeter` and a `GoalTracker`; the results a `RunSummary` and the gains
+broken down.
+
+## DEC-065 -- Glass ballot boxes, rarer upgrades, a rear guard
+
+**Context.** "The boxes need a redesign, the bonuses an upgrade."
+
+**Decision.** `ballotbox.js`: a glass urne in a Marianne-blue frame with a
+tricolore band, a slotted lid and a "?" envelope turning inside, drawn by
+four instanced meshes for every box of a circuit; `G.itemBoxes[i].mesh` is
+an Object3D proxy the simulation and the effects move as before,
+`syncBallotBoxes` copies the proxies into the instances each drawn frame.
+The fake urne is the same box with its "?" upside down and a tilt. The
+roll is 0.8 s (was 1.1). Items get tiers (`ITEM_TIERS`: the HUD tints the
+slot and plays a jackpot for rare/mythic) and three new ones with several
+uses (`turbo3`, `dossier3`, the mythic `reserve`: 5 golden boosts and 5
+coins); odds rebalanced (rows sum to 100). A kart holding a barricade, a
+fake urne or a gas canister (`REAR_GUARDS`) stops a dossier or a BRAV-M
+bike coming from behind, losing the item.
+
+## DEC-066 -- Three live events a race
+
+**Context.** "A lot of variants and events" on the long lap.
+
+**Decision.** `raceevents.js` draws three of five events from the seed and
+fires each when the leader passes ~24 %, ~50 % and ~76 % of the race: Flash
+info (everyone boosts, the back longer), Pluie d'urnes (every box back,
+upgraded draws for 12 s), Pluie de pièces (every coin back, double for
+12 s), Manif sauvage (four barricades across the road ahead, gaps to
+thread), Sondage éclair (the three last get an item and a boost). The
+server runs them; clients see their effects through what snapshots already
+carry, plus the banner's id (`ev`) shown in the centre of the HUD.

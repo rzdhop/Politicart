@@ -316,7 +316,7 @@ describe('the "légers" decor', () => {
     const scene = new THREE.Scene(); G.animated = []; G.hazards = []; G.entitySeq = 0; G.trackIdx = i; G.track = TRACKS[i];
     buildTrack(scene, TRACKS[i], { fold, seed: 7 });   // the race seed is explicit: the seeded draws never go through Math.random
     vi.restoreAllMocks();
-    return { scene, animated: G.animated, crowd: G.crowd, moving: [...G.crowd.map(c => c.g), ...G.cyclists.map(c => c.mesh), ...G.crossings.map(c => c.mesh), ...G.itemBoxes.map(b => b.mesh)] };
+    return { scene, animated: G.animated, crowd: G.crowd, moving: [...G.crowd.map(c => c.g), ...G.cyclists.map(c => c.mesh), ...G.crossings.map(c => c.mesh), ...Object.values(G.boxBatch), G.coinMesh] };   // the urnes are drawn by their batch, the boxes' meshes are proxies (ballotbox.js)
   }
   /** Run a built circuit's animations and crowd for `steps` server steps. */
   function run(built, steps) {

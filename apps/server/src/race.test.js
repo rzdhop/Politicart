@@ -122,7 +122,7 @@ describe('a race in a worker', () => {
       expect(race.grid).toHaveLength(7); expect(roster).toHaveLength(7);
       await until(() => sent.some(([id, m]) => id === 'rida' && m.t === 'snap' && m.s.k.length === 7));
       const snap = sent.filter(([id, m]) => id === 'rida' && m.t === 'snap').at(-1)[1].s;
-      expect(snap.k[6].gd).toBe(1); expect(snap.lp).toBe(3);
+      expect(snap.k[6].gd).toBe(1); expect(snap.lp).toBe(1);   // one long lap (DEC-061)
 
       expect(await race.god({ cmd: 'stun', target: 'all', dur: 2 }, 'rida')).toMatchObject({ ok: true });
       expect(await race.god({ cmd: 'laps', laps: 5 }, 'rida')).toMatchObject({ ok: true });

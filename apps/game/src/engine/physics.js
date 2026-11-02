@@ -25,7 +25,10 @@ import { aiInput } from './ai.js';
 import { ITEMS, rollItem } from './data.js';
 import { hintFor, say } from './events.js';
 import { readInput } from './input.js';
-import { stunKart } from './items.js';
+import { landItem, stunKart } from './items.js';
+import { COIN_SPEED } from './coins.js';
+import { checkGoals, tally } from './goals.js';
+import { updateSection } from './sections.js';
 import { G } from './state.js';
 import { isFoe } from './teams.js';
 import { clamp, fmtTime, lerp, ordinal, rand, wrapAngle } from './util.js';
@@ -41,8 +44,8 @@ export function updateProgress(k) {
     if (k.lap > k.maxLap) {
       k.maxLap = k.lap;
       const lapTime = G.time - k.lapStart; k.lapStart = G.time; if (lapTime < k.bestLap) k.bestLap = lapTime;
-      if (k.lap >= G.laps && !k.finished) { k.finished = true; k.finishTime = G.time; if (!k.isAI) onHumanFinish(k); }
-      else if (!k.isAI) { say(k, k.lap === G.laps - 1 ? 'DERNIER TOUR !' : 'TOUR ' + (k.lap + 1) + ' — ' + fmtTime(lapTime)); sfxFor(k, 'lap'); }
+      if (k.lap >= G.laps && !k.finished) { k.finished = true; k.finishTime = G.time; if (!k.isAI) { onHumanFinish(k); checkGoals(k); } }
+      else if (!k.isAI) { say(k, k.lap === G.laps - 1 ? 'DERNIER TOUR !' : 'TOUR ' + (k.lap + 1) + ' — ' + fmtTime(lapTime)); k.section = 0; k.sectionAt = G.time; sfxFor(k, 'lap'); }
     }
   } else if (prev < N * 0.2 && best > N * 0.8) k.lap--;
   k.progress = k.lap + best / N;
@@ -70,8 +73,10 @@ export function updateKart(k, dt) {
   if (k.slowed > 0) maxSpeed *= 0.55;
   if (k.rabot > 0) maxSpeed *= 0.85;                                                   // coup de rabot: -15 %
   if (k.isAI || k.finished) maxSpeed *= k.aiSpeedMul;
+  maxSpeed *= 1 + COIN_SPEED * (k.coins || 0);                                     // every politicoin carried: +0.8 % top speed (coins.js)
+  if (!k.isAI && !k.finished) maxSpeed *= catchUp(k.rank, G.karts.length);         // a human at the back gets a little help (DEC-063)
   if (k.capped > 0) maxSpeed = Math.min(maxSpeed, DIRECTIVE_CAP);                     // directive européenne: 110 km/h, rubber-banding included
-  updateProgress(k);
+  updateProgress(k); updateSection(k);
   const s = G.samples[k.idx]; const hw = s.hw ?? G.hw;   // the road's half-width where the kart is (DEC-050)
   let lateral = (k.pos.x - s.x) * s.sx + (k.pos.z - s.z) * s.sz;
   k.offroad = Math.abs(lateral) > hw;
@@ -100,7 +105,7 @@ export function updateKart(k, dt) {
   else k.speed *= Math.exp(-dt * 0.9);
   if (!k.air && k.fly <= 0) k.speed -= s.slope * SLOPE_PULL * dt;                        // a climb drags, a descent gives
   if (k.speed > maxSpeed) k.speed = lerp(k.speed, maxSpeed, 1 - Math.exp(-dt * 2.5));
-  if (k.stun > 0) k.speed *= Math.exp(-dt * 3);
+  if (k.stun > 0) k.speed *= Math.exp(-dt * STUN_DRAG);
 
   const sf = clamp(Math.abs(k.speed) / baseMax, 0, 1);
   k.steer = lerp(k.steer || 0, inp.steer, 1 - Math.exp(-dt * 11));   // smoothed steering input
@@ -109,7 +114,7 @@ export function updateKart(k, dt) {
   if (k.drift.active) {
     if (!inp.drift || k.speed < baseMax * 0.25 || k.stun > 0) {
       const c = k.drift.charge;
-      if (c > 2.0) { k.boost = Math.max(k.boost, 1.1); k.boostPower = 1.45; sfxFor(k, 'boost'); say(k, 'SUPER MINI-TURBO'); }
+      if (c > 2.0) { k.boost = Math.max(k.boost, 1.1); k.boostPower = 1.45; sfxFor(k, 'boost'); say(k, 'SUPER MINI-TURBO'); tally(k, 'turbos'); }
       else if (c > 1.0) { k.boost = Math.max(k.boost, 0.55); k.boostPower = 1.3; sfxFor(k, 'boost'); }
       k.drift.active = false; k.drift.charge = 0;
     } else { k.drift.charge += dt; turnRate = 2.4 * S.handling * (k.drift.dir * 1.15 + k.steer * 0.55) * (0.5 + 0.5 * sf); k.speed *= Math.exp(-dt * 0.12); }
@@ -143,25 +148,28 @@ export function updateKart(k, dt) {
 
   // vertical motion
   if (!k.air) k.y = groundY;
-  else { k.vy -= 32 * dt; k.y += k.vy * dt; if (k.y <= groundY) { k.y = groundY; k.air = false; if (k.trick) { k.boost = Math.max(k.boost, 0.7); k.boostPower = 1.35; sfxFor(k, 'boost'); } else k.speed *= 0.94; k.trick = false; } }
+  else { k.vy -= 32 * dt; k.y += k.vy * dt; if (k.y <= groundY) { k.y = groundY; k.air = false; if (k.trick) { k.boost = Math.max(k.boost, 0.7); k.boostPower = 1.35; sfxFor(k, 'boost'); tally(k, 'tricks'); } else k.speed *= 0.94; k.trick = false; } }
   // pits, dash pads
   if (!k.air && !onRamp && k.fly <= 0) {
     if (k.pitGrace <= 0) for (const p of G.pits) { const rel = (k.idx - p.i0 + G.N) % G.N; if (rel < p.len && Math.abs(lateral) < hw) { k.pitGrace = 2;
       if (p.kind === 'water') { k.speed *= 0.3; if (stunKart(k, 0.8)) say(k, 'PLOUF !'); }
       else if (p.kind === 'works') { k.slowed = Math.max(k.slowed, 2.2); k.speed *= 0.6; { say(k, 'ZONE DE TRAVAUX !'); sfxFor(k, 'bump'); } }
       else if (p.kind === 'manif') { if (stunKart(k, 1.0)) say(k, 'PRIS DANS LA MANIF !'); } break; } }
-    if (k.padGrace <= 0) for (const p of G.pads) { const rel = (k.idx - p.i0 + G.N) % G.N; if (rel < p.len && Math.abs(lateral) < hw) { k.padGrace = 2; k.boost = Math.max(k.boost, 0.9); k.boostPower = 1.5; sfxFor(k, 'boost'); break; } }
+    if (k.padGrace <= 0) for (const p of G.pads) { const rel = (k.idx - p.i0 + G.N) % G.N; if (rel < p.len && Math.abs(lateral) < hw) { k.padGrace = 2; k.boost = Math.max(k.boost, 0.9); k.boostPower = 1.5; sfxFor(k, 'boost'); tally(k, 'pads'); break; } }
   }
-  // timers
+  // timers; a spin that runs out gives the kart a short boost and a moment no hit can stun it again (DEC-063)
+  const spun = k.stun > 0;
   k.slip = Math.max(0, k.slip - dt); k.confused = Math.max(0, k.confused - dt); k.pitGrace = Math.max(0, k.pitGrace - dt); k.padGrace = Math.max(0, k.padGrace - dt); k.phantom = Math.max(0, k.phantom - dt);
   k.boost = Math.max(0, k.boost - dt); k.stun = Math.max(0, k.stun - dt); k.invincible = Math.max(0, k.invincible - dt); k.hazardGrace = Math.max(0, k.hazardGrace - dt);
   k.slowed = Math.max(0, k.slowed - dt); k.fly = Math.max(0, k.fly - dt); k.powerCd = Math.max(0, k.powerCd - dt);
   k.bump = Math.max(0, (k.bump || 0) - dt); k.bumpCd = Math.max(0, (k.bumpCd || 0) - dt);
   k.shield = Math.max(0, (k.shield || 0) - dt); k.rabot = Math.max(0, (k.rabot || 0) - dt); k.capped = Math.max(0, (k.capped || 0) - dt);
+  k.hitGrace = Math.max(0, (k.hitGrace || 0) - dt);
+  if (spun && k.stun <= 0) recover(k);
   if (k.relance > 0) { k.relanceTimer -= dt; if (k.relanceTimer <= 0) { k.relance--; k.relanceTimer = 1.1; k.boost = 0.7; k.boostPower = 1.45; sfxFor(k, 'boost'); } }
   if (!G.replaying && k.god && !k.item && k.itemRolling <= 0 && !k.pendingItem) { k.pendingItem = rollItem(k.rank); k.itemRolling = GOD_ITEM_DELAY; }   // creative mode: the next item is always on its way
   // the roll is the server's: a replay keeps the item the snapshot names
-  if (k.itemRolling > 0 && !G.replaying) { k.itemRolling -= dt; if (k.itemRolling <= 0) { k.item = k.pendingItem; k.pendingItem = null; if (!k.isAI) { sfxFor(k, 'pick'); hintFor(k, ITEMS[k.item].hint); } else k.itemTimer = rand(0.8, 4); } }
+  if (k.itemRolling > 0 && !G.replaying) { k.itemRolling -= dt; if (k.itemRolling <= 0) { landItem(k, k.pendingItem); k.pendingItem = null; if (!k.isAI) { sfxFor(k, 'pick'); hintFor(k, ITEMS[k.item].hint); } else k.itemTimer = rand(0.8, 4); } }
 
   k.rampSlope = onRamp ? onRamp.slope : k.air ? 0 : Math.atan(s.slope);           // the mesh pitches with the plank or the road
   if (!G.replaying) updateKartVisual(k, dt, sf);                                  // a replayed tick is not drawn: the frame poses the kart once (netrace.js)
@@ -208,6 +216,29 @@ export function updateKartVisual(k, dt, sf) {
   // the parts that move on their own (kart.js), then the trail (trail.js), which lives in world space
   for (const f of u.anim) f(dt, G.time, k);
   if (u.trail) u.trail.update(k, dt);
+}
+
+// ---------- Less frustration (DEC-063) ----------
+/** How fast a spinning kart loses its speed (1/s): it keeps about a sixth of it over a full spin, not nothing. */
+export const STUN_DRAG = 1.6;
+/** The boost a kart gets as its spin ends (seconds, power): it is back in the race at once. */
+export const RECOVER_BOOST = 0.6, RECOVER_POWER = 1.35;
+/** How long after a spin no hit can stun the kart again: no stun-lock. */
+export const HIT_GRACE = 1.0;
+/** The top-speed help a human gets by place, from the leader down (6 karts); the field's size stretches it. */
+export const CATCH_UP = Object.freeze([1, 1, 1.02, 1.035, 1.05, 1.07]);
+
+/** The top-speed factor for a human in place `rank` (0 = first) of a field of `field` karts. */
+export function catchUp(rank, field = 6) {
+  if (field <= 1) return 1;
+  const f = Math.max(0, Math.min(1, rank / (field - 1)));
+  return CATCH_UP[Math.round(f * (CATCH_UP.length - 1))];
+}
+
+/** Kart k's spin just ran out: the comeback boost and the grace (the end of a spin that an item cut short is endStun's, which gives neither). */
+function recover(k) {
+  k.boost = Math.max(k.boost, RECOVER_BOOST); k.boostPower = Math.max(k.boostPower || 1.4, RECOVER_POWER); k.hitGrace = HIT_GRACE;
+  sfxFor(k, 'boost');
 }
 
 // ---------- Relief (DEC-050) ----------
@@ -260,7 +291,7 @@ export function kartCollisions() {
       const power = clamp(0.6 + headOn, 0.6, 1.6);
       a.bump = BUMP_TIME; a.bumpPower = power * ta * 2; a.bumpSide = side(a, nx, nz); a.bumpCd = 0.3;
       b.bump = BUMP_TIME; b.bumpPower = power * tb * 2; b.bumpSide = side(b, -nx, -nz); b.bumpCd = 0.3;
-      if (isFoe(a, b)) { if (a.invincible > 0 && b.invincible <= 0) stunKart(b, 1.2); if (b.invincible > 0 && a.invincible <= 0) stunKart(a, 1.2); }
+      if (isFoe(a, b)) { if (a.invincible > 0 && b.invincible <= 0) stunKart(b, 1.2, a); if (b.invincible > 0 && a.invincible <= 0) stunKart(a, 1.2, b); }
       sfxFor(a, 'bump'); sfxFor(b, 'bump');
     }
   }

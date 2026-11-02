@@ -13,12 +13,17 @@
 // fake G and never has to know about Three.js or the DOM. One small object
 // and one short array per frame is well within what 60 fps tolerates.
 
+import { itemTier, REAR_GUARDS } from './data.js';
+import { goalsOf } from './goals.js';
+import { sectionOf } from './sections.js';
+
 /** Build the payload for the current frame from the shared state. */
 export function framePayload(G, CFG) {
   const k = G.player;
+  const event = G.eventBanner?.title ?? '';
   const announce = G.state === 'countdown'
     ? String(Math.min(3, Math.ceil(G.countdown)))
-    : (G.time < 0.9 ? 'PARTEZ !' : '');
+    : (G.time < 0.9 ? 'PARTEZ !' : event);
   return {
     state: G.state,
     time: G.time,
@@ -34,6 +39,13 @@ export function framePayload(G, CFG) {
     driftCharge: k.drift.charge,
     item: k.item,
     itemRolling: k.itemRolling > 0,
+    itemUses: k.item ? Math.max(1, k.itemUses || 1) : 0,     // an upgrade's uses left (DEC-065)
+    itemTier: k.item ? itemTier(k.item) : null,
+    section: sectionOf(k, G.track),                          // the long lap's themed section (sections.js)
+    coins: k.coins || 0,                                     // politicoins carried (coins.js)
+    pickups: k.pickups || 0,
+    goals: goalsOf(k, G.goals || []),                        // the run's three goals (goals.js)
+    event,                                                   // a live event's title while its banner shows (raceevents.js)
     powerName: k.def.power.name,
     powerCd: k.powerCd,
     powerCdMax: k.def.power.cd || CFG.powerCooldown,
@@ -58,6 +70,7 @@ export function statusOf(k) {
   on('shield', k.shield);
   if (k.phantom > 0) on('phantom', k.phantom); else on('immunity', k.invincible);
   on('fly', k.fly);
+  if (k.item && !(k.itemRolling > 0) && REAR_GUARDS.includes(k.item)) out.push({ id: 'rear', count: 1 });    // an item held behind the kart guards its back (DEC-065)
   return out;
 }
 /**

@@ -59,14 +59,22 @@ function updateHUD(p) {
   const h = hud;
   if (!h.pos || !h.lap || !h.time || !h.item || !h.power || !h.speed || !h.drift || !h.center || !h.wrong) return;
   h.pos.setPosition(p.rank + 1);
-  h.lap.setText(p.finished ? 'ARRIVÉE' : 'TOUR ' + Math.min(p.lap + 1, p.laps) + '/' + p.laps);
+  h.lap.setText(lapText(p));
   h.time.setText(fmtTime(p.finished ? p.finishTime : p.time) + (p.bestLap < Infinity ? '  ·  meilleur tour ' + fmtTime(p.bestLap) : ''));
   h.speed.setValue(p.speed * 3.2);
   h.drift.setValue(clamp(p.driftCharge / 2, 0, 1)); h.drift.setColor(p.driftCharge > 2 ? '#ff7a1a' : p.driftCharge > 1 ? '#ffd34d' : '#7cc4ff');
   let shown;
-  if (p.itemRolling) { const ids = Object.keys(ITEMS); const it = ITEMS[ids[Math.floor(p.time * 12) % ids.length]]; shown = it.icon + '|…'; }
-  else if (p.item) shown = ITEMS[p.item].icon + '|' + ITEMS[p.item].name; else shown = '·|aucun objet';
-  if (shown !== lastItemShown) { lastItemShown = shown; const [ico, nm] = shown.split('|'); h.item.setItem({ icon: ico, label: nm, filled: !!p.item }); }
+  if (p.itemRolling) { const ids = Object.keys(ITEMS); const it = ITEMS[ids[Math.floor(p.time * 16) % ids.length]]; shown = it.icon + '|…'; }
+  else if (p.item) shown = ITEMS[p.item].icon + '|' + ITEMS[p.item].name + '|' + (p.itemTier || 'common') + '|' + (p.itemUses || 1); else shown = '·|aucun objet';
+  if (shown !== lastItemShown) {
+    const landed = lastItemShown.endsWith('|…') && !!p.item;   // the roll just stopped on this item
+    lastItemShown = shown; const [ico, nm, tier, uses] = shown.split('|');
+    h.item.setItem({ icon: ico, label: nm, filled: !!p.item, tier: p.item ? tier : null, count: Number(uses) || 1 });
+    if (landed && tier !== 'common') h.item.flashJackpot?.();   // a rare or mythic item: the jackpot (DEC-065)
+  }
+  // the run's rewards (DEC-064): the coins carried and the goals
+  h.coins?.setCoins(p.coins ?? 0, 10);
+  if (p.goals) h.goals?.setGoals(p.goals);
   h.power.setCharge(1 - p.powerCd / p.powerCdMax);
   if (p.powerReady !== lastPowerReady || p.god !== lastGod) { lastPowerReady = p.powerReady; lastGod = p.god; h.power.setReady(p.powerReady); h.power.setKeyHint(p.god ? 'F · MODE DIEU' : p.powerReady ? 'F · PRÊT !' : 'F · recharge'); }
   h.power.setName(p.powerName);
@@ -100,7 +108,13 @@ function updateHudMotion(p) {
 // is this writer's frame clock.
 const banners = createBannerQueue();
 function setHint(t) { if (hud.hint) hud.hint.setText(t); }
-const HINT = 'Ramassez une urne dorée pour obtenir un objet.';
+const HINT = 'Ramassez une urne pour obtenir un objet.';
+/** The lap counter: a one-lap race (DEC-061) counts its themed sections, a longer one (the admin's) its laps. */
+function lapText(p) {
+  if (p.finished) return 'ARRIVÉE';
+  if (p.laps === 1 && p.section) return 'TOUR UNIQUE · SECTEUR ' + (p.section.i + 1) + '/' + p.section.n;
+  return 'TOUR ' + Math.min(p.lap + 1, p.laps) + '/' + p.laps;
+}
 function toast(t) { banners.push(t); }
 function tickToast(dt) { const r = banners.tick(dt); if (!r || !hud.toast) return; if (r.show) hud.toast.show(r.show); else if (r.hide) hud.toast.hide(); }
 

@@ -275,6 +275,34 @@
 
 .item.used { animation:kr-used .45s ease-out both; }
 
+/* A rare or mythic item lands: the slot bursts and settles (the jackpot). */
+@keyframes kr-jackpot {
+  0% { transform:scale(1); filter:brightness(1); }
+  25% { transform:scale(1.22) rotate(-4deg); filter:brightness(1.8); }
+  55% { transform:scale(.95) rotate(2deg); }
+  100% { transform:scale(1); filter:brightness(1); }
+}
+
+.item.jackpot { animation:kr-jackpot .6s cubic-bezier(.2,.9,.3,1.2) both; }
+
+/* A coin picked: the meter pops. */
+@keyframes kr-coin-gain {
+  0% { transform:scale(1); }
+  40% { transform:scale(1.14); }
+  100% { transform:scale(1); }
+}
+
+.coin-meter.gain { animation:kr-coin-gain .25s ease-out both; }
+
+/* A goal reached: its row flashes gold once. */
+@keyframes kr-goal-just {
+  0% { background:rgba(242,193,78,0); transform:translateX(0); }
+  30% { background:rgba(242,193,78,.35); transform:translateX(4px); }
+  100% { background:rgba(242,193,78,0); transform:translateX(0); }
+}
+
+.goal-tracker .goal.just { animation:kr-goal-just .8s ease-out both; border-radius:4px; }
+
 .power.ready { animation:kr-ready 1.6s ease-in-out infinite; }
 
 .power.ready.charged { animation:kr-charged .35s cubic-bezier(.2,.9,.3,1.2),kr-ready 1.6s ease-in-out .35s infinite; }
@@ -378,6 +406,9 @@
   .pos.loss,
   .item.rolling .ico,
   .item.used,
+  .item.jackpot,
+  .coin-meter.gain,
+  .goal-tracker .goal.just,
   .power.ready,
   .power.ready.charged,
   .toast.on,

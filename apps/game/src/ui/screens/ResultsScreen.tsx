@@ -1,9 +1,10 @@
 import {
-  Button, Disclaimer, GainBreakdown, Heading, Panel, Podium, ResultsTable, Row, Screen, Subtitle, TeamStandings,
+  Button, Disclaimer, GainBreakdown, Heading, Panel, Podium, ResultsTable, Row, RunSummary, Screen, Subtitle, TeamStandings,
   type GainLine, type PodiumEntry, type ResultsRow,
 } from '@politikart/ui';
 
 import { DAILY_COINS } from '../../engine/catalog.js';
+import { goalsOf } from '../../engine/goals.js';
 import { CHARACTERS } from '../../engine/data.js';
 import { G } from '../../engine/state.js';
 import { TEAM_NAMES } from '../../engine/teams.js';
@@ -38,17 +39,35 @@ export function XpLine({ ui }: { ui: UiSnapshot }) {
   if (!g) return <Disclaimer id="r-xp">{'Niveau ' + ui.account.profile.level}</Disclaimer>;
   const chars = CHARACTERS as unknown as Character[];
   const names = g.unlockedNow.map(id => chars.find(c => c.id === id)?.name ?? id);
-  const lines: GainLine[] = [{ key: 'xp', label: 'XP', value: g.gained, tone: 'xp' }];
+  const lines: GainLine[] = [{ key: 'xp', label: 'XP' + (g.goalXp > 0 ? ' (dont ' + g.goalXp + ' d’objectifs)' : ''), value: g.gained, tone: 'xp' }];
+  // the politicoins the race paid in all, then what they are made of beyond the place: the run's own (DEC-064) and the bonuses
   if (g.coins > 0) lines.push({ key: 'coins', label: 'politicoins', value: g.coins, tone: 'coin' });
+  if (g.pickups > 0) lines.push({ key: 'pickups', label: 'politicoins ramassés', value: g.pickups, tone: 'coin' });
+  if (g.goalCoins > 0) lines.push({ key: 'goals', label: 'politicoins (' + g.goals + ' objectif' + (g.goals > 1 ? 's' : '') + ')', value: g.goalCoins, tone: 'bonus' });
+  if (g.streakCoins > 0) lines.push({ key: 'streak', label: 'série de ' + g.streak + ' podiums', value: g.streakCoins, tone: 'bonus' });
   if (g.daily) lines.push({ key: 'daily', label: 'bonus du jour', value: DAILY_COINS, tone: 'bonus' });
   if (g.levelUpCoins > 0) lines.push({ key: 'level', label: 'politicoins (niveau ' + g.level + ')', value: g.levelUpCoins, tone: 'bonus' });
   const notes = [...(g.levelUp ? ['Niveau ' + g.level + ' atteint !'] : []), ...(names.length ? ['Débloqué : ' + names.join(', ')] : [])];
   return <GainBreakdown id="r-xp" lines={lines} notes={notes} format={fr} />;
 }
 
+/**
+ * What the run achieved (DEC-064): the goals, the coins picked on the road
+ * and the podium streak the server counted. A guest sees the same, with an
+ * invitation to sign in to cash it.
+ */
+export function RunLine({ ui }: { ui: UiSnapshot }) {
+  const k = G.player as unknown as (Racer & { pickups?: number }) | null;
+  if (!k || ui.state !== 'results') return null;
+  const goals = goalsOf(k, (G.goals ?? []) as never).map((g: { text: string; done: boolean }) => ({ text: g.text, done: g.done }));
+  if (!goals.length) return null;
+  const footer = !ui.account && ui.netAvailable ? 'Créez un compte pour encaisser vos objectifs et vos politicoins.' : undefined;
+  return <RunSummary id="r-run" goals={goals} coins={k.pickups ?? 0} streak={ui.lastGain?.streak ?? 0} footer={footer} />;
+}
+
 function summary(player: Racer, field: number) {
   return ordinal(player.rank + 1) + ' sur ' + field + ' — ' + VERDICTS[player.rank]
-    + (player.bestLap < Infinity ? '  ·  Meilleur tour : ' + fmtTime(player.bestLap) : '')
+    + (player.finished ? '  ·  Temps : ' + fmtTime(player.finishTime) : '')
     + '  ·  Pouvoir utilisé ' + player.powerUses + '×';
 }
 
@@ -80,6 +99,7 @@ export function ResultsScreen({ ui }: { ui: UiSnapshot }) {
         <Heading id="r-title">Résultats du scrutin</Heading>
         <Subtitle id="r-sub" style={{ fontSize: 16 }}>{player ? summary(player, karts.length) : ''}</Subtitle>
         {podium.length ? <Podium id="r-podium" entries={podium} placeLabel={ordinal} /> : null}
+        <RunLine ui={ui} />
         <XpLine ui={ui} />
         <RaceKartCard ui={ui} id="r-kart" />
         <ResultsTable rows={rows} columns={['', 'Candidat·e', 'Temps']} bodyProps={{ id: 'r-body' }} />
@@ -132,6 +152,7 @@ function TeamResults({ ui, results }: { ui: UiSnapshot; results: NetResults }) {
           pointsLabel={p => p + ' pts'}
           teams={results.teams.map(t => ({ key: t.team, name: 'Équipe ' + t.name, points: t.points, detail: t.drivers.length + ' pilote' + (t.drivers.length > 1 ? 's' : ''), color: TEAM_COLOR[t.team], you: t.team === mine }))}
         />
+        <RunLine ui={ui} />
         <XpLine ui={ui} />
         <RaceKartCard ui={ui} id="r-kart" />
         <ResultsTable rows={rows} columns={['', 'Pilote', 'Temps · points']} bodyProps={{ id: 'r-body' }} />

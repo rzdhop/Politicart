@@ -28,6 +28,7 @@ import { CHARACTERS, TRACKS } from '../engine/data.js';
 import { hasPreview, launch, makeThumbs, setPreview } from '../engine/stagegate.js';
 import { requestPrebuild } from '../engine/prebuild.js';
 import { onThumbs as onTrackThumbs, warmFigures } from '../engine/thumbs.js';
+import { goalsCount } from '../engine/goals.js';
 import { STARTERS } from '../engine/progress.js';
 import { startRace } from '../engine/race.js';
 import { G, getPoly, togglePoly as toggleEnginePoly } from '../engine/state.js';
@@ -104,12 +105,20 @@ export function statsOf(s: Partial<Stats> | null | undefined): Stats {
   return out as unknown as Stats;
 }
 /** The bonuses a race paid on top (economy.js settleRace). */
-export interface Bonus { daily: boolean; levelUp: boolean; levelUpCoins: number }
+export interface Bonus {
+  daily: boolean; levelUp: boolean; levelUpCoins: number;
+  /** The run's own lines (DEC-064); absent from a server older than them. */
+  pickups?: number; goals?: number; goalXp?: number; goalCoins?: number; streak?: number; streakCoins?: number;
+}
 /** What the account API answers (engine/account.js). */
 type AuthReply = { ok: boolean; status: number; error?: string; token?: string; profile?: Profile; gained?: number; coins?: number; bonus?: Bonus };
 
 /** What the last race earned, for the results screen: experience, politicoins (daily and level-up bonuses included), a level, candidates. */
-export interface Gain { gained: number; coins: number; daily: boolean; levelUpCoins: number; level: number; levelUp: boolean; unlockedNow: string[] }
+export interface Gain {
+  gained: number; coins: number; daily: boolean; levelUpCoins: number; level: number; levelUp: boolean; unlockedNow: string[];
+  /** The run's own lines (DEC-064): coins picked on the road, goals reached and what they paid, the podium streak and its bonus. */
+  pickups: number; goals: number; goalXp: number; goalCoins: number; streak: number; streakCoins: number;
+}
 
 /** The kart this screen drives in the race on screen (or the last one): its candidate and the full style it was built with. */
 export interface RaceKart { charId: string; style: KartStyle }
@@ -388,6 +397,7 @@ function takeProfile(profile: Profile, gained = 0, coins = 0, bonus: Bonus | nul
     const had = new Set(before?.unlocked ?? []);
     patch.lastGain = {
       gained, coins, daily: !!bonus?.daily, levelUpCoins: bonus?.levelUpCoins ?? 0,
+      pickups: bonus?.pickups ?? 0, goals: bonus?.goals ?? 0, goalXp: bonus?.goalXp ?? 0, goalCoins: bonus?.goalCoins ?? 0, streak: bonus?.streak ?? 0, streakCoins: bonus?.streakCoins ?? 0,
       level: profile.level, levelUp: !!before && profile.level > before.level, unlockedNow: profile.unlocked.filter(id => !had.has(id)),
     };
   }
@@ -405,13 +415,14 @@ net.onProfile((profile: Profile | null, gained: number, coins: number, bonus: Bo
 
 /** A solo race just ended: tell the server how it went (rank, circuit, candidate, times) and keep what it paid. */
 function reportSoloRace() {
-  const acc = snapshot.account; const k = G.player as unknown as { rank: number; finished: boolean; finishTime: number; bestLap: number; def?: { id: string } } | null; if (!acc || !k) return;
+  const acc = snapshot.account; const k = G.player as unknown as { rank: number; finished: boolean; finishTime: number; bestLap: number; def?: { id: string }; pickups?: number } | null; if (!acc || !k) return;
   const race = {
     rank: k.rank, field: G.karts.length, finished: !!k.finished,
     trackId: (TRACKS as { id: string }[])[G.trackIdx]?.id ?? null,
     charId: k.def?.id ?? (CHARACTERS as { id: string }[])[G.charIdx]?.id ?? null,
     time: k.finished && Number.isFinite(k.finishTime) ? k.finishTime : null,
     bestLap: Number.isFinite(k.bestLap) ? k.bestLap : null,
+    pickups: k.pickups ?? 0, goals: goalsCount(k),   // the run's own (DEC-064)
   };
   account.reportRace(acc.token, race, { base: remoteServer })
     .then((r: AuthReply) => { if (r.ok && r.profile) takeProfile(r.profile, r.gained ?? 0, r.coins ?? 0, r.bonus ?? null); });

@@ -1,6 +1,8 @@
 import { lazy, memo, Suspense } from 'react';
 import {
   CenterAnnounce,
+  CoinMeter,
+  GoalTracker,
   DriftGauge,
   HitVignette,
   HudCorner,
@@ -18,7 +20,9 @@ import {
   StatusBadges,
   Toast,
   WrongWay,
+  type CoinMeterHandle,
   type DriftGaugeHandle,
+  type GoalTrackerHandle,
   type HitVignetteHandle,
   type ItemSlotHandle,
   type Latency,
@@ -65,11 +69,14 @@ export interface HudHandles {
   /** Stage 4's (DEC-053): the tinted edges and the statuses on the kart. */
   vignette: HitVignetteHandle | null;
   status: StatusBadgesHandle | null;
+  /** The run's rewards (DEC-064): the politicoins carried and the three goals. */
+  coins: CoinMeterHandle | null;
+  goals: GoalTrackerHandle | null;
 }
 
 export const hud: HudHandles = {
   pos: null, lap: null, time: null, item: null, power: null, hint: null, speed: null, drift: null, center: null, toast: null, wrong: null, net: null,
-  vignette: null, status: null, layout: null,
+  vignette: null, status: null, layout: null, coins: null, goals: null,
 };
 
 /** The connection's line, in French. */
@@ -88,16 +95,18 @@ const Readouts = memo(function Readouts() {
       <HitVignette id="h-hit" ref={(h) => { hud.vignette = h; }} />
       <HudCorner corner="topLeft">
         <PositionReadout id="h-pos" position={6} ref={(h) => { hud.pos = h; }} />
-        <LapCounter id="h-lap" ref={(h) => { hud.lap = h; }}>TOUR 1/3</LapCounter>
+        <LapCounter id="h-lap" ref={(h) => { hud.lap = h; }}>TOUR UNIQUE · SECTEUR 1/4</LapCounter>
         <RaceTimer id="h-time" ref={(h) => { hud.time = h; }}>0:00.00</RaceTimer>
         {/* the team race's ping and delay, coloured by the round trip; hidden and empty in solo play */}
         <LatencyReadout id="h-net" format={formatNet} ref={(h) => { hud.net = h; }} />
         <StatusBadges id="h-status" ref={(h) => { hud.status = h; }} />
+        <GoalTracker id="h-goals" label="Objectifs" ref={(h) => { hud.goals = h; }} />
       </HudCorner>
       <HudCorner corner="topRight">
         <MinimapFrame id="minimap" ref={(canvas) => { attachMinimap(canvas); }} />
       </HudCorner>
       <HudCorner corner="bottomLeft">
+        <CoinMeter id="h-coins" coins={0} max={10} ref={(h) => { hud.coins = h; }} />
         <ItemSlot id="h-item" icon="·" label="aucun objet" ref={(h) => { hud.item = h; }} />
         <PowerGauge
           id="h-power"
@@ -109,7 +118,7 @@ const Readouts = memo(function Readouts() {
           keyHintProps={{ id: 'h-pkey' }}
           ref={(h) => { hud.power = h; }}
         />
-        <HudHint id="h-hint" ref={(h) => { hud.hint = h; }}>Ramassez une urne dorée pour obtenir un objet.</HudHint>
+        <HudHint id="h-hint" ref={(h) => { hud.hint = h; }}>Ramassez une urne pour obtenir un objet.</HudHint>
       </HudCorner>
       <HudCorner corner="bottomRight">
         <SpeedReadout value={0} valueProps={{ id: 'h-speed' }} ref={(h) => { hud.speed = h; }} />

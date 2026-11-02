@@ -42,6 +42,7 @@ vi.mock('../engine/audio.js', () => {
 
 import { setRoster } from '../engine/custom.js';
 import { BASE, CHARACTERS, TRACKS } from '../engine/data.js';
+import { pickGoals } from '../engine/goals.js';
 import { builtinStyle } from '../engine/kartstyle.js';
 import { resetMachine, transition, getState } from '../engine/machine.js';
 import { setTransport } from '../engine/net.js';
@@ -1276,6 +1277,22 @@ describe('the kart card and the coin line (stage 7)', () => {
     expect(($(container, 'r-xp')?.querySelector('.gain-value') as HTMLElement).style.getPropertyValue('--to')).toBe('40');
     expect($(container, 'r-kart')!.querySelector('.kart-trail')?.textContent).toBe('Laser');
     expect(getSnapshot().account!.profile.coins).toBe(60);
+  });
+
+  it('shows the run: the goals as stamps, and what the coins picked, the goals and the streak paid', async () => {
+    const bonus = { daily: false, levelUp: false, levelUpCoins: 0, pickups: 7, goals: 2, goalXp: 30, goalCoins: 50, streak: 3, streakCoins: 18 };
+    const { container, server } = await renderServed({ server: true, who: 'player', progress: { gained: 100, coins: 135, bonus } });
+    const player = raceWith({}) as Record<string, unknown>;
+    player.pickups = 7; player.tally = { turbos: 2 };
+    (G as unknown as { goals: unknown }).goals = pickGoals(1);
+    act(() => { transition('race'); transition('results'); });
+    await settle();
+    expect(server.calls.find(c => c.url === './api/progress')?.body).toMatchObject({ pickups: 7 });
+    expect($(container, 'r-run')?.querySelectorAll('.rs-goal')).toHaveLength(3);
+    expect($(container, 'r-run')?.querySelector('.streak')?.textContent).toContain('3 podiums');
+    expect([...$(container, 'r-xp')!.querySelectorAll('.gain-line')].map(l => l.textContent)).toEqual([
+      '+100 XP (dont 30 d’objectifs)', '+135 politicoins', '+7 politicoins ramassés', '+50 politicoins (2 objectifs)', '+18 série de 3 podiums',
+    ]);
   });
 
   it('names the level reached and its politicoins', async () => {

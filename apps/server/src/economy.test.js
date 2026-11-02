@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 
-import { BOX_BUNDLE, BOX_PRICE, DAILY_COINS, EVERYTHING, RACE_COINS, REFUND, levelUpCoins } from '../../game/src/engine/catalog.js';
+import { BOX_BUNDLE, BOX_PRICE, DAILY_COINS, EVERYTHING, GOAL_COINS, GOAL_XP, PICKUP_CAP, RACE_COINS, REFUND, levelUpCoins, streakCoins } from '../../game/src/engine/catalog.js';
 import { STARTERS } from '../../game/src/engine/progress.js';
 import { hashPassword } from './accounts.js';
 import { ensureAdmin } from './admin.js';
@@ -420,7 +420,8 @@ describe('settleRace', () => {
     const { after } = await race({ rank: 3, bestLap: 30, trackId: 'nowhere' });               // unknown circuit: no time kept
     expect(after.stats).toEqual({
       races: 6, wins: 1, podiums: 3, finished: 5, dnf: 1, solo: 5, team: 1, teamWins: 1, boxes: 0,
-      coinsEarned: 60 + (35 + levelUpCoins(2)) + (18 + 20) + 45 + 5 + (25 + levelUpCoins(3)), coinsSpent: 0,   // 120 xp at the second race, 280 at the last
+      coinsEarned: 60 + (35 + levelUpCoins(2) + streakCoins(35, 2)) + (18 + 20) + 45 + 5 + (25 + levelUpCoins(3)), coinsSpent: 0,   // 120 xp at the second race, 280 at the last; the second is the second podium in a row
+      podiumStreak: 0, bestStreak: 2, goals: 0, pickups: 0,
       drops: { char: 0, part: 0, trail: 0, coins: 0 }, recent: [],
       bestLap: { elysee: 39 }, bestTime: { elysee: 120 }, byChar: { victor: 5 },
       lastDaily: utcDay(DAY), lastRaceAt: DAY,
@@ -431,6 +432,31 @@ describe('settleRace', () => {
   it('answers null for an account that is gone', async () => {
     const s = openFileStore(null);
     expect(await settleRace(s, { id: 'gone', xp: 0 }, { rank: 0, field: 6, finished: true })).toBeNull();
+  });
+
+  it('pays the run: the coins picked (capped), the goals in experience and coins (capped at three)', async () => {
+    let { s, u } = await fresh();
+    let { gain } = await settleRace(s, u, { rank: 5, field: 6, finished: true, pickups: 12, goals: 2 }, { now: DAY });
+    expect(gain).toMatchObject({ xp: 20 + 2 * GOAL_XP, coins: RACE_COINS[5] + 12 + 2 * GOAL_COINS, pickups: 12, goals: 2, goalXp: 2 * GOAL_XP, goalCoins: 2 * GOAL_COINS, streak: 0, streakCoins: 0 });
+    ({ s, u } = await fresh());
+    ({ gain } = await settleRace(s, u, { rank: 5, field: 6, finished: true, pickups: 9999, goals: 99 }, { now: DAY }));
+    expect(gain.pickups).toBe(PICKUP_CAP); expect(gain.goals).toBe(3);
+    ({ s, u } = await fresh());
+    ({ gain } = await settleRace(s, u, { rank: 5, field: 6, finished: true, pickups: -4, goals: 'x' }, { now: DAY }));
+    expect(gain).toMatchObject({ pickups: 0, goals: 0 });
+  });
+
+  it('counts a podium streak, pays it from the second podium in a row and resets it off the podium', async () => {
+    const { s, u } = await fresh();
+    const run = async rank => (await settleRace(s, await s.user(u.id), { rank, field: 6, finished: true }, { now: DAY })).gain;
+    expect(await run(0)).toMatchObject({ streak: 1, streakCoins: 0 });
+    expect(await run(1)).toMatchObject({ streak: 2, streakCoins: streakCoins(RACE_COINS[1], 2) });
+    expect(streakCoins(RACE_COINS[1], 2)).toBeGreaterThan(0);
+    expect(await run(2)).toMatchObject({ streak: 3 });
+    expect(await run(4)).toMatchObject({ streak: 0, streakCoins: 0 });
+    const stats = normaliseStats((await s.user(u.id)).stats);
+    expect(stats.podiumStreak).toBe(0); expect(stats.bestStreak).toBe(3);
+    expect(streakCoins(100, 99)).toBe(Math.round(100 * 0.2 * 5));   // capped at STREAK_MAX steps
   });
 });
 
@@ -472,6 +498,7 @@ describe('normaliseStats', () => {
   it('repairs every field and drops what it does not know', () => {
     expect(normaliseStats(null)).toEqual({
       races: 0, wins: 0, podiums: 0, finished: 0, dnf: 0, solo: 0, team: 0, teamWins: 0, boxes: 0, coinsEarned: 0, coinsSpent: 0,
+      podiumStreak: 0, bestStreak: 0, goals: 0, pickups: 0,
       drops: { char: 0, part: 0, trail: 0, coins: 0 }, recent: [], bestLap: {}, bestTime: {}, byChar: {}, lastDaily: null, lastRaceAt: null,
     });
     const ring = normaliseStats({ recent: [

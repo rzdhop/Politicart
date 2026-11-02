@@ -75,9 +75,9 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
  * builders) or the climate sets (climate.js): swapped in for a slice,
  * captured after it, put into G by applyPrebuilt.
  */
-export const FIELDS = Object.freeze(['track', 'samples', 'N', 'trackLength', 'animated', 'crowd', 'hazards', 'projectiles', 'itemBoxes', 'ramps', 'pits', 'pads', 'crossings', 'cyclists',
+export const FIELDS = Object.freeze(['track', 'samples', 'N', 'trackLength', 'animated', 'crowd', 'hazards', 'projectiles', 'itemBoxes', 'boxBatch', 'coins', 'coinMesh', 'ramps', 'pits', 'pads', 'crossings', 'cyclists',
   'seed', 'layout', 'rng', 'hw', 'entitySeq', 'lamps', 'disposables', 'climate', 'sun', 'sunOffset']);
-const freshState = track => ({ track, samples: [], N: 0, trackLength: 0, animated: [], crowd: [], hazards: [], projectiles: [], itemBoxes: [], ramps: [], pits: [], pads: [], crossings: [], cyclists: [],
+const freshState = track => ({ track, samples: [], N: 0, trackLength: 0, animated: [], crowd: [], hazards: [], projectiles: [], itemBoxes: [], boxBatch: null, coins: [], coinMesh: null, ramps: [], pits: [], pads: [], crossings: [], cyclists: [],
   seed: 0, layout: null, rng: null, hw: track.roadHalfWidth ?? CFG.roadHalfWidth, entitySeq: 0, lamps: [], disposables: [], climate: null, sun: null, sunOffset: null });
 
 /** The one job: the circuit being built ahead, or null. */

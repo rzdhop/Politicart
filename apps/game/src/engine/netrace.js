@@ -28,6 +28,7 @@ import { applyKart, bracket, decodeVfx, extrapolateKart, lerpKart } from './nets
 import { onKartJoin, onNet, onPong, onRace, onResults, onSnap, sendInput, sendPing } from './net.js';
 import { updateKartVisual } from './physics.js';
 import { blend, errorOffset, estimateDelay, lastSeq, predictTick, reconcile, recordTick, resetPrediction } from './predict.js';
+import { EVENTS } from './raceevents.js';
 import { animateCrowd, joinField, placeCrossing, startField, viewStep } from './race.js';
 import { G, STEP } from './state.js';
 import { receiveVfx, replayVfx } from './vfx.js';
@@ -289,6 +290,8 @@ export function netStep(dt) {
       if (g.userData.blink) g.userData.blink.material.color.setHex(Math.floor(G.time * 10) % 2 ? 0x3a6bff : 0xff3a4a);
     });
     G.itemBoxes.forEach((bx, i) => { bx.mesh.visible = b.b[i] === '1'; });
+    if (typeof b.cn === 'string' && G.coins) G.coins.forEach((c, i) => { c.active = b.cn[i] === '1'; });   // the coins on the road (coins.js)
+    G.eventBanner = b.ev && EVENTS[b.ev] ? { id: b.ev, t: 1, title: EVENTS[b.ev].title } : null;                                                      // a live event's banner (raceevents.js)
     G.crossings.forEach((c, i) => { if (b.c[i] !== undefined) { c.t = (a.c[i] ?? b.c[i]) + (b.c[i] - (a.c[i] ?? b.c[i])) * f; placeCrossing(c); } });
     applyCyclists(a.cy, b.cy, f);
   }
@@ -299,7 +302,7 @@ export function netStep(dt) {
   else if (handoff) { const f = Math.exp(-HANDOFF_RATE * dt); handoff.x *= f; handoff.z *= f; handoff.y *= f; handoff.h *= f; if (Math.abs(handoff.x) + Math.abs(handoff.z) < 0.01) handoff = null; }
   const at = predicting || handoff ? lift(own) : null;
   for (const k of G.karts) updateKartVisual(k, dt, clamp(Math.abs(k.speed) / (42 * k.stats.speed), 0, 1));
-  for (const bx of G.itemBoxes) { bx.mesh.rotation.y += 0.03; bx.mesh.rotation.x += 0.01; }
+  for (const bx of G.itemBoxes) bx.mesh.rotation.y += 0.03;
   for (const fn of [...G.animated]) fn(dt);
   animateCrowd();
   const payload = viewStep(dt);

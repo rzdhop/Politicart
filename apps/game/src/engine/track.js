@@ -35,6 +35,8 @@ import { SALT_CYCLISTS, SALT_FEATURES, SALT_RACE, derive, makeRng } from './seed
 import { CFG, G, bikeLaneOf, disposable, getPoly, nextEntityId } from './state.js';
 import { TEX, bakeSurface, surface, textures } from './textures.js';
 import { pick, rand } from './util.js';
+import { buildBallotBoxes } from './ballotbox.js';
+import { buildCoins } from './coins.js';
 import { EMBANK, PAVEMENT, STILL, nOf, setDecorScale, setTerrain, still, terrainFlat, terrainY, yAt } from './decor/context.js';
 import { BUILDERS, DECOR_SURFACES } from './decor/index.js';
 import { flushInstanced, resetInstanced } from './decor/instanced.js';
@@ -352,10 +354,12 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   scene.add(ground.mesh);
   yield TRACK_PHASES[2];
 
-  // item boxes: rows of 4 golden urns across the road, four rows unless the track lists more
-  G.itemBoxes = [];
-  const boxGeo = new THREE.OctahedronGeometry(1.1, 0); const boxMat = new THREE.MeshStandardMaterial({ color: 0xffd34d, emissive: 0x6a4a00, transparent: true, opacity: 0.9, roughness: 0.3, metalness: 0.4 });
-  (track.boxRows || [0.18, 0.42, 0.66, 0.88]).forEach(f => { const s = samples[Math.floor(f * N)]; const sp = s.hw * 0.4; [-1.5, -0.5, 0.5, 1.5].forEach(o => { const m = new THREE.Mesh(boxGeo, boxMat); m.position.set(s.x + s.sx * o * sp, roadY(s, o * sp) + 1.4, s.z + s.sz * o * sp); scene.add(m); G.itemBoxes.push({ x: m.position.x, z: m.position.z, mesh: m, active: true, timer: 0 }); }); });
+  // item boxes: rows of 4 glass urnes across the road (ballotbox.js, four instanced draws), four rows unless the track lists more;
+  // then the politicoins in lines between the rows (coins.js, one draw), from the race seed
+  const boxRows = track.boxRows || [0.18, 0.42, 0.66, 0.88], spots = [];
+  boxRows.forEach(f => { const s = samples[Math.floor(f * N)]; const sp = s.hw * 0.4; [-1.5, -0.5, 0.5, 1.5].forEach(o => spots.push({ x: s.x + s.sx * o * sp, y: roadY(s, o * sp), z: s.z + s.sz * o * sp })); });
+  buildBallotBoxes(scene, spots);
+  buildCoins(scene, samples, boxRows, seed);
 
   // shared street furniture: lamps, ad boards, crowd zones, grandstand, benches, pigeons
   for (const _ of furnish(scene, track, layout)) yield TRACK_PHASES[3];

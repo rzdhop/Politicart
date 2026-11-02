@@ -107,8 +107,8 @@ describe('account API client', () => {
     const f = fake(200, { profile: {}, gained: 70, coins: 110, bonus: { daily: true } });
     expect(await reportRace('tok', { rank: 0, field: 6, finished: true, trackId: 'bourbon', charId: 'gege', time: 201.5, bestLap: 55.25 }, { fetchImpl: f })).toMatchObject({ ok: true, gained: 70, coins: 110 });
     await reportRace('tok', { rank: 2, field: 6, finished: false }, { fetchImpl: f });
-    expect(JSON.parse(f.calls[0][1].body)).toEqual({ rank: 0, field: 6, finished: true, trackId: 'bourbon', charId: 'gege', time: 201.5, bestLap: 55.25 });
-    expect(JSON.parse(f.calls[1][1].body)).toEqual({ rank: 2, field: 6, finished: false, trackId: null, charId: null, time: null, bestLap: null });
+    expect(JSON.parse(f.calls[0][1].body)).toEqual({ rank: 0, field: 6, finished: true, trackId: 'bourbon', charId: 'gege', time: 201.5, bestLap: 55.25, pickups: 0, goals: 0 });
+    expect(JSON.parse(f.calls[1][1].body)).toEqual({ rank: 2, field: 6, finished: false, trackId: null, charId: null, time: null, bestLap: null, pickups: 0, goals: 0 });
   });
 });
 

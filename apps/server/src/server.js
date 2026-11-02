@@ -55,7 +55,7 @@ import { TRACKS } from '../../game/src/engine/data.js';
 import { levelFromXp } from '../../game/src/engine/progress.js';
 import { accountApi } from './accounts.js';
 import { dashboardApi, recordRace, recordSolo } from './dashboard.js';
-import { economyApi, settleRace } from './economy.js';
+import { bonusOf, economyApi, settleRace } from './economy.js';
 import { newCode, Room } from './lobby.js';
 import { rosterApi } from './roster.js';
 import { openFileStore } from './store.js';
@@ -240,7 +240,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
    */
   async function updateProfile(user, gain = null) {
     const profile = await api.profile(user);
-    const msg = { t: 'profile', profile, gained: gain?.xp ?? 0, coins: gain?.coins ?? 0, bonus: { daily: !!gain?.daily, levelUp: !!gain?.levelUp, levelUpCoins: gain?.levelUpCoins ?? 0 } };
+    const msg = { t: 'profile', profile, gained: gain?.xp ?? 0, coins: gain?.coins ?? 0, bonus: bonusOf(gain) };
     for (const c of online.get(user.id) ?? []) {
       c.user = user; send(c.id, msg);
       const room = c.code && rooms.get(c.code); if (room) { room.setProfile(c.id, { level: profile.level, owned: profile.owned }); showRoom(room); }
@@ -281,7 +281,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
       if (!c || !c.user || r.isAI || r.god || slot.god) continue;
       const settled = await settleRace(store, c.user, {
         rank: r.rank, field: results.ranking.length, finished: r.finished, teamWon: !!first && first.points > 0 && first.team === r.team,
-        trackId, bestLap: r.bestLap, time: r.time, charId: slot.charId, solo: false,
+        trackId, bestLap: r.bestLap, time: r.time, charId: slot.charId, solo: false, pickups: r.pickups ?? 0, goals: r.goals ?? 0,
       }, { now: now() });
       if (settled) await updateProfile(settled.after, settled.gain);
     }

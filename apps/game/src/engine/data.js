@@ -100,8 +100,26 @@ export const ITEMS = {
   cumul:       { name: 'Cumul des mandats',         icon: '🎖️', hint: 'Deux mandats, deux objets : en tire deux au hasard et les utilise d’un coup.' },
   factcheck:   { name: 'Fact-checking',             icon: '🔍', hint: 'Vérifie le kart qui vous précède : traverse son immunité et le sonne.' },
   pantouflage: { name: 'Pantouflage',               icon: '🥿', hint: 'Reconversion express dans le privé : un bond en avant sur la piste.' },
-  referendum:  { name: 'Référendum',                icon: '🗳', hint: 'Coup de poker : le oui booste tout le monde, le non sonne vos adversaires, l’abstention vous ralentit.' },
+  referendum:  { name: 'Référendum',                icon: '🗳', hint: 'Coup de poker : le oui booste tout le monde, le non sonne vos adversaires, le vote blanc vous relance un peu.' },
+  // the upgrades (DEC-065): several uses of one item (`uses`), drawn from the same rows as their base (`base`), rarer
+  turbo3:      { name: '49.3 en rafale',            icon: '⚡', hint: 'Trois passages en force : trois boosts, un par appui.', base: 'turbo', uses: 3 },
+  dossier3:    { name: 'Triple fuite',              icon: '📁', hint: 'Trois dossiers Mediapart, un par appui, sur les karts qui vous précèdent.', base: 'dossier', uses: 3 },
+  reserve:     { name: 'Réserve parlementaire',     icon: '💰', hint: 'Le jackpot : cinq boosts dorés et cinq politicoins, un boost par appui.', uses: 5 },
 };
+/**
+ * Each item's rarity, for the HUD's roll (a rare or mythic draw lands with a
+ * jackpot flash, DEC-065): the rest are common.
+ */
+export const ITEM_TIERS = Object.freeze({
+  dossier: 'rare', motion: 'rare', immunite: 'rare', bravm: 'rare', factcheck: 'rare', relance: 'rare', cumul: 'rare', pantouflage: 'rare', turbo3: 'rare', dossier3: 'rare',
+  helico: 'mythic', dissolution: 'mythic', niche: 'mythic', reserve: 'mythic',
+});
+/** The rarity of item `id`: 'common', 'rare' or 'mythic'. */
+export const itemTier = id => ITEM_TIERS[id] ?? 'common';
+/** The items a kart can hold behind it as a shield: a dossier or a bike from behind ends in them (DEC-065). */
+export const REAR_GUARDS = Object.freeze(['greve', 'sondage', 'lacrymo']);
+/** How many uses item `id` holds when drawn. */
+export const itemUses = id => ITEMS[id]?.uses ?? 1;
 /** The statuses the HUD lists on the player's kart (payload.js statusOf, StatusBadges): glyph, name, and whether it helps. */
 export const STATUSES = {
   slowed:   { icon: '🐌', name: 'Ralenti',        good: false },
@@ -114,21 +132,32 @@ export const STATUSES = {
   immunity: { icon: '🛡️', name: 'Immunité',       good: true },
   phantom:  { icon: '🧾', name: 'Niche fiscale',  good: true },
   fly:      { icon: '🚁', name: 'Hélico',         good: true },
+  rear:     { icon: '🛡', name: 'Arrière protégé', good: true },
 };
+// The leader draws defence and small boosts, the back of the field the big
+// catch-up moves; the upgrades and the jackpot come mostly to those behind
+// (DEC-065). Rows sum to 100.
 export const ITEM_ODDS = [
-  { turbo: 24, greve: 26, dossier: 8, sondage: 16, casserolade: 10, niche: 6, langue: 12, referendum: 4 },
-  { turbo: 20, greve: 14, dossier: 16, sondage: 10, bravm: 10, casserolade: 8, niche: 8, langue: 8, factcheck: 6, referendum: 6 },
-  { turbo: 16, greve: 6, dossier: 16, sondage: 8, bravm: 12, motion: 8, casserolade: 8, lacrymo: 8, relance: 8, factcheck: 8, cumul: 6, pantouflage: 6 },
-  { turbo: 12, dossier: 12, motion: 14, bravm: 12, lacrymo: 10, immunite: 8, relance: 8, niche: 8, factcheck: 8, cumul: 8, pantouflage: 8 },
-  { turbo: 8, dossier: 10, motion: 14, bravm: 12, lacrymo: 10, helico: 10, dissolution: 10, relance: 6, niche: 4, cumul: 8, pantouflage: 10, referendum: 6 },
-  { turbo: 6, motion: 12, bravm: 12, lacrymo: 10, helico: 14, dissolution: 14, immunite: 8, relance: 6, cumul: 8, pantouflage: 10 },
+  { turbo: 24, greve: 24, dossier: 8, sondage: 14, casserolade: 8, niche: 4, langue: 12, referendum: 4, turbo3: 2 },
+  { turbo: 18, greve: 12, dossier: 14, sondage: 10, bravm: 10, casserolade: 8, niche: 6, langue: 8, factcheck: 6, referendum: 4, turbo3: 4 },
+  { turbo: 12, greve: 6, dossier: 12, sondage: 6, bravm: 10, motion: 8, casserolade: 6, lacrymo: 8, relance: 8, factcheck: 6, cumul: 6, pantouflage: 4, turbo3: 4, dossier3: 4 },
+  { turbo: 8, dossier: 10, motion: 12, bravm: 10, lacrymo: 8, immunite: 8, relance: 8, niche: 6, factcheck: 6, cumul: 6, pantouflage: 6, turbo3: 6, dossier3: 4, reserve: 2 },
+  { turbo: 6, dossier: 6, motion: 12, bravm: 10, lacrymo: 8, helico: 10, dissolution: 8, relance: 6, niche: 4, cumul: 6, pantouflage: 8, referendum: 4, turbo3: 6, dossier3: 4, reserve: 2 },
+  { turbo: 4, motion: 10, bravm: 10, lacrymo: 6, helico: 12, dissolution: 10, immunite: 8, relance: 6, cumul: 6, pantouflage: 8, turbo3: 8, dossier3: 6, reserve: 6 },
 ];
-export function rollItem(rank) {
+/** What an item becomes during an urn rush (raceevents.js): the upgrade of its kind. */
+export const RUSH_UPGRADE = Object.freeze({ turbo: 'turbo3', dossier: 'dossier3', greve: 'turbo3', sondage: 'dossier3', referendum: 'reserve' });
+/**
+ * Draw an item for a kart in place `rank` (0 = first). During an urn rush
+ * (`G.urnRush` > 0, passed as `rush`) the common draws are upgraded
+ * (RUSH_UPGRADE).
+ */
+export function rollItem(rank, rush = false) {
   const table = ITEM_ODDS[clamp(rank, 0, ITEM_ODDS.length - 1)];
   let total = 0; for (const k in table) total += table[k];
-  let r = Math.random() * total;
-  for (const k in table) { r -= table[k]; if (r <= 0) return k; }
-  return 'turbo';
+  let r = Math.random() * total, out = 'turbo';
+  for (const k in table) { r -= table[k]; if (r <= 0) { out = k; break; } }
+  return rush ? RUSH_UPGRADE[out] ?? out : out;
 }
 
 // ---------- Tracks ----------

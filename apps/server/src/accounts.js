@@ -34,7 +34,7 @@ import { promisify } from 'node:util';
 import { CHARACTERS, TRACKS } from '../../game/src/engine/data.js';
 import { profileOf } from '../../game/src/engine/progress.js';
 import { adminConfig, isAdminUser, isReservedName } from './admin.js';
-import { ownedOf, seconds, settleRace } from './economy.js';
+import { bonusOf, ownedOf, seconds, settleRace } from './economy.js';
 import { nameKey } from './store.js';
 
 const scrypt = promisify(scryptCb);
@@ -228,6 +228,7 @@ export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {},
         rank: Math.max(0, Math.floor(Number(b.rank) || 0)), field, finished: b.finished === true,
         trackId: TRACK_IDS.includes(b.trackId) ? b.trackId : null, charId: CHAR_IDS.includes(b.charId) ? b.charId : null,
         time: seconds(b.time), bestLap: seconds(b.bestLap), solo: true,
+        pickups: b.pickups, goals: b.goals,   // the run's own (DEC-064): settleRace caps both
       };
       await owned(user);             // a pre-economy account is seeded with the level it had before this race
       const settled = await settleRace(store, user, race, { now });
@@ -235,7 +236,7 @@ export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {},
       const { after, gain } = settled;
       onProfile(after);
       onSoloRace(after, race);
-      reply(res, 200, { profile: await profile(after), gained: gain.xp, coins: gain.coins, bonus: { daily: gain.daily, levelUp: gain.levelUp, levelUpCoins: gain.levelUpCoins } });
+      reply(res, 200, { profile: await profile(after), gained: gain.xp, coins: gain.coins, bonus: bonusOf(gain) });
     },
   };
 

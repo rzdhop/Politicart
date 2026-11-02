@@ -40,6 +40,17 @@ export const DNF_COINS = 5;
 export const TEAM_WIN_COINS = 20;
 /** The bonus of the first race of a (UTC) day. */
 export const DAILY_COINS = 50;
+// The run's own rewards (DEC-064), paid by the server's settleRace beside the place:
+/** Experience and politicoins for each of the run's goals reached (goals.js). */
+export const GOAL_XP = 15, GOAL_COINS = 25;
+/** How many goals a run sets. */
+export const GOALS_PER_RUN = 3;
+/** The most politicoins picked on the road that a race pays (one each): a guard on what a client reports. */
+export const PICKUP_CAP = 60;
+/** The podium streak: each race in a row on the podium after the first adds STREAK_STEP of the place's coins, up to STREAK_MAX steps. */
+export const STREAK_STEP = 0.2, STREAK_MAX = 5;
+/** The streak bonus on `base` politicoins (the place's) for a podium streak of `streak` races (this one included). */
+export const streakCoins = (base, streak) => (streak >= 2 ? Math.round(base * STREAK_STEP * Math.min(STREAK_MAX, streak - 1)) : 0);
 /** The bonus for reaching `level`. */
 export const levelUpCoins = level => 100 * level;
 
