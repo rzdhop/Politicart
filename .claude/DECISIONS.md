@@ -1260,3 +1260,18 @@ circuit's ground is one quad; "légers" ground uses 50 m cells.
 karts, 3 seeds): meshes -33 to -48 % on both tiers; triangles on
 "détaillés" from -35 % (Élysée) to +37 % (Versailles), on "légers" from
 +7 % (Élysée) to +29 % (Marseille). Build time per race about unchanged.
+
+## DEC-060 -- The chase camera follows a yaw of its own, held while the kart spins
+
+**Context.** The owner: "when hit by a bonus the kart turns but not the
+camera". A stunned kart spins its physical heading at 11 rad/s
+(`physics.js`); `race.js updateCamera` placed the camera straight off that
+heading and lerped its position towards a target racing round a 10 m
+circle, so the camera cut through the kart while its aim whipped round.
+
+**Decision.** `race.js` keeps `CAM.yaw`, eased towards the followed kart's
+heading the short way round (`CAM_YAW_RATE` = 12/s) and held while that
+kart is stunned; the camera's position and aim come from it. The spin stays
+a physics heading (no change to snapshots or prediction): only the view
+ignores it. `startField` resets the yaw to the start line's tangent.
+`camera.test.js` pins the hold, the short way round and a smooth swing back.
