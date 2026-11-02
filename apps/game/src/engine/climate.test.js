@@ -89,7 +89,7 @@ describe('applyClimate, headless', () => {
     for (const g of clouds) { const meshes = []; g.traverse(o => { if (o.isMesh) meshes.push(o); }); expect(meshes).toHaveLength(1); }
     expect(G.animated).toHaveLength(clouds.length);
     const x0 = clouds[0].position.x; G.animated[0](1); expect(clouds[0].position.x).toBeCloseTo(x0 + 2.5, 5);
-    clouds[0].position.x = 800; G.animated[0](0.01); expect(clouds[0].position.x).toBe(-760);
+    clouds[0].position.x = 1200; G.animated[0](0.01); expect(clouds[0].position.x).toBe(-1140);
   });
 
   it('lights the registered lamp heads at night, in two draws, and leaves them dark at noon', () => {

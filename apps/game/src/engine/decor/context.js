@@ -25,7 +25,27 @@ export const still = o => { STILL.push(o); return o; };
 
 /** Scale of the circuit being built (a live binding: importers read the current value). */
 export let DS = 1;
-export function setDecorScale(s) { DS = s; }
+/**
+ * The circuit scale the builders' world-unit layouts were drawn for: the
+ * Élysée's palace, the Seine's quais, Versailles' bassins and the rest were
+ * placed in metres around a road drawn at scale 3. Since the races became one
+ * long lap (DEC-061) the circuits are drawn at 4.5; `K` (DS / LAYOUT_SCALE) is
+ * the factor those world positions, and the lengths of what runs along the
+ * road (rivers, quais, sea sheets), grow by so the landmarks keep framing the
+ * road. Buildings, props and people keep their size.
+ */
+export const LAYOUT_SCALE = 3;
+/** DS / LAYOUT_SCALE, a live binding like DS: 1 on a circuit drawn at scale 3, 1.5 at 4.5. */
+export let K = 1;
+export function setDecorScale(s) { DS = s; K = s / LAYOUT_SCALE; }
+/**
+ * A world coordinate `v` of such a layout that belongs with a point of the
+ * road `d` metres away along that axis (v - d is the road's coordinate at
+ * scale 3): moved out with that road point by K, still d metres from it. For
+ * what must stay by the road (a square at its kerb, a hill just past it)
+ * where `v * K` would leave it further off.
+ */
+export const follow = (v, d) => v * K - d * (K - 1);
 /** Whether (x, z), in scale-1 coordinates, is at least `margin` metres (scale-1) clear of the road. */
 export const clearAt = (x, z, margin) => isClear(x * DS, z * DS, margin * DS);
 
@@ -35,6 +55,14 @@ export const nOf = n => (getPoly() === 'high' ? n : Math.ceil(n / 2));
 // ---------- The ground's height (DEC-050) ----------
 /** The pavement's reach beyond the road's edge, and the embankment's width beyond that, in metres. */
 export const PAVEMENT = 6, EMBANK = 34;
+/**
+ * The ground plain (track.js groundMesh): GROUND_SIZE metres square in
+ * GROUND_CELLS cells a side on "détaillés", its heights following the terrain
+ * within TERRAIN_REACH of the origin (every circuit's loop and the terrain's
+ * RADIUS around it fit inside), flat beyond. elysee-props.js groundY reads
+ * the same lattice.
+ */
+export const GROUND_SIZE = 4000, GROUND_CELLS = 128, TERRAIN_REACH = 1200;
 /** How far the road's height reaches into the terrain around it, and where it starts fading to the flat plain. */
 const RADIUS = 220, FADE = 150;
 let coarse = [], flat = true;

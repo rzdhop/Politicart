@@ -19,7 +19,7 @@ import * as THREE from 'three';
 
 import { G, getPoly, isClear } from '../state.js';
 import { pick, rand } from '../util.js';
-import { DS, clearAt, nOf, yAt } from './context.js';
+import { DS, K, clearAt, follow, nOf, yAt } from './context.js';
 import { fromBuilder, instanced } from './instanced.js';
 import { box, cyl } from '../primitives.js';
 import { building, carousel, funicular, house, lamp, metroEntrance, sacreCoeur, windmill } from './street.js';
@@ -43,6 +43,8 @@ const WALLS = [0xffffff, 0xf2d9b8], CV_COLOURS = [0xd0d4d8, 0xb33a3a, 0xf2c14e, 
 
 export function* buildMontmartre(scene, world) {
   const N = G.N, S = DS, dense = getPoly() === 'high';
+  // world positions below are drawn for a circuit at scale 3: `w(x, z)` moves one out with the road by K (context.js, DEC-061)
+  const w = (x, z) => [x * K, z * K];
   OPENED.length = 0;
   const batch = (make, opts) => { const b = instanced(fromBuilder(g => g.add(make())), opts); OPENED.push({ label: '', batch: b }); return b; };
   const houses = (dense ? WALLS : WALLS.slice(0, 1)).flatMap(c => { const m = plasterMat(c); return [[10, 9, 10], [14, 10, 13], [8, 8, 8]].map(([w, d, h]) => batch(() => villageHouse(w, d, h, m), { world: true })); });
@@ -83,7 +85,7 @@ export function* buildMontmartre(scene, world) {
 
   // the place du Tertre inside the top of the loop, on the level ground by the road before the bank down into the loop: its cobbles,
   // the painters' red parasols over their tables, easels round them, tourists, mimes, pigeons, the cafés on its north side
-  const TX = 60, TZ = 385; world.add(cobbleSquare(124, 60, TX, TZ));
+  const TX = 60 * K, TZ = follow(385, -80); world.add(cobbleSquare(124, 60, TX, TZ));   // 80 m inside the loop's top (z 465 at scale 3)
   const on = (x, z) => yAt(x, z) + 0.06, gap = dense ? 6 : 9;
   for (let x = -36; x <= 36; x += gap) for (let z = -14; z <= 14; z += gap) { const px = TX + x + rand(-1.2, 1.2), pz = TZ + z + rand(-1.2, 1.2); parasols.add(px, pz, { y: on(px, pz) }); sets.add(px, pz, { y: on(px, pz), rotY: rand(0, 6.28) }); }
   for (let i = 0, n = nOf(16); i < n; i++) {
@@ -95,7 +97,7 @@ export function* buildMontmartre(scene, world) {
   tour(TX - 50, TZ - 20, on(TX - 50, TZ - 20), nOf(8));
   for (let i = 0; i < 4; i++) { const x = TX - 30 + i * 20, z = TZ - 26; walker(world, x, z, { rotY: Math.PI, coat: 0x222222, base: on(x, z), world: true, amp: 0.35 }); }   // the mimes, in black, white-faced
   for (let i = 0; i < nOf(40); i++) { const x = TX + rand(-60, 60), z = TZ + rand(-28, 28); pigeons.add(x, z, { y: on(x, z), rotY: rand(0, 6.28) }); }
-  for (let i = 0; i < nOf(16); i++) { const x = rand(-90, 90), z = rand(-450, -405); pigeons.add(x, z, { y: yAt(x, z), rotY: rand(0, 6.28) }); }
+  for (let i = 0; i < nOf(16); i++) { const x = rand(-90, 90) * K, z = rand(-450, -405) * K; pigeons.add(x, z, { y: yAt(x, z), rotY: rand(0, 6.28) }); }
   [['LA MÈRE CATHERINE', 0xc8102e, -34], ['LE CONSULAT', 0x2f6b3a, 34]].forEach(([name, color, x]) => {
     const fx = TX + x, fz = TZ + 34; if (!isClear(fx, fz, 4)) return; const f = terraceFront(name, color, 16); f.position.set(fx, yAt(fx, fz), fz); f.rotation.y = Math.PI; world.add(f);
     for (let k = 0; k < nOf(8); k++) { const px = fx - 6 + (k % 4) * 4, pz = fz - 4 - Math.floor(k / 4) * 3.5; sets.add(px, pz, { y: on(px, pz), rotY: rand(0, 6.28) }); }
@@ -105,21 +107,22 @@ export function* buildMontmartre(scene, world) {
   yield;
 
   // the west side: the Lapin Agile among the vines of the Clos Montmartre, the Moulin de la Galette and the Moulin Radet, the guinguette's tables
-  const la = lapinAgile(); la.position.set(-360, yAt(-360, 225), 225); la.rotation.y = -Math.PI / 2; if (isClear(-360, 225, 24)) world.add(la);
-  [[-336, -6, 0], [-276, 24, 0.2], [-375, 126, -0.1], [-330, 180, 0.1]].forEach(([cx, cz, r]) => { if (!isClear(cx, cz, 20)) return; for (let row = 0; row < 4; row++) for (let c = 0; c < (dense ? 8 : 5); c++) { const lx = (c - 3.5) * 2.2, lz = (row - 1.5) * 2.4, x = cx + lx * Math.cos(r) + lz * Math.sin(r), z = cz - lx * Math.sin(r) + lz * Math.cos(r); vines.add(x, z, { y: yAt(x, z), rotY: rand(0, 6.28) }); } });
+  { const [x, z] = w(-360, 225), la = lapinAgile(); la.position.set(x, yAt(x, z), z); la.rotation.y = -Math.PI / 2; if (isClear(x, z, 24)) world.add(la); }
+  [[-336, -6, 0], [-276, 24, 0.2], [-375, 126, -0.1], [-330, 180, 0.1]].map(([x, z, r]) => [...w(x, z), r]).forEach(([cx, cz, r]) => { if (!isClear(cx, cz, 20)) return; for (let row = 0; row < 4; row++) for (let c = 0; c < (dense ? 8 : 5); c++) { const lx = (c - 3.5) * 2.2, lz = (row - 1.5) * 2.4, x = cx + lx * Math.cos(r) + lz * Math.sin(r), z = cz - lx * Math.sin(r) + lz * Math.cos(r); vines.add(x, z, { y: yAt(x, z), rotY: rand(0, 6.28) }); } });
   const mill = (x, z, rot, k) => { let sails = null; const m = merged(p => { windmill(p, 0, 0, rot); sails = p.children[0].children.find(c => c.isGroup); }, o => o === sails); m.position.set(x, yAt(x, z), z); m.scale.setScalar(k); world.add(m); return m; };
-  mill(-330, 60, Math.PI / 2, 1.15).name = 'montmartre:moulin-galette';
-  if (isClear(-405, -30, 16)) mill(-405, -30, Math.PI / 2 + 0.4, 0.85);
-  for (let i = 0; i < nOf(10); i++) { const x = -300 + rand(-14, 14), z = 92 + rand(-8, 8); sets.add(x, z, { y: yAt(x, z), rotY: rand(0, 6.28) }); }
-  for (let i = 0; i < nOf(8); i++) { const x = -300 + rand(-12, 12), z = 92 + rand(-6, 6); walker(world, x, z, { base: yAt(x, z), world: true, amp: 0.3 }); }   // dancing at the guinguette
-  { const x = -330, z = 255; if (isClear(x, z, 12)) tour(x, z, yAt(x, z), nOf(7)); }
+  mill(...w(-330, 60), Math.PI / 2, 1.15).name = 'montmartre:moulin-galette';
+  { const [x, z] = w(-405, -30); if (isClear(x, z, 16)) mill(x, z, Math.PI / 2 + 0.4, 0.85); }
+  const [gx, gz] = w(-300, 92);   // the guinguette
+  for (let i = 0; i < nOf(10); i++) { const x = gx + rand(-14, 14), z = gz + rand(-8, 8); sets.add(x, z, { y: yAt(x, z), rotY: rand(0, 6.28) }); }
+  for (let i = 0; i < nOf(8); i++) { const x = gx + rand(-12, 12), z = gz + rand(-6, 6); walker(world, x, z, { base: yAt(x, z), world: true, amp: 0.3 }); }   // dancing at the guinguette
+  { const [x, z] = w(-330, 255); if (isClear(x, z, 12)) tour(x, z, yAt(x, z), nOf(7)); }
   yield;
 
   // the foot of the butte, by the start: the carousel, the Métro, the Mur des je t'aime, the Deux Moulins' terrace
   carousel(scene, -45, -125); metroEntrance(scene, 22, -132, Math.PI); metroEntrance(scene, -140, -118, Math.PI / 2);
-  if (isClear(120, -372, 14)) { const m = murJeTaime(); m.position.set(120, yAt(120, -372), -372); m.rotation.y = Math.PI; world.add(m); }
-  if (isClear(180, -384, 14)) { const f = terraceFront('CAFÉ DES DEUX MOULINS', 0xd4af37, 16); f.position.set(180, yAt(180, -384), -384); f.rotation.y = Math.PI; world.add(f); for (let k = 0; k < nOf(8); k++) { const x = 174 + (k % 4) * 4, z = -390 - Math.floor(k / 4) * 3.5; sets.add(x, z, { y: yAt(x, z), rotY: rand(0, 6.28) }); } }
-  { const x = 60, z = -360; if (isClear(x, z, 10)) tour(x, z, yAt(x, z), nOf(7)); }
+  { const [x, z] = w(120, -372); if (isClear(x, z, 14)) { const m = murJeTaime(); m.position.set(x, yAt(x, z), z); m.rotation.y = Math.PI; world.add(m); } }
+  { const [cx, cz] = w(180, -384); if (isClear(cx, cz, 14)) { const f = terraceFront('CAFÉ DES DEUX MOULINS', 0xd4af37, 16); f.position.set(cx, yAt(cx, cz), cz); f.rotation.y = Math.PI; world.add(f); for (let k = 0; k < nOf(8); k++) { const x = cx - 6 + (k % 4) * 4, z = cz - 6 - Math.floor(k / 4) * 3.5; sets.add(x, z, { y: yAt(x, z), rotY: rand(0, 6.28) }); } } }
+  { const [x, z] = w(60, -360); if (isClear(x, z, 10)) tour(x, z, yAt(x, z), nOf(7)); }
   yield;
 
   // terraced streets beside the climb and the way down: stone terraces stepping with the road on its outer side, houses on them, steps up their face, lamps along their edge
@@ -153,10 +156,10 @@ export function* buildMontmartre(scene, world) {
   yield;
   for (let a = 0.05; a < Math.PI * 2; a += 0.17) { const r = 207, x = Math.cos(a) * r, z = Math.sin(a) * r; if (z > 150 || !clearAt(x, z, 11)) continue; const w = rand(12, 16), d = rand(9, 12), h = rand(8, 12); const b = merged(g => house(g, 0, 0, w, d, h, -a + Math.PI / 2)); b.position.set(x, 0, z); scene.add(b); }
   // the village down in the hollow of the loop: lanes of houses facing each other, a tree here and there
-  for (const lz of dense ? [-240, -120, 0, 120] : [-180, 60]) {
+  for (const lz of (dense ? [-240, -120, 0, 120] : [-180, 60]).map(z => z * K)) {
     yield;
-    for (let x = -300; x <= 300; x += 15) for (const sg of [1, -1]) {
-      const hx = x + rand(-1.5, 1.5), hz = lz + sg * 13; if (Math.abs(hx + 135) < 30 && hz < -330) continue;
+    for (let x = -300 * K; x <= 300 * K; x += 15) for (const sg of [1, -1]) {
+      const hx = x + rand(-1.5, 1.5), hz = lz + sg * 13; if (Math.abs(hx + 135 * K) < 30 && hz < -330 * K) continue;
       if (!isClear(hx, hz, 20)) continue;
       const y0 = yAt(hx, hz - 7), y1 = yAt(hx, hz + 7); if (Math.abs(y1 - y0) > 0.8) continue;   // level ground only: the hollow's rim is a bank
       if (Math.random() < 0.15) { wtrees.add(hx, hz, { y: (y0 + y1) / 2, scale: rand(0.9, 1.2), rotY: rand(0, 6.28) }); continue; }

@@ -14,7 +14,7 @@ import { applyPrebuilt, buildExtras, dropPrebuild, HAZARD_TYPES, prebuildFrame, 
 import { startField, startRace } from './race.js';
 import { CFG, G, getPoly, togglePoly } from './state.js';
 import { takeSurfaceRequests } from './textures.js';
-import { buildTrack, surfacesOf, TRACK_PHASES } from './track.js';
+import { buildTrack, samplesOf, surfacesOf, TRACK_PHASES } from './track.js';
 
 const slots = () => CHARACTERS.slice(0, 6).map((def, i) => ({ def, isAI: i < 5, local: i === 5 }));
 /** Run the pre-build's frames headless until it reports nothing left; the number of frames it took. */
@@ -64,13 +64,13 @@ describe('the pre-build', () => {
     for (const [k, v] of Object.entries(sentinel)) expect(G[k], k).toBe(v);
     const pre = takePrebuilt({ trackIdx: 1, seed: 5 });
     expect(pre.scene).toBe(st.scene);
-    expect(pre.state.N).toBe(CFG.samples);
+    expect(pre.state.N).toBe(samplesOf(TRACKS[1]));                           // CFG.samples grown with the scale (DEC-061)
     expect(pre.state.seed).toBe(5);
     expect(pre.state.layout).toEqual(chooseLayout(TRACKS[1], 5));             // the seed's layout, obstacles and cyclists (DEC-049)
     expect(pre.state.entitySeq).toBeGreaterThan(0);                           // the static obstacles took their ids
     expect(pre.state.lamps.length).toBeGreaterThan(0);                        // the lamp heads for the climate to light
     expect(pre.state.climate).toBeNull();                                     // headless: no priming, so no climate yet
-    expect(pre.state.samples).toHaveLength(CFG.samples);
+    expect(pre.state.samples).toHaveLength(samplesOf(TRACKS[1]));
     expect(pre.state.cyclists.length).toBeGreaterThan(8);
     expect(pre.state.itemBoxes.length).toBeGreaterThanOrEqual(16);
     expect(pre.state.crowd.length).toBeGreaterThan(10);
@@ -106,7 +106,7 @@ describe('the pre-build', () => {
     startField(slots(), { seed: 3 });
     expect(getState()).toBe('countdown');
     expect(G.scene).toBe(scene);
-    expect(G.samples).toHaveLength(CFG.samples);
+    expect(G.samples).toHaveLength(samplesOf(TRACKS[0]));
     expect(G.cyclists.length).toBeGreaterThan(8);
     expect(G.itemBoxes.length).toBeGreaterThanOrEqual(16);
     expect(G.hazards.length).toBeGreaterThan(0);
@@ -142,7 +142,7 @@ describe('the pre-build', () => {
     expect(st.built).toBe(false);
     startField(slots(), { seed: st.seed });
     expect(G.scene).toBe(st.scene);
-    expect(G.samples).toHaveLength(CFG.samples);
+    expect(G.samples).toHaveLength(samplesOf(TRACKS[0]));
     expect(countMeshes(G.scene)).toBeGreaterThan(1500);
   });
 

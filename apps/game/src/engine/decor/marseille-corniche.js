@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import { box, cyl, sph } from '../primitives.js';
 import { G, disposable, getPoly, isClear } from '../state.js';
 import { pick, rand } from '../util.js';
-import { terrainY, yAt } from './context.js';
+import { K, terrainY, yAt } from './context.js';
 import { batch, perBuild } from './life.js';
 import { landmark } from './marseille-port.js';
 import { bench, lampAt, treeAt } from './street.js';
@@ -66,14 +66,17 @@ export function* corniche(scene, world) {
  * The sea west of the Corniche, from the harbour's mouth up past the islands,
  * in two sheets: past the cliffs' foot (where the terrain is back to sea
  * level, decor/context.js terrainY) and round the mouth west of the
- * harbour's own water, out to the sky dome (climate.js, 1,100 m round the
- * origin: nothing beyond it is ever seen). World units; its own copy of the
+ * harbour's own water, out to the sky dome (climate.js SKY_RADIUS round the
+ * origin: nothing beyond it is ever seen). World units drawn for a scale-3
+ * circuit, moved out by K with the road (context.js); its inner edge stays
+ * as far past the Corniche's shore sheet as it was. Its own copy of the
  * harbour's water.
  */
 export function sea(world, waterMat) {
   const m = seaMaterial(waterMat, 12, 45), g = new THREE.Group(); g.name = 'marseille:sea';
   // the uvs scaled to each sheet's size: one texel size on both
-  for (const [x0, x1, z0, z1] of [[-1120, -760, -560, 760], [-1120, -935, -820, -560]]) { const geo = new THREE.PlaneGeometry(x1 - x0, z1 - z0), uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (x1 - x0) / 360, uv.getY(i) * (z1 - z0) / 1320); const w = new THREE.Mesh(geo, m); w.rotation.x = -Math.PI / 2; w.position.set((x0 + x1) / 2, 0.03, (z0 + z1) / 2); w.receiveShadow = true; g.add(w); }
+  const w = 760 * K - 120 * (K - 1);   // the inner edge: the shore sheet (cornicheSea) reaches as far past the road at any scale
+  for (const [x0, x1, z0, z1] of [[-1120 * K, -w, -560 * K, 760 * K], [-1120 * K, -935 * K, -820 * K, -560 * K]]) { const geo = new THREE.PlaneGeometry(x1 - x0, z1 - z0), uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (x1 - x0) / 360, uv.getY(i) * (z1 - z0) / 1320); const w = new THREE.Mesh(geo, m); w.rotation.x = -Math.PI / 2; w.position.set((x0 + x1) / 2, 0.03, (z0 + z1) / 2); w.receiveShadow = true; g.add(w); }
   world.add(g);
   return g;
 }

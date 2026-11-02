@@ -26,7 +26,7 @@ import { box, cone, cyl, mat, tag, textPlane } from '../primitives.js';
 import { G, SHADOWS, disposable, getPoly } from '../state.js';
 import { surface } from '../textures.js';
 import { pick, rand } from '../util.js';
-import { DS, EMBANK, PAVEMENT, nOf, still, terrainY } from './context.js';
+import { DS, EMBANK, GROUND_CELLS, GROUND_SIZE, K, PAVEMENT, TERRAIN_REACH, nOf, still, terrainY } from './context.js';
 import { fromBuilder, instanced } from './instanced.js';
 import { cafe, crowd, flock, lampMat, metroEntrance, sedan } from './street.js';
 
@@ -37,8 +37,11 @@ export const lampsLit = () => !!CLIMATES[G.layout?.climate ?? G.track?.climates?
 /** The ground's height at world (x, z), `lat` metres past the road's edge: the pavement's top (0.35 m over the road) to 6 m out, then down the embankment (track.js) to the terrain. */
 export const groundAt = (x, z, lat) => groundY(x, z) + 0.35 * Math.max(0, Math.min(1, lat <= 6 ? 1 : 1 - (lat - 6) / 34));
 
-/** An instanced() batch with cells of 200 m on "détaillés", 500 m on "légers". */
-export const batch = (make, opts = {}) => instanced(make, { cell: high() ? 200 : 500, ...opts });
+/**
+ * An instanced() batch with cells of 200 m on "détaillés", 750 m on "légers": the cells of 500 m the layouts were tuned
+ * with, grown with them by K (DEC-061), so a phone draws the long lap's props in as many meshes as the old lap's.
+ */
+export const batch = (make, opts = {}) => instanced(make, { cell: high() ? 200 : 500 * K, ...opts });
 
 /**
  * Mark `g` still and, on "détaillés", merge it by material now (vertex
@@ -53,6 +56,21 @@ export function compact(g, keep = () => false) {
     mergeByMaterial(g, o => crowd.has(o) || keep(o));
   }
   return still(g);
+}
+
+/**
+ * Move a group whose children were placed in world units round its own
+ * centre: the group to the centre of its contents, each child back by as
+ * much, so nothing moves. A group merged by material (compact, or the
+ * "légers" fold) keeps its vertices in its own frame, in float32: far out on
+ * the long lap (DEC-061, 900 m and more) world-frame vertices lose a few
+ * hundredths of a millimetre, enough to warp a rifle's thin faces. Returns g.
+ */
+export function centred(g) {
+  const c = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3()); c.y = 0;
+  for (const o of g.children) o.position.sub(c);
+  g.position.add(c);
+  return g;
 }
 
 /** A mesh of `geo` in the shared plain finish of `color`, at (x, y, z), casting and taking shadows. */
@@ -230,10 +248,11 @@ export function clear(x, z, margin) {
 }
 
 // ---------- The ground's height, fast ----------
-/** The terrain's heights at the ground mesh's own vertices (track.js groundMesh: 25 m apart, 3200 m square, the terrain within 800 m), filled as asked, for the build. */
-const LAT = new Float32Array(129 * 129); let LAT_OF = null, LAT_FLAT = true;
+/** The terrain's heights at the ground mesh's own vertices (track.js groundMesh: GROUND_CELLS a side over GROUND_SIZE, the terrain within TERRAIN_REACH; context.js), filled as asked, for the build. */
+const LN = GROUND_CELLS + 1, LSTEP = GROUND_SIZE / GROUND_CELLS, LHALF = GROUND_SIZE / 2;
+const LAT = new Float32Array(LN * LN); let LAT_OF = null, LAT_FLAT = true;
 function latticeY(i, j) {
-  const k = i * 129 + j; if (Number.isNaN(LAT[k])) { const x = -1600 + j * 25, z = -1600 + i * 25; LAT[k] = Math.abs(x) <= 800 && Math.abs(z) <= 800 ? terrainY(x, z) : 0; }
+  const k = i * LN + j; if (Number.isNaN(LAT[k])) { const x = -LHALF + j * LSTEP, z = -LHALF + i * LSTEP; LAT[k] = Math.abs(x) <= TERRAIN_REACH && Math.abs(z) <= TERRAIN_REACH ? terrainY(x, z) : 0; }
   return LAT[k];
 }
 /**
@@ -247,7 +266,7 @@ export function groundY(x, z) {
   const g = grid(), cx = Math.floor(x / GCELL), cz = Math.floor(z / GCELL);
   let best = null, bd = Infinity;
   for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) { const list = g.get((cx + i) + ',' + (cz + j)); if (list) for (const s of list) { const d = (s.x - x) ** 2 + (s.z - z) ** 2; if (d < bd) { bd = d; best = s; } } }
-  const fx = Math.min(127.999, Math.max(0, (x + 1600) / 25)), fz = Math.min(127.999, Math.max(0, (z + 1600) / 25)), j = Math.floor(fx), i = Math.floor(fz), u = fx - j, v = fz - i;
+  const top = GROUND_CELLS - 0.001, fx = Math.min(top, Math.max(0, (x + LHALF) / LSTEP)), fz = Math.min(top, Math.max(0, (z + LHALF) / LSTEP)), j = Math.floor(fx), i = Math.floor(fz), u = fx - j, v = fz - i;
   const t = (latticeY(i, j) * (1 - u) + latticeY(i, j + 1) * u) * (1 - v) + (latticeY(i + 1, j) * (1 - u) + latticeY(i + 1, j + 1) * u) * v;
   if (!best) return t;
   const d = Math.sqrt(bd), edge = (best.hw ?? G.hw) + PAVEMENT, y = best.y || 0;
@@ -508,14 +527,16 @@ export function paris(scene, world) {
       }
       yield;
       const along = (n, f0, df, lat, sg0, add) => { for (let j = 0; j < n; j++) { const at = Math.floor(N * (f0 + j * df)) % N, sg = j % 2 ? -sg0 : sg0; if (skip(at, sg)) continue; const p = P.spot(at, sg, lat); if (clear(p.x, p.z, lat - 1)) add(p); } };
-      along(10, 0.05, 0.097, 7.5, 1, p => P.wallaces.add(p.x, p.z, { y: p.y }));
-      along(10, 0.1, 0.093, 7.6, -1, p => P.morris.add(p.x, p.z, { y: p.y }));
-      along(28, 0.003, 1 / 28, 7.2, 1, p => P.benches.add(p.x, p.z, { y: p.y, rotY: p.face }));
+      // counts per lap grown with it (K, DEC-061), so as many per metre on the long lap
+      const kn = n => Math.round(n * K);
+      along(kn(10), 0.05, 0.097 / K, 7.5, 1, p => P.wallaces.add(p.x, p.z, { y: p.y }));
+      along(kn(10), 0.1, 0.093 / K, 7.6, -1, p => P.morris.add(p.x, p.z, { y: p.y }));
+      along(kn(28), 0.003, 1 / kn(28), 7.2, 1, p => P.benches.add(p.x, p.z, { y: p.y, rotY: p.face }));
       for (const f of metro) along(1, f, 0, 9, -1, p => metroEntrance(scene, P.s1(p.x), P.s1(p.z), p.face + Math.PI));
       for (const [f, name, c] of cafes) along(1, f, 0, 11.5, -1, p => cafe(scene, P.s1(p.x), P.s1(p.z), p.face, name, c, 3));
       for (const f of fleurs) along(1, f, 0, 11, 1, p => { const fl = fleuriste(p.x, p.z, p.face, p.y); world.add(fl); compact(fl); });
-      for (let n = 0; n < nOf(12); n++) { const at = Math.floor(rand(0, N)), sg = pick([1, -1]); if (skip(at, sg)) continue; const p = P.spot(at, sg, rand(2.5, 5)); P.pigeons(p.x, p.z, p.y); }
-      for (let n = 0; n < (high() ? 90 : 24); n++) { const at = Math.floor(rand(0, N)), sg = pick([1, -1]); if (skip(at, sg)) continue; const p = P.spot(at, sg, rand(1.6, 5.6)); if (clear(p.x, p.z, 1)) P.walker(p.x, p.z, p.y); }   // passers-by
+      for (let n = 0; n < nOf(kn(12)); n++) { const at = Math.floor(rand(0, N)), sg = pick([1, -1]); if (skip(at, sg)) continue; const p = P.spot(at, sg, rand(2.5, 5)); P.pigeons(p.x, p.z, p.y); }
+      for (let n = 0; n < kn(high() ? 90 : 24); n++) { const at = Math.floor(rand(0, N)), sg = pick([1, -1]); if (skip(at, sg)) continue; const p = P.spot(at, sg, rand(1.6, 5.6)); if (clear(p.x, p.z, 1)) P.walker(p.x, p.z, p.y); }   // passers-by
       yield;
     },
     finish() { flashes(flashSpots, { world: true }); },

@@ -21,7 +21,7 @@ import { box, cyl, plane } from '../primitives.js';
 import { G, getPoly, isClear } from '../state.js';
 import { TEX } from '../textures.js';
 import { pick, rand } from '../util.js';
-import { DS, clearAt, nOf, yAt } from './context.js';
+import { DS, K, clearAt, nOf, yAt } from './context.js';
 import { fromBuilder, instanced } from './instanced.js';
 import { orangery, palace, swan } from './street.js';
 import {
@@ -110,8 +110,9 @@ export function* buildVersailles(scene, world) {
   const swans = []; for (let i = 0; i < nOf(10); i++) { const s = merged(g => { swan(g, 0, 0).rotation.y = 0; }); s.position.set(rand(-14, 14), 0, rand(-215, -400)); s.rotation.y = rand(0, 6.28); scene.add(s); swans.push(s); }
   G.animated.push(dt => { for (const s of swans) { s.position.z += Math.cos(s.rotation.y) * dt * 0.6; s.position.x += Math.sin(s.rotation.y) * dt * 0.6; if (Math.abs(s.position.x) > 16 * DS || s.position.z > -200 * DS || s.position.z < -420 * DS) s.rotation.y += Math.PI; } });
   const canalY = yAt(0, -305 * S) + 0.03, boats = [];
-  for (let i = 0; i < nOf(3); i++) { const b = gondola(); b.position.set((i - 1) * 30, canalY, rand(-1040, -640)); b.userData.dir = i % 2 ? 1 : -1; world.add(b); boats.push(b); }
-  G.animated.push(dt => { for (const b of boats) { b.position.z += b.userData.dir * dt * 2.2; if (b.position.z > -600 || b.position.z < -1060) b.userData.dir *= -1; b.rotation.y = b.userData.dir > 0 ? 0 : Math.PI; } });
+  // the gondolas in world units, drawn for a scale-3 circuit and moved down the canal by K (context.js, DEC-061)
+  for (let i = 0; i < nOf(3); i++) { const b = gondola(); b.position.set((i - 1) * 30, canalY, rand(-1040, -640) * K); b.userData.dir = i % 2 ? 1 : -1; world.add(b); boats.push(b); }
+  G.animated.push(dt => { for (const b of boats) { b.position.z += b.userData.dir * dt * 2.2; if (b.position.z > -600 * K || b.position.z < -1060 * K) b.userData.dir *= -1; b.rotation.y = b.userData.dir > 0 ? 0 : Math.PI; } });
   const rowing = batch(rowboat); for (let i = 0; i < 6; i++) rowing.add((i - 2.5) * 5.5, -192 - (i % 2) * 3, { rotY: Math.PI / 2 + rand(-0.2, 0.2) });
   yield;
 
@@ -185,8 +186,9 @@ export function* buildVersailles(scene, world) {
   yield;
 
   // the orangery, facing the gardens, its orange trees in their caisses in rows before it and a round basin; a line of topiary along the terrace
-  // (in world units, on the level ground the west allées come down to: stretched with the circuit it would be 300 m long)
-  const OX = -430, OZ = 335, or = merged(g => { orangery(g, 0, 0, 100, Math.PI); g.add(box(104, 2, 16, STONE, 0, -0.9, 0)); }); or.name = 'versailles:orangerie'; or.position.set(OX, footing(OX, OZ, 104, 16).y, OZ); world.add(or);
+  // (in world units, on the level ground the west allées come down to: stretched with the circuit it would be 300 m long; its place,
+  // drawn for a scale-3 circuit, moves out by K with the road, DEC-061)
+  const OX = -430 * K, OZ = 335 * K, or = merged(g => { orangery(g, 0, 0, 100, Math.PI); g.add(box(104, 2, 16, STONE, 0, -0.9, 0)); }); or.name = 'versailles:orangerie'; or.position.set(OX, footing(OX, OZ, 104, 16).y, OZ); world.add(or);
   const oranges = batch(() => gardenTree('orange'), { world: true });
   for (const z of [OZ - 18, OZ - 26]) for (let x = OX - 46; x <= OX + 46; x += dense ? 8 : 11.5) if (isClear(x, z, 6)) oranges.add(x, z, { y: yAt(x, z), scale: rand(0.9, 1.1) });
   if (isClear(OX, OZ - 44, 14)) { const b = merged(g => { g.add(cyl(8, 8.4, 0.6, STONE, 0, 0.3, 0, 28)); g.add(disc(7.6, water, 0.62, 28)); }); b.position.set(OX, footing(OX, OZ - 44, 17, 17).y, OZ - 44); world.add(b); }
@@ -206,11 +208,12 @@ export function* buildVersailles(scene, world) {
   for (let i = 0; i < nOf(10); i++) { const x = rand(-100, 100), z = rand(-130, 100); if (clearAt(x, z, 6) && Math.abs(x) > 30) gardeners.add(x, z, { rotY: rand(0, 6.28) }); }
   yield;
   // the petit train, up and down the allée beside the tapis vert, between Latona and Apollo
-  const route = []; for (let k = 0; k <= 40; k++) { const z = 110 - k * 340 / 40; route.push(yAt(46, z)); }
-  const yOn = z => { const u = Math.max(0, Math.min(40, (110 - z) / (340 / 40))), k = Math.floor(u), t = u - k; return route[k] + ((route[Math.min(40, k + 1)] ?? route[k]) - route[k]) * t; };
+  // (world units: Latona stands at z 100 whatever the scale, Apollo and the tapis vert's edge move out by K with the circuit)
+  const TRX = 46 * K, TRZ = 110 + 230 * K, route = []; for (let k = 0; k <= 40; k++) { const z = 110 - k * TRZ / 40; route.push(yAt(TRX, z)); }
+  const yOn = z => { const u = Math.max(0, Math.min(40, (110 - z) / (TRZ / 40))), k = Math.floor(u), t = u - k; return route[k] + ((route[Math.min(40, k + 1)] ?? route[k]) - route[k]) * t; };
   const train = [trainCar(true), trainCar(false), trainCar(false)]; train.forEach(c => world.add(c)); let tz = 0, tdir = -1;
-  const placeTrain = () => train.forEach((c, k) => { const z = tz - tdir * k * 5.4; c.position.set(46, yOn(z), z); c.rotation.y = tdir > 0 ? 0 : Math.PI; });
-  placeTrain(); G.animated.push(dt => { tz += tdir * dt * 4; if (tz < -215 || tz > 95) { tz = Math.max(-215, Math.min(95, tz)); tdir *= -1; } placeTrain(); });
+  const placeTrain = () => train.forEach((c, k) => { const z = tz - tdir * k * 5.4; c.position.set(TRX, yOn(z), z); c.rotation.y = tdir > 0 ? 0 : Math.PI; });
+  placeTrain(); G.animated.push(dt => { tz += tdir * dt * 4; if (tz < -215 * K || tz > 95) { tz = Math.max(-215 * K, Math.min(95, tz)); tdir *= -1; } placeTrain(); });
   // in the rain, puddles on the gravel by the road
   if (wet) { const pools = batch(() => puddle(water), { world: true }); for (let i = 0; i < nOf(40); i++) { const s = G.samples[Math.floor(rand(0, N))], sg = Math.random() < 0.5 ? 1 : -1, l = s.hw + rand(2, 5); pools.add(s.x + s.sx * sg * l, s.z + s.sz * sg * l, { y: s.y, rotY: rand(0, 6.28), scale: rand(0.7, 1.4) }); } }
 }

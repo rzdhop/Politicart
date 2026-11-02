@@ -47,8 +47,8 @@ describe('headless engine', () => {
     expect(low).toBe(0.75); expect(high).toBeLessThanOrEqual(0.75 + 0.3 + 1e-9);
     expect(getState()).toBe('race');
     const ai = G.karts.filter(k => k.isAI);
-    // Every AI kart has moved forward along the circuit (a lap is about 3 km now), and the ranks are a permutation.
-    ai.forEach((k, j) => expect(k.progress).toBeGreaterThan(start[j] + 0.1));
+    // Every AI kart has moved forward along the circuit (a lap is about 4.7-5.5 km since DEC-061), and the ranks are a permutation.
+    ai.forEach((k, j) => expect(k.progress).toBeGreaterThan(start[j] + 0.06));
     expect(G.karts.map(k => k.rank).sort()).toEqual([0, 1, 2, 3, 4, 5]);
     for (const k of G.karts) { expect(Number.isFinite(k.pos.x)).toBe(true); expect(Number.isFinite(k.pos.z)).toBe(true); }
   });

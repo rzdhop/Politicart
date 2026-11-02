@@ -24,6 +24,12 @@ const BEFORE = {
   versailles: { high: { meshes: 2746, tris: 491000 }, low: { meshes: 1146, tris: 191000 } },
   montmartre: { high: { meshes: 2835, tris: 561000 }, low: { meshes: 1220, tris: 185000 } },
 };
+/**
+ * One long lap (DEC-061): the circuits are drawn 1.5 times larger, so the road and all that follows it (its ribbons, lamps,
+ * trees, blocks, benches, the bike lane) is half as long again at the same density per metre, while the landmarks are not:
+ * the scene totals measured on the old three-lap circuits allow 15 % more triangles (about a third of the extra road).
+ */
+const LONG_LAP = 1.15;
 const LANDMARKS = {
   versailles: ['versailles:chateau', 'versailles:latone', 'versailles:apollon', 'versailles:colonnade', 'versailles:orangerie', 'versailles:terrasses', 'versailles:labyrinthe'],
   montmartre: ['montmartre:butte', 'montmartre:sacre-coeur', 'montmartre:funiculaire', 'montmartre:place-du-tertre', 'montmartre:moulin-galette', 'montmartre:lapin-agile', 'montmartre:mur-je-taime', 'montmartre:terrasses'],
@@ -101,7 +107,7 @@ describe.each(['versailles', 'montmartre'])('the %s decor', id => {
     const { scene } = build(id, poly);
     const before = BEFORE[id][poly], meshes = countMeshes(scene, true), tris = countTriangles(scene, true);
     expect(meshes).toBeLessThanOrEqual(before.meshes);
-    expect(tris).toBeLessThanOrEqual(before.tris * (poly === 'high' ? 1.4 : 1.1));
+    expect(tris).toBeLessThanOrEqual(before.tris * (poly === 'high' ? 1.4 : 1.1) * LONG_LAP);
     expect(meshes).toBeLessThan(14000);
   }, 60000);
 });

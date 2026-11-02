@@ -89,6 +89,12 @@ export function applyClimate(scene, track, climateId = pickClimate(track)) {
 }
 
 // ---------- The sky ----------
+/**
+ * The dome's radius round the origin: past every circuit's decor (the loops
+ * drawn at scale 4.5 reach about 900 m, their landmarks further, DEC-061).
+ * The race camera's far plane (render.js) reaches its far side from the loop.
+ */
+export const SKY_RADIUS = 1650;
 function skyDome(scene, c) {
   const [top, mid, horizon] = c.sky.map(hex);
   const t = disposable(canvasTexture(c.stars ? 512 : 16, 256, (ctx, w, h) => {
@@ -96,7 +102,7 @@ function skyDome(scene, c) {
     ctx.fillStyle = gr; ctx.fillRect(0, 0, w, h);
     if (c.stars) { let s = 7; const nx = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; for (let i = 0; i < 320; i++) { const a = 0.35 + nx() * 0.65; ctx.fillStyle = 'rgba(255,255,255,' + a.toFixed(2) + ')'; ctx.fillRect(nx() * w, nx() * h * 0.55, nx() < 0.15 ? 2 : 1, 1); } }
   }));
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(1100, 24, 12), disposable(new THREE.MeshBasicMaterial({ map: t, side: THREE.BackSide, fog: false })));
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(SKY_RADIUS, 24, 12), disposable(new THREE.MeshBasicMaterial({ map: t, side: THREE.BackSide, fog: false })));
   sky.name = 'sky'; scene.add(sky);
 }
 
@@ -107,8 +113,8 @@ function clouds(scene, { count, tint, opacity, y }) {
     const g = new THREE.Group(); g.name = 'cloud'; const n = 3 + Math.floor(Math.random() * 3);
     for (let j = 0; j < n; j++) { const s = new THREE.Mesh(new THREE.SphereGeometry(rand(7, 14), 10, 8), cm); s.position.set(j * 9 - n * 4, rand(-2, 3), rand(-4, 4)); s.scale.y = 0.55; g.add(s); }
     mergeByMaterial(g);
-    g.position.set(rand(-700, 700), rand(y[0], y[1]), rand(-700, 700)); scene.add(g);
-    G.animated.push(dt => { g.position.x += dt * 2.5; if (g.position.x > 760) g.position.x = -760; });
+    g.position.set(rand(-1050, 1050), rand(y[0], y[1]), rand(-1050, 1050)); scene.add(g);
+    G.animated.push(dt => { g.position.x += dt * 2.5; if (g.position.x > 1140) g.position.x = -1140; });
   }
 }
 

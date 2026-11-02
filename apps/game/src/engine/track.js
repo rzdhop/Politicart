@@ -35,7 +35,7 @@ import { SALT_CYCLISTS, SALT_FEATURES, SALT_RACE, derive, makeRng } from './seed
 import { CFG, G, bikeLaneOf, disposable, getPoly, nextEntityId } from './state.js';
 import { TEX, bakeSurface, surface, textures } from './textures.js';
 import { pick, rand } from './util.js';
-import { EMBANK, PAVEMENT, STILL, nOf, setDecorScale, setTerrain, still, terrainFlat, terrainY, yAt } from './decor/context.js';
+import { EMBANK, GROUND_CELLS, GROUND_SIZE, LAYOUT_SCALE, PAVEMENT, STILL, TERRAIN_REACH, nOf, setDecorScale, setTerrain, still, terrainFlat, terrainY, yAt } from './decor/context.js';
 import { BUILDERS, DECOR_SURFACES } from './decor/index.js';
 import { flushInstanced, resetInstanced } from './decor/instanced.js';
 import { resetLife } from './decor/life.js';
@@ -248,6 +248,13 @@ function bikeLane(scene, track, strip) {
 }
 
 // ---------- Track construction ----------
+/** The ground texture's tile, in metres (montmartre-props.js grassMat tiles the butte alike). */
+const GRASS_TILE = 3200 / 280;
+/** The circuit scale CFG.samples was sized for: a lap drawn at that scale has CFG.samples samples, about 2 m apart. */
+export const SAMPLES_SCALE = LAYOUT_SCALE;
+/** How many samples a lap of `track` has: CFG.samples grown with its scale, so the spacing stays about 2 m (DEC-061). */
+export const samplesOf = track => Math.round(CFG.samples * (track.scale || 1) / SAMPLES_SCALE);
+
 /** Build circuit `track` into `scene`: every phase of buildTrackPhases at once, `opts` as there ({ fold, seed }). */
 export function buildTrack(scene, track, opts = {}) {
   for (const _phase of buildTrackPhases(scene, track, opts)) { /* every phase, at once */ }
@@ -286,14 +293,15 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   G.seed = seed >>> 0; G.layout = layout; G.rng = makeRng(derive(seed, SALT_RACE)); G.hw = track.roadHalfWidth ?? CFG.roadHalfWidth;
   for (const kind of surfacesOf(track)) for (const _ of bakeSurface(kind)) yield TRACK_PHASES[0];   // baked ahead, a few rows a step
   yield TRACK_PHASES[0];
-  // The circuit is drawn at track.scale; CFG.samples grows with it so the
-  // samples stay about as far apart as before and every distance counted in
-  // samples (feature lengths, AI look-ahead, power offsets) keeps its meaning.
+  // The circuit is drawn at track.scale; the sample count grows with it
+  // (CFG.samples at SAMPLES_SCALE) so the samples stay about 2 m apart and
+  // every distance counted in samples (feature lengths, ramps, pits, AI
+  // look-ahead, power offsets) keeps its meaning on the long lap (DEC-061).
   const S = track.scale || 1; setDecorScale(S);
   const pts = track.points.map(p => new THREE.Vector3(p[0] * S, 0, p[1] * S));
   const curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
-  curve.arcLengthDivisions = 2000;
-  const N = CFG.samples, samples = [], heights = profileHeights(track.profile, N);
+  curve.arcLengthDivisions = Math.round(2000 * S / SAMPLES_SCALE);
+  const N = samplesOf(track), samples = [], heights = profileHeights(track.profile, N);
   for (let i = 0; i < N; i++) {
     const u = i / N; const p = curve.getPointAt(u); const t = curve.getTangentAt(u).normalize(); samples.push({ x: p.x, z: p.z, y: heights[i], tx: t.x, tz: t.z, sx: -t.z, sz: t.x, hw: G.hw, bank: 0, wind: 0, slope: 0 });
     if (i % SLICE_SAMPLES === SLICE_SAMPLES - 1) yield TRACK_PHASES[1];
@@ -346,7 +354,7 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
 
   // ground: a plain that follows the road's relief around it (decor/context.js terrainY), flat on a flat circuit;
   // the map cloned for its own repeat (the normal map follows it: one uvTransform in r128), none of it on "légers"
-  const gs = surface(track.gravel ? 'gravel' : 'grass'), gt = disposable(gs.map.clone()); gt.needsUpdate = true; gt.repeat.set(280, 280);
+  const gs = surface(track.gravel ? 'gravel' : 'grass'), gt = disposable(gs.map.clone()); gt.needsUpdate = true; gt.repeat.set(GROUND_SIZE / GRASS_TILE, GROUND_SIZE / GRASS_TILE);
   const ground = { mesh: null };
   for (const _ of groundMesh(gt, gs.normalMap, ground)) yield TRACK_PHASES[2];
   scene.add(ground.mesh);
@@ -442,16 +450,16 @@ function embankment(scene, samples, color, stride = 1) {
 }
 
 /**
- * The ground plain, 3200 m square: a grid whose heights follow the terrain within 800 m of the circuit, flat beyond (and flat throughout on a flat circuit).
+ * The ground plain, GROUND_SIZE metres square (4 km, past the sky dome): a grid whose heights follow the terrain within TERRAIN_REACH of the origin, flat beyond (and flat throughout on a flat circuit).
  * A generator that yields every few rows (the terrain's heights are the cost on a hilly circuit) and leaves the mesh in `out.mesh`.
  */
 function* groundMesh(texture, normalMap, out) {
-  // a flat circuit needs one quad; "légers" takes 50 m cells, the terrain's blend being smooth over 220 m (DEC-050)
-  const SIZE = 3200, CELLS = terrainFlat() ? 1 : getPoly() === 'high' ? 128 : 64, p = [], uv = [], ix = [];
+  // a flat circuit needs one quad; "détaillés" takes 31 m cells, "légers" 62 m, the terrain's blend being smooth over 220 m (DEC-050)
+  const SIZE = GROUND_SIZE, CELLS = terrainFlat() ? 1 : getPoly() === 'high' ? GROUND_CELLS : GROUND_CELLS / 2, p = [], uv = [], ix = [];
   for (let j = 0; j <= CELLS; j++) {
     for (let i = 0; i <= CELLS; i++) {
       const x = -SIZE / 2 + i * SIZE / CELLS, z = -SIZE / 2 + j * SIZE / CELLS;
-      p.push(x, Math.abs(x) <= 800 && Math.abs(z) <= 800 ? terrainY(x, z) : 0, z); uv.push(i / CELLS, j / CELLS);
+      p.push(x, Math.abs(x) <= TERRAIN_REACH && Math.abs(z) <= TERRAIN_REACH ? terrainY(x, z) : 0, z); uv.push(i / CELLS, j / CELLS);
     }
     if (j % 16 === 15) yield;
   }
