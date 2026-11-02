@@ -32,7 +32,7 @@ export const LINE_EVERY = 0.055, LINE_COINS = 5, LINE_STEP = 6;
 /** How close a kart passes to take a coin (m, squared). */
 const PICK_D2 = 2.4 * 2.4;
 /** A coin's height over the road (m). */
-const COIN_Y = 1.0;
+const COIN_Y = 1.2;
 
 /**
  * Where the coins of a circuit go: lines of LINE_COINS along the road, one
@@ -61,8 +61,8 @@ export function coinSpots(samples, boxRows, seed) {
 export function buildCoins(scene, samples, boxRows, seed) {
   const spots = coinSpots(samples, boxRows, seed);
   const low = getPoly() === 'low';
-  const geo = new THREE.CylinderGeometry(0.62, 0.62, 0.14, low ? 10 : 20); geo.rotateX(Math.PI / 2);
-  const mat = disposable(new THREE.MeshStandardMaterial({ color: 0xf2c14e, emissive: 0x6a4a00, emissiveIntensity: 0.7, roughness: 0.3, metalness: 0.7 }));
+  const geo = new THREE.CylinderGeometry(0.85, 0.85, 0.18, low ? 12 : 24); geo.rotateX(Math.PI / 2);
+  const mat = disposable(new THREE.MeshStandardMaterial({ color: 0xffd34d, emissive: 0xa87400, emissiveIntensity: 1, roughness: 0.25, metalness: 0.55 }));
   const mesh = new THREE.InstancedMesh(geo, mat, Math.max(1, spots.length)); mesh.name = 'road:politicoins'; mesh.count = spots.length; mesh.frustumCulled = false;
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(mesh);
   G.coins = spots.map(p => ({ ...p, active: true, timer: 0 }));

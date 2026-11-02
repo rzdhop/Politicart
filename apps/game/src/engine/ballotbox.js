@@ -20,7 +20,7 @@ import { canvasTexture } from './primitives.js';
 import { G, disposable, getPoly } from './state.js';
 
 /** The urne's outer size (m): width and depth, height. */
-export const BOX_W = 2.0, BOX_H = 2.1;
+export const BOX_W = 2.3, BOX_H = 2.4;
 /** How high over the road a box floats (m), and how far it bobs. */
 export const BOX_Y = 1.4, BOB = 0.18;
 
@@ -81,9 +81,9 @@ function envelopeTexture(fake) {
 function materials(fake = false) {
   return {
     frame: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.25 }),
-    glass: new THREE.MeshStandardMaterial({ color: 0xd8ecff, emissive: 0x3a2a00, transparent: true, opacity: 0.32, roughness: 0.05, metalness: 0.1, depthWrite: false, side: THREE.DoubleSide }),
-    envelope: new THREE.MeshStandardMaterial({ map: envelopeTexture(fake), emissive: 0x4a3a10, emissiveIntensity: 0.6, roughness: 0.6, side: THREE.DoubleSide }),
-    glow: new THREE.MeshBasicMaterial({ color: GOLD, transparent: true, opacity: 0.35, depthWrite: false }),
+    glass: new THREE.MeshStandardMaterial({ color: 0xd8ecff, emissive: 0x5a4410, transparent: true, opacity: 0.38, roughness: 0.05, metalness: 0.1, depthWrite: false, side: THREE.DoubleSide }),
+    envelope: new THREE.MeshStandardMaterial({ map: envelopeTexture(fake), emissive: 0x806020, emissiveIntensity: 0.9, roughness: 0.6, side: THREE.DoubleSide }),
+    glow: new THREE.MeshBasicMaterial({ color: GOLD, transparent: true, opacity: 0.55, depthWrite: false }),
   };
 }
 
@@ -92,8 +92,8 @@ let GEO = null;
 function geometries() {
   if (GEO) return GEO;
   const low = getPoly() === 'low';
-  const glow = new THREE.CircleGeometry(1.6, low ? 12 : 24); glow.rotateX(-Math.PI / 2);
-  GEO = { frame: frameGeometry(), glass: new THREE.BoxGeometry(BOX_W - 0.08, BOX_H - 0.08, BOX_W - 0.08), envelope: new THREE.BoxGeometry(1.15, 0.82, 0.04), glow };
+  const glow = new THREE.CircleGeometry(1.9, low ? 12 : 24); glow.rotateX(-Math.PI / 2);
+  GEO = { frame: frameGeometry(), glass: new THREE.BoxGeometry(BOX_W - 0.08, BOX_H - 0.08, BOX_W - 0.08), envelope: new THREE.BoxGeometry(1.5, 1.08, 0.05), glow };
   return GEO;
 }
 
