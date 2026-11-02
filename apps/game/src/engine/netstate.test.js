@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildHazard, buildProjectileMesh, useItem } from './items.js';
 import { resetMachine } from './machine.js';
 import { applyKart, applyKartDiscrete, applyKartMotion, applyKartPrivate, applyKartStatus, bracket, decodeVfx, encodeKart, encodeKartPrivate, encodeSnapshot, encodeStatus, encodeVfx, extrapolateKart, lerpKart, markTeleports, TELEPORT_D } from './netstate.js';
 import { simStep, startRace } from './race.js';
+import { mulberry32 } from './seed.js';
 import { G } from './state.js';
 
 const blank = () => ({ pos: { x: 0, z: 0 }, drift: { active: false, dir: 0, charge: 0 } });
@@ -73,10 +74,17 @@ describe('snapshots of a live race', () => {
   });
 
   it('weigh about a kilobyte and a half for a six-kart field, a third of what they were', () => {
-    const sizes = [];
-    for (let n = 0; n < 20 * 60; n++) { simStep(1 / 60); if (n % 3 === 0) sizes.push(JSON.stringify(encodeSnapshot(G, n)).length + JSON.stringify(encodeKartPrivate(G.player)).length); }
-    const mean = sizes.reduce((a, b) => a + b, 0) / sizes.length;
-    expect(mean).toBeLessThan(1700);                              // measured 1.40 to 1.65 kB with the owner's block on the five circuits (4.1 to 4.5 kB before)
+    // The race is seeded but item rolls still draw on Math.random, which made the mean swing
+    // from about 1.5 to 1.9 kB run to run (over the bound about one run in four): the same dice
+    // every time, so the bound measures the encoding (a few dozen bytes still move with the ids the setup leaves).
+    const random = vi.spyOn(Math, 'random').mockImplementation(mulberry32(8));
+    try {
+      resetMachine('tracks'); G.charIdx = 0; G.trackIdx = 1; startRace({ seed: 8 }); for (let n = 0; n < 8 * 60; n++) simStep(1 / 60);
+      const sizes = [];
+      for (let n = 0; n < 20 * 60; n++) { simStep(1 / 60); if (n % 3 === 0) sizes.push(JSON.stringify(encodeSnapshot(G, n)).length + JSON.stringify(encodeKartPrivate(G.player)).length); }
+      const mean = sizes.reduce((a, b) => a + b, 0) / sizes.length;
+      expect(mean).toBeLessThan(1700);                              // measured 1.40 to 1.65 kB with the owner's block on the five circuits (4.1 to 4.5 kB before)
+    } finally { random.mockRestore(); }
   });
 
   it('carry the race’s lap count and which karts are gods (DEC-031)', () => {

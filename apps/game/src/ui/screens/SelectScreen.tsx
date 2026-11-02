@@ -6,6 +6,7 @@ import {
   Disclaimer,
   Heading,
   KeyCap,
+  MenuGlyph,
   PowerBox,
   Roster,
   Row,
@@ -23,7 +24,7 @@ import { CHARACTERS } from '../../engine/data.js';
 import { unlockLevel } from '../../engine/progress.js';
 import { setPreviewFrame } from '../../engine/stagegate.js';
 import { stageDrag } from '../../engine/stageinput.js';
-import { actions, unlockedOf, type UiSnapshot } from '../store';
+import { actions, garageNews, unlockedOf, type UiSnapshot } from '../store';
 import { useTouchMode } from '../TouchControls';
 import type { Character } from '../types';
 
@@ -98,6 +99,7 @@ export function SelectScreen({ ui }: { ui: UiSnapshot }) {
   const characters = CHARACTERS as unknown as Character[];
   const chosen = characters[ui.charIdx] ?? characters[0]!;
   const unlocked = unlockedOf(ui);
+  const news = garageNews(ui);
   const head = (
     <div className="select-head">
       <Tricolore />
@@ -107,7 +109,12 @@ export function SelectScreen({ ui }: { ui: UiSnapshot }) {
   const buttons = (
     <Row>
       <Button id="b-back1" variant="ghost" onClick={actions.toTitle}>Retour</Button>
-      <Button id="b-garage" variant="ghost" onClick={actions.openGarage}>Garage</Button>
+      {/* The Garage, made to be seen (DEC-072): a blue button with its wrench, and the count of parts not yet seen there. */}
+      <Button id="b-garage" className="garage-cta" onClick={() => actions.openGarage('select')}>
+        <MenuGlyph name="garage" className="garage-cta-icon" />
+        Garage
+        {news ? <span className="garage-cta-news" aria-label={news + (news > 1 ? ' nouvelles pièces' : ' nouvelle pièce')}>{'+' + news}</span> : null}
+      </Button>
       <Button id="b-next1" onClick={actions.toTracks}>Choisir le circuit →</Button>
     </Row>
   );

@@ -7,6 +7,7 @@ export const MENU_GLYPHS = [
   'play',
   'multi',
   'shop',
+  'garage',
   'account',
   'sound',
   'mute',
@@ -47,6 +48,15 @@ const PATHS: Record<MenuGlyphName, ReactNode> = {
       <path d="M4.5 8h15l-1.2 12.5H5.7z" />
       <path d="M8.5 8V6.5a3.5 3.5 0 0 1 7 0V8" />
       <path d="M10.5 18v-6h2.2a1.7 1.7 0 0 1 0 3.4h-2.2" />
+    </>
+  ),
+  // a wrench across a wheel: the kart's workshop
+  garage: (
+    <>
+      <circle cx="9" cy="15" r="5.5" />
+      <circle cx="9" cy="15" r="1.6" />
+      <path d="M13 11l5.2-5.2" />
+      <path d="M16.5 3.6a3 3 0 0 0 3.9 3.9l-1.8 1.8-3.9-3.9z" />
     </>
   ),
   // a bust

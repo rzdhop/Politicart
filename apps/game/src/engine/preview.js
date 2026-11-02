@@ -515,9 +515,9 @@ function step(dt) {
     for (const f of u.kart.userData.anim) f(dt, t, off ? FLOORED : null);   // a launch floors it: the turbine's heat and the exhaust glows swell
     for (const f of u.pilot.userData.anim) f(dt, t);
     if (off) poseLaunch(dt);
-    // the Garage shows the trail, as if the kart drove (A-032)
+    // the Garage and the Boutique's fitting room show the trail, as if the kart drove (A-032)
     if (u.trail) {
-      const on = getState() === 'garage';
+      const on = getState() === 'garage' || getState() === 'shop';
       u.trail.trail.group.visible = on;
       if (on) runTrail(u.trail, dt);
     }

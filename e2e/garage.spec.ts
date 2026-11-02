@@ -161,15 +161,13 @@ test.describe('R-22 garage ownership', () => {
     await expect(page.locator('#g-wheels-gold')).toHaveAttribute('aria-pressed', 'false');
     expect(await page.evaluate(() => localStorage.getItem('politikart-kart'))).toBeNull();
 
-    // The badge opens the Boutique on the parts; "Retour" lands on the roster, from which the Garage reopens.
+    // The badge opens the Boutique on the parts; "Retour" lands back in the Garage (DEC-072).
     await page.locator('#g-buy-wheels-gold').click({ force: true });
     await expect(page.locator('#s-shop')).toBeVisible();
     await expect(page.locator('#shop-panel-parts')).toBeVisible();
     await expect(page.locator('#b-buy-part-wheels-gold')).toBeVisible();
     expect(await page.evaluate(() => localStorage.getItem('politikart-kart'))).toBeNull();
     await page.locator('#b-shop-back').click();
-    await expect(page.locator('#s-select')).toBeVisible();
-    await page.locator('#b-garage').click();
     await expect(page.locator('#s-garage')).toBeVisible();
     // A trail's badge leads to the Politibox, its only source.
     await page.locator('#g-buy-trail-laser').click({ force: true });

@@ -37,6 +37,9 @@ const ONE_COLUMN = { gridTemplateColumns: '1fr', width: '100%' } as const;
  */
 const LAYOUT = { flex: '0 0 auto' } as const;
 
+/** The Garage's way back, named for where it leads (DEC-072). */
+const BACK_LABEL = { select: 'Retour au casting', title: 'Retour au menu', results: 'Retour au menu', shop: 'Retour à la boutique' } as const;
+
 const PANEL = { textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 12 } as const;
 const NOTE = { marginTop: -6 } as const;
 
@@ -108,7 +111,8 @@ export function GarageScreen({ ui }: { ui: UiSnapshot }) {
   const buttons = (
     <Row>
       <Button id="b-garage-reset" variant="ghost" onClick={actions.resetGarage}>Par défaut</Button>
-      <Button id="b-garage-back" onClick={actions.toSelect}>Retour au casting</Button>
+      {ui.netAvailable ? <Button id="b-garage-shop" variant="ghost" onClick={() => actions.shopFromGarage('parts')}>Boutique</Button> : null}
+      <Button id="b-garage-back" onClick={actions.closeGarage}>{BACK_LABEL[ui.garageFrom]}</Button>
     </Row>
   );
   const form = (

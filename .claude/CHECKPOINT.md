@@ -2,7 +2,32 @@
 
 Current state only. History lives in git.
 
-## Latest task -- 2026-11-02: fun pass (one long lap, rewards, events, boxes, items, title screen, camera)
+## Latest task -- 2026-11-02: items, Garage and Boutique redesign
+
+- **Branch:** `feature/awesome-hamilton-ogmw8l`, cut from `main` at
+  `6adcef2` (PR #18). Owner's answers: every race item redrawn, the Garage
+  pushed from the title card, the results, the Politibox and the roster,
+  the Boutique front end only (no economy change), a try-on on the stage.
+- **Done:** DEC-071 (`engine/itemmeshes.js`: BRAV-M bikes with officers,
+  Mediapart envelope, censure stamp, fact-check glass, strike barricade,
+  tear gas; projectiles face their way; five new effect kinds), DEC-072
+  (Garage card with a news badge, blue roster button, results and
+  Politibox « Équiper », machine edges title/results/shop <-> garage),
+  DEC-073 (Boutique over the live stage: fitting room with « Essayer »,
+  `ShopHero`, `CollectionMeter`, « À votre portée » / « Prochain objectif »,
+  `PartArt`, ShopCard `onTry`/`trying`/`spotlight`, `garage` MenuGlyph).
+- **Tier 1 on the tip:** typecheck clean; ui 535 + 8 skipped, game 1236,
+  server 185; game build OK. Browser (software GL, local server): title,
+  Boutique, try-on, equip into the Garage and the roster render with no
+  console error, desktop and phone; item props checked in a throwaway
+  viewer. E2E (pre-installed Chromium 1243 via a scratch config):
+  shop.spec and garage.spec 10/11 -- R-17 "races with a fully styled kart"
+  times out on the countdown under software GL, and fails the same way on
+  the untouched baseline.
+- **Follow-ups:** the new effect kinds and the props not yet seen in a real
+  race on a GPU; the Garage glyph could read more like a wrench.
+
+## Previous task -- 2026-11-02: fun pass (one long lap, rewards, events, boxes, items, title screen, camera)
 
 - **Branch:** `feature/sleepy-edison-ce5m9q`, cut from `main` at `f0161a4`
   (PR #17), pushed. Owner's answers: race format "1 long lap, circuits

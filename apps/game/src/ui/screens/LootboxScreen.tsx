@@ -22,6 +22,10 @@ export function LootboxScreen({ ui }: { ui: UiSnapshot }) {
   const { drop, drops, index, phase, busy, error } = ui.shop;
   const grade = dropGrade(drop) as Grade;
   const coins = ui.account?.profile.coins ?? 0;
+  // a part or a trail won goes straight on the kart from here (DEC-072): the Garage opens on it
+  const fit = drop && (drop.kind === 'part' || drop.kind === 'trail') && ui.account
+    ? (drop.kind === 'trail' ? { category: 'trail', value: drop.id } : { category: drop.id.split(':')[0]!, value: drop.id.split(':')[1]! })
+    : null;
   const refund = drop && drop.kind !== 'coins' && drop.duplicate ? 'Doublon : +' + fr(drop.refund) + ' politicoins remboursés' : undefined;
   return (
     <Screen id="s-lootbox" hidden={ui.state !== 'lootbox'} className="lootbox-screen">
@@ -43,6 +47,9 @@ export function LootboxScreen({ ui }: { ui: UiSnapshot }) {
             badgeProps={{ id: 'box-grade' }}
           >
             <CoinCount value={coins} label="politicoins" format={fr} />
+            {fit ? (
+              <Button id="b-box-equip" className="garage-cta lb-equip" onClick={() => actions.equip(fit.category, fit.value)}>Équiper maintenant</Button>
+            ) : null}
             <Row>
               <Button id="b-box-again" disabled={busy || coins < BOX_PRICE} onClick={() => { void actions.openBox(1); }}>Encore une !</Button>
               <Button id="b-box-five" variant="ghost" disabled={busy || coins < BOX_BUNDLE.price} onClick={() => { void actions.openBox(5); }}>

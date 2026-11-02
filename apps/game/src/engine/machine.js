@@ -28,8 +28,11 @@
 // the friend list. Reached from the title, it leads back there or -- when an
 // invitation is accepted -- straight into the lobby.
 //
-// `garage` is where the player styles their own kart, reached from and
-// returning to the roster, so the turntable stays on screen throughout.
+// `garage` is where the player styles their own kart (DEC-072): reached from
+// the roster, from the title's Garage card, from a solo race's results and
+// from the Boutique (a part just won or tried on), it goes back where it came
+// from -- the results' way back being the title -- or to the Boutique on a
+// locked part's badge.
 //
 // `dashboard` is the admin's dashboard (DEC-030): statistics, accounts and
 // live rooms. Reached from the title, it leads back there or -- when the
@@ -37,26 +40,26 @@
 //
 // `shop` is the Boutique (DEC-037): candidates and kart parts for
 // politicoins, and the Politibox. Reached from the title or from the roster
-// (a locked candidate's tile), it goes back where it came from, or into
-// `lootbox`, where the Politibox opens on the canvas and which only ever
-// returns to the shop.
+// (a locked candidate's tile) or the Garage (a locked part's badge), it goes
+// back where it came from, into the Garage, or into `lootbox`, where the
+// Politibox opens on the canvas and which only ever returns to the shop.
 
 export const STATES = Object.freeze(['title', 'select', 'tracks', 'admin', 'countdown', 'race', 'paused', 'results', 'lobby', 'account', 'garage', 'dashboard', 'shop', 'lootbox']);
 
 const NEXT = Object.freeze({
-  title: Object.freeze(['select', 'admin', 'lobby', 'account', 'dashboard', 'shop']),
+  title: Object.freeze(['select', 'admin', 'lobby', 'account', 'dashboard', 'shop', 'garage']),
   select: Object.freeze(['title', 'tracks', 'garage', 'shop']),
   tracks: Object.freeze(['select', 'countdown']),
   admin: Object.freeze(['title']),
   countdown: Object.freeze(['race', 'paused', 'lobby']),
   race: Object.freeze(['paused', 'results', 'lobby']),
   paused: Object.freeze(['race', 'countdown', 'title']),
-  results: Object.freeze(['countdown', 'title', 'lobby']),
+  results: Object.freeze(['countdown', 'title', 'lobby', 'garage']),
   lobby: Object.freeze(['title', 'countdown']),
   account: Object.freeze(['title', 'lobby']),
-  garage: Object.freeze(['select']),
+  garage: Object.freeze(['select', 'title', 'shop']),
   dashboard: Object.freeze(['title', 'lobby']),
-  shop: Object.freeze(['title', 'select', 'lootbox']),
+  shop: Object.freeze(['title', 'select', 'lootbox', 'garage']),
   lootbox: Object.freeze(['shop']),
 });
 
