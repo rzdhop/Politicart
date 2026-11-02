@@ -38,7 +38,12 @@ test.describe('R-10 phones', () => {
   test('lays the page out at the phone’s width and shows the touch legend', async ({ page }) => {
     await page.goto('/');
     expect(await page.evaluate(() => document.documentElement.clientWidth)).toBe(390);
+    // the title keeps the legend in its « Commandes » sheet (DEC-070)
+    await expect(page.locator('#touch-legend')).toHaveCount(0);
+    await page.locator('#b-help').tap();
     await expect(page.locator('#touch-legend')).toBeVisible();
+    await page.locator('#help-sheet .sheet-close').tap();
+    await expect(page.locator('#help-sheet')).toHaveCount(0);
     await expect(page.locator('#touch')).toBeHidden();       // no race yet
   });
 
@@ -250,7 +255,11 @@ test.describe('R-10b computers', () => {
 
   test('show no touch controls and keep the keyboard legend', async ({ page }) => {
     await page.goto('/');
+    await page.locator('#b-help').click();
+    await expect(page.locator('#help-sheet .controls')).toContainText('accélérer');
     await expect(page.locator('#touch-legend')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#help-sheet')).toHaveCount(0);
     await page.locator('#b-play').click();
     await page.locator('#b-next1').click();
     await page.locator('#b-start').click();

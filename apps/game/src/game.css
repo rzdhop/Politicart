@@ -128,6 +128,9 @@ body{--note-h:34px;--note-room:calc(8px + var(--note-h) + 6px + env(safe-area-in
 @media (max-width:600px){.kr-touch{--note-h:42px;}}
 #ui .screen.noted{bottom:var(--note-room);}
 #ui:has(>#note:not([hidden])) .screen:not(#s-lootbox){bottom:var(--note-room);}
+/* The title's help sheet (DEC-070) rises from the bottom on a phone: while the note shows, its last line clears it. */
+#ui:has(>#note:not([hidden])) .sheet{padding-bottom:calc(20px + var(--note-room));}
+@media (min-width:600px){#ui:has(>#note:not([hidden])) .sheet{padding-bottom:24px;}}
 /* On a phone the Garage's chips are tap targets: 44px tall, their grade badge included. */
 .kr-touch #s-garage .chip{min-height:44px;}
 @media (pointer:coarse){#s-garage .chip{min-height:44px;}}
@@ -175,11 +178,9 @@ body{--note-h:34px;--note-room:calc(8px + var(--note-h) + 6px + env(safe-area-in
   #s-tracks .card .track-thumb{max-height:24vh;}
   #s-tracks .card .track-thumb canvas{object-fit:contain;}
 }
-/* Phones held sideways: the title, the circuits and the other menus shrink to the short side. */
+/* Phones held sideways: the circuits and the other menus shrink to the short side (the title's own layout is the library's, menu.css). */
 @media (max-height:520px) and (orientation:landscape){
   .screen{padding-block:10px;gap:10px;}
-  #s-title h1{font-size:clamp(30px,11vh,60px);}
-  #s-title .controls{font-size:12px;gap:4px 14px;}
   #s-tracks .card{padding:8px;gap:6px;}
   #s-tracks .card .name{font-size:15px;}
   #s-tracks .card .track-thumb{max-height:30vh;}

@@ -27,7 +27,7 @@ import { setInputSource } from './engine/input.js';
 import { getState, onTransition } from './engine/machine.js';
 import { renderLootbox } from './engine/boxgate.js';
 import { isNetRace, netStep } from './engine/netrace.js';
-import { launching, renderPreview, showsTurntable, stageInfo, stageStill, warmStage } from './engine/stagegate.js';
+import { drawsStage, launching, renderPreview, stageInfo, stageStill, warmStage } from './engine/stagegate.js';
 import { prebuildFrame, prebuildStatus, primeCountdown } from './engine/prebuild.js';
 import { BUDGET_MS as THUMB_BUDGET_MS, setStillProbe, thumbsFrame, thumbStatus } from './engine/thumbs.js';
 import { endRace, renderRace, stepRace } from './engine/race.js';
@@ -126,12 +126,14 @@ window.addEventListener('keydown', e => {
   const onTile = !!focused?.matches('#roster .tile');   // the tiles only: the roster's footer holds Retour and Garage
   const screenEnter = e.code === 'Enter' && (!focused || onTile);
   if (screenEnter && onTile) e.preventDefault();
-  if (screenEnter && G.state === 'title') $('b-play').click();
-  if (screenEnter && G.state === 'results') $('b-again').click();
+  // one press, one screen: the state the key found, so "Jouer" does not also press "Choisir le circuit" on the roster it opened
+  const at = G.state;
+  if (screenEnter && at === 'title') $('b-play').click();
+  if (screenEnter && at === 'results') $('b-again').click();
   // The roster: ← → the next candidate, ↑ ↓ the one a row (four tiles) away, wrapping; Enter does what "Choisir le circuit →" does.
   const roster = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -4, ArrowDown: 4 }[e.code];
   if (G.state === 'select' && roster) actions.stepChar(roster);
-  if (G.state === 'select' && screenEnter) $('b-next1').click();
+  if (at === 'select' && screenEnter) $('b-next1').click();
   // The Politibox: the space bar hurries the opening, like a tap on the stage.
   if (G.state === 'lootbox' && e.code === 'Space') actions.skipOpening();
 });
@@ -192,7 +194,9 @@ let lastFrame = performance.now();
  * stage takes a frame's share of its warm-up behind the title each frame
  * (preview.js warmStage: build it and compile its programs a few at a time,
  * draw it once, then the portraits and the Garage's parts; a no-op once warm
- * for the detail level), so "Jouer" opens the stage without a hitch.
+ * for the detail level), so "Jouer" opens the stage without a hitch. Now
+ * that the title draws the stage as its backdrop (DEC-070), that drawing is
+ * most of the warm-up, and the idle title's share goes to the portraits.
  */
 let titleIdle = 0;
 const WARM_AFTER = 0.8;
@@ -208,9 +212,12 @@ function frame(now) {
   if (state === 'title') { titleIdle += dt; if (titleIdle > WARM_AFTER) setTimeout(warmStage, 0); }
   else titleIdle = 0;
   // The Politibox owns the canvas while it opens (DEC-037). The roster and the Garage show the
-  // turntable; every other menu sits on the plain night background, the canvas cleared to it,
-  // but for the circuits' first 1.4 s after "Choisir le circuit →": the stage draws the kart
-  // driving off behind the cards, then clears to that background itself (preview.js launch, Q3).
+  // turntable, and the title shows the same stage as its backdrop, the player's candidate turning
+  // on the podium behind the menu (DEC-070; the stage chunk is fetched on the title's first frame
+  // and the plain background shows until it has compiled). Every other menu sits on the plain night
+  // background, the canvas cleared to it, but for the circuits' first 1.4 s after "Choisir le
+  // circuit →": the stage draws the kart driving off behind the cards, then clears to that
+  // background itself (preview.js launch, Q3).
   if (state === 'lootbox') { renderLootbox(dt); return; }
   // The chosen circuit is built ahead, a slice per frame, while the player sits on the circuits, in the lobby or on the
   // results (engine/prebuild.js, DEC-055); the stage's launch keeps its frames to itself. Drawn over or cleared below.
@@ -220,8 +227,8 @@ function frame(now) {
     // the circuits' thumbnails get what the pre-build left of the frame's share, at most their own budget (engine/thumbs.js)
     if (state === 'tracks' && !launch) { const left = Math.min(THUMB_BUDGET_MS, FRAME_SHARE_MS - (performance.now() - t0)); thumbsFrame({ renderer: getRenderer(), budget: left >= 1.5 ? left : 0 }); }
   }
-  if (showsTurntable(state) || (state === 'tracks' && launching())) { renderPreview(dt); return; }
-  if (state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'dashboard' || state === 'shop') { clearCanvas(); return; }
+  if (drawsStage(state) || (state === 'tracks' && launching())) { renderPreview(dt); return; }
+  if (state === 'tracks' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'dashboard' || state === 'shop') { clearCanvas(); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
 
   const payload = isNetRace() ? netStep(dt) : stepRace(dt);

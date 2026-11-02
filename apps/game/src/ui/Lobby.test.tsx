@@ -93,8 +93,10 @@ describe('the lobby', () => {
     act(() => { sock.open(); sock.serve({ t: 'welcome', id: 'me', profile: PROFILE }); });
     expect(sock.sent[0]).toEqual({ t: 'hello', name: 'Alice', token: 'tok' });
     fireEvent.click(container.querySelector('#b-acc-back')!);
-    expect(container.querySelector('#b-account')?.textContent).toBe('Alice · niv. 2');
-    expect(primaries(container, '#s-title')).toEqual([['b-play']]);   // signed in, the account stays a ghost
+    expect(container.querySelector('#b-account .mc-sub')?.textContent).toBe('Alice · niv. 2');
+    // signed in, the account stays a card: « Jouer » is the title's one hero button (DEC-070)
+    expect([...container.querySelectorAll('#s-title .hero-btn')].map(b => b.id)).toEqual(['b-play']);
+    expect(container.querySelector('#b-account')?.classList.contains('menu-card')).toBe(true);
 
     fireEvent.click(container.querySelector('#b-multi')!);
     expect(getState()).toBe('lobby');
