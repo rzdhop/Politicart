@@ -47,10 +47,10 @@ export function LootboxScreen({ ui }: { ui: UiSnapshot }) {
             badgeProps={{ id: 'box-grade' }}
           >
             <CoinCount value={coins} label="politicoins" format={fr} />
-            {fit ? (
-              <Button id="b-box-equip" className="garage-cta lb-equip" onClick={() => actions.equip(fit.category, fit.value)}>Équiper maintenant</Button>
-            ) : null}
-            <Row>
+            <Row className="lb-actions">
+              {fit ? (
+                <Button id="b-box-equip" className="garage-cta lb-equip" onClick={() => actions.equip(fit.category, fit.value)}>Équiper maintenant</Button>
+              ) : null}
               <Button id="b-box-again" disabled={busy || coins < BOX_PRICE} onClick={() => { void actions.openBox(1); }}>Encore une !</Button>
               <Button id="b-box-five" variant="ghost" disabled={busy || coins < BOX_BUNDLE.price} onClick={() => { void actions.openBox(5); }}>
                 {'Ouvrir ×5 · ' + fr(BOX_BUNDLE.price)}

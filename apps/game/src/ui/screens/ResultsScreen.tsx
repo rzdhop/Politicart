@@ -127,7 +127,7 @@ function GarageNudge({ ui }: { ui: UiSnapshot }) {
   if (!part) return null;
   return (
     <Disclaimer id="r-garage-nudge" className="garage-nudge">
-      {'Avec ' + fr(coins) + ' politicoins, offrez-vous « ' + part.name + ' » : essayez-la sur votre kart dans la Boutique.'}
+      {'Avec ' + fr(coins) + ' politicoins, de quoi vous offrir « ' + part.name + ' » : passez à l’essayage dans la Boutique.'}
     </Disclaimer>
   );
 }

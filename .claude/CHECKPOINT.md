@@ -24,8 +24,19 @@ Current state only. History lives in git.
   shop.spec and garage.spec 10/11 -- R-17 "races with a fully styled kart"
   times out on the countdown under software GL, and fails the same way on
   the untouched baseline.
+- **Phone pass (after PR #19):** the Boutique keeps two columns on a phone
+  held sideways (shelves scrolling past the fitting room pinned beside them,
+  tighter header, hero and cards); « Essayer » scrolls the podium back only
+  when it is out of view; the Politibox reveal fits a sideways phone (wider
+  card, buttons on one line, history hidden, name never cut at the top);
+  « Équiper maintenant » leads the result's buttons; an upright phone keeps
+  its two-by-two shop grid; the results nudge reads right whatever the
+  part's gender. Screenshots at 390x844 and 844x390: title, Boutique,
+  try-on, reveal, Garage, roster, results; no console error.
 - **Follow-ups:** the new effect kinds and the props not yet seen in a real
-  race on a GPU; the Garage glyph could read more like a wrench.
+  race on a GPU; the Garage glyph could read more like a wrench; the Bourbon
+  « légers » triangle budget sits at the top of its build-to-build spread
+  (re-measure BEFORE at scale 4.5, or seed the decor's cosmetic draws).
 
 ## Previous task -- 2026-11-02: fun pass (one long lap, rewards, events, boxes, items, title screen, camera)
 

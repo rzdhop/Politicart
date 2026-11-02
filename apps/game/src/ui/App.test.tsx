@@ -1236,7 +1236,7 @@ describe('the fitting room and the Garage everywhere (DEC-072, DEC-073)', () => 
     act(() => { actions.hideNote(); });
     const card = $(container, 'b-garage-title')!;
     expect(card.querySelector('.mc-badge')?.textContent).toBe('+3');
-    expect(card.querySelector('.mc-sub')?.textContent).toBe('Nouvelles pièces à monter !');
+    expect(card.querySelector('.mc-sub')?.textContent).toBe('Pièces à monter !');
     fireEvent.click(card);
     expect(getState()).toBe('garage');
     expect(localStorage.getItem('politikart-garage-seen')).toBe('3');
