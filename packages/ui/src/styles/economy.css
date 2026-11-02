@@ -699,3 +699,141 @@
 .trail-strip[data-trail=none] .ts-stream { display:none; }
 
 .shop-card .shop-image .trail-strip { min-height:0; }
+
+/* ShopCard's fitting-room extras (DEC-073) ------------------------------------ */
+
+/* Worn on the stage right now: a gold ring and a lift. */
+.shop-card.trying {
+  border-color:var(--gold);
+  box-shadow:0 0 0 2px var(--gold),0 10px 28px rgba(242,193,78,.25);
+}
+.shop-card .shop-foot .btn.shop-try { flex:0 0 auto; }
+.shop-card .shop-foot .btn.shop-try[aria-pressed=true] {
+  background:rgba(242,193,78,.18);
+  border-color:var(--gold);
+  color:var(--gold);
+}
+.shop-card .shop-foot .btn.shop-equip {
+  background:linear-gradient(180deg,#ffd970,var(--gold));
+  color:#0c1230;
+  box-shadow:0 3px 0 #a8801c;
+}
+/* The spotlight ribbon over the picture's top-left corner. */
+.shop-card .shop-spotlight {
+  position:absolute;
+  left:8px;
+  bottom:8px;
+  padding:3px 9px;
+  border-radius:999px;
+  background:var(--gold);
+  color:#0c1230;
+  font-family:var(--font-display);
+  font-size:13px;
+  letter-spacing:.02em;
+  box-shadow:0 2px 0 #a8801c,0 0 14px rgba(242,193,78,.55);
+}
+.shop-card.spotlit { border-color:rgba(242,193,78,.55); }
+
+/* ShopHero ------------------------------------------------------------------ */
+
+.shop-hero {
+  position:relative;
+  display:grid;
+  grid-template-columns:minmax(120px,190px) 1fr;
+  align-items:center;
+  gap:18px;
+  width:100%;
+  box-sizing:border-box;
+  padding:18px 20px;
+  border-radius:16px;
+  border:2px solid rgba(242,193,78,.75);
+  background:
+    radial-gradient(120% 140% at 12% 50%,rgba(242,193,78,.32),transparent 55%),
+    linear-gradient(115deg,rgba(31,58,147,.55),rgba(12,18,48,.92) 45%,rgba(200,16,46,.4));
+  box-shadow:0 0 0 1px rgba(0,0,0,.35),0 14px 40px rgba(242,193,78,.18),inset 0 1px 0 rgba(255,255,255,.12);
+  overflow:hidden;
+  text-align:left;
+}
+.shop-hero::after {   /* a tricolore hairline along the bottom */
+  content:"";
+  position:absolute;
+  left:0; right:0; bottom:0;
+  height:4px;
+  background:linear-gradient(90deg,var(--blue) 0 33.3%,var(--fg) 33.3% 66.6%,var(--red) 66.6%);
+}
+.shop-hero .hero-art { position:relative; display:flex; justify-content:center; }
+.shop-hero .hero-urne { width:100%; max-width:190px; height:auto; display:block; overflow:visible; }
+.shop-hero .hero-rays path { fill:rgba(255,225,130,.22); }
+.shop-hero .hero-flag {
+  position:absolute;
+  top:2px;
+  right:0;
+  padding:3px 10px;
+  border-radius:999px;
+  background:var(--red);
+  color:#fff;
+  font-family:var(--font-display);
+  font-size:13px;
+  transform:rotate(8deg);
+  box-shadow:0 2px 0 #7a0f1a;
+}
+.shop-hero .hero-body { display:flex; flex-direction:column; gap:10px; min-width:0; }
+.shop-hero .hero-title {
+  margin:0;
+  font-family:var(--font-display);
+  font-weight:400;
+  font-size:clamp(28px,4.4vw,42px);
+  line-height:1;
+  color:var(--gold);
+  text-shadow:0 3px 0 rgba(0,0,0,.45),0 0 24px rgba(242,193,78,.45);
+}
+.shop-hero .hero-tagline { margin:0; font-size:15px; line-height:1.4; color:var(--fg); }
+.shop-hero .hero-perks { display:flex; flex-wrap:wrap; gap:8px; margin:0; padding:0; list-style:none; }
+.shop-hero .hero-perk {
+  display:inline-flex;
+  align-items:baseline;
+  gap:6px;
+  padding:4px 10px;
+  border-radius:999px;
+  background:rgba(0,0,0,.3);
+  border:1px solid var(--line);
+  font-size:13px;
+  color:var(--muted);
+}
+.shop-hero .hero-perk-value { font-family:var(--font-display); font-size:16px; color:var(--fg); }
+.shop-hero .hero-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.shop-hero .hero-actions .btn { min-height:48px; font-size:19px; }
+
+@keyframes kr-hero-spin { to { transform:rotate(360deg); } }
+@keyframes kr-hero-bob { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
+@keyframes kr-hero-drop { 0%,20% { transform:translateY(-14px); opacity:0; } 45% { opacity:1; } 80%,100% { transform:translateY(10px); opacity:0; } }
+@media (prefers-reduced-motion:no-preference) {
+  .shop-hero .hero-rays { transform-origin:80px 80px; transform-box:view-box; animation:kr-hero-spin 18s linear infinite; }
+  .shop-hero .hero-box { animation:kr-hero-bob 2.6s ease-in-out infinite; }
+  .shop-hero .hero-envelope { animation:kr-hero-drop 2.6s ease-in infinite; }
+}
+
+/* CollectionMeter ----------------------------------------------------------- */
+
+.collection-meter { display:flex; flex-direction:column; gap:6px; min-width:180px; }
+.collection-meter .cm-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+.collection-meter .cm-label { font-family:var(--font-display); font-size:15px; letter-spacing:.02em; }
+.collection-meter .cm-figure { font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.collection-meter .cm-bar {
+  display:flex;
+  height:10px;
+  border-radius:999px;
+  overflow:hidden;
+  background:rgba(246,241,228,.1);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.45);
+}
+.collection-meter .cm-seg { display:block; height:100%; background:var(--gold); }
+.collection-meter .cm-common { background:var(--grade-common); }
+.collection-meter .cm-rare { background:var(--grade-rare); }
+.collection-meter .cm-mythic { background:var(--grade-mythic); }
+.collection-meter .cm-incredible { background:linear-gradient(90deg,var(--grade-incredible),var(--grade-incredible-2)); }
+
+@media (max-width:560px) {
+  .shop-hero { grid-template-columns:96px 1fr; gap:12px; padding:14px; }
+  .shop-hero .hero-actions .btn { flex:1 1 100%; }
+}

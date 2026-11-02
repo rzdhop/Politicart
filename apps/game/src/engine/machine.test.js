@@ -24,6 +24,9 @@ const FLOWS = [
   ['title', 'dashboard', 'lobby', 'countdown', 'race', 'results', 'lobby'],         // entered a room as a god from it
   ['title', 'shop', 'lootbox', 'shop', 'title'],                                    // the Boutique, a Politibox, and home
   ['title', 'select', 'shop', 'select'],                                            // a locked candidate's tile, then back to the roster
+  ['title', 'garage', 'shop', 'garage', 'title'],                                   // the title's Garage card, a locked part's badge, and home
+  ['results', 'garage', 'title'],                                                   // customise the kart after a race
+  ['title', 'shop', 'lootbox', 'shop', 'garage', 'shop'],                           // a part won, equipped at once, back to the shop
 ];
 
 describe('game state machine', () => {
@@ -45,7 +48,7 @@ describe('game state machine', () => {
   });
 
   it('refuses moves the game has no path for, and stays put', () => {
-    for (const [from, to] of [['title', 'race'], ['title', 'results'], ['select', 'countdown'], ['race', 'title'], ['race', 'select'], ['admin', 'select'], ['results', 'race'], ['countdown', 'results'], ['lobby', 'race'], ['lobby', 'select'], ['lobby', 'paused'], ['select', 'lobby'], ['account', 'select'], ['race', 'account'], ['dashboard', 'select'], ['select', 'dashboard'], ['race', 'dashboard'], ['title', 'lootbox'], ['select', 'lootbox'], ['lootbox', 'title'], ['lootbox', 'select'], ['shop', 'tracks'], ['shop', 'countdown'], ['results', 'shop'], ['garage', 'shop'], ['race', 'shop']]) {
+    for (const [from, to] of [['title', 'race'], ['title', 'results'], ['select', 'countdown'], ['race', 'title'], ['race', 'select'], ['admin', 'select'], ['results', 'race'], ['countdown', 'results'], ['lobby', 'race'], ['lobby', 'select'], ['lobby', 'paused'], ['select', 'lobby'], ['account', 'select'], ['race', 'account'], ['dashboard', 'select'], ['select', 'dashboard'], ['race', 'dashboard'], ['title', 'lootbox'], ['select', 'lootbox'], ['lootbox', 'title'], ['lootbox', 'select'], ['shop', 'tracks'], ['shop', 'countdown'], ['results', 'shop'], ['garage', 'tracks'], ['race', 'shop'], ['race', 'garage'], ['lootbox', 'garage']]) {
       resetMachine(from);
       expect(canTransition(to)).toBe(false);
       expect(() => transition(to)).toThrow(/Illegal game state transition: /);

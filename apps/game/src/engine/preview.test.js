@@ -237,10 +237,11 @@ describe('the portraits\' placeholders', () => {
 });
 
 describe('showsTurntable', () => {
-  it('is the roster and the Garage alone: the other menus show the plain night background', () => {
+  it('is the roster, the Garage and the Boutique\'s fitting room (DEC-073) alone: the other menus show the plain night background', () => {
     expect(showsTurntable('select')).toBe(true);
     expect(showsTurntable('garage')).toBe(true);
-    for (const s of ['title', 'tracks', 'shop', 'admin', 'lobby', 'account', 'dashboard', 'lootbox', 'race', 'paused', 'results']) expect(showsTurntable(s), s).toBe(false);
+    expect(showsTurntable('shop')).toBe(true);
+    for (const s of ['title', 'tracks', 'admin', 'lobby', 'account', 'dashboard', 'lootbox', 'race', 'paused', 'results']) expect(showsTurntable(s), s).toBe(false);
   });
 });
 

@@ -1427,3 +1427,75 @@ before, so Marseille's quai and Montmartre's ring of houses read sparser
 from the road; a road-relative spread would bring them back. The Grand
 Canal, already past the sky dome, now reaches further past it.
 
+
+## DEC-071 -- The items look like what they are
+
+**Context.** The owner asked for the items' moments to be redesigned: the
+BRAV-M's bikes, the Mediapart dossier, every perk. The projectiles were a
+handful of boxes spinning at 9 rad/s (a motorbike turned like a top), and
+item activations reused the generic aura.
+
+**Decision.** A new module, `engine/itemmeshes.js`, draws the props: the
+BRAV-M bike with its two officers (the passenger's baton swinging), blue
+fairing, POLICE panniers, headlight and alternating beacons, wheels spinning
+and the bike leaning into its homing turns; the Mediapart dossier as a sealed
+envelope tilted toward the chasing camera (MEDIAPART band, wax seal,
+CONFIDENTIEL, the flap lifting) with leaked sheets orbiting it; the motion de
+censure as a giant rubber stamp (CENSURE, 49.3) pumping on its way down; the
+fact-check as a brass magnifying glass with a glint and FAUX inside. Every
+projectile faces where it flies (`poseProjectile`, eased; a networked client
+takes the step between two snapshots), so solo and team races show the same
+thing. The strike's barricade gains tyres, a pallet, a GRÈVE ! placard and a
+burning barrel; the tear gas a grenade and a churning cloud, both animated
+through G.animated by `animate()`, which unhooks itself once the hazard is
+gone. Five new effect kinds (`vfx.js`): `rocket` (turbos, réserve), `bubble`
+(immunité, langue de bois, niche fiscale), `siren` (the BRAV-M called in and
+landing), `pans` (casserolade), `beam` (hélico, pantouflage, motion).
+
+**Consequence.** The props are built on the game server too (headless, blank
+textures), as before; their materials are cached and primed during the
+countdown (prebuild.js builds one of each). The events are new strings in
+the effects vocabulary, carried like the others.
+
+## DEC-072 -- The Garage is everywhere
+
+**Context.** The Garage was a ghost button on the roster: players did not
+find it, so parts won or bought were rarely fitted.
+
+**Decision.** A Garage card on the title (everyone's, static build included)
+whose badge counts the parts and trails owned since the last visit
+(`garage.js garageSeen`, kept in this browser); a blue Garage button with its
+wrench on the roster; « Personnaliser mon kart » on a solo race's results,
+with a line naming a part the balance now buys; « Équiper maintenant » on a
+part or trail revealed by the Politibox; « Équiper » on every owned card in
+the Boutique. The machine gains title ↔ garage, results → garage and
+garage ↔ shop; the Garage's « Retour » is named for and leads back to where
+it was opened from (the results lead to the title). A Garage opened from the
+Boutique and a Boutique opened from the Garage go back to each other rather
+than stacking.
+
+## DEC-073 -- The Boutique is a fitting room
+
+**Context.** The shop was three tabs of flat cards over a cleared canvas.
+The owner wants players to want to go there and unlock things.
+
+**Decision.** The Boutique now stands on the live hemicycle stage
+(`showsTurntable('shop')`): the shelves on the left, the player's kart on the
+podium on the right. « Essayer » on any part or trail wears it on the podium
+(`garage.js setTryOn`: on top of the owned edits, never stored, taken off the
+moment the shop is left, so a race never sees it); the fitting room beside
+it names it and offers to buy it, to equip it if owned, or the Politibox for
+a trail. The Politibox has a hero banner (`ShopHero`: the golden urne on its
+rays, odds and the bundle's saving as chips); under it, « À votre portée »
+shows the four dearest things the balance buys now, or « Prochain objectif »
+the cheapest one and how far the balance is from it. The header carries a
+`CollectionMeter` (owned out of everything, by grade). Part cards draw their
+option (`PartArt`: gold wheels in gold, a rainbow neon in a rainbow) and an
+affordable one wears a gold « À votre portée » ribbon. The library gains
+`ShopHero`, `CollectionMeter`, ShopCard's `onTry` / `trying` / `spotlight`
+and a `garage` MenuGlyph. Prices and odds are unchanged; the server still
+charges from the catalogue alone.
+
+**Consequence.** The stage now draws behind the shop (the governor and the
+still stage apply as on the roster). A guest may try on what they cannot
+buy. The odds table moved into a « Toutes les chances » disclosure.

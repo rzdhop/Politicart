@@ -43,7 +43,7 @@ import { fxAnchorsOf } from './kart.js';
 import { G, disposable, getPoly } from './state.js';
 
 /** Every kind spawnVfx knows, the network's vocabulary (netstate.js encodeVfx). */
-export const VFX_KINDS = Object.freeze(['impact', 'shockwave', 'puff', 'stars', 'aura', 'confetti', 'streak', 'flame', 'splash', 'dust', 'swath', 'gas', 'flash', 'papers', 'coins', 'windup', 'pop']);
+export const VFX_KINDS = Object.freeze(['impact', 'shockwave', 'puff', 'stars', 'aura', 'confetti', 'streak', 'flame', 'splash', 'dust', 'swath', 'gas', 'flash', 'papers', 'coins', 'windup', 'pop', 'rocket', 'bubble', 'siren', 'pans', 'beam']);
 
 /** Instances per layer, per detail level. Each layer is one draw call while anything in it lives. */
 export const POOLS = Object.freeze({
@@ -345,6 +345,55 @@ const KINDS = {
     const c = e.c ?? 0xf2c14e;
     const p = riding('streak', k, 0, 1.1, 1.8, 0.3, c); p.ry = Math.PI; p.ax = 2.5; p.ay = 2.5; p.az = 0.5; p.stretch = 9; p.rise = true;
     const r = ring(0, 0, 0, 2.8, 1.4, 0.3, c); r.kart = k; r.oy = 0.15; r.y = 0; r.rise = true;
+  },
+  // ---- the items' own moments (DEC-071) ----
+  // a turbo lit: fire blasting from every exhaust, a smoke plume, a ring kicked out behind and speed lines
+  rocket(e, k) {
+    const c = e.c ?? 0xffd34d;
+    if (k) {
+      for (const [x, y, z] of fxAnchorsOf(k.mesh).exhaust) for (let i = 0; i < 7; i++) { const p = riding('glow', k, x + rnd(-0.1, 0.1), y + rnd(-0.1, 0.1), z, rnd(0.3, 0.55), pick([0xff7a1a, c, 0xff3a1a, 0xffffff])); p.vx = rnd(-1.5, 1.5); p.vy = rnd(0, 1.5); p.oz = z - rnd(0, 1.2); p.s0 = rnd(1.6, 2.4); p.s1 = 0.3; }
+      const h = k.heading, fx = Math.sin(h), fz = Math.cos(h), bx = k.pos.x - fx * 2.5, bz = k.pos.z - fz * 2.5;
+      spray('puff', 9, bx, k.y + 0.6, bz, { v: 2, up: 1.5, grav: -1, life: 1, colors: [0x9a9aa8, 0xc9c9d4, 0x6e6e78], s0: 0.9, s1: 2.8, drag: 2, spin: 1 });
+      ring(bx, k.y, bz, 1, 6, 0.4, c); ring(bx, k.y, bz, 0.6, 4, 0.35, 0xffffff, 0.06);
+      KINDS.streak(e, k);
+    } else spray('glow', 14, e.x, e.y + 0.6, e.z, { v: 5, up: 2, grav: 0, life: 0.5, colors: [0xff7a1a, c] });
+  },
+  // a shield going up: a dome of light closing over the kart, then a ring settling
+  bubble(e, k) {
+    const c = e.c ?? 0xf2c14e, x = k ? k.pos.x : e.x, z = k ? k.pos.z : e.z, y = k ? k.y : e.y;
+    for (let i = 0; i < 26; i++) {
+      const a = i / 26 * Math.PI * 2 * 3, lat = (i % 9) / 9 * Math.PI / 2, r = 3.1;
+      const ox = Math.sin(a) * Math.cos(lat) * r, oy = 0.3 + Math.sin(lat) * r * 0.8, oz = Math.cos(a) * Math.cos(lat) * r;
+      const p = k ? riding('glow', k, ox, oy, oz, 0.7, i % 3 ? c : 0xffffff) : emit('glow', x + ox, y + oy, z + oz, 0.7, c);
+      p.delay = (1 - lat / (Math.PI / 2)) * 0.15; p.s0 = 1.6; p.s1 = 0.6; p.vy = 0.4;
+    }
+    ring(x, y, z, 4, 2.4, 0.5, c); ring(x, y + 1.6, z, 3.4, 2.2, 0.45, 0xffffff, 0.1);
+  },
+  // the BRAV-M called in: blue and red flashes taking turns over the kart, and two rings
+  siren(e, k) {
+    const x = k ? k.pos.x : e.x, z = k ? k.pos.z : e.z, y = (k ? k.y : e.y) + 2.4;
+    for (let i = 0; i < 6; i++) {
+      const c = i % 2 ? 0xff3a4a : 0x3a6bff;
+      const p = k ? riding('glow', k, i % 2 ? 0.7 : -0.7, 2.4, -0.4, 0.14, c) : emit('glow', x, y, z, 0.14, c);
+      p.delay = i * 0.11; p.s0 = 7; p.s1 = 4;
+      ring(x, y - 2.4, z, 1, 5.5, 0.3, c, i * 0.11);
+    }
+  },
+  // a casserolade: pots and lids flung in a circle, copper and steel, and a clatter of sparks
+  pans(e, k) {
+    const x = k ? k.pos.x : e.x, z = k ? k.pos.z : e.z, y = (k ? k.y : e.y) + 1.4;
+    spray('debris', 22, x, y, z, { v: 16, up: 7, grav: 18, life: 0.9, colors: [0xd98a3a, 0xb87333, 0xc0c4cc, 0x8a8f99], s0: 2.2, s1: 1.4, ax: 1, ay: 0.35, az: 1, spin: 14 });
+    spray('glow', 14, x, y, z, { v: 18, up: 3, grav: 6, life: 0.35, color: 0xfff1b0 });
+  },
+  // a column of light where a kart vanishes or lands (pantouflage, hélico)
+  beam(e, k) {
+    const c = e.c ?? 0xf2c14e, x = k ? k.pos.x : e.x, z = k ? k.pos.z : e.z, y = k ? k.y : e.y;
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * Math.PI * 2, p = emit('streak', x + Math.sin(a) * 1.6, y + 0.2, z + Math.cos(a) * 1.6, 0.6, i % 2 ? c : 0xffffff);
+      p.rx = Math.PI / 2; p.ax = 3; p.ay = 3; p.az = 1; p.stretch = 9; p.vy = 5; p.delay = (i % 3) * 0.04;
+    }
+    ring(x, y, z, 0.5, 3.6, 0.45, c);
+    spray('glow', 10, x, y + 1, z, { v: 2, up: 7, grav: 0, life: 0.7, color: 0xffffff, drag: 1.5 });
   },
   // a ballot box coming back: a ring and a twinkle
   pop(e) {

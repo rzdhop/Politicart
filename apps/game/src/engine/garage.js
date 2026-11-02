@@ -76,5 +76,38 @@ export function setOwned(owned) { OWNED = owned === null || owned === undefined 
 /** What setOwned() last said, cleaned; null without an economy. */
 export const getOwned = () => OWNED;
 
-/** The full style the player's kart renders with when driving `char`: the owned edits over the character default. */
-export const myStyle = char => playerStyle(char, ownedStyle(EDITS, OWNED));
+let TRY = null;
+
+/**
+ * The Boutique's fitting room (DEC-073): one part or trail (`key`, `value`
+ * as setGarage takes them) worn on the podium while the shop shows it,
+ * owned or not. Nothing is stored, and the store takes it off whenever the
+ * shop is left, so a race never sees it. An invalid value is ignored.
+ * Returns whether it is worn.
+ */
+export function setTryOn(key, value) {
+  const clean = cleanStyle({ [key]: value });
+  TRY = Object.hasOwn(clean, key) ? clean : null;
+  return TRY !== null;
+}
+/** Take the fitting room's part off. */
+export function clearTryOn() { TRY = null; }
+/** What the fitting room wears ({key: value}), or null. */
+export const getTryOn = () => TRY;
+
+/** The full style the player's kart renders with when driving `char`: the owned edits over the character default, and the fitting room's part over both. */
+export const myStyle = char => playerStyle(char, TRY ? { ...ownedStyle(EDITS, OWNED), ...TRY } : ownedStyle(EDITS, OWNED));
+
+const SEEN_KEY = 'politikart-garage-seen';
+/**
+ * How many parts and trails the player owned the last time they opened the
+ * Garage (DEC-072), so the title's Garage card can say "N nouveautés" when a
+ * purchase or a Politibox drop added some since. Kept in this browser.
+ */
+export function garageSeen() {
+  try { const n = Number(localStorage.getItem(SEEN_KEY)); return Number.isFinite(n) && n >= 0 ? n : 0; } catch (e) { return 0; }
+}
+/** Remember that the Garage was opened while `n` parts and trails were owned. */
+export function markGarageSeen(n) {
+  try { localStorage.setItem(SEEN_KEY, String(Math.max(0, Math.floor(n) || 0))); } catch (e) { /* storage unavailable: the badge just shows again */ }
+}

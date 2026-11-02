@@ -8,7 +8,9 @@ import { KartCard } from './KartCard';
 import { OddsTable } from './OddsTable';
 import { RevealCard } from './RevealCard';
 import { RevealStage } from './RevealStage';
+import { CollectionMeter } from './CollectionMeter';
 import { ShopCard } from './ShopCard';
+import { ShopHero } from './ShopHero';
 import { Tabs } from './Tabs';
 import { TrailStrip } from './TrailStrip';
 
@@ -474,5 +476,69 @@ describe('TrailStrip', () => {
     const { container } = render(<TrailStrip trail="laser" />);
     expect(container.firstElementChild?.getAttribute('aria-hidden')).toBe('true');
     expect(container.firstElementChild?.getAttribute('role')).toBeNull();
+  });
+});
+
+describe('ShopCard fitting-room extras (DEC-073)', () => {
+  it('adds a try button beside the buy button, pressed and ringed while trying', () => {
+    const onTry = vi.fn();
+    const { container } = render(<ShopCard title="Roues dorées" grade="mythic" price={400} onTry={onTry} tryLabel="Essayer" trying tryProps={{ id: 'try' }} buyLabel="Acheter" />);
+    const btn = container.querySelector('#try')!;
+    expect(btn.textContent).toBe('Essayer');
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('article')!.className).toContain('trying');
+    fireEvent.click(btn);
+    expect(onTry).toHaveBeenCalledTimes(1);
+  });
+
+  it('makes the extra action the live one on an owned card, beside the disabled owned button', () => {
+    const onTry = vi.fn();
+    const { container } = render(<ShopCard title="Roues dorées" grade="mythic" owned onTry={onTry} tryLabel="Équiper" ownedLabel="Acquis" tryProps={{ id: 'eq' }} buyProps={{ id: 'buy' }} />);
+    const eq = container.querySelector('#eq')!;
+    expect(eq.className).toContain('shop-equip');
+    expect(eq.hasAttribute('disabled')).toBe(false);
+    expect(container.querySelector('#buy')?.textContent).toBe('Acquis');
+    fireEvent.click(eq);
+    expect(onTry).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes the price with the consumer\'s formatter', () => {
+    const { container } = render(<ShopCard title="Turbine" grade="incredible" price={1000} priceFormat={(n) => n.toLocaleString('fr-FR')} />);
+    expect(container.querySelector('.shop-price .coin-value')?.textContent).toBe((1000).toLocaleString('fr-FR'));
+  });
+
+  it('lays a spotlight ribbon over the picture', () => {
+    const { container } = render(<ShopCard title="Aileron" grade="rare" price={150} spotlight="À votre portée" />);
+    expect(container.querySelector('.shop-image .shop-spotlight')?.textContent).toBe('À votre portée');
+    expect(container.querySelector('article')!.className).toContain('spotlit');
+  });
+});
+
+describe('ShopHero', () => {
+  it('shows the title, the tagline, the perks, the flag and the actions', () => {
+    const { container } = render(
+      <ShopHero title="La Politibox" tagline="Tout peut sortir" perks={[{ label: 'Candidat·e', value: '2 %' }]} flag="Jackpot">
+        <button type="button">Ouvrir</button>
+      </ShopHero>,
+    );
+    expect(container.querySelector('.hero-title')?.textContent).toBe('La Politibox');
+    expect(container.querySelector('.hero-tagline')?.textContent).toBe('Tout peut sortir');
+    expect(container.querySelectorAll('.hero-perk')).toHaveLength(1);
+    expect(container.querySelector('.hero-flag')?.textContent).toBe('Jackpot');
+    expect(container.querySelector('.hero-actions button')?.textContent).toBe('Ouvrir');
+    expect(container.querySelector('svg.hero-urne')).not.toBeNull();
+  });
+});
+
+describe('CollectionMeter', () => {
+  it('is a meter with its value, and one segment per share sized on the total', () => {
+    const { container } = render(<CollectionMeter label="Collection" have={10} total={40} shares={[{ grade: 'rare', have: 8, total: 20 }, { grade: 'mythic', have: 2, total: 20 }]} />);
+    const m = container.querySelector('[role=meter]')!;
+    expect(m.getAttribute('aria-valuenow')).toBe('10');
+    expect(m.getAttribute('aria-valuemax')).toBe('40');
+    const segs = [...container.querySelectorAll<HTMLElement>('.cm-seg')];
+    expect(segs.map(s => s.dataset.grade)).toEqual(['rare', 'mythic']);
+    expect(segs[0]!.style.width).toBe('20%');
+    expect(container.querySelector('.cm-figure')?.textContent).toBe('10 / 40');
   });
 });

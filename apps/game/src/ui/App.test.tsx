@@ -612,18 +612,23 @@ describe('the title screen (DEC-070)', () => {
     expect($(container, 'touch-legend')).toBeNull();
   });
 
-  it('offers no destination cards on the static build', async () => {
+  it('offers the Garage alone among the destination cards on the static build', async () => {
     const { container } = await renderServed({ server: false });
-    expect(container.querySelector('#s-title .menu-cards')).toBeNull();
+    expect([...container.querySelectorAll('#s-title .menu-cards .menu-card')].map(c => c.id)).toEqual(['b-garage-title']);
     for (const id of ['b-multi', 'b-shop', 'b-account']) expect($(container, id), '#' + id).toBeNull();
+    fireEvent.click($(container, 'b-garage-title')!);
+    expect(getState()).toBe('garage');
+    expect($(container, 'b-garage-back')?.textContent).toBe('Retour au menu');
+    fireEvent.click($(container, 'b-garage-back')!);
+    expect(getState()).toBe('title');
   });
 
   it('lays the game server\'s destinations out as cards: Multijoueur, Boutique with the balance, Compte with the pseudo, the level and the requests', async () => {
     setTransport(OpenSocket);
     const { container } = await renderServed({ server: true, who: 'player', coins: 1250 });
     const cards = [...container.querySelectorAll('#s-title .menu-cards .menu-card')];
-    expect(cards.map(c => c.id)).toEqual(['b-multi', 'b-shop', 'b-account']);
-    expect(cards.map(c => c.querySelector('.mc-label')?.textContent)).toEqual(['Multijoueur', 'Boutique', 'Compte']);
+    expect(cards.map(c => c.id)).toEqual(['b-garage-title', 'b-multi', 'b-shop', 'b-account']);
+    expect(cards.map(c => c.querySelector('.mc-label')?.textContent)).toEqual(['Garage', 'Multijoueur', 'Boutique', 'Compte']);
     expect($(container, 'b-shop')!.querySelector('.mc-sub .coin-value')?.textContent).toBe((1250).toLocaleString('fr-FR'));
     expect($(container, 'b-account')!.querySelector('.mc-sub')?.textContent).toBe('Marianne · niv. 1');
     expect($(container, 'b-account')!.querySelector('.mc-badge')).toBeNull();
@@ -964,9 +969,13 @@ describe('the Boutique and the Politibox (DEC-032..037)', () => {
     expect(disabled(container, 'b-open-box')).toBe(true);
     expect(disabled(container, 'b-buy-char-lucie')).toBe(true);
     expect(disabled(container, 'b-buy-part-wheels-gold')).toBe(true);
-    const buttons = [...container.querySelectorAll<HTMLButtonElement>('#s-shop .shop-card button')];
+    // every buy button waits; only « Essayer » works, a guest may try on what they cannot buy (DEC-073)
+    const buttons = [...container.querySelectorAll<HTMLButtonElement>('#s-shop .shop-card button:not(.shop-try)')];
     expect(buttons.length).toBeGreaterThan(30);
     expect(buttons.every(b => b.disabled)).toBe(true);
+    fireEvent.click($(container, 'b-try-part-wheels-gold')!);
+    expect(getSnapshot().tryOn).toEqual({ category: 'wheels', value: 'gold' });
+    expect($(container, 'b-fit-buy')?.textContent).toBe('Compte requis');
     fireEvent.click($(container, 'b-shop-back')!);
     expect(getState()).toBe('title');
   });
@@ -1145,6 +1154,97 @@ describe('the Boutique and the Politibox (DEC-032..037)', () => {
   });
 });
 
+describe('the fitting room and the Garage everywhere (DEC-072, DEC-073)', () => {
+  it('try a part on the podium, buy it from the fitting room, then equip it into the Garage and come back', async () => {
+    resetGarage();
+    const { container } = await renderServed({ server: true, who: 'player', coins: 1000 });
+    fireEvent.click($(container, 'b-shop')!);
+    fireEvent.click($(container, 'shop-tab-parts')!);
+    fireEvent.click($(container, 'b-try-part-wheels-gold')!);
+    expect(getSnapshot().tryOn).toEqual({ category: 'wheels', value: 'gold' });
+    expect(myStyle(CHARACTERS[G.charIdx]!).wheels).toBe('gold');              // worn on the podium, not owned
+    expect(localStorage.getItem('politikart-kart')).toBeNull();               // and nothing stored
+    expect($(container, 'shop-part-wheels-gold')!.className).toContain('trying');
+    expect($(container, 'shop-fitting-name')?.textContent).toBe('Roues dorées');
+    expect($(container, 'b-fit-buy')?.textContent).toBe('Acheter · 400');
+    fireEvent.click($(container, 'b-fit-buy')!);
+    await settle();
+    expect($(container, 'b-buy-part-wheels-gold')?.textContent).toBe('Acquis');
+    fireEvent.click($(container, 'b-fit-equip')!);
+    expect(getState()).toBe('garage');
+    expect(getSnapshot().tryOn).toBeNull();
+    expect(JSON.parse(localStorage.getItem('politikart-kart')!)).toEqual({ wheels: 'gold' });
+    expect(pressed(container, 'g-wheels-gold')).toBe('true');
+    expect($(container, 'b-garage-back')?.textContent).toBe('Retour à la boutique');
+    fireEvent.click($(container, 'b-garage-back')!);
+    expect(getState()).toBe('shop');
+    fireEvent.click($(container, 'b-shop-back')!);
+    expect(getState()).toBe('title');
+    resetGarage();
+  });
+
+  it('take the tried part off when the shop is left, so a race never wears it', async () => {
+    resetGarage();
+    const { container } = await renderServed({ server: true, who: 'player', coins: 0 });
+    fireEvent.click($(container, 'b-shop')!);
+    fireEvent.click($(container, 'shop-tab-parts')!);
+    fireEvent.click($(container, 'b-try-trail-laser')!);
+    expect(myStyle(CHARACTERS[G.charIdx]!).trail).toBe('laser');
+    expect($(container, 'b-fit-box')?.textContent).toBe('Tenter la Politibox');   // trails are won, never sold
+    fireEvent.click($(container, 'b-try-trail-laser')!);                          // the same again takes it off
+    expect(getSnapshot().tryOn).toBeNull();
+    fireEvent.click($(container, 'b-try-part-exhaust-turbine')!);
+    expect($(container, 'b-fit-buy')?.textContent).toContain('Encore');
+    fireEvent.click($(container, 'b-shop-back')!);
+    expect(getSnapshot().tryOn).toBeNull();
+    expect(myStyle(CHARACTERS[G.charIdx]!).exhaust).not.toBe('turbine');
+  });
+
+  it('show what the balance buys in the shop window, or the next goal and how far it is', async () => {
+    const rich = await renderServed({ server: true, who: 'player', coins: 450 });
+    fireEvent.click($(rich.container, 'b-shop')!);
+    const picks = [...rich.container.querySelectorAll('#shop-picks .shop-card')];
+    expect(picks.length).toBe(4);
+    expect(picks.every(c => c.querySelector('.shop-spotlight')?.textContent === 'À votre portée')).toBe(true);
+    expect($(rich.container, 'shop-collection')?.getAttribute('role')).toBe('meter');
+    cleanup();
+    if (getSnapshot().account) actions.logOut();
+    while (getState() !== 'title') transition('title');
+    const poor = await renderServed({ server: true, who: 'player', coins: 40 });
+    fireEvent.click($(poor.container, 'b-shop')!);
+    expect($(poor.container, 'shop-picks')).toBeNull();
+    expect($(poor.container, 'shop-next-meter')?.textContent).toContain('encore 110 politicoins');
+  });
+
+  it('equip a part won in the Politibox straight from its reveal', async () => {
+    resetGarage();
+    const drop = { kind: 'part', id: 'exhaust:turbine', grade: 'incredible', duplicate: false, refund: 0 };
+    const { container } = await renderServed({ server: true, who: 'player', coins: 150, drop });
+    fireEvent.click($(container, 'b-shop')!);
+    fireEvent.click($(container, 'b-open-box')!);
+    await settle();
+    act(() => { box.onPhase?.('reveal'); });
+    fireEvent.click($(container, 'b-box-equip')!);
+    expect(getState()).toBe('garage');
+    expect(JSON.parse(localStorage.getItem('politikart-kart')!)).toEqual({ exhaust: 'turbine' });
+    resetGarage();
+  });
+
+  it('count on the title\'s Garage card the parts won since the last visit, and clear them once it is opened', async () => {
+    localStorage.removeItem('politikart-garage-seen');
+    const { container } = await renderServed({ server: true, who: 'player', owned: { chars: [], parts: ['wheels:gold', 'spoiler:wing'], trails: ['laser'] } });
+    act(() => { actions.hideNote(); });
+    const card = $(container, 'b-garage-title')!;
+    expect(card.querySelector('.mc-badge')?.textContent).toBe('+3');
+    expect(card.querySelector('.mc-sub')?.textContent).toBe('Nouvelles pièces à monter !');
+    fireEvent.click(card);
+    expect(getState()).toBe('garage');
+    expect(localStorage.getItem('politikart-garage-seen')).toBe('3');
+    fireEvent.click($(container, 'b-garage-back')!);
+    expect($(container, 'b-garage-title')!.querySelector('.mc-badge')).toBeNull();
+  });
+});
+
 describe('the Garage locks (DEC-035)', () => {
   const chipsOf = (container: HTMLElement) => [...container.querySelectorAll<HTMLButtonElement>('#s-garage .chip')];
 
@@ -1189,13 +1289,15 @@ describe('the Garage locks (DEC-035)', () => {
     expect(pressed(container, 'g-wheels-chrome')).toBe('true');
     expect(JSON.parse(localStorage.getItem('politikart-kart')!)).toEqual({ wheels: 'chrome' });
 
-    // The badge leads to the Boutique's parts, and "Retour" to the roster.
+    // The badge leads to the Boutique's parts, and "Retour" back to the Garage (DEC-072), then the roster.
     fireEvent.click($(container, 'g-buy-wheels-gold')!);
     expect(getState()).toBe('shop');
     expect(getSnapshot().shop.tab).toBe('parts');
     expect($(container, 'shop-panel-parts')!.hidden).toBe(false);
     expect(JSON.parse(localStorage.getItem('politikart-kart')!)).toEqual({ wheels: 'chrome' });
     fireEvent.click($(container, 'b-shop-back')!);
+    expect(getState()).toBe('garage');
+    fireEvent.click($(container, 'b-garage-back')!);
     expect(getState()).toBe('select');
 
     fireEvent.click($(container, 'b-garage')!);

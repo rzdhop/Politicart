@@ -14,6 +14,8 @@ export interface ShopCardProps extends Omit<ComponentPropsWithRef<'article'>, 't
   grade: Grade;
   /** The price in politicoins, shown as a `CoinCount` in the footer. Omit for an item with no price line. */
   price?: number;
+  /** How the price is written (the game passes an `fr-FR` formatter); the browser's default otherwise. */
+  priceFormat?: (n: number) => string;
   /** Already in the player's inventory: the button reads `ownedLabel`, disabled, and a tick ribbon appears. */
   owned?: boolean;
   /**
@@ -40,6 +42,20 @@ export interface ShopCardProps extends Omit<ComponentPropsWithRef<'article'>, 't
   buyProps?: ButtonProps;
   /** Anything else to show between the subtitle and the footer. */
   children?: ReactNode;
+  /**
+   * A second action beside the main button -- the game's « Essayer », which
+   * wears the item on the 3D stage, or on an owned card its « Équiper ».
+   * Ghost, except on an owned card, where it is the live one. Omit for none.
+   */
+  onTry?: () => void;
+  /** The try button's text. Defaults to "Try". */
+  tryLabel?: ReactNode;
+  /** Props for the try button (its id). */
+  tryProps?: ButtonProps;
+  /** The item is being tried on right now: the card is ringed and the try button pressed. */
+  trying?: boolean;
+  /** A ribbon across the picture's corner: « À votre portée », « Nouveau ». */
+  spotlight?: ReactNode;
 }
 
 /**
@@ -55,6 +71,12 @@ export interface ShopCardProps extends Omit<ComponentPropsWithRef<'article'>, 't
  *
  * The card carries `grade-<g>`, so from `rare` up it gets the grade's motion
  * (fx.css) exactly like the badge inside it.
+ *
+ * Two optional extras turn a shelf into a fitting room: `onTry` adds a ghost
+ * « Essayer » beside the main button (`trying` rings the card while the
+ * item is worn), and `onEquip` keeps an owned card's button live, as
+ * « Équiper ». `spotlight` lays a gold ribbon over the picture's corner for
+ * the items the game wants seen first.
  *
  * ```tsx
  * <ShopCard
@@ -75,6 +97,7 @@ export function ShopCard({
   subtitle,
   grade,
   price,
+  priceFormat,
   owned = false,
   locked,
   image,
@@ -84,13 +107,19 @@ export function ShopCard({
   ownedLabel = 'Owned',
   buyProps,
   children,
+  onTry,
+  tryLabel = 'Try',
+  tryProps,
+  trying = false,
+  spotlight,
   className,
   ...rest
 }: ShopCardProps) {
   const isLocked = !owned && Boolean(locked);
+  const hasSpotlight = spotlight !== undefined && spotlight !== null && spotlight !== false;
   return (
     <article
-      className={cx('card', 'shop-card', `grade-${grade}`, owned && 'owned', isLocked && 'locked', className)}
+      className={cx('card', 'shop-card', `grade-${grade}`, owned && 'owned', isLocked && 'locked', trying && 'trying', hasSpotlight && 'spotlit', className)}
       data-grade={grade}
       {...rest}
     >
@@ -104,12 +133,18 @@ export function ShopCard({
       </div>
       <div className="shop-image">
         {typeof image === 'string' ? <img alt="" src={image} /> : image}
+        {hasSpotlight ? <span className="shop-spotlight">{spotlight}</span> : null}
       </div>
       <div className="shop-title">{title}</div>
       {subtitle === undefined ? null : <div className="shop-subtitle">{subtitle}</div>}
       {children}
       <div className="shop-foot">
-        {price === undefined ? null : <CoinCount value={price} size="sm" className="shop-price" />}
+        {price === undefined ? null : <CoinCount value={price} size="sm" className="shop-price" {...(priceFormat ? { format: priceFormat } : {})} />}
+        {onTry ? (
+          <Button variant={owned ? undefined : 'ghost'} className={owned ? 'shop-equip' : 'shop-try'} aria-pressed={owned ? undefined : trying} onClick={onTry} {...tryProps}>
+            {tryLabel}
+          </Button>
+        ) : null}
         {owned ? (
           <Button variant="ghost" disabled {...buyProps}>
             {ownedLabel}

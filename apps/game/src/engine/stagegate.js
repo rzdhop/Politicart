@@ -37,8 +37,8 @@ export function loadStage() {
 export const stageLoaded = () => !!mod;
 function later(f) { queued.push(f); loadStage(); }
 
-/** The screens that show the turntable (the select stage): the roster and the Garage. */
-export const showsTurntable = state => state === 'select' || state === 'garage';
+/** The screens that show the turntable (the select stage): the roster, the Garage and the Boutique, whose fitting room wears a part on it (DEC-073). */
+export const showsTurntable = state => state === 'select' || state === 'garage' || state === 'shop';
 /**
  * The screens that show the stage as their backdrop (DEC-070): the title,
  * the player's candidate turning on the podium behind the menu, framed into

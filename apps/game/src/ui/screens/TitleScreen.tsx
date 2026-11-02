@@ -18,7 +18,7 @@ import {
 
 import { CHARACTERS } from '../../engine/data.js';
 import { stageDrag } from '../../engine/stageinput.js';
-import { actions, isAdmin, type UiSnapshot } from '../store';
+import { actions, garageNews, isAdmin, type UiSnapshot } from '../store';
 import { useTouchMode } from '../TouchControls';
 
 const ADMIN_LABEL = {
@@ -51,7 +51,7 @@ function incoming(ui: UiSnapshot) {
  * player's candidate turns on the podium (the stage draws into this
  * screen's ShowcaseStage band, game.js / preview.js), the logo and a
  * rotating quip, one huge « Jouer », then the destinations as cards
- * (Multijoueur, Boutique, Compte: game server only), the settings as
+ * (the Garage, DEC-072; Multijoueur, Boutique, Compte: game server only), the settings as
  * pills in the corner (graphics, sound, the controls' help sheet, the
  * admin's entries), and the parody notice at the bottom. Enter starts,
  * as before (game.js); the ids are the E2E suite's (DEC-009).
@@ -83,19 +83,34 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
       <Tagline lines={TAGLINES} paused={hidden} />
     </>
   );
-  const cards = ui.netAvailable && (
+  const news = garageNews(ui);
+  // The Garage is everyone's, server or not (DEC-072): its card says what was won or bought since the last visit.
+  const garage = (
+    <MenuCard
+      id="b-garage-title"
+      className="menu-card-garage"
+      icon={<MenuGlyph name="garage" />}
+      label="Garage"
+      sub={news ? 'Nouvelles pièces à monter !' : 'Personnalisez votre kart'}
+      badge={news ? '+' + news : undefined}
+      badgeLabel={news ? news + (news > 1 ? ' nouvelles pièces' : ' nouvelle pièce') : undefined}
+      onClick={() => actions.openGarage('title')}
+    />
+  );
+  const cards = (
     <div className="menu-cards">
-      <MenuCard id="b-multi" icon={<MenuGlyph name="multi" />} label="Multijoueur" sub="Entre amis" onClick={actions.multiplayer} />
+      {garage}
+      {ui.netAvailable && <MenuCard id="b-multi" icon={<MenuGlyph name="multi" />} label="Multijoueur" sub="Entre amis" onClick={actions.multiplayer} />}
       {/* The Boutique exists only where a game server runs the economy (DEC-035). */}
-      <MenuCard
+      {ui.netAvailable && <MenuCard
         id="b-shop"
         tone="gold"
         icon={<MenuGlyph name="shop" />}
         label="Boutique"
         sub={<CoinCount size="sm" value={ui.account?.profile.coins ?? 0} format={fr} />}
         onClick={() => actions.openShop('title')}
-      />
-      <MenuCard
+      />}
+      {ui.netAvailable && <MenuCard
         id="b-account"
         tone="red"
         icon={<MenuGlyph name="account" />}
@@ -104,7 +119,7 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
         badge={requests ? '✉ ' + requests : undefined}
         badgeLabel={requests ? requests + (requests > 1 ? ' demandes d’ami' : ' demande d’ami') : undefined}
         onClick={actions.openAccount}
-      />
+      />}
     </div>
   );
   const actionsSlot = (

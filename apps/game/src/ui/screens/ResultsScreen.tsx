@@ -12,6 +12,7 @@ import { fmtTime, ordinal } from '../../engine/util.js';
 import { actions, type Gain, type NetResults, type UiSnapshot } from '../store';
 import type { Character, Racer } from '../types';
 import { RaceKartCard } from './PauseScreen';
+import { offersFor } from './ShopScreen';
 
 const COLUMN = { display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' } as const;
 
@@ -103,12 +104,31 @@ export function ResultsScreen({ ui }: { ui: UiSnapshot }) {
         <XpLine ui={ui} />
         <RaceKartCard ui={ui} id="r-kart" />
         <ResultsTable rows={rows} columns={['', 'Candidat·e', 'Temps']} bodyProps={{ id: 'r-body' }} />
+        <GarageNudge ui={ui} />
         <Row>
           <Button id="b-again" onClick={actions.start}>Rejouer</Button>
+          <Button id="b-results-garage" className="garage-cta" onClick={() => actions.openGarage('results')}>Personnaliser mon kart</Button>
           <Button id="b-menu" variant="ghost" onClick={actions.toTitle}>Menu</Button>
         </Row>
       </Panel>
     </Screen>
+  );
+}
+
+/**
+ * After a solo race, the way to the Garage (DEC-072): when the balance now
+ * buys a part the kart does not have, say so -- the cheapest such part and
+ * the Boutique's fitting room are a tap away.
+ */
+function GarageNudge({ ui }: { ui: UiSnapshot }) {
+  if (!ui.netAvailable || !ui.account) return null;
+  const coins = ui.account.profile.coins;
+  const part = offersFor(ui).find(o => o.kind === 'part' && o.price <= coins);
+  if (!part) return null;
+  return (
+    <Disclaimer id="r-garage-nudge" className="garage-nudge">
+      {'Avec ' + fr(coins) + ' politicoins, offrez-vous « ' + part.name + ' » : essayez-la sur votre kart dans la Boutique.'}
+    </Disclaimer>
   );
 }
 

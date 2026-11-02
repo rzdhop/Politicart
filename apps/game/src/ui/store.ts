@@ -16,7 +16,7 @@ import * as account from '../engine/account.js';
 import { initAudio, isMuted, toggleMute as toggleAudioMute } from '../engine/audio.js';
 import { beginDraft, clearDraft, getDraft, setRoster } from '../engine/custom.js';
 import { emptyOwned } from '../engine/catalog.js';
-import { getGarage, resetGarage, setGarage, setOwned } from '../engine/garage.js';
+import { clearTryOn, garageSeen, getGarage, getTryOn, markGarageSeen, resetGarage, setGarage, setOwned, setTryOn } from '../engine/garage.js';
 import { playOpening, skipOpening as skipBoxOpening, stopOpening } from '../engine/boxgate.js';
 import { canTransition, getState, onTransition, transition } from '../engine/machine.js';
 import * as net from '../engine/net.js';
@@ -137,12 +137,14 @@ export type Drop =
 /** Where the opening is, for the DOM half (the library's RevealStage); `tease` is the rarity build-up, `next` the pause between two openings of a bundle. */
 export type RevealPhase = 'idle' | 'opening' | 'tease' | 'burst' | 'reveal' | 'next';
 export type ShopTab = 'box' | 'chars' | 'parts';
+/** The screens the Garage opens from (DEC-072). */
+export type GarageFrom = 'select' | 'title' | 'shop' | 'results';
 /**
  * The Boutique: where it was opened from, the tab on show, the last call's
  * outcome, and the Politibox being opened: every drop of the run (one, or
  * the bundle's five), the one on screen (`drop` = `drops[index]`) and its phase.
  */
-export interface ShopView { from: 'title' | 'select'; tab: ShopTab; busy: boolean; error: string | null; notice: string | null; drop: Drop | null; drops: Drop[]; index: number; phase: RevealPhase }
+export interface ShopView { from: 'title' | 'select' | 'garage'; tab: ShopTab; busy: boolean; error: string | null; notice: string | null; drop: Drop | null; drops: Drop[]; index: number; phase: RevealPhase }
 type ShopReply = { ok: boolean; status: number; error?: string; profile?: Profile; drop?: Drop; drops?: Drop[] };
 export type AdminStatus = 'idle' | 'saved';
 /** What the roster API answers (engine/account.js fetchRoster / saveRoster). */
@@ -193,6 +195,12 @@ export interface UiSnapshot {
   adsVersion: number;
   /** Bumped whenever the player's Garage edits change, so the form re-reads them. */
   garageVersion: number;
+  /** Where the Garage was opened from, where its "Retour" leads (DEC-072): the results lead back to the title. */
+  garageFrom: GarageFrom;
+  /** How many parts and trails the account owned when the Garage was last opened (engine/garage.js garageSeen): the title card's "nouveautés". */
+  garageSeen: number;
+  /** The Boutique's fitting room (DEC-073): the part or trail worn on the podium, as {category, value}; null when none. */
+  tryOn: { category: string; value: string } | null;
   /** The "play on a computer" note: shown until the first race starts, then never again. */
   noteHidden: boolean;
   /** Whether the page was served by the game server, so team races are possible. */
@@ -276,6 +284,19 @@ export function ownedOf(ui: Pick<UiSnapshot, 'netAvailable' | 'account'>): Owned
   return ui.account ? ui.account.profile.owned : emptyOwned();
 }
 
+/** How many parts and trails an account owns (the commons not counted); null without one (no economy, a guest). */
+export function ownedCount(ui: Pick<UiSnapshot, 'netAvailable' | 'account'>): number | null {
+  if (!ui.netAvailable || !ui.account) return null;
+  const o = ui.account.profile.owned;
+  return (o?.parts?.length ?? 0) + (o?.trails?.length ?? 0);
+}
+
+/** What the title's Garage card announces: the parts and trails won or bought since the Garage was last opened (DEC-072). */
+export function garageNews(ui: Pick<UiSnapshot, 'netAvailable' | 'account' | 'garageSeen'>): number {
+  const n = ownedCount(ui);
+  return n === null ? 0 : Math.max(0, n - ui.garageSeen);
+}
+
 /** The candidate ids this player may drive: the account's unlocks, or the starters for a guest. */
 export function unlockedOf(ui: Pick<UiSnapshot, 'account'>): string[] {
   return ui.account ? ui.account.profile.unlocked : [...STARTERS];
@@ -295,6 +316,9 @@ let snapshot: UiSnapshot = {
   formVersion: 0,
   adsVersion: 0,
   garageVersion: 0,
+  garageFrom: 'select',
+  garageSeen: garageSeen(),
+  tryOn: null,
   noteHidden: false,
   netAvailable: false,
   net: net.getNet() as NetView,
@@ -358,6 +382,8 @@ onTransition((to: string, from: string) => {
   if (to === 'paused') patch.pauseNet = isNetRace() ? (netLatency() as NetLatency | null) : null;
   // the circuits' figures are worked out while the roster shows, so "Choisir le circuit →" finds them ready (thumbs.js)
   if (to === 'select') warmFigures();
+  // the fitting room's part comes off the moment the Boutique is left (DEC-073): a race never wears it
+  if (from === 'shop' && to !== 'lootbox' && getTryOn()) { clearTryOn(); patch.tryOn = null; refreshPreview(); }
   // the lobby's player cards show the candidates' portraits: placeholders at least, the portraits once rendered (DEC-045)
   if (to === 'lobby' && !Object.keys(snapshot.thumbs).length) refreshThumbs();
   set(patch);
@@ -762,7 +788,31 @@ export const actions = {
   hideNote() { set({ noteHidden: true }); },
 
   // ---- Garage: the player's own kart ----
-  openGarage() { transition('garage'); setPreview(G.charIdx); },
+  /**
+   * "Garage", from the roster (its default), the title's Garage card, a solo
+   * race's results or the Boutique (DEC-072). Opening it notes how many parts
+   * the account owns, which clears the title card's "nouveautés".
+   */
+  openGarage(from: GarageFrom = 'select') {
+    if (!canTransition('garage')) return;
+    initAudio();
+    // from the Boutique that was itself opened from the Garage: just go back there, so the two never stack
+    if (from === 'shop' && snapshot.shop.from === 'garage') { actions.closeShop(); return; }
+    if (from !== 'shop') keepCharUnlocked();
+    transition('garage');
+    setPreview(G.charIdx);
+    const seen = ownedCount(snapshot);
+    if (seen !== null) markGarageSeen(seen);
+    set({ garageFrom: from, ...(seen === null ? {} : { garageSeen: seen }) });
+  },
+  /** The Garage's "Retour": back where it was opened from (the results lead to the title). */
+  closeGarage() {
+    if (getState() !== 'garage') return;
+    const to = snapshot.garageFrom === 'results' ? 'title' : snapshot.garageFrom;
+    transition(to);
+    if (to === 'select') keepCharUnlocked();
+    setPreview(G.charIdx);
+  },
   /** Change one field of the player's kart; an invalid value is ignored. */
   setGarage(key: string, value: unknown) {
     if (!setGarage(key, value)) return;
@@ -894,6 +944,7 @@ export const actions = {
     const st = getState();
     if (st === 'tracks') transition('select');
     if (st === 'lootbox') actions.boxDone();
+    if (getState() === 'garage') transition(snapshot.garageFrom === 'select' ? 'select' : 'title');
     if (getState() === 'shop') transition('title');
     if (getState() === 'select' || getState() === 'admin' || (getState() === 'results' && !isNetRace())) transition('title');
     if (getState() === 'title' || getState() === 'account' || getState() === 'dashboard') transition('lobby');
@@ -905,7 +956,7 @@ export const actions = {
 
   // ---- The Boutique and the Politibox (DEC-032..037) ----
   /** "Boutique", from the title or the roster, optionally on a tab. Only where a game server runs the economy. */
-  openShop(from: 'title' | 'select', tab?: ShopTab) {
+  openShop(from: 'title' | 'select' | 'garage', tab?: ShopTab) {
     if (!snapshot.netAvailable || !canTransition('shop')) return;
     initAudio();
     // The candidates' cards show the roster portraits (placeholders until each is rendered).
@@ -920,18 +971,52 @@ export const actions = {
    * has no garage → shop edge; the player reopens the Garage from there).
    */
   shopFromGarage(tab: ShopTab) {
-    if (!snapshot.netAvailable) return;
-    if (getState() === 'garage') transition('select');
-    actions.openShop('select', tab);
+    if (!snapshot.netAvailable || getState() !== 'garage') return;
+    // a Garage opened from the Boutique goes back there, on the tab, rather than stacking another
+    if (snapshot.garageFrom === 'shop') { initAudio(); shop({ tab, error: null, notice: null }); transition('shop'); setPreview(G.charIdx); return; }
+    actions.openShop('garage', tab);
   },
   /** "Retour": back where the shop was opened from. */
   closeShop() {
     if (getState() !== 'shop') return;
     shop({ error: null, notice: null });
     transition(snapshot.shop.from);
-    if (snapshot.shop.from === 'select') { keepCharUnlocked(); setPreview(G.charIdx); }
+    if (snapshot.shop.from === 'select') keepCharUnlocked();
+    setPreview(G.charIdx);
   },
   shopTab(tab: ShopTab) { shop({ tab, error: null, notice: null }); },
+  /**
+   * "Essayer": wear part `value` of `category` (or a trail, category
+   * 'trail') on the podium while the Boutique shows it (DEC-073); the same
+   * one again takes it off. Nothing is bought or stored.
+   */
+  tryOn(category: string, value: string) {
+    if (getState() !== 'shop') return;
+    const cur = snapshot.tryOn;
+    if (cur && cur.category === category && cur.value === value) { actions.takeOff(); return; }
+    if (!setTryOn(category, value)) return;
+    set({ tryOn: { category, value } });
+    setPreview(G.charIdx);
+  },
+  /** Take the fitting room's part off. */
+  takeOff() {
+    if (!snapshot.tryOn) return;
+    clearTryOn(); set({ tryOn: null }); setPreview(G.charIdx);
+  },
+  /**
+   * "Équiper": fit a part or trail the account owns (just bought, just won)
+   * and open the Garage on it, from the Boutique or straight from the
+   * Politibox's reveal (DEC-072).
+   */
+  equip(category: string, value: string) {
+    const st = getState();
+    if (st === 'lootbox') actions.boxDone();
+    if (getState() !== 'shop') return;
+    clearTryOn(); set({ tryOn: null });
+    setGarage(category, value);
+    set({ garageVersion: snapshot.garageVersion + 1 });
+    actions.openGarage('shop');
+  },
   /** Buy candidate `id`. The price is the server's (catalog.js): the request names the candidate only. */
   async buyChar(id: string) {
     if (await shopCall(t => account.shop.buyChar(t, id, { base: remoteServer }))) shop({ notice: 'Acquis !' });

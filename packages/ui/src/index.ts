@@ -267,6 +267,8 @@ export {
   type RevealStageProps,
 } from './components/economy/RevealStage';
 export { ShopCard, type ShopCardProps } from './components/economy/ShopCard';
+export { ShopHero, type ShopHeroPerk, type ShopHeroProps, UrneArt } from './components/economy/ShopHero';
+export { type CollectionShare, CollectionMeter, type CollectionMeterProps } from './components/economy/CollectionMeter';
 export { type Tab, Tabs, type TabsProps } from './components/economy/Tabs';
 export { type TrailKind, TrailStrip, type TrailStripProps } from './components/economy/TrailStrip';
 

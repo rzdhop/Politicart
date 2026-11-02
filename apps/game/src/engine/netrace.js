@@ -23,6 +23,7 @@ import { emit } from './events.js';
 import { playerStyle } from './kartstyle.js';
 import { readInput } from './input.js';
 import { buildHazard, buildProjectileMesh } from './items.js';
+import { poseProjectile } from './itemmeshes.js';
 import { getState, transition } from './machine.js';
 import { applyKart, bracket, decodeVfx, extrapolateKart, lerpKart } from './netstate.js';
 import { onKartJoin, onNet, onPong, onRace, onResults, onSnap, sendInput, sendPing } from './net.js';
@@ -286,8 +287,8 @@ export function netStep(dt) {
     const pa = new Map(a.p.map(p => [p.id, p]));
     syncEntities(projectiles, b.p, buildProjectileMesh, (g, e) => {
       const o = pa.get(e.id) ?? e;
-      g.position.set(o.x + (e.x - o.x) * f, o.y + (e.y - o.y) * f, o.z + (e.z - o.z) * f); g.rotation.y += dt * 9;
-      if (g.userData.blink) g.userData.blink.material.color.setHex(Math.floor(G.time * 10) % 2 ? 0x3a6bff : 0xff3a4a);
+      g.position.set(o.x + (e.x - o.x) * f, o.y + (e.y - o.y) * f, o.z + (e.z - o.z) * f);
+      poseProjectile(g, e.x - o.x, e.z - o.z, dt, G.time);   // toward where it went between the two snapshots (itemmeshes.js)
     });
     G.itemBoxes.forEach((bx, i) => { bx.mesh.visible = b.b[i] === '1'; });
     if (typeof b.cn === 'string' && G.coins) G.coins.forEach((c, i) => { c.active = b.cn[i] === '1'; });   // the coins on the road (coins.js)
