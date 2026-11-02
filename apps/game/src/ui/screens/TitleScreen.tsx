@@ -28,7 +28,7 @@ const ADMIN_LABEL = {
 
 /** The quips under the logo, one every few seconds (Tagline). Invented, like the rest of the satire. */
 export const TAGLINES = [
-  'Trois tours, cinq adversaires, aucune cohabitation.',
+  'Un seul tour, cinq adversaires, aucune cohabitation.',
   'Le premier sur la ligne forme le gouvernement.',
   'Ici, on double par la gauche comme par la droite.',
   'Un dérapage contrôlé, pour une fois.',
@@ -130,7 +130,7 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
         actions={actionsSlot}
         footer={
           <Disclaimer>
-            Parodie : les candidat·es sont des caricatures, à un jeu de mots près, de personnalités politiques bien réelles. Pouvoirs, répliques et scandales sont inventés. Trois tours, cinq adversaires, aucune cohabitation.
+            Parodie : les candidat·es sont des caricatures, à un jeu de mots près, de personnalités politiques bien réelles. Pouvoirs, répliques et scandales sont inventés. Un seul tour, cinq adversaires, aucune cohabitation.
           </Disclaimer>
         }
       />
