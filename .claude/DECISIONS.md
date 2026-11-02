@@ -1382,3 +1382,48 @@ circuit" in the same keydown.
 **Consequence.** The title costs a stage frame per frame, as the roster
 does (on "légers" the low tier). The first visit to the roster is already
 warm. `e2e/mobile.spec.ts` opens `#b-help` to see the touch legend.
+
+## DEC-061 -- One long lap: circuits drawn 1.5x larger
+
+**Context.** The owner chose one long lap of about 2.5 minutes over three
+laps of about 90 s, the circuits extended about 1.5 times. The other half
+of that change (laps = 1, items, physics, the HUD, rewards) is a separate
+piece of work; this one is the circuits.
+
+**Decision.** Every track is drawn at `scale: 4.5` (was 3): 4.7 to 5.5 km a
+lap. The sample count grows with the scale (`track.js samplesOf`,
+`CFG.samples` at `SAMPLES_SCALE` 3: 2,700 samples, still about 2 m apart),
+so every distance counted in samples (feature `len`, ramps, pits, the AI's
+look-ahead, power offsets, cyclist gaps) keeps its metres; what is a
+fraction of the lap (`f`, `boxRows`, `profile`) stretches with it. A pit a
+ramp jumps keeps its 15 (or 12) samples after the ramp. Each circuit has
+13 item rows (the old spacing) and two or three more skeleton features
+(pads, ramps, bumps; still one crossing; no bump on the flat Élysée, whose
+ground would become a grid); cyclist ranges grow about 1.3 times, within
+the 28 riders a snapshot carries. The builders' world-unit layouts, drawn
+around a scale-3 road, move out by `K = DS / 3` (`decor/context.js`; `follow()`
+keeps the butte and the place du Tertre their distance from the road), as do
+the lengths of what runs along the road (the Seine and its quais, the
+Faubourg, the sea sheets); buildings, props and people keep their size, and
+counts set per lap (Wallace fountains, Morris columns, benches, passers-by,
+péniches, joggers) grow by K so their density per metre holds. The interior
+grids of blocks keep their count over the wider loop. The sky dome is 1,650 m
+(`climate.js SKY_RADIUS`), the race camera's far plane 2,700 m, the clouds
+spread 1.5 times wider, the ground plain is 4 km with the terrain out to
+1,200 m (128 cells a side, 31 m on "détaillés"); fog distances are
+unchanged. On "légers" the Paris batches' cells grow with K (750 m), so the
+long lap draws its props in as many meshes. Groups placed in world units by
+the road and merged (the cour pavée, the red carpet) are centred on their
+contents: world-frame float32 vertices 900 m out warped thin faces.
+
+**Consequence.** Scene totals at race start (headless, seed 7, no karts),
+scale 3 -> 4.5: "détaillés" triangles +17 % (Versailles) to +35 % (Bourbon),
+meshes +17 to +23 %; "légers" triangles +23 to +33 %, meshes +9 to +22 %,
+at the same density per metre (what a frame draws stays bounded by the
+cells' culling). The decor tests' triangle baselines take a `LONG_LAP`
+factor of 1.15; their mesh baselines are unchanged. Themed decor written at
+scale 1 (spread by `spreadDecor`) sits 1.5 times further from the road than
+before, so Marseille's quai and Montmartre's ring of houses read sparser
+from the road; a road-relative spread would bring them back. The Grand
+Canal, already past the sky dome, now reaches further past it.
+

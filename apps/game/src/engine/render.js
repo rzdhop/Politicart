@@ -15,7 +15,8 @@ import * as THREE from 'three';
 
 import { $ } from './util.js';
 
-export const camera = new THREE.PerspectiveCamera(65, 1, 0.5, 2000);
+// far: past the sky dome's far side seen from the loop's edge (climate.js SKY_RADIUS, 1,650 m, plus a circuit's ~900 m reach, DEC-061)
+export const camera = new THREE.PerspectiveCamera(65, 1, 0.5, 2700);
 
 let renderer = null;
 
