@@ -91,7 +91,7 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
       className="menu-card-garage"
       icon={<MenuGlyph name="garage" />}
       label="Garage"
-      sub={news ? 'Nouvelles pièces à monter !' : 'Personnalisez votre kart'}
+      sub={news ? 'Pièces à monter !' : 'Votre kart'}
       badge={news ? '+' + news : undefined}
       badgeLabel={news ? news + (news > 1 ? ' nouvelles pièces' : ' nouvelle pièce') : undefined}
       onClick={() => actions.openGarage('title')}

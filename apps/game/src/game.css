@@ -252,6 +252,37 @@ body{--note-h:34px;--note-room:calc(8px + var(--note-h) + 6px + env(safe-area-in
   #s-shop .showcase-stage{min-height:max(170px,28vh);}
   #s-shop .showcase .big{font-size:28px;}
 }
+/* A phone held sideways (the library's short-landscape layout, DEC-073): too short to stack the podium over the
+   shelves, so the two columns stay, the shelves scrolling past the fitting room pinned beside them like the roster's
+   showcase; the header, the hero and the type tighten so a card and the podium both fit the 390px of height. */
+@media (max-height:520px) and (orientation:landscape){
+  #s-shop{padding-block:8px;gap:8px;--select-pin-inset:16px;}
+  #ui:has(>#note:not([hidden])) #s-shop,#s-shop.noted{--select-pin-inset:calc(16px + var(--note-room));}
+  #s-shop .shop-layout{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:12px;}
+  #s-shop .showcase{position:sticky;top:0;}
+  #s-shop .showcase-stage{min-height:120px;}
+  #s-shop .showcase .big{font-size:22px;}
+  #s-shop .showcase .title{font-size:11px;}
+  #s-shop .shop-top{gap:6px 14px;}
+  #s-shop .shop-top h2{font-size:22px!important;}
+  #s-shop .shop-top .coin-count{font-size:18px;}
+  #s-shop .shop-top .collection-meter{flex-basis:180px;}
+  #s-shop .shop-hero{grid-template-columns:80px 1fr;gap:10px;padding:10px 12px;align-items:start;}
+  #s-shop .shop-hero .hero-title{font-size:24px;}
+  #s-shop .shop-hero .hero-tagline{font-size:12px;}
+  #s-shop .shop-hero .hero-perk{font-size:11px;padding:2px 8px;}
+  #s-shop .shop-hero .hero-perk-value{font-size:13px;}
+  #s-shop .shop-hero .hero-actions .btn{min-height:40px;font-size:15px;padding:6px 12px;}
+  #s-shop .shop-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+  #s-shop .shop-card{padding:10px;gap:6px;}
+  #s-shop .shop-card .shop-image{aspect-ratio:16/10;}
+  #s-shop .shop-card .shop-title{font-size:15px;}
+  #s-shop .shop-card .shop-foot .btn{font-size:13px;padding:6px 8px;min-height:40px;}
+  #s-shop .fitting-name{font-size:18px;}
+  #s-shop .fitting-actions .btn{font-size:14px;padding:7px 12px;}
+  #s-shop .panel{padding:10px;}
+  #s-shop .tabs .tab{font-size:14px;}
+}
 #b-shop .coin-count{margin-left:6px;vertical-align:middle;}
 @media (max-width:480px){
   #s-shop .shop-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
@@ -281,7 +312,7 @@ body{--note-h:34px;--note-room:calc(8px + var(--note-h) + 6px + env(safe-area-in
    results' « Personnaliser mon kart », the Politibox's « Équiper
    maintenant » -- and the title's Garage card, whose badge counts the parts
    won or bought since the last visit and pulses while there are some. */
-.btn.garage-cta{display:inline-flex;align-items:center;gap:8px;color:#fff;background:linear-gradient(180deg,#4a72e8,var(--blue));box-shadow:0 5px 0 #0f1f5a,0 0 18px rgba(79,163,255,.35);}
+.btn.garage-cta{display:inline-flex;align-items:center;justify-content:center;gap:8px;color:#fff;background:linear-gradient(180deg,#4a72e8,var(--blue));box-shadow:0 5px 0 #0f1f5a,0 0 18px rgba(79,163,255,.35);}
 .btn.garage-cta:hover{box-shadow:0 6px 0 #0f1f5a,0 0 26px rgba(79,163,255,.55);}
 .btn.garage-cta .garage-cta-icon{width:22px;height:22px;flex-shrink:0;}
 .btn.garage-cta .garage-cta-news{font-family:var(--font-body);font-weight:900;font-size:13px;line-height:1;padding:3px 7px;border-radius:999px;background:var(--gold);color:#0c1230;}
@@ -289,9 +320,25 @@ body{--note-h:34px;--note-room:calc(8px + var(--note-h) + 6px + env(safe-area-in
 .menu-card.menu-card-garage .mc-badge{background:var(--gold);color:#0c1230;}
 @keyframes kr-news{0%,100%{transform:scale(1);}50%{transform:scale(1.18);}}
 @media (prefers-reduced-motion:no-preference){.menu-card.menu-card-garage .mc-badge,.btn.garage-cta .garage-cta-news{animation:kr-news 1.4s ease-in-out infinite;}}
-#s-lootbox .lb-equip{align-self:center;font-size:22px;}
-#s-results .garage-nudge{color:var(--gold);text-align:center;max-width:520px;}
+/* « Équiper maintenant » leads the result's buttons (DEC-072); on an upright phone it takes a line of its own. */
+#s-lootbox .lb-actions{justify-content:center;}
+@media (max-width:600px){#s-lootbox .lb-actions .lb-equip{flex:1 1 100%;}}
+/* A phone held sideways: the result card must fit the 390px of height, the prize's name included. The overlay is
+   fixed and cannot scroll, so the card tightens, its buttons share one line and the history (also in the shop)
+   steps aside; should it still overflow, it overflows at the bottom, never cutting the name off the top. */
+@media (max-height:520px) and (orientation:landscape){
+  #s-lootbox .kr-reveal{align-items:safe flex-end;padding:8px 12px max(52px,env(safe-area-inset-bottom,0px));}
+  #s-lootbox .lb-history{display:none;}
+  #s-lootbox .kr-reveal-card{max-width:min(720px,100%);}
+  #s-lootbox .reveal-card{gap:4px;padding:10px 14px;}
+  #s-lootbox .reveal-card .reveal-glyph{display:none;}
+  #s-lootbox .reveal-card .reveal-name{font-size:22px;}
+  #s-lootbox .lb-actions{flex-wrap:nowrap;gap:8px;}
+  #s-lootbox .lb-actions .btn{font-size:14px;padding:7px 12px;min-height:40px;white-space:nowrap;}
+}
+#s-results .garage-nudge{color:var(--gold);text-align:center;max-width:520px;text-wrap:balance;}
 /* Four destination cards (the Garage joined them, DEC-072): two by two, so every label reads whole. */
 #s-title .menu-cards:has(>:nth-child(4)){grid-auto-flow:row;grid-template-columns:repeat(2,minmax(0,1fr));}
 @media (max-width:560px){#s-shop .shop-hero{align-items:start;}}
-#s-shop .shop-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));}
+@media (min-width:481px){#s-shop .shop-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));}}   /* an upright phone keeps its two by two (above) */
+#s-shop .fitting-actions .btn[disabled]{cursor:not-allowed;background:rgba(246,241,228,.1);color:var(--muted);box-shadow:none;transform:none;}

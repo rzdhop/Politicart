@@ -45,14 +45,17 @@ const pct = (x: number) => fr(Math.round(x * 1000) / 10) + ' %';
 const STAGE_LABEL = 'Votre kart sur le podium : glissez pour le faire pivoter';
 
 /**
- * Try a part on (actions.tryOn) and, where the podium sits above the
- * shelves rather than beside them (a narrow window), bring it into view so
+ * Try a part on (actions.tryOn) and, when the podium is scrolled out of
+ * view (stacked above the shelves on an upright phone), bring it back so
  * the press shows its result.
  */
 function tryIt(category: string, value: string) {
   actions.tryOn(category, value);
-  if (typeof window === 'undefined' || !window.matchMedia?.('(max-width:900px)').matches) return;
-  document.getElementById('shop-showcase')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  // Pinned beside the shelves (a computer, a phone held sideways) the podium is already in view; stacked above them, it is brought back.
+  const stage = typeof document === 'undefined' ? null : document.getElementById('shop-showcase');
+  if (!stage?.getBoundingClientRect) return;
+  const r = stage.getBoundingClientRect();
+  if (r.bottom < 120 || r.top > window.innerHeight * 0.5) stage.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
 }
 
 /** While a call runs every buy button waits; otherwise the card decides (an explicit `disabled: undefined` would undo its lock). */
