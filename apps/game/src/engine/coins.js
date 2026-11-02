@@ -28,7 +28,9 @@ export const COINS_LOST_ON_HIT = 3;
 /** How long a taken coin stays away (s). */
 export const COIN_RESPAWN = 10;
 /** A line of coins every this much of the lap, five coins a line, this many samples apart. */
-export const LINE_EVERY = 0.055, LINE_COINS = 5, LINE_STEP = 6;
+export const LINE_EVERY = 0.04, LINE_COINS = 5, LINE_STEP = 6;
+/** How far (fraction of the lap) a line keeps from a ballot-box row: about 60 m on the long lap (DEC-061). */
+export const ROW_CLEARANCE = 0.012;
 /** How close a kart passes to take a coin (m, squared). */
 const PICK_D2 = 2.4 * 2.4;
 /** A coin's height over the road (m). */
@@ -37,13 +39,13 @@ const COIN_Y = 1.2;
 /**
  * Where the coins of a circuit go: lines of LINE_COINS along the road, one
  * every LINE_EVERY of the lap, each line at a lane drawn from the seed and
- * sometimes weaving across; never within 2.5 % of the lap of a ballot-box row
+ * sometimes weaving across; never within ROW_CLEARANCE of the lap of a ballot-box row
  * `boxRows` (fractions), nor in the first and last 3 % (the grid).
  */
 export function coinSpots(samples, boxRows, seed) {
   const N = samples.length, rng = mulberry32(derive(seed >>> 0, SALT_COINS)), out = [];
   for (let f = 0.03 + LINE_EVERY / 2; f < 0.97; f += LINE_EVERY) {
-    if (boxRows.some(b => Math.abs(b - f) < 0.025)) continue;
+    if (boxRows.some(b => Math.abs(b - f) < ROW_CLEARANCE)) continue;
     const lane = (rng() * 2 - 1) * 0.55, weave = rng() < 0.35 ? (rng() < 0.5 ? -1 : 1) * 0.25 : 0;
     for (let j = 0; j < LINE_COINS; j++) {
       const s = samples[(Math.floor(f * N) + j * LINE_STEP) % N], hw = s.hw ?? 12;

@@ -2,7 +2,33 @@
 
 Current state only. History lives in git.
 
-## Latest task -- closed 2026-10-29: the maps, races, Politibox, multiplayer and loading overhaul
+## Latest task -- 2026-11-02: fun pass (one long lap, rewards, events, boxes, items, title screen, camera)
+
+- **Branch:** `feature/sleepy-edison-ce5m9q`, cut from `main` at `f0161a4`
+  (PR #17), pushed. Owner's answers: race format "1 long lap, circuits
+  ~1.5x", less frustration yes, all rewards, full title redesign.
+- **Done:** DEC-060 (camera yaw held during a spin), DEC-061 (circuits at
+  scale 4.5, 2,700 samples, 13 box rows, sky 1,650 m), DEC-062 (one lap,
+  four named sections), DEC-063 (soft stuns, comeback boost, hit grace,
+  catch-up), DEC-064 (coins on the road, three seeded goals, podium streak,
+  the server pays them), DEC-065 (instanced glass urnes, item tiers and
+  jackpot, turbo3/dossier3/reserve, rear guard), DEC-066 (three seeded live
+  events), DEC-070 (title hero over the live stage, `menu` component group).
+- **Tier 1 on the tip:** typecheck clean; ui 524 + 8 skipped, game 1228,
+  server 185; game build OK. Browser (software GL, dev server): a solo race
+  runs with no console error; urnes, coins, CoinMeter, GoalTracker and the
+  section counter render.
+- **Not run:** the E2E suite (Chromium 1248 wanted, 1243 installed);
+  `mobile.spec.ts` was edited for the help sheet; R-04/R-05/R-07b touch the
+  title. Nothing measured on a real GPU or phone.
+- **Follow-ups:** decor spread by scale reads sparser beside the road on
+  Marseille and Montmartre (a road-relative spread would fix it); relief
+  profiles stretched 1.5x so crests launch less; the Grand Canal reaches
+  ~1.9 km; draw calls per frame not re-measured; solo pickups/goals are
+  client-reported (capped 60 / 3, no anti-cheat); item rolls and the
+  manif's lateral jitter still on `Math.random`.
+
+## Previous task -- closed 2026-10-29: the maps, races, Politibox, multiplayer and loading overhaul
 
 - **Branch:** `claude/racing-game-improvements-2f59ui`, cut from `main` at
   `61ebddb` (PR #16), pushed. Plan in `.claude/PLAN.md` (approved by the
