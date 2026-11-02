@@ -23,6 +23,10 @@ import { updateCyclists } from './cyclists.js';
 import { hintFor, say, setHint } from './events.js';
 import { line } from './lines.js';
 import { pickupItems, stunKart, updateProjectiles } from './items.js';
+import { syncBallotBoxes } from './ballotbox.js';
+import { pickupCoins, syncCoins } from './coins.js';
+import { freshTally, pickGoals } from './goals.js';
+import { startEvents, updateEvents } from './raceevents.js';
 import { buildKart } from './kart.js';
 import { myStyle } from './garage.js';
 import { defaultStyle } from './kartstyle.js';
@@ -38,7 +42,7 @@ import { CFG, G } from './state.js';
 import { buildTrack } from './track.js';
 import { buildTrail } from './trail.js';
 import { initVfx, updateVfx } from './vfx.js';
-import { clamp, lerp, rand } from './util.js';
+import { clamp, lerp, rand, wrapAngle } from './util.js';
 
 // ---------- Kart entities ----------
 function makeKart(def, isAI, style) {
@@ -61,6 +65,7 @@ function makeKart(def, isAI, style) {
     y: 0, vy: 0, air: false, trick: false, rampPrev: null, slip: 0, confused: 0, pitGrace: 0, padGrace: 0, steer: 0, phantom: 0,
     kx: 0, kz: 0, bump: 0, bumpCd: 0, bumpPower: 1, bumpSide: 1, shield: 0, rabot: 0, capped: 0,
     idx: 0, lap: 0, progress: 0, rank: 0, finished: false, finishTime: 0,
+    itemUses: 0, hitGrace: 0, coins: 0, pickups: 0, tally: freshTally(), goalsDone: 0, section: 0, sectionAt: 0,
     team: null, god: false, lane: isAI ? rand(-6, 6) : 0, laneTimer: rand(2, 6), aiSpeedMul: 1, skill: rand(-0.03, 0.03), hazardGrace: 0, lapStart: 0, bestLap: Infinity, maxLap: 0,
   };
 }
@@ -112,8 +117,9 @@ export function startField(slots, { seed = 0 } = {}) {
     k.mesh.position.set(k.pos.x, k.y, k.pos.z); k.mesh.rotation.y = k.heading; scene.add(k.mesh);
   });
   G.time = 0; G.countdown = 3.6; G.resultsAt = Infinity; G.wrongTimer = 0; G.laps = CFG.laps;
-  const s = G.samples[0]; camera.position.set(s.x - s.tx * 14, s.y + 7, s.z - s.tz * 14); camera.fov = 65;
-  setHint('Ramassez une urne dorée pour obtenir un objet.');
+  G.goals = pickGoals(G.seed); startEvents(G.seed);   // the run's three goals and its three live events, from the race seed (DEC-064, DEC-066)
+  const s = G.samples[0]; camera.position.set(s.x - s.tx * 14, s.y + 7, s.z - s.tz * 14); camera.fov = 65; CAM.yaw = Math.atan2(s.tx, s.tz);
+  setHint('Ramassez une urne pour obtenir un objet.');
   // The god's hint only: a banner here would reach the god twice in a team race, once from this client and once from the server's copy of the engine.
   if (G.player.god) hintFor(G.player, 'Mode dieu : pouvoir sans recharge, objets à volonté, intouchable. Vous ne marquez pas de points.');
   transition('countdown');
@@ -147,8 +153,29 @@ export function disposeScene(scene) {
 }
 
 // ---------- Camera & sun ----------
+/**
+ * The chase camera's own yaw, apart from the kart's heading. A stunned kart
+ * spins at 11 rad/s (physics.js); a camera placed straight off its heading
+ * swung round the kart with it, its position lerped across the circle (so it
+ * cut through the kart) while its aim whipped round: the kart turned and the
+ * view lurched. The camera now follows CAM.yaw, eased the short way round
+ * towards the heading, and held while the kart spins, so a hit spins the kart
+ * on screen and never the view; when the spin ends (the kart faces the road
+ * again) the view swings back in a fraction of a second.
+ */
+export const CAM = { yaw: 0 };
+/** How fast CAM.yaw catches the heading while driving (1/s): quick enough to read as locked behind the kart, smooth through a snap (a wall, a teleport, the end of a spin). */
+export const CAM_YAW_RATE = 12;
+
+/** Ease CAM.yaw towards kart k's heading over dt, the short way round; held still while k is stunned. */
+export function followYaw(k, dt) {
+  if (k.stun > 0) return CAM.yaw;
+  CAM.yaw = wrapAngle(CAM.yaw + wrapAngle(k.heading - CAM.yaw) * (1 - Math.exp(-dt * CAM_YAW_RATE)));
+  return CAM.yaw;
+}
+
 function updateCamera(dt) {
-  const k = G.player; const fx = Math.sin(k.heading), fz = Math.cos(k.heading);
+  const k = G.player; const yaw = followYaw(k, dt); const fx = Math.sin(yaw), fz = Math.cos(yaw);
   // A screen held upright sees a narrow slice of the road: widen the lens and
   // pull back and up as the aspect drops below 1, so a phone in portrait
   // still shows the road ahead and the karts beside it.
@@ -198,6 +225,7 @@ export function stepRace(dt) {
 export function viewStep(dt) {
   updateVfx(dt);   // before the camera, which reads the shake and the dip it leaves in G.fxHud
   updateCamera(dt);
+  syncBallotBoxes(dt); syncCoins(dt);
   updateWrongWay();
   const payload = framePayload(G, CFG);
   drawMinimap(payload.kartPositions);
@@ -229,7 +257,7 @@ export function simStep(dt) {
   } else G.time += dt;
 
   for (const k of G.karts) updateKart(k, dt);
-  kartCollisions(); pickupItems(); updateProjectiles(dt); updateRanks();
+  kartCollisions(); pickupItems(); pickupCoins(dt); updateProjectiles(dt); updateRanks(); updateEvents(dt);
   for (const f of [...G.animated]) f(dt);
   for (const c of G.crossings) { c.t += dt; placeCrossing(c);
     for (const k of G.karts) { if (k.hazardGrace > 0 || k.fly > 0 || k.y - c.s.y > 1.2) continue; const d = (k.pos.x - c.mesh.position.x) ** 2 + (k.pos.z - c.mesh.position.z) ** 2; if (d < 10) { k.hazardGrace = 1.5; k.speed *= 0.3; if (stunKart(k, 1.3)) say(k, line('hazard.cortege.hit')); } } }

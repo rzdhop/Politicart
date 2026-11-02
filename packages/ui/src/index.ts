@@ -111,7 +111,19 @@ export {
   ItemSlot,
   type ItemSlotHandle,
   type ItemSlotProps,
+  type ItemTier,
 } from './components/hud/ItemSlot';
+export {
+  CoinMeter,
+  type CoinMeterHandle,
+  type CoinMeterProps,
+} from './components/hud/CoinMeter';
+export {
+  GoalTracker,
+  type Goal,
+  type GoalTrackerHandle,
+  type GoalTrackerProps,
+} from './components/hud/GoalTracker';
 export { LapCounter, type LapCounterProps } from './components/hud/LapCounter';
 export {
   FAIR_MS,
@@ -169,6 +181,11 @@ export {
   type GainBreakdownProps,
   type GainLine,
 } from './components/results/GainBreakdown';
+export {
+  RunSummary,
+  type RunGoal,
+  type RunSummaryProps,
+} from './components/results/RunSummary';
 export { Podium, type PodiumEntry, type PodiumProps } from './components/results/Podium';
 export {
   ResultsTable,
@@ -201,6 +218,21 @@ export { TextInput, type TextInputProps } from './components/workshop/TextInput'
 
 // Misc.
 export { NoteBanner, type NoteBannerProps } from './components/misc/NoteBanner';
+
+// Menu: the title screen's hero composition over the 3D stage (DEC-070).
+export { HeroButton, type HeroButtonProps } from './components/menu/HeroButton';
+export { MenuCard, type MenuCardProps, type MenuCardTone } from './components/menu/MenuCard';
+export {
+  MENU_GLYPHS,
+  MenuGlyph,
+  type MenuGlyphName,
+  type MenuGlyphProps,
+} from './components/menu/MenuGlyph';
+export { SettingsChip, type SettingsChipProps } from './components/menu/SettingsChip';
+export { Sheet, type SheetProps } from './components/menu/Sheet';
+export { Tagline, type TaglineProps } from './components/menu/Tagline';
+export { TitleLayout, type TitleLayoutProps } from './components/menu/TitleLayout';
+export { TitleLogo, type TitleLogoProps } from './components/menu/TitleLogo';
 
 // Economy: grades, politicoins, the shop and the Politibox reveal. The grade
 // motion is fx.css, keyed on the `grade-<g>` classes these set.

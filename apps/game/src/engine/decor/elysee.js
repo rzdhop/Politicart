@@ -20,8 +20,8 @@ import { cyl, mat, tag, textPlane } from '../primitives.js';
 import { G, disposable } from '../state.js';
 import { surface } from '../textures.js';
 import { pick, rand } from '../util.js';
-import { DS, nOf, still } from './context.js';
-import { Merger, batch, blockClear, compact, fleuriste, groundY, haussmann, high, horseman, lineWithBlocks, litWindows, mansardGeo, paris, signMat, slab, stanchionProp, uvBox } from './elysee-props.js';
+import { DS, K, nOf, still } from './context.js';
+import { Merger, batch, blockClear, centred, compact, fleuriste, groundY, haussmann, high, horseman, lineWithBlocks, litWindows, mansardGeo, paris, signMat, slab, stanchionProp, uvBox } from './elysee-props.js';
 import { SKINS, busStop, cafe, figure, fountain, gate, hedgeWall, kiosk, metroEntrance } from './street.js';
 
 /** The surface kinds (textures.js) this decor bakes, beyond the road's and the ground's: the pre-build bakes them ahead, a slice at a time. */
@@ -119,13 +119,14 @@ export function* buildElysee(scene, world) {
   yield;
 
   // ---- the rue du Faubourg Saint-Honoré: street, pavements, luxury shops facing the gate, ordinary blocks along the palace ----
-  const fb = new THREE.Group(); fb.name = 'elysee:faubourg';
+  // The palace's quarter stays in the middle of the loop at any scale; the street runs on across the loop's wider inside (K, DEC-061).
+  const fb = new THREE.Group(), FL = 780 * K; fb.name = 'elysee:faubourg';
   const am = new THREE.MeshStandardMaterial({ map: surface('asphalt').map, roughness: 1 });
-  const st = flat(fb, 780, 16, 0, -6, am, 0.03); const su = st.geometry.attributes.uv; for (let i = 0; i < su.count; i++) su.setXY(i, su.getX(i) * 780 / 20, su.getY(i));
+  const st = flat(fb, FL, 16, 0, -6, am, 0.03); const su = st.geometry.attributes.uv; for (let i = 0; i < su.count; i++) su.setXY(i, su.getX(i) * FL / 20, su.getY(i));
   const FM = new Merger().at(0, 0, 0);
-  FM.box(780, 0.16, 5.5, 0x9a9a92, 0, 0.08, -16.75); FM.box(780, 0.16, 5.5, 0x9a9a92, 0, 0.08, 4.75);
-  for (let x = -380; x < 380; x += 9) FM.box(3, 0.02, 0.18, 0xf6f1e4, x, 0.045, -6);                                              // the centre line
-  fp.add({ x: 0, z: -6, w: 800, d: 34, rotY: 0 });
+  FM.box(FL, 0.16, 5.5, 0x9a9a92, 0, 0.08, -16.75); FM.box(FL, 0.16, 5.5, 0x9a9a92, 0, 0.08, 4.75);
+  for (let x = -FL / 2 + 10; x < FL / 2 - 10; x += 9) FM.box(3, 0.02, 0.18, 0xf6f1e4, x, 0.045, -6);                              // the centre line
+  fp.add({ x: 0, z: -6, w: FL + 20, d: 34, rotY: 0 });
   let shop = 0;
   for (let x = -342; x < 342; x += 38) {
     if (Math.abs(x + 19) < 40) continue;   // Place Beauvau, opposite the gate
@@ -138,8 +139,8 @@ export function* buildElysee(scene, world) {
   world.add(still(FM.into(fb)));
   yield;
   // its street life: lamps, bollards, Wallace fountains, Morris columns, the Métro, a bus stop, cafés, a kiosk, flower kiosks, the press at the gate
-  for (let x = -370; x <= 370; x += high() ? 26 : 52) { lamps.add(x, -18.6); lamps.add(x + 13, 6.6, { rotY: Math.PI }); }
-  for (let x = -376; x <= 376; x += high() ? 4 : 8) if (Math.abs(x) > 14) { bollards.add(x, -14.3); bollards.add(x, 2.3); }
+  for (let x = -FL / 2 + 20; x <= FL / 2 - 20; x += high() ? 26 : 52) { lamps.add(x, -18.6); lamps.add(x + 13, 6.6, { rotY: Math.PI }); }
+  for (let x = -FL / 2 + 14; x <= FL / 2 - 14; x += high() ? 4 : 8) if (Math.abs(x) > 14) { bollards.add(x, -14.3); bollards.add(x, 2.3); }
   [[-150, -18], [210, -18], [-260, 6]].forEach(([x, z]) => wallaces.add(x, z, { y: 0 }));
   [[-96, -18.3], [170, -18.3], [130, 6.3], [-300, 6.3]].forEach(([x, z]) => morris.add(x, z, { y: 0 }));
   metroEntrance(scene, s1(-230), s1(-17.5), 0); busStop(scene, s1(60), s1(-17.4), Math.PI); kiosk(scene, s1(-60), s1(5.5), 0x2e8b57, 'PRESSE', Math.PI);
@@ -154,8 +155,8 @@ export function* buildElysee(scene, world) {
   const van = new THREE.Group(); van.add(slab(6, 2.6, 2.4, 0xf6f1e4, 0, 1.7, 0)); van.add(slab(1.6, 1.6, 2.3, 0xf6f1e4, 3.6, 1.2, 0)); van.add(cyl(1.0, 0.3, 0.4, 0xdddddd, -1, 3.4, 0, 10)); van.add(slab(6.02, 0.5, 2.42, 0xc8102e, 0, 1.2, 0)); van.position.set(34, 0, -1.5); press.add(van);
   world.add(press); compact(press);
   yield;
-  for (let i = 0; i < nOf(40); i++) walker(rand(-360, 360), pick([rand(-19, -15), rand(2.5, 7)]), 0.16);
-  for (let i = 0; i < nOf(8); i++) pigeons(rand(-300, 300), pick([rand(-18, -15.5), rand(3, 6.5)]), 0.16);
+  for (let i = 0; i < nOf(Math.round(40 * K)); i++) walker(rand(-360, 360) * K, pick([rand(-19, -15), rand(2.5, 7)]), 0.16);
+  for (let i = 0; i < nOf(Math.round(8 * K)); i++) pigeons(rand(-300, 300) * K, pick([rand(-18, -15.5), rand(3, 6.5)]), 0.16);
   yield;
 
   // ---- Place Beauvau, opposite the gate: the square, the ministry behind its gate, police vans and panels ----
@@ -173,7 +174,7 @@ export function* buildElysee(scene, world) {
   yield;
   const grid = [], quads = [0, 1, 2, 3].map(() => new Merger()), AM = new Merger().at(0, 0, 0);
   let tried = 0;
-  for (let gx = -440; gx <= 440; gx += 82) for (let gz = -420; gz <= 420; gz += 74) {
+  for (let gx = -440 * K; gx <= 440 * K; gx += 82 * K) for (let gz = -420 * K; gz <= 420 * K; gz += 74 * K) {   // the same blocks over the loop's wider inside
     const w = 64, d = 56, f = { x: gx, z: gz, w, d, rotY: 0 };
     if (++tried % 12 === 0) yield;
     if (!fp.free(f, 6) || !blockClear(gx, gz, w + 10, d + 10, 0, 14)) continue;
@@ -208,7 +209,7 @@ export function* buildElysee(scene, world) {
       const sg = textPlane(9, 1.2, 'COUR D’HONNEUR', '#1a1a1a', '#d4af37', 70); sg.position.set(mx, y + 13.4, mz); sg.rotation.y = ry; cour.add(sg); }
     for (let rel = 0; rel < len; rel += 10) for (const sg of [1, -1]) { const p = spot(i0 + rel, sg, 2.6); const gd = figure(0x1f2a5e, pick(SKINS), 'guard'); gd.position.set(p.x, p.y, p.z); gd.rotation.y = p.face; cour.add(gd); }
     for (let rel = -2; rel <= len + 2; rel += 2) for (const sg of [1, -1]) { const p = spot(i0 + rel, sg, 6.4); bollards.add(p.x, p.z, { y: p.y }); }
-    world.add(cour); compact(cour);
+    world.add(centred(cour)); compact(cour);
   }
   yield;
 
@@ -224,7 +225,7 @@ export function* buildElysee(scene, world) {
       const u = spot(pad.i0 + 9, sg, 2.6), us = figure(0x111111, pick(SKINS), null); us.position.set(u.x, u.y, u.z); us.rotation.y = u.face; tapis.add(us);
       for (let n = 0; n < 4; n++) { const p = spot(pad.i0 - 3 + n * 3, sg, 3.6 + rand(0, 1.2)); photographer(p.x, p.z, p.face + rand(-0.4, 0.4), p.y); }
     }
-    world.add(tapis); compact(tapis);
+    world.add(centred(tapis)); compact(tapis);
   }
   yield;
 
@@ -237,13 +238,13 @@ export function* buildElysee(scene, world) {
     const s = cr.s, side = new THREE.Group(); side.name = 'elysee:presse-carrefour';
     for (const sg of [1, -1]) for (let n = 0; n < 4; n++) { const lat = sg * (s.hw + 3 + rand(0, 2)), along = rand(-12, -6) * (n % 2 ? 1 : -1); photographer(s.x + s.sx * lat + s.tx * along, s.z + s.sz * lat + s.tz * along, Math.atan2(-s.sx * sg, -s.sz * sg) + rand(-0.3, 0.3), s.y + 0.35); }
     for (let i = 0; i < 10; i++) { const sg = i % 2 ? 1 : -1, lat = sg * (hw + 2.5 + rand(0, 2)), al = rand(-3, 3); walker(s.x + s.sx * lat + s.tx * al, s.z + s.sz * lat + s.tz * al, s.y + 0.35, { rotY: Math.atan2(-s.sx * sg, -s.sz * sg), amp: 0.08 }); }   // pedestrians waiting to cross
-    world.add(side); compact(side);
+    world.add(centred(side)); compact(side);
   }
   // ---- a one-way narrow street where the layout pinches the road: the signs, bollards along the pinched kerb ----
   for (const f of (G.layout?.features || []).filter(x => x.t === 'narrow')) {
     const i0 = Math.floor(f.f * N), sens = new THREE.Group(); sens.name = 'elysee:sens-unique';
     for (const at of [i0, i0 + (f.len || 6)]) for (const sg of [1, -1]) { const p = spot(at, sg, 3), y = p.y; sens.add(cyl(0.05, 0.05, 2.8, 0x555555, p.x, y + 1.4, p.z, 5)); const sg2 = textPlane(1.8, 0.6, 'SENS UNIQUE', '#1f3a93', '#fff', 80); sg2.position.set(p.x, y + 2.9, p.z); sg2.rotation.y = p.face; sens.add(sg2); }
-    world.add(sens); compact(sens);
+    world.add(centred(sens)); compact(sens);
     for (let rel = 0; rel < (f.len || 6); rel += 2) for (const sg of [1, -1]) { const p = spot(i0 + rel, sg, 6.4); bollards.add(p.x, p.z, { y: p.y }); }
   }
   P.finish();

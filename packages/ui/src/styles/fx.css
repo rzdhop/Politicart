@@ -275,6 +275,34 @@
 
 .item.used { animation:kr-used .45s ease-out both; }
 
+/* A rare or mythic item lands: the slot bursts and settles (the jackpot). */
+@keyframes kr-jackpot {
+  0% { transform:scale(1); filter:brightness(1); }
+  25% { transform:scale(1.22) rotate(-4deg); filter:brightness(1.8); }
+  55% { transform:scale(.95) rotate(2deg); }
+  100% { transform:scale(1); filter:brightness(1); }
+}
+
+.item.jackpot { animation:kr-jackpot .6s cubic-bezier(.2,.9,.3,1.2) both; }
+
+/* A coin picked: the meter pops. */
+@keyframes kr-coin-gain {
+  0% { transform:scale(1); }
+  40% { transform:scale(1.14); }
+  100% { transform:scale(1); }
+}
+
+.coin-meter.gain { animation:kr-coin-gain .25s ease-out both; }
+
+/* A goal reached: its row flashes gold once. */
+@keyframes kr-goal-just {
+  0% { background:rgba(242,193,78,0); transform:translateX(0); }
+  30% { background:rgba(242,193,78,.35); transform:translateX(4px); }
+  100% { background:rgba(242,193,78,0); transform:translateX(0); }
+}
+
+.goal-tracker .goal.just { animation:kr-goal-just .8s ease-out both; border-radius:4px; }
+
 .power.ready { animation:kr-ready 1.6s ease-in-out infinite; }
 
 .power.ready.charged { animation:kr-charged .35s cubic-bezier(.2,.9,.3,1.2),kr-ready 1.6s ease-in-out .35s infinite; }
@@ -378,6 +406,9 @@
   .pos.loss,
   .item.rolling .ico,
   .item.used,
+  .item.jackpot,
+  .coin-meter.gain,
+  .goal-tracker .goal.just,
   .power.ready,
   .power.ready.charged,
   .toast.on,
@@ -398,4 +429,114 @@
   .drop-chip:nth-child(-n+3) { transform:none; opacity:1; }
   .kr-sink { transform:none; opacity:0; }
   .kr-tease { opacity:.3; }
+}
+
+/* The title screen (menu.css, DEC-070) ------------------------------------- */
+
+/* The logo arrives: the rule wipes open, the name slams down and settles,
+   then a light sweeps its letters every few seconds. */
+@keyframes kr-wipe {
+  from { transform:scaleX(0); }
+  to { transform:scaleX(1); }
+}
+
+@keyframes kr-slam {
+  0% { transform:translateY(-70px) scale(1.35); opacity:0; }
+  45% { transform:translateY(6px) scale(1.06,.9); opacity:1; }
+  65% { transform:translateY(-4px) scale(.98,1.04); }
+  82% { transform:translateY(1px) scale(1.01,.99); }
+  100% { transform:none; opacity:1; }
+}
+
+@keyframes kr-sheen {
+  0%,62% { background-position:100% 0,0 0; }
+  100% { background-position:0% 0,0 0; }
+}
+
+/* A new quip drops in with a tilt. */
+@keyframes kr-tag-in {
+  from { transform:translateY(10px) rotate(-2deg); opacity:0; }
+  to { transform:none; opacity:1; }
+}
+
+/* The call to action breathes and catches the light. */
+@keyframes kr-hero-glow {
+  0%,100% { opacity:.4; transform:scale(.97); }
+  50% { opacity:.95; transform:scale(1.05); }
+}
+
+@keyframes kr-hero-shine {
+  0%,58% { background-position:100% 0; }
+  100% { background-position:0% 0; }
+}
+
+@keyframes kr-fade-in {
+  from { opacity:0; }
+  to { opacity:1; }
+}
+
+/* A glyph's wiggle when its card is hovered or focused. */
+@keyframes kr-wiggle {
+  0%,100% { transform:rotate(0); }
+  25% { transform:rotate(-12deg) scale(1.1); }
+  60% { transform:rotate(9deg) scale(1.1); }
+}
+
+/* The friend-request bubble's beat. */
+@keyframes kr-beat {
+  0%,70%,100% { transform:scale(1); }
+  80% { transform:scale(1.22); }
+  90% { transform:scale(.95); }
+}
+
+@keyframes kr-sheet-up {
+  from { transform:translateY(40px); opacity:0; }
+  to { transform:none; opacity:1; }
+}
+
+.title-logo .tricolore { animation:kr-wipe .6s cubic-bezier(.2,.8,.2,1) backwards; }
+.title-logo-name { animation:kr-slam .85s cubic-bezier(.25,.9,.3,1) .12s backwards,kr-sheen 6s ease-in-out 1.6s infinite; }
+.title-logo-sub { animation:kr-rise .5s cubic-bezier(.2,.8,.2,1) .6s backwards; }
+.tagline-line { animation:kr-tag-in .45s cubic-bezier(.2,.9,.3,1.25) backwards; }
+.tl-corner,
+.tl-caption,
+.tl-footer { animation:kr-fade-in .6s ease-out .5s backwards; }
+.tl-actions .hero-btn { animation:kr-pop .55s cubic-bezier(.2,.9,.3,1.2) .5s backwards; }
+.hero-btn::before { animation:kr-hero-glow 2.4s ease-in-out infinite; }
+.hero-btn::after { animation:kr-hero-shine 4.5s ease-in-out 1.4s infinite; }
+.menu-cards > * { animation:kr-rise .5s cubic-bezier(.2,.8,.2,1) .7s backwards; }
+.menu-cards > :nth-child(2) { animation-delay:.78s; }
+.menu-cards > :nth-child(3) { animation-delay:.86s; }
+.menu-cards > :nth-child(4) { animation-delay:.94s; }
+.menu-card:hover .mc-icon svg,
+.menu-card:focus-visible .mc-icon svg { animation:kr-wiggle .5s ease-in-out; }
+.mc-badge { animation:kr-beat 2.2s ease-in-out infinite; }
+.sheet-backdrop { animation:kr-fade-in .2s ease-out; }
+.sheet { animation:kr-sheet-up .28s cubic-bezier(.2,.8,.2,1); }
+
+@media (prefers-reduced-motion:reduce) {
+  .title-logo .tricolore,
+  .title-logo-name,
+  .title-logo-sub,
+  .tagline-line,
+  .tl-corner,
+  .tl-caption,
+  .tl-footer,
+  .tl-actions .hero-btn,
+  .hero-btn::before,
+  .hero-btn::after,
+  .menu-cards > *,
+  .menu-card:hover .mc-icon svg,
+  .menu-card:focus-visible .mc-icon svg,
+  .mc-badge,
+  .sheet-backdrop,
+  .sheet {
+    animation:none;
+  }
+  .hero-btn,
+  .menu-card,
+  .settings-chip { transition:none; }
+  .hero-btn:hover,
+  .menu-card:hover,
+  .menu-card:focus-visible { transform:none; }
 }

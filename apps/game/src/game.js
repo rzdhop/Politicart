@@ -27,7 +27,7 @@ import { setInputSource } from './engine/input.js';
 import { getState, onTransition } from './engine/machine.js';
 import { renderLootbox } from './engine/boxgate.js';
 import { isNetRace, netStep } from './engine/netrace.js';
-import { launching, renderPreview, showsTurntable, stageInfo, stageStill, warmStage } from './engine/stagegate.js';
+import { drawsStage, launching, renderPreview, stageInfo, stageStill, warmStage } from './engine/stagegate.js';
 import { prebuildFrame, prebuildStatus, primeCountdown } from './engine/prebuild.js';
 import { BUDGET_MS as THUMB_BUDGET_MS, setStillProbe, thumbsFrame, thumbStatus } from './engine/thumbs.js';
 import { endRace, renderRace, stepRace } from './engine/race.js';
@@ -59,14 +59,22 @@ function updateHUD(p) {
   const h = hud;
   if (!h.pos || !h.lap || !h.time || !h.item || !h.power || !h.speed || !h.drift || !h.center || !h.wrong) return;
   h.pos.setPosition(p.rank + 1);
-  h.lap.setText(p.finished ? 'ARRIVÉE' : 'TOUR ' + Math.min(p.lap + 1, p.laps) + '/' + p.laps);
+  h.lap.setText(lapText(p));
   h.time.setText(fmtTime(p.finished ? p.finishTime : p.time) + (p.bestLap < Infinity ? '  ·  meilleur tour ' + fmtTime(p.bestLap) : ''));
   h.speed.setValue(p.speed * 3.2);
   h.drift.setValue(clamp(p.driftCharge / 2, 0, 1)); h.drift.setColor(p.driftCharge > 2 ? '#ff7a1a' : p.driftCharge > 1 ? '#ffd34d' : '#7cc4ff');
   let shown;
-  if (p.itemRolling) { const ids = Object.keys(ITEMS); const it = ITEMS[ids[Math.floor(p.time * 12) % ids.length]]; shown = it.icon + '|…'; }
-  else if (p.item) shown = ITEMS[p.item].icon + '|' + ITEMS[p.item].name; else shown = '·|aucun objet';
-  if (shown !== lastItemShown) { lastItemShown = shown; const [ico, nm] = shown.split('|'); h.item.setItem({ icon: ico, label: nm, filled: !!p.item }); }
+  if (p.itemRolling) { const ids = Object.keys(ITEMS); const it = ITEMS[ids[Math.floor(p.time * 16) % ids.length]]; shown = it.icon + '|…'; }
+  else if (p.item) shown = ITEMS[p.item].icon + '|' + ITEMS[p.item].name + '|' + (p.itemTier || 'common') + '|' + (p.itemUses || 1); else shown = '·|aucun objet';
+  if (shown !== lastItemShown) {
+    const landed = lastItemShown.endsWith('|…') && !!p.item;   // the roll just stopped on this item
+    lastItemShown = shown; const [ico, nm, tier, uses] = shown.split('|');
+    h.item.setItem({ icon: ico, label: nm, filled: !!p.item, tier: p.item ? tier : null, count: Number(uses) || 1 });
+    if (landed && tier !== 'common') h.item.flashJackpot?.();   // a rare or mythic item: the jackpot (DEC-065)
+  }
+  // the run's rewards (DEC-064): the coins carried and the goals
+  h.coins?.setCoins(p.coins ?? 0, 10);
+  if (p.goals) h.goals?.setGoals(p.goals);
   h.power.setCharge(1 - p.powerCd / p.powerCdMax);
   if (p.powerReady !== lastPowerReady || p.god !== lastGod) { lastPowerReady = p.powerReady; lastGod = p.god; h.power.setReady(p.powerReady); h.power.setKeyHint(p.god ? 'F · MODE DIEU' : p.powerReady ? 'F · PRÊT !' : 'F · recharge'); }
   h.power.setName(p.powerName);
@@ -100,7 +108,13 @@ function updateHudMotion(p) {
 // is this writer's frame clock.
 const banners = createBannerQueue();
 function setHint(t) { if (hud.hint) hud.hint.setText(t); }
-const HINT = 'Ramassez une urne dorée pour obtenir un objet.';
+const HINT = 'Ramassez une urne pour obtenir un objet.';
+/** The lap counter: a one-lap race (DEC-061) counts its themed sections, a longer one (the admin's) its laps. */
+function lapText(p) {
+  if (p.finished) return 'ARRIVÉE';
+  if (p.laps === 1 && p.section) return 'TOUR UNIQUE · SECTEUR ' + (p.section.i + 1) + '/' + p.section.n;
+  return 'TOUR ' + Math.min(p.lap + 1, p.laps) + '/' + p.laps;
+}
 function toast(t) { banners.push(t); }
 function tickToast(dt) { const r = banners.tick(dt); if (!r || !hud.toast) return; if (r.show) hud.toast.show(r.show); else if (r.hide) hud.toast.hide(); }
 
@@ -126,12 +140,14 @@ window.addEventListener('keydown', e => {
   const onTile = !!focused?.matches('#roster .tile');   // the tiles only: the roster's footer holds Retour and Garage
   const screenEnter = e.code === 'Enter' && (!focused || onTile);
   if (screenEnter && onTile) e.preventDefault();
-  if (screenEnter && G.state === 'title') $('b-play').click();
-  if (screenEnter && G.state === 'results') $('b-again').click();
+  // one press, one screen: the state the key found, so "Jouer" does not also press "Choisir le circuit" on the roster it opened
+  const at = G.state;
+  if (screenEnter && at === 'title') $('b-play').click();
+  if (screenEnter && at === 'results') $('b-again').click();
   // The roster: ← → the next candidate, ↑ ↓ the one a row (four tiles) away, wrapping; Enter does what "Choisir le circuit →" does.
   const roster = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -4, ArrowDown: 4 }[e.code];
   if (G.state === 'select' && roster) actions.stepChar(roster);
-  if (G.state === 'select' && screenEnter) $('b-next1').click();
+  if (at === 'select' && screenEnter) $('b-next1').click();
   // The Politibox: the space bar hurries the opening, like a tap on the stage.
   if (G.state === 'lootbox' && e.code === 'Space') actions.skipOpening();
 });
@@ -192,7 +208,9 @@ let lastFrame = performance.now();
  * stage takes a frame's share of its warm-up behind the title each frame
  * (preview.js warmStage: build it and compile its programs a few at a time,
  * draw it once, then the portraits and the Garage's parts; a no-op once warm
- * for the detail level), so "Jouer" opens the stage without a hitch.
+ * for the detail level), so "Jouer" opens the stage without a hitch. Now
+ * that the title draws the stage as its backdrop (DEC-070), that drawing is
+ * most of the warm-up, and the idle title's share goes to the portraits.
  */
 let titleIdle = 0;
 const WARM_AFTER = 0.8;
@@ -208,9 +226,12 @@ function frame(now) {
   if (state === 'title') { titleIdle += dt; if (titleIdle > WARM_AFTER) setTimeout(warmStage, 0); }
   else titleIdle = 0;
   // The Politibox owns the canvas while it opens (DEC-037). The roster and the Garage show the
-  // turntable; every other menu sits on the plain night background, the canvas cleared to it,
-  // but for the circuits' first 1.4 s after "Choisir le circuit →": the stage draws the kart
-  // driving off behind the cards, then clears to that background itself (preview.js launch, Q3).
+  // turntable, and the title shows the same stage as its backdrop, the player's candidate turning
+  // on the podium behind the menu (DEC-070; the stage chunk is fetched on the title's first frame
+  // and the plain background shows until it has compiled). Every other menu sits on the plain night
+  // background, the canvas cleared to it, but for the circuits' first 1.4 s after "Choisir le
+  // circuit →": the stage draws the kart driving off behind the cards, then clears to that
+  // background itself (preview.js launch, Q3).
   if (state === 'lootbox') { renderLootbox(dt); return; }
   // The chosen circuit is built ahead, a slice per frame, while the player sits on the circuits, in the lobby or on the
   // results (engine/prebuild.js, DEC-055); the stage's launch keeps its frames to itself. Drawn over or cleared below.
@@ -220,8 +241,8 @@ function frame(now) {
     // the circuits' thumbnails get what the pre-build left of the frame's share, at most their own budget (engine/thumbs.js)
     if (state === 'tracks' && !launch) { const left = Math.min(THUMB_BUDGET_MS, FRAME_SHARE_MS - (performance.now() - t0)); thumbsFrame({ renderer: getRenderer(), budget: left >= 1.5 ? left : 0 }); }
   }
-  if (showsTurntable(state) || (state === 'tracks' && launching())) { renderPreview(dt); return; }
-  if (state === 'tracks' || state === 'title' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'dashboard' || state === 'shop') { clearCanvas(); return; }
+  if (drawsStage(state) || (state === 'tracks' && launching())) { renderPreview(dt); return; }
+  if (state === 'tracks' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'dashboard' || state === 'shop') { clearCanvas(); return; }
   if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
 
   const payload = isNetRace() ? netStep(dt) : stepRace(dt);

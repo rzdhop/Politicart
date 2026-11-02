@@ -44,10 +44,10 @@ export const me = (token, { fetchImpl = globalThis.fetch, base = '' } = {}) =>
  * `time` and `bestLap` (seconds) feed the account's stats.
  *
  * @param {string} token
- * @param {{ rank: number, field: number, finished: boolean, trackId?: string | null, charId?: string | null, time?: number | null, bestLap?: number | null }} race
+ * @param {{ rank: number, field: number, finished: boolean, trackId?: string | null, charId?: string | null, time?: number | null, bestLap?: number | null, pickups?: number, goals?: number }} race
  */
-export const reportRace = (token, { rank, field, finished, trackId = null, charId = null, time = null, bestLap = null }, { fetchImpl = globalThis.fetch, base = '' } = {}) =>
-  call(fetchImpl, base, 'POST', '/api/progress', { token, body: { rank, field, finished, trackId, charId, time, bestLap } });
+export const reportRace = (token, { rank, field, finished, trackId = null, charId = null, time = null, bestLap = null, pickups = 0, goals = 0 }, { fetchImpl = globalThis.fetch, base = '' } = {}) =>
+  call(fetchImpl, base, 'POST', '/api/progress', { token, body: { rank, field, finished, trackId, charId, time, bestLap, pickups, goals } });   // pickups and goals: the run's own (DEC-064)
 
 // ---------- The politicoins economy (DEC-032..035) ----------
 // Every call is the account's own. The server prices and rolls everything;

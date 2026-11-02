@@ -21,7 +21,7 @@ import { box, plane } from '../primitives.js';
 import { G, disposable, getPoly, isClear } from '../state.js';
 import { TEX, surface } from '../textures.js';
 import { pick, rand } from '../util.js';
-import { DS, clearAt, nOf, still } from './context.js';
+import { DS, K, clearAt, nOf, still } from './context.js';
 import { chateauIf, corniche, cornicheSea, frioul, sea, seaMaterial, waterSheet } from './marseille-corniche.js';
 import { boules, landmark, major, mooredBoat, mooringPost, mucem, ombriere, sardineStall } from './marseille-port.js';
 import { bonneMere, building, cafe, circling, crane, crowd, ferrisWheel, ferry, flock, fort, house, tram, treeAt } from './street.js';
@@ -45,15 +45,16 @@ export function* buildMarseille(scene, world) {
   const quays = new THREE.Group(); quays.add(box(520, 1.6, 2, 0xbfb398, -50, 0.8, -194)); quays.add(box(520, 1.6, 2, 0xbfb398, -50, 0.8, -230)); quays.add(box(2, 1.6, 36, 0xbfb398, 211, 0.8, -212));
   scene.add(landmark(quays, 'marseille:quays'));
   for (let px = -200; px <= 160; px += 60) scene.add(still(box(2, 0.5, 30, 0xbfb398, px, 0.2, -210)));
-  // the mouth's landmarks stay within the sky dome's 1,100 m (climate.js): Fort Saint-Jean on the north side of the mouth, its walls west and north
-  fort(world, -860, -545, Math.PI); crane(world, 225 * S, -175 * S, -0.6); crane(world, 232 * S, -140 * S, 0.4); crane(world, 60 * S, -238 * S, 2.6);
+  // the mouth's landmarks, in world units drawn for a scale-3 circuit and moved out by K with the road (context.js), stay within the
+  // sky dome (climate.js SKY_RADIUS): Fort Saint-Jean on the north side of the mouth, its walls west and north
+  fort(world, -860 * K, -545 * K, Math.PI); crane(world, 225 * S, -175 * S, -0.6); crane(world, 232 * S, -140 * S, 0.4); crane(world, 60 * S, -238 * S, 2.6);
   bonneMere(world, 40 * S, -268 * S);
   for (let x = -290; x <= 190; x += 34) building(scene, x, -252, 28, 16, rand(12, 18), 0, pick(OCHRES), pick([0xa0523d, 0xb0623f]));
   for (let x = -280; x <= 190; x += hi ? 15 : 30) treeAt(scene, x + rand(-2, 2), -236, 'palm');
   yield;
   // out on the water and on the mouth's quays, in world units: the sea, the islands, the MuCEM and its footbridge to the fort, La Major
-  sea(world, waterMat); cornicheSea(world, seaMaterial(waterMat, 10, 14)); chateauIf(world, -960, -150); frioul(world, -920, 250);
-  mucem(world, -790, -470, { x: -860, z: -490 }); major(world, -660, -330, 0);
+  sea(world, waterMat); cornicheSea(world, seaMaterial(waterMat, 10, 14)); chateauIf(world, -960 * K, -150 * K); frioul(world, -920 * K, 250 * K);
+  mucem(world, -790 * K, -470 * K, { x: -860 * K, z: -490 * K }); major(world, -660 * K, -330 * K, 0);
   yield;
   // the fleet moored stern-to along the pontoons, rolling; the ferry-boat crossing to the other quay; the big wheel
   const gap = (hi ? 7.5 : 15) / S;

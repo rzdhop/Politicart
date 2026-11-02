@@ -26,7 +26,8 @@
 // time per account is what the game does; only the coins are atomic.
 import { CHARACTERS, TRACKS } from '../../game/src/engine/data.js';
 import {
-  BOX_BUNDLE, BOX_PRICE, canBuyChar, canBuyPart, cleanOwned, coinsForRace, collection, DAILY_COINS, EVERYTHING, GRADES, levelUpCoins, partKey, priceOf, rollBox,
+  BOX_BUNDLE, BOX_PRICE, canBuyChar, canBuyPart, cleanOwned, coinsForRace, collection, DAILY_COINS, EVERYTHING, GOAL_COINS, GOAL_XP, GOALS_PER_RUN, GRADES, levelUpCoins, partKey,
+  PICKUP_CAP, priceOf, rollBox, streakCoins,
 } from '../../game/src/engine/catalog.js';
 import { levelFromXp, STARTERS, unlockedIds, unlockLevel, xpForRace } from '../../game/src/engine/progress.js';
 import { bearer } from './accounts.js';
@@ -39,7 +40,7 @@ const CHAR_IDS = CHARACTERS.map(c => c.id);
 const DROP_KINDS = ['char', 'part', 'trail', 'coins'];
 /** How many of the last Politibox drops an account's stats keep (newest first). */
 export const RECENT_DROPS = 10;
-const COUNTERS = ['races', 'wins', 'podiums', 'finished', 'dnf', 'solo', 'team', 'teamWins', 'boxes', 'coinsEarned', 'coinsSpent'];
+const COUNTERS = ['races', 'wins', 'podiums', 'finished', 'dnf', 'solo', 'team', 'teamWins', 'boxes', 'coinsEarned', 'coinsSpent', 'podiumStreak', 'bestStreak', 'goals', 'pickups'];
 
 /** A lap or race time worth keeping: finite seconds in 5..3600, else null. */
 export const seconds = v => (typeof v === 'number' && Number.isFinite(v) && v >= 5 && v <= 3600 ? v : null);
@@ -95,6 +96,20 @@ export function normaliseStats(s) {
   return out;
 }
 
+/**
+ * What a client is told a race paid beyond the experience and the coins'
+ * total: the daily and level-up bonuses, and the run's own lines (DEC-064)
+ * -- the coins picked on the road, the goals and what they paid, the podium
+ * streak and its bonus. `gain` is settleRace's (null for a profile pushed
+ * outside a race).
+ */
+export function bonusOf(gain) {
+  return {
+    daily: !!gain?.daily, levelUp: !!gain?.levelUp, levelUpCoins: gain?.levelUpCoins ?? 0,
+    pickups: gain?.pickups ?? 0, goals: gain?.goals ?? 0, goalXp: gain?.goalXp ?? 0, goalCoins: gain?.goalCoins ?? 0, streak: gain?.streak ?? 0, streakCoins: gain?.streakCoins ?? 0,
+  };
+}
+
 /** The level-up bonus for going from level `from` to level `to`: levelUpCoins of every level reached, summed. */
 export function levelUpBonus(from, to) {
   let sum = 0;
@@ -138,15 +153,23 @@ export async function ownedOf(store, user, { admin = false, log = console } = {}
  * `after` the account as stored, or null when the account is gone.
  */
 export async function settleRace(store, user, outcome, { now = Date.now() } = {}) {
-  const xp = xpForRace(outcome);
+  // the run's own (DEC-064): the coins picked on the road and the goals reached, as the race reports them (capped)
+  const pickups = Math.min(PICKUP_CAP, count(Math.floor(Number(outcome.pickups) || 0)));
+  const goals = Math.min(GOALS_PER_RUN, count(Math.floor(Number(outcome.goals) || 0)));
+  const xp = xpForRace(outcome) + goals * GOAL_XP;
   const withXp = await store.addXp(user.id, xp);
   if (!withXp) return null;
   // the level before is read from the stored total, not from a record that may be stale
   const levelBefore = levelFromXp(withXp.xp - xp).level, levelAfter = levelFromXp(withXp.xp).level;
   const bonus = levelUpBonus(levelBefore, levelAfter);
   const today = utcDay(now);
-  const daily = normaliseStats(withXp.stats).lastDaily !== today;
-  const coins = coinsForRace(outcome) + bonus + (daily ? DAILY_COINS : 0);
+  const before = normaliseStats(withXp.stats);
+  const daily = before.lastDaily !== today;
+  // the podium streak: one more for a finished race in the top three, back to zero otherwise
+  const podium = outcome.finished === true && Math.floor(Number(outcome.rank) || 0) <= 2;
+  const streak = podium ? before.podiumStreak + 1 : 0;
+  const place = coinsForRace(outcome), streakBonus = streakCoins(place, streak);
+  const coins = place + bonus + (daily ? DAILY_COINS : 0) + pickups + goals * GOAL_COINS + streakBonus;
   const withCoins = (await store.addCoins(user.id, coins)) ?? withXp;
 
   const s = normaliseStats(withCoins.stats);
@@ -162,10 +185,11 @@ export async function settleRace(store, user, outcome, { now = Date.now() } = {}
   }
   if (CHAR_IDS.includes(charId)) s.byChar[charId] = (s.byChar[charId] ?? 0) + 1;
   s.coinsEarned += coins;
+  s.podiumStreak = streak; s.bestStreak = Math.max(s.bestStreak, streak); s.goals += goals; s.pickups += pickups;
   s.lastDaily = today;
   s.lastRaceAt = now;
   const after = (await store.setStats(user.id, s)) ?? withCoins;
-  return { after, gain: { xp, coins, daily, levelUp: levelAfter > levelBefore, levelUpCoins: bonus } };
+  return { after, gain: { xp, coins, daily, levelUp: levelAfter > levelBefore, levelUpCoins: bonus, pickups, goals, goalXp: goals * GOAL_XP, goalCoins: goals * GOAL_COINS, streak, streakCoins: streakBonus } };
 }
 
 /** What the shop says to each refusal of catalog.js canBuyChar / canBuyPart. */

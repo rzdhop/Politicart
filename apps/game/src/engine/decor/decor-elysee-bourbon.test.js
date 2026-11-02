@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { SKY_RADIUS } from '../climate.js';
 import { TRACKS } from '../data.js';
 import { countMeshes, countTriangles } from '../geo.js';
 import { seedForVariant } from '../layout.js';
@@ -20,13 +21,19 @@ const BEFORE = {
   elysee: { high: [[2215, 768555], [2312, 776211], [2226, 774187]], low: [[763, 205027], [759, 209963], [702, 209383]] },
   bourbon: { high: [[2026, 604702], [2008, 612148], [2107, 623330]], low: [[684, 182886], [602, 184520], [674, 188346]] },
 };
+/**
+ * One long lap (DEC-061): the circuits are drawn 1.5 times larger, so the road and all that follows it (its ribbons, lamps,
+ * trees, blocks, benches, the bike lane) is half as long again at the same density per metre, while the landmarks are not:
+ * the scene totals measured on the old three-lap circuits allow 15 % more triangles (about a third of the extra road).
+ */
+const LONG_LAP = 1.15;
 /** The landmarks each circuit must show, by group name. */
 const LANDMARKS = {
   elysee: ['elysee:palais', 'elysee:cour-honneur', 'elysee:jardin', 'elysee:helicoptere', 'elysee:faubourg', 'elysee:beauvau', 'elysee:presse', 'elysee:cour-pavee', 'elysee:tapis-rouge', 'elysee:escorte'],
   bourbon: ['bourbon:assemblee', 'bourbon:presse', 'bourbon:obelisque', 'bourbon:concorde', 'bourbon:seine', 'bourbon:pont-concorde', 'bourbon:pont-alexandre-iii', 'bourbon:pylones', 'bourbon:tunnel', 'bourbon:pont-route', 'bourbon:bateau-mouche', 'bourbon:batobus', 'bourbon:paris-plages', 'bourbon:peniche', 'bourbon:rive-droite'],
 };
 /** What lies on the road on purpose: the cour pavée's cobbles, the red carpet, the tunnel's haze, the escort riding with the crossing's car. */
-const ON_ROAD = /:pavers|:carpet|:haze|escorte/;
+const ON_ROAD = /:pavers|:carpet|:haze|escorte|^road:/;   // road: the urnes and the coins (ballotbox.js, coins.js)
 
 const setPoly = p => { if (getPoly() !== p) togglePoly(); };
 afterEach(() => setPoly('high'));
@@ -43,7 +50,7 @@ describe.each([['elysee', 0], ['bourbon', 1]])('%s decor', (id, i) => {
     for (let v = 0; v < 3; v++) {
       const scene = build(i, seedForVariant(TRACKS[i], v)), [meshes, tris] = BEFORE[id][poly][v];
       expect(countMeshes(scene, true), `${id} ${poly} variant ${v} meshes`).toBeLessThanOrEqual(meshes);
-      expect(countTriangles(scene, true), `${id} ${poly} variant ${v} triangles`).toBeLessThanOrEqual(tris * (poly === 'high' ? 1.4 : 1.1));
+      expect(countTriangles(scene, true), `${id} ${poly} variant ${v} triangles`).toBeLessThanOrEqual(tris * (poly === 'high' ? 1.4 : 1.1) * LONG_LAP);
     }
   }, 60000);
 
@@ -75,9 +82,9 @@ describe.each([['elysee', 0], ['bourbon', 1]])('%s decor', (id, i) => {
         for (let k = 0; k < pos.count; k += step) { v.fromBufferAttribute(pos, k).applyMatrix4(o.matrixWorld); test(v.x, v.y, v.z); }
       });
       expect([...new Set(onRoad)], `seed ${seed}`).toEqual([]);
-      // the sky is a sphere of 1,100 m round the origin (climate.js): nothing of the decor beyond it
+      // the sky is a sphere of SKY_RADIUS round the origin (climate.js): nothing of the decor beyond it
       let far = 0; for (const g of named(scene, id)) g.traverse(o => { if (!o.isMesh || o.isInstancedMesh) return; const pos = o.geometry.attributes.position; for (let k = 0; k < pos.count; k++) { v.fromBufferAttribute(pos, k).applyMatrix4(o.matrixWorld); far = Math.max(far, Math.hypot(v.x, v.z)); } });
-      expect(far).toBeLessThan(1100);
+      expect(far).toBeLessThan(SKY_RADIUS);
     }
   }, 60000);
 });

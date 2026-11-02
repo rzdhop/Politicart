@@ -1260,3 +1260,170 @@ circuit's ground is one quad; "légers" ground uses 50 m cells.
 karts, 3 seeds): meshes -33 to -48 % on both tiers; triangles on
 "détaillés" from -35 % (Élysée) to +37 % (Versailles), on "légers" from
 +7 % (Élysée) to +29 % (Marseille). Build time per race about unchanged.
+
+## DEC-060 -- The chase camera follows a yaw of its own, held while the kart spins
+
+**Context.** The owner: "when hit by a bonus the kart turns but not the
+camera". A stunned kart spins its physical heading at 11 rad/s
+(`physics.js`); `race.js updateCamera` placed the camera straight off that
+heading and lerped its position towards a target racing round a 10 m
+circle, so the camera cut through the kart while its aim whipped round.
+
+**Decision.** `race.js` keeps `CAM.yaw`, eased towards the followed kart's
+heading the short way round (`CAM_YAW_RATE` = 12/s) and held while that
+kart is stunned; the camera's position and aim come from it. The spin stays
+a physics heading (no change to snapshots or prediction): only the view
+ignores it. `startField` resets the yaw to the start line's tangent.
+`camera.test.js` pins the hold, the short way round and a smooth swing back.
+
+## DEC-062 -- One long lap, cut into four themed sections
+
+**Context.** The owner chose "1 long lap, circuits extended ~1.5x" (DEC-061
+draws them larger) for short, varied runs of about 2.5 minutes.
+
+**Decision.** `CFG.laps` = 1 (the admin can still set more, DEC-031).
+`sections.js` names four sections per circuit (fractions of the lap); a
+human entering the next one hears its name and the split, the lap counter
+reads "TOUR UNIQUE · SECTEUR 2/4" (still "TOUR x/y" past one lap, for the
+E2E checks on `#h-lap`).
+
+## DEC-063 -- Hits are shorter, a spin ends on a boost, the back gets help
+
+**Context.** "Fun, not frustrating": stuns ran 0.7-2.6 s, killed the boost
+and the drift charge and could chain; Référendum's abstention slowed its
+own user.
+
+**Decision.** `stunKart` stuns for `softStun(d) = min(1.2, 0.35 + 0.45 d)`;
+a spinning kart keeps more of its speed (`STUN_DRAG` 1.6/s, was 3); when a
+spin runs out the kart gets `RECOVER_BOOST` and `HIT_GRACE` (1 s with no
+new stun: no stun-lock). Humans get a little top speed by place
+(`CATCH_UP`, up to +7 % in last). The vote blanc now gives a small boost.
+A stunned kart drops 3 coins (DEC-064). Values are physics constants, the
+snapshot carries the grace for the local prediction.
+
+## DEC-064 -- The run pays: coins on the road, three goals, a podium streak
+
+**Context.** "Runs have to be rewarding": a race paid only by place.
+
+**Decision.** `coins.js` lays lines of politicoins from the race seed (one
+instanced draw); a kart carries up to 10 (+0.8 % top speed each), every
+coin picked counts (`k.pickups`). `goals.js` draws three goals from the
+seed (never "podium" and "win" together) out of nine, counted from a
+per-kart tally (super mini-turbos, tricks, pads, hits dealt, items, coins,
+hits taken) or judged at the line. `settleRace` pays pickups (capped 60),
+`GOAL_XP`/`GOAL_COINS` per goal (capped 3) and a podium streak
+(`streakCoins`: +20 % of the place's coins per podium in a row after the
+first, 5 steps max; `podiumStreak`, `bestStreak` in the stats). A solo
+race reports pickups and goals (no anti-cheat, as before, but capped); a
+team race's come from the server's own simulation. The HUD shows a
+`CoinMeter` and a `GoalTracker`; the results a `RunSummary` and the gains
+broken down.
+
+## DEC-065 -- Glass ballot boxes, rarer upgrades, a rear guard
+
+**Context.** "The boxes need a redesign, the bonuses an upgrade."
+
+**Decision.** `ballotbox.js`: a glass urne in a Marianne-blue frame with a
+tricolore band, a slotted lid and a "?" envelope turning inside, drawn by
+four instanced meshes for every box of a circuit; `G.itemBoxes[i].mesh` is
+an Object3D proxy the simulation and the effects move as before,
+`syncBallotBoxes` copies the proxies into the instances each drawn frame.
+The fake urne is the same box with its "?" upside down and a tilt. The
+roll is 0.8 s (was 1.1). Items get tiers (`ITEM_TIERS`: the HUD tints the
+slot and plays a jackpot for rare/mythic) and three new ones with several
+uses (`turbo3`, `dossier3`, the mythic `reserve`: 5 golden boosts and 5
+coins); odds rebalanced (rows sum to 100). A kart holding a barricade, a
+fake urne or a gas canister (`REAR_GUARDS`) stops a dossier or a BRAV-M
+bike coming from behind, losing the item.
+
+## DEC-066 -- Three live events a race
+
+**Context.** "A lot of variants and events" on the long lap.
+
+**Decision.** `raceevents.js` draws three of five events from the seed and
+fires each when the leader passes ~24 %, ~50 % and ~76 % of the race: Flash
+info (everyone boosts, the back longer), Pluie d'urnes (every box back,
+upgraded draws for 12 s), Pluie de pièces (every coin back, double for
+12 s), Manif sauvage (four barricades across the road ahead, gaps to
+thread), Sondage éclair (the three last get an item and a boost). The
+server runs them; clients see their effects through what snapshots already
+carry, plus the banner's id (`ev`) shown in the centre of the HUD.
+
+## DEC-070 -- The title screen is a hero over the live stage
+
+**Context.** The title was one glass panel of eight equal-weight buttons, the
+key legend and the disclaimer, on a cleared canvas: nothing said "play me",
+and the 3D stage, the game's best first impression, waited behind "Jouer".
+The owner asked for a full redesign of the main page, fun and inviting.
+
+**Decision.** The title draws the select stage as its backdrop
+(`stagegate.js showsBackdrop` / `drawsStage`; game.js renders it on the
+title instead of clearing): the player's candidate turns on the podium
+(0.32 rad/s from the first frame where the stage moves by itself, still
+under reduced motion or the governor), framed into the title's own
+`ShowcaseStage` band (`#title-stage`) by the roster's frame function, which
+already follows the visible screen's band, and draggable. The chunk loads on
+the title's first frame; until the stage has compiled, the canvas is cleared
+to the plain background (`renderPreview` clears while it compiles on a
+screen that has not drawn it yet). `warmStage` still starts the portraits
+behind an idle title. The layout is a new `menu` group in `packages/ui`:
+`TitleLayout` (left column over a scrim, stage on the right; one column on
+a phone), `TitleLogo` (animated entrance and sheen), `Tagline` (rotating
+quips), `HeroButton` (the one « Jouer »), `MenuCard` (Multijoueur, Boutique
+with the balance, Compte with pseudo, level and a friend-request badge),
+`SettingsChip` (graphics, sound, « Commandes », the admin's two entries),
+`Sheet` (the modal that now holds the controls legend, `#touch-legend`
+inside it in touch mode) and `MenuGlyph`. Motion is fx.css only, off under
+`prefers-reduced-motion`. `#b-poly` and `#b-mute` stay on the title as
+chips with their exact labels. Enter on the title now opens the roster
+only: game.js read the state again after "Jouer" and pressed "Choisir le
+circuit" in the same keydown.
+
+**Consequence.** The title costs a stage frame per frame, as the roster
+does (on "légers" the low tier). The first visit to the roster is already
+warm. `e2e/mobile.spec.ts` opens `#b-help` to see the touch legend.
+
+## DEC-061 -- One long lap: circuits drawn 1.5x larger
+
+**Context.** The owner chose one long lap of about 2.5 minutes over three
+laps of about 90 s, the circuits extended about 1.5 times. The other half
+of that change (laps = 1, items, physics, the HUD, rewards) is a separate
+piece of work; this one is the circuits.
+
+**Decision.** Every track is drawn at `scale: 4.5` (was 3): 4.7 to 5.5 km a
+lap. The sample count grows with the scale (`track.js samplesOf`,
+`CFG.samples` at `SAMPLES_SCALE` 3: 2,700 samples, still about 2 m apart),
+so every distance counted in samples (feature `len`, ramps, pits, the AI's
+look-ahead, power offsets, cyclist gaps) keeps its metres; what is a
+fraction of the lap (`f`, `boxRows`, `profile`) stretches with it. A pit a
+ramp jumps keeps its 15 (or 12) samples after the ramp. Each circuit has
+13 item rows (the old spacing) and two or three more skeleton features
+(pads, ramps, bumps; still one crossing; no bump on the flat Élysée, whose
+ground would become a grid); cyclist ranges grow about 1.3 times, within
+the 28 riders a snapshot carries. The builders' world-unit layouts, drawn
+around a scale-3 road, move out by `K = DS / 3` (`decor/context.js`; `follow()`
+keeps the butte and the place du Tertre their distance from the road), as do
+the lengths of what runs along the road (the Seine and its quais, the
+Faubourg, the sea sheets); buildings, props and people keep their size, and
+counts set per lap (Wallace fountains, Morris columns, benches, passers-by,
+péniches, joggers) grow by K so their density per metre holds. The interior
+grids of blocks keep their count over the wider loop. The sky dome is 1,650 m
+(`climate.js SKY_RADIUS`), the race camera's far plane 2,700 m, the clouds
+spread 1.5 times wider, the ground plain is 4 km with the terrain out to
+1,200 m (128 cells a side, 31 m on "détaillés"); fog distances are
+unchanged. On "légers" the Paris batches' cells grow with K (750 m), so the
+long lap draws its props in as many meshes. Groups placed in world units by
+the road and merged (the cour pavée, the red carpet) are centred on their
+contents: world-frame float32 vertices 900 m out warped thin faces.
+
+**Consequence.** Scene totals at race start (headless, seed 7, no karts),
+scale 3 -> 4.5: "détaillés" triangles +17 % (Versailles) to +35 % (Bourbon),
+meshes +17 to +23 %; "légers" triangles +23 to +33 %, meshes +9 to +22 %,
+at the same density per metre (what a frame draws stays bounded by the
+cells' culling). The decor tests' triangle baselines take a `LONG_LAP`
+factor of 1.15; their mesh baselines are unchanged. Themed decor written at
+scale 1 (spread by `spreadDecor`) sits 1.5 times further from the road than
+before, so Marseille's quai and Montmartre's ring of houses read sparser
+from the road; a road-relative spread would bring them back. The Grand
+Canal, already past the sky dome, now reaches further past it.
+

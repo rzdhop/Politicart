@@ -20,7 +20,10 @@
 import * as THREE from 'three';
 
 import { sfxFor } from './audio.js';
-import { ITEMS, rollItem } from './data.js';
+import { ITEMS, itemTier, itemUses, REAR_GUARDS, rollItem } from './data.js';
+import { buildFakeBallotBox } from './ballotbox.js';
+import { dropCoins, takeCoin } from './coins.js';
+import { tally } from './goals.js';
 import { hintFor, say, tell } from './events.js';
 import { line, plural } from './lines.js';
 import { updateProgress } from './physics.js';
@@ -33,24 +36,46 @@ import { spawnVfx } from './vfx.js';
 // Hazards and projectiles carry an id so a snapshot can name them (DEC-014); the counter lives in state.js, since track.js numbers the static obstacles too (DEC-049).
 
 // ---------- Items ----------
+/** How long the roll of an item lasts once a box is taken (s): short, so the box pays out at once (DEC-065). */
+export const ITEM_ROLL = 0.8;
+/** How long a taken box stays away (s). */
+export const BOX_RESPAWN = 3;
+/** The projectiles a rear guard stops. */
+const GUARDED = Object.freeze(['dossier', 'bravm']);
+
 export function pickupItems() {
   for (const b of G.itemBoxes) {
-    b.mesh.rotation.y += 0.03; b.mesh.rotation.x += 0.01;
+    b.mesh.rotation.y += 0.03;
     if (!b.active) { b.timer -= 1 / 60; if (b.timer <= 0) { b.active = true; b.mesh.visible = true; } continue; }
-    for (const k of G.karts) { if (k.item || k.itemRolling > 0 || k.finished || k.fly > 0) continue; const d = (k.pos.x - b.x) ** 2 + (k.pos.z - b.z) ** 2; if (d < 7) { b.active = false; b.timer = 3; b.mesh.visible = false; k.pendingItem = rollItem(k.rank); k.itemRolling = 1.1; sfxFor(k, 'box'); break; } }
+    for (const k of G.karts) { if (k.item || k.itemRolling > 0 || k.finished || k.fly > 0) continue; const d = (k.pos.x - b.x) ** 2 + (k.pos.z - b.z) ** 2; if (d < 7) { b.active = false; b.timer = BOX_RESPAWN; b.mesh.visible = false; k.pendingItem = rollItem(k.rank, G.urnRush > 0); k.itemRolling = ITEM_ROLL; sfxFor(k, 'box'); break; } }
   }
 }
+/** The rolled item lands in kart k's slot, with its uses; a rare or mythic one plays the jackpot for its driver. */
+export function landItem(k, id) {
+  k.item = id; k.itemUses = itemUses(id);
+  if (!k.isAI && itemTier(id) !== 'common') sfxFor(k, 'jackpot');
+}
+/** Whether kart k holds an item behind it that guards its back (a rear guard, drawn and ready). */
+export const guardsRear = k => !!k.item && !(k.itemRolling > 0) && REAR_GUARDS.includes(k.item);
+
 export function useItem(k) {
-  if (!k.item || k.itemRolling > 0) return; const it = k.item; k.item = null;
+  if (!k.item || k.itemRolling > 0) return; const id = k.item;
+  // an item of several uses (an upgrade, the jackpot) stays in the slot until its last use
+  if ((k.itemUses || 1) > 1) { k.itemUses--; if (k.isAI) k.itemTimer = rand(0.4, 1.4); } else { k.item = null; k.itemUses = 0; }
+  const it = id;
+  tally(k, 'items');
   const fx = Math.sin(k.heading), fz = Math.cos(k.heading);
   // every item shows where it starts (vfx.js); what it does to the karts it reaches shows where it lands (impact below)
   if (it === 'turbo') { k.boost = 1.6; k.boostPower = 1.55; sfxFor(k, 'boost'); spawnVfx('aura', { kart: k, color: 0xffd34d }); say(k, line('item.turbo.use')); }
-  else if (it === 'greve') { spawnHazard('barricade', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5, null, k.team); k.hazardGrace = 1.0; sfxFor(k, 'drop'); spawnVfx('dust', { x: k.pos.x - fx * 3.5, y: k.y, z: k.pos.z - fz * 3.5 }); say(k, line('item.greve.use')); }
-  else if (it === 'sondage') { spawnHazard('fakebox', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5, null, k.team); k.hazardGrace = 1.0; sfxFor(k, 'drop'); spawnVfx('puff', { x: k.pos.x - fx * 3.5, y: k.y, z: k.pos.z - fz * 3.5, color: 0xffe9a0 }); say(k, line('item.sondage.use')); }
+  else if (it === 'turbo3') { k.boost = Math.max(k.boost, 1.15); k.boostPower = 1.55; sfxFor(k, 'boost'); spawnVfx('aura', { kart: k, color: 0xffd34d }); spawnVfx('streak', { kart: k, color: 0xffd34d }); say(k, line('item.turbo3.use')); }
+  else if (it === 'dossier3') { const ahead = foeAhead(k, G.karts); spawnProjectile('dossier', k, ahead && !ahead.finished ? ahead : null); sfxFor(k, 'swoosh'); spawnVfx('streak', { kart: k, color: 0xfff5dd }); say(k, line('item.dossier3.use')); }
+  else if (it === 'reserve') { k.boost = Math.max(k.boost, 0.9); k.boostPower = 1.6; takeCoin(k); sfxFor(k, 'euro'); spawnVfx('coins', { kart: k }); spawnVfx('aura', { kart: k, color: 0xf2c14e }); say(k, line('item.reserve.use')); }
+  else if (it === 'greve') { spawnHazard('barricade', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5, null, k.team, k); k.hazardGrace = 1.0; sfxFor(k, 'drop'); spawnVfx('dust', { x: k.pos.x - fx * 3.5, y: k.y, z: k.pos.z - fz * 3.5 }); say(k, line('item.greve.use')); }
+  else if (it === 'sondage') { spawnHazard('fakebox', k.pos.x - fx * 3.5, k.pos.z - fz * 3.5, null, k.team, k); k.hazardGrace = 1.0; sfxFor(k, 'drop'); spawnVfx('puff', { x: k.pos.x - fx * 3.5, y: k.y, z: k.pos.z - fz * 3.5, color: 0xffe9a0 }); say(k, line('item.sondage.use')); }
   else if (it === 'immunite') { k.invincible = 6; endStun(k); sfxFor(k, 'shield'); spawnVfx('aura', { kart: k, color: 0xf2c14e }); say(k, line('item.immunite.use')); }
   else if (it === 'helico') { k.fly = 4; endStun(k); k.drift.active = false; sfxFor(k, 'helico'); spawnVfx('dust', { kart: k }); say(k, line('item.helico.use')); }
   else if (it === 'relance') { k.relance = 3; k.relanceTimer = 0; sfxFor(k, 'euro'); spawnVfx('coins', { kart: k }); say(k, line('item.relance.use')); }
-  else if (it === 'remaniement') { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished && o.rank < k.rank) { if (o.item) o.item = null; if (stunKart(o, 0.7)) hit.push(o); } const n = hit.length; sfxFor(k, 'stamp'); spawnVfx('shockwave', { kart: k, color: 0xb14cff, r: 14 }); impact(hit, 'papers'); tell(k, line('item.remaniement.use', { n, s: plural(n) }), line('item.remaniement.hit'), hit); }
+  else if (it === 'remaniement') { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished && o.rank < k.rank) { if (o.item) o.item = null; if (stunKart(o, 0.7, k)) hit.push(o); } const n = hit.length; sfxFor(k, 'stamp'); spawnVfx('shockwave', { kart: k, color: 0xb14cff, r: 14 }); impact(hit, 'papers'); tell(k, line('item.remaniement.use', { n, s: plural(n) }), line('item.remaniement.hit'), hit); }
   else if (it === 'dossier') { const ahead = foeAhead(k, G.karts); const target = ahead && !ahead.finished ? ahead : null; spawnProjectile('dossier', k, target); sfxFor(k, 'swoosh'); spawnVfx('streak', { kart: k, color: 0xfff5dd }); say(k, line('item.dossier.use')); }
   else if (it === 'motion') { const target = leadingFoe(k, G.karts); spawnProjectile('motion', k, target); sfxFor(k, 'motion'); spawnVfx('aura', { kart: k, color: 0xc8102e }); say(k, line('item.motion.use')); }
   else if (it === 'bravm') {
@@ -60,8 +85,8 @@ export function useItem(k) {
     sfxFor(k, 'siren'); spawnVfx('dust', { kart: k, color: 0x9a9aa8 }); say(k, line('item.bravm.use'));
   }
   else if (it === 'lacrymo') { spawnHazard('lacrymo', k.pos.x - fx * 4, k.pos.z - fz * 4, k); k.hazardGrace = 1.2; sfxFor(k, 'gas'); spawnVfx('gas', { x: k.pos.x - fx * 4, y: k.y, z: k.pos.z - fz * 4 }); say(k, line('item.lacrymo.use')); }
-  else if (it === 'casserolade') { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { const dx = o.pos.x - k.pos.x, dz = o.pos.z - k.pos.z; if (Math.hypot(dx, dz) < 20) { o.speed *= 0.5; if (stunKart(o, 0.8)) hit.push(o); } } const n = hit.length; sfxFor(k, 'pans'); heard(hit, 'pans'); spawnVfx('shockwave', { kart: k, color: 0xd98a3a, r: 20 }); impact(hit, 'impact', 0xd98a3a); tell(k, line('item.casserolade.use', { n, s: plural(n) }), line('item.casserolade.hit'), hit); }
-  else if (it === 'dissolution') { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { if (stunKart(o, 0.9)) hit.push(o); } const n = hit.length; sfxFor(k, 'gavel'); spawnVfx('shockwave', { kart: k, color: 0xf6f1e4, r: 60 }); impact(hit, 'papers'); tell(k, line('item.dissolution.use', { n, s: plural(n) }), line('item.dissolution.hit'), hit); }
+  else if (it === 'casserolade') { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { const dx = o.pos.x - k.pos.x, dz = o.pos.z - k.pos.z; if (Math.hypot(dx, dz) < 20) { o.speed *= 0.5; if (stunKart(o, 0.8, k)) hit.push(o); } } const n = hit.length; sfxFor(k, 'pans'); heard(hit, 'pans'); spawnVfx('shockwave', { kart: k, color: 0xd98a3a, r: 20 }); impact(hit, 'impact', 0xd98a3a); tell(k, line('item.casserolade.use', { n, s: plural(n) }), line('item.casserolade.hit'), hit); }
+  else if (it === 'dissolution') { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { if (stunKart(o, 0.9, k)) hit.push(o); } const n = hit.length; sfxFor(k, 'gavel'); spawnVfx('shockwave', { kart: k, color: 0xf6f1e4, r: 60 }); impact(hit, 'papers'); tell(k, line('item.dissolution.use', { n, s: plural(n) }), line('item.dissolution.hit'), hit); }
   else if (it === 'niche') { k.invincible = 5; k.phantom = 5; k.boost = Math.max(k.boost, 0.6); k.boostPower = 1.3; endStun(k); sfxFor(k, 'euro'); spawnVfx('coins', { kart: k }); say(k, line('item.niche.use')); }
   else if (it === 'langue') { k.shield = 25; sfxFor(k, 'shield'); spawnVfx('aura', { kart: k, color: 0x7cc4ff }); say(k, line('item.langue.use')); }
   else if (it === 'cumul') {
@@ -69,7 +94,7 @@ export function useItem(k) {
     const got = []; while (got.length < 2) { const r = rollItem(k.rank); if (r !== 'cumul') got.push(r); }
     spawnVfx('confetti', { kart: k, r: 16 });
     say(k, line('item.cumul.use', { names: got.map(g => ITEMS[g].name.toUpperCase()).join(' + ') }));
-    for (const g of got) { k.item = g; useItem(k); }
+    for (const g of got) { k.item = g; k.itemUses = 1; useItem(k); }
     return;
   }
   else if (it === 'factcheck') { const ahead = foeAhead(k, G.karts); spawnProjectile('factcheck', k, ahead && !ahead.finished ? ahead : null); sfxFor(k, 'swoosh'); spawnVfx('aura', { kart: k, color: 0x9fd8ff }); say(k, line('item.factcheck.use')); }
@@ -83,10 +108,11 @@ export function useItem(k) {
   else if (it === 'referendum') {
     const r = Math.random();
     if (r < 0.4) { const boosted = G.karts.filter(o => !o.finished); for (const o of boosted) { o.boost = Math.max(o.boost, 0.8); o.boostPower = Math.max(o.boostPower, 1.3); if (o !== k) sfxFor(o, 'boost'); } k.boost = 1.6; k.boostPower = 1.5; sfxFor(k, 'boost'); spawnVfx('confetti', { kart: k }); impact(boosted, 'aura', 0xffd34d); tell(k, line('item.referendum.use'), line('item.referendum.hit'), boosted); }
-    else if (r < 0.8) { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { if (stunKart(o, 0.7)) hit.push(o); } const n = hit.length; sfxFor(k, 'gavel'); spawnVfx('shockwave', { kart: k, color: 0xc8102e, r: 30 }); impact(hit, 'impact', 0xc8102e); tell(k, line('item.referendum.non', { n, s: plural(n) }), line('item.referendum.nonHit'), hit); }
-    else { k.slowed = Math.max(k.slowed, 1.5); sfxFor(k, 'drop'); spawnVfx('puff', { kart: k, color: 0x9a9a9a }); spawnVfx('aura', { kart: k, color: 0x6b8fb5 }); say(k, line('item.referendum.nul')); }
+    else if (r < 0.8) { const hit = []; for (const o of G.karts) if (isFoe(k, o) && !o.finished) { if (stunKart(o, 0.7, k)) hit.push(o); } const n = hit.length; sfxFor(k, 'gavel'); spawnVfx('shockwave', { kart: k, color: 0xc8102e, r: 30 }); impact(hit, 'impact', 0xc8102e); tell(k, line('item.referendum.non', { n, s: plural(n) }), line('item.referendum.nonHit'), hit); }
+    else { k.boost = Math.max(k.boost, 0.6); k.boostPower = Math.max(k.boostPower || 1.4, 1.3); sfxFor(k, 'boost'); spawnVfx('puff', { kart: k, color: 0xf6f1e4 }); spawnVfx('aura', { kart: k, color: 0x6b8fb5 }); say(k, line('item.referendum.nul')); }   // the vote blanc: no longer a penalty (DEC-063)
   }
-  hintFor(k, 'Ramassez une urne dorée pour obtenir un objet.');
+  if (k.item) hintFor(k, ITEMS[k.item].hint + ' (' + k.itemUses + ' restant' + (k.itemUses > 1 ? 's' : '') + ')');
+  else hintFor(k, 'Ramassez une urne pour obtenir un objet.');
 }
 /** An effect of `type` on every kart in `karts` (the drivers a move reached), in `color` if given. */
 export function impact(karts, type, color) { for (const o of karts) spawnVfx(type, { kart: o, color }); }
@@ -105,7 +131,8 @@ export function buildHazard(type) {
     [-1.0, 1.0].forEach(o => { g.add(box(0.15, 1.3, 0.15, 0x333333, o, 0.65, 0.25)); g.add(box(0.15, 1.3, 0.15, 0x333333, o, 0.65, -0.25)); });
     g.add(box(0.8, 0.5, 0.05, 0xc8102e, 0.9, 1.8, 0)); g.add(cyl(0.04, 0.04, 2.2, 0x333333, 0.5, 1.1, 0, 5)); g.rotation.y = rand(0, 6.28);
   } else if (type === 'fakebox') {
-    const m = new THREE.Mesh(new THREE.OctahedronGeometry(1.1, 0), new THREE.MeshStandardMaterial({ color: 0xffd34d, emissive: 0x6a4a00, transparent: true, opacity: 0.9, roughness: 0.3, metalness: 0.4 })); m.position.y = 1.4; g.add(m); G.animated.push(dt => { m.rotation.y -= dt * 1.8; m.rotation.x -= dt * 0.6; }); r = 2.4; life = 40; stun = 1.4;
+    // the fake urne (ballotbox.js): the real one's look, its "?" upside down and a tilt as it turns
+    const fb = buildFakeBallotBox(); g.add(fb); G.animated.push(dt => fb.userData.tick(dt, G.time)); r = 2.4; life = 40; stun = 1.4;
   } else if (type === 'lisier') {
     const pl = new THREE.Mesh(new THREE.CircleGeometry(4.2, 18), new THREE.MeshStandardMaterial({ color: 0x5a3b1e, roughness: 1 })); pl.rotation.x = -Math.PI / 2; pl.position.y = 0.1; pl.scale.set(1.3, 1, 1); g.add(pl);
     for (let i = 0; i < 7; i++) { const sp = new THREE.Mesh(new THREE.CircleGeometry(rand(0.5, 1.2), 10), mat(0x3f2a14)); sp.rotation.x = -Math.PI / 2; sp.position.set(rand(-4, 4), 0.11, rand(-3, 3)); g.add(sp); }
@@ -132,10 +159,10 @@ export function buildHazard(type) {
   }
   return { g, r, life, stun };
 }
-export function spawnHazard(type, x, z, extra, team) {
+export function spawnHazard(type, x, z, extra, team, by = null) {
   const { g, r, life, stun } = buildHazard(type);
   const y = roadYAt(x, z);   // on the road's surface where it is dropped (DEC-050)
-  g.position.set(x, y, z); G.scene.add(g); G.hazards.push({ id: nextEntityId(), type, x, z, y, mesh: g, life, r, stun, owner: extra || null, team: team ?? (extra ? extra.team : null) ?? null });
+  g.position.set(x, y, z); G.scene.add(g); G.hazards.push({ id: nextEntityId(), type, x, z, y, mesh: g, life, r, stun, owner: extra || null, team: team ?? (extra ? extra.team : null) ?? null, by: by ?? extra ?? null });
 }
 /** The mesh of a projectile of `type`, unplaced. Shared by the simulation and networked clients. */
 export function buildProjectileMesh(type) {
@@ -164,10 +191,25 @@ export function spawnProjectile(type, owner, target, side) {
   const p = { id: nextEntityId(), type, x: owner.pos.x + fx * 3 + (-fz) * sidespawn, z: owner.pos.z + fz * 3 + fx * sidespawn, y: type === 'motion' ? 1.5 : type === 'bravm' ? 0 : 1.0, gy: G.samples[owner.idx]?.y || 0, dx: fx, dz: fz, owner, target, speed: type === 'motion' ? 85 : type === 'bravm' ? 74 : type === 'factcheck' ? 70 : 62, life: type === 'motion' ? 12 : type === 'bravm' ? 8 : 5, mesh: g, idx: owner.idx };
   g.position.set(p.x, p.y + p.gy, p.z); G.scene.add(g); G.projectiles.push(p);
 }
-export function stunKart(k, dur) {
+/** The longest a hit stuns (s), whatever the move (DEC-063). */
+export const STUN_MAX = 1.2;
+/** How long a hit nominally `d` seconds long actually stuns: about half, a floor so it still reads as a hit, never past STUN_MAX. */
+export const softStun = d => Math.min(STUN_MAX, 0.35 + d * 0.45);
+/**
+ * Stun kart k for a hit of nominal length `dur` (softStun shortens it),
+ * `by` the kart whose move it is (counted for its "hits" goal). Honours
+ * flight, immunity, the Langue de bois shield and the grace after a spin
+ * (physics.js HIT_GRACE). A stunned kart drops some coins. Returns whether
+ * the kart was stunned.
+ */
+export function stunKart(k, dur, by = null) {
   if (k.god || k.fly > 0) return false;
   if (k.invincible > 0) { spawnVfx('shockwave', { kart: k, color: 0xf2c14e, r: 4 }); return false; }   // the blow glances off
-  if (k.shield > 0) { k.shield = 0; sfxFor(k, 'shield'); spawnVfx('shockwave', { kart: k, color: 0x7cc4ff, r: 5 }); say(k, line('shield.parry')); return false; } k.stun = Math.max(k.stun, dur); k.drift.active = false; k.drift.charge = 0; k.boost = 0; sfxFor(k, 'hit'); return true;
+  if (k.shield > 0) { k.shield = 0; sfxFor(k, 'shield'); spawnVfx('shockwave', { kart: k, color: 0x7cc4ff, r: 5 }); say(k, line('shield.parry')); return false; }
+  if (k.hitGrace > 0) { spawnVfx('shockwave', { kart: k, color: 0xffffff, r: 3 }); return false; }   // just out of a spin: no stun-lock
+  k.stun = Math.max(k.stun, softStun(dur)); k.drift.active = false; k.drift.charge = 0; k.boost = 0; sfxFor(k, 'hit');
+  dropCoins(k); tally(k, 'hitsTaken'); if (by && by !== k) tally(by, 'hits');
+  return true;
 }
 /** Cut a stun short (an item that frees the driver) and face the road again, as the end of a spin does. */
 export function endStun(k) {
@@ -201,10 +243,14 @@ export function updateProjectiles(dt) {
     let hit = false;
     if (p.mesh.userData.blink) p.mesh.userData.blink.material.color.setHex(Math.floor(G.time * 10) % 2 ? 0x3a6bff : 0xff3a4a);
     for (const k of G.karts) { if (k.god) continue; if (k === p.owner && p.life > (p.type === 'motion' ? 11.5 : p.type === 'bravm' ? 7.4 : 4.6)) continue; if (k !== p.owner && !isFoe(p.owner, k)) continue; if (p.type === 'motion' && k !== p.target) continue; if (k.fly > 0 || k.y - p.gy > 1.5) continue; const d = (k.pos.x - p.x) ** 2 + (k.pos.z - p.z) ** 2; if (d < 6.5) {
+      // a dossier or a bike from behind ends in the item the kart holds behind it (DEC-065)
+      if (GUARDED.includes(p.type) && k !== p.owner && guardsRear(k) && p.dx * Math.sin(k.heading) + p.dz * Math.cos(k.heading) > 0.3) {
+        k.item = null; k.itemUses = 0; sfxFor(k, 'parry'); spawnVfx('impact', { kart: k, color: 0xf6f1e4 }); say(k, line('rear.parry')); hit = true; break;
+      }
       // fact-checking goes through immunity, shields and tax loopholes alike
       projectileHit(p, k);
-      if (p.type === 'factcheck') { k.invincible = 0; k.shield = 0; k.phantom = 0; stunKart(k, 1.2); say(k, line('item.factcheck.hit')); hit = true; break; }
-      stunKart(k, p.type === 'motion' ? 2.6 : p.type === 'bravm' ? 1.7 : 1.5); say(k, line('item.' + p.type + '.hit')); hit = true; break; } }
+      if (p.type === 'factcheck') { k.invincible = 0; k.shield = 0; k.phantom = 0; stunKart(k, 1.2, p.owner); say(k, line('item.factcheck.hit')); hit = true; break; }
+      stunKart(k, p.type === 'motion' ? 2.6 : p.type === 'bravm' ? 1.7 : 1.5, p.owner); say(k, line('item.' + p.type + '.hit')); hit = true; break; } }
     if (!hit && p.life <= 0) spawnVfx('puff', { x: p.x, y: p.y + p.gy, z: p.z, color: 0xcfcfcf });   // spent: it fizzles out
     if (hit || p.life <= 0) { G.scene.remove(p.mesh); G.projectiles.splice(i, 1); }
   }
@@ -215,8 +261,8 @@ export function updateProjectiles(dt) {
       else if (h.type === 'chatons') { k.speed *= 0.35; k.confused = Math.max(k.confused, 1.2); k.hazardGrace = 1.2; sfxFor(k, 'bump'); spawnVfx('puff', { kart: k, color: 0xffc0d8 }); say(k, line('hazard.chatons.hit')); }
       else if (h.type === 'lisier') { if (k.slip <= 0) { say(k, line('hazard.lisier.hit')); spawnVfx('splash', { kart: k, color: 0x5a3b1e }); } k.slip = Math.max(k.slip, 0.4); }
       else if (h.type === 'obstacle') { const dx = k.pos.x - h.x, dz = k.pos.z - h.z, dd = Math.hypot(dx, dz) || 1; k.pos.x = h.x + dx / dd * h.r; k.pos.z = h.z + dz / dd * h.r; if (k.speed > 12) { k.speed *= 0.55; sfxFor(k, 'bump'); hazardHit(h, k); } }
-      else if (h.type === 'rondpoint') { const dx = k.pos.x - h.x, dz = k.pos.z - h.z, dd = Math.hypot(dx, dz) || 1; k.pos.x = h.x + dx / dd * h.r; k.pos.z = h.z + dz / dd * h.r; if (k.speed > 10) { k.speed *= 0.4; hazardHit(h, k); if (stunKart(k, h.stun)) say(k, line('hazard.rondpoint.hit')); k.hazardGrace = 0.8; } }
-      else { hazardHit(h, k); if (stunKart(k, h.stun)) say(k, line('hazard.' + h.type + '.hit')); hit = true; break; } } }     // fakebox or barricade
+      else if (h.type === 'rondpoint') { const dx = k.pos.x - h.x, dz = k.pos.z - h.z, dd = Math.hypot(dx, dz) || 1; k.pos.x = h.x + dx / dd * h.r; k.pos.z = h.z + dz / dd * h.r; if (k.speed > 10) { k.speed *= 0.4; hazardHit(h, k); if (stunKart(k, h.stun, h.by)) say(k, line('hazard.rondpoint.hit')); k.hazardGrace = 0.8; } }
+      else { hazardHit(h, k); if (stunKart(k, h.stun, h.by)) say(k, line('hazard.' + h.type + '.hit')); hit = true; break; } } }     // fakebox or barricade
     if (hit || h.life <= 0) { G.scene.remove(h.mesh); G.hazards.splice(i, 1); }
   }
 }

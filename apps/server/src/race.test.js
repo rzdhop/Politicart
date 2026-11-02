@@ -1,10 +1,11 @@
 // A whole race through the real worker thread, stepped as fast as possible.
 import { describe, expect, it } from 'vitest';
 
-import { CHARACTERS } from '../../game/src/engine/data.js';
+import { CHARACTERS, TRACKS } from '../../game/src/engine/data.js';
 import { buildKart } from '../../game/src/engine/kart.js';
 import { decodeVfx } from '../../game/src/engine/netstate.js';
 import { buildPilot } from '../../game/src/engine/pilot.js';
+import { samplesOf } from '../../game/src/engine/track.js';
 import { VFX_KINDS } from '../../game/src/engine/vfx.js';
 import { Room } from './lobby.js';
 import { runRace } from './race.js';
@@ -71,9 +72,9 @@ describe('a race in a worker', () => {
       expect(mine.every(m => m.me && Number.isInteger(m.me.lap))).toBe(true);
       expect(bobs.every(m => m.ack === undefined && m.n === undefined && m.me)).toBe(true);
       // each block is its owner's kart: its progress is that kart's place on the spline
-      const last = mine.at(-1), hers = bobs.at(-1);
-      expect(last.me.pr).toBeCloseTo(last.me.lap + last.s.k[4].idx / 1800, 3);
-      expect(hers.me.pr).toBeCloseTo(hers.me.lap + hers.s.k[5].idx / 1800, 3);
+      const last = mine.at(-1), hers = bobs.at(-1), N = samplesOf(TRACKS[0]);   // the lap's samples (DEC-061: grown with the circuit's scale)
+      expect(last.me.pr).toBeCloseTo(last.me.lap + last.s.k[4].idx / N, 3);
+      expect(hers.me.pr).toBeCloseTo(hers.me.lap + hers.s.k[5].idx / N, 3);
       expect(last.s.k[4].idx).not.toBe(last.s.k[5].idx);
       expect(mine.at(-1).s.k[4]).not.toHaveProperty('lap');            // the HUD-only fields travel in the block alone
       // one snapshot text for everyone, each player's part spliced on
@@ -122,7 +123,7 @@ describe('a race in a worker', () => {
       expect(race.grid).toHaveLength(7); expect(roster).toHaveLength(7);
       await until(() => sent.some(([id, m]) => id === 'rida' && m.t === 'snap' && m.s.k.length === 7));
       const snap = sent.filter(([id, m]) => id === 'rida' && m.t === 'snap').at(-1)[1].s;
-      expect(snap.k[6].gd).toBe(1); expect(snap.lp).toBe(3);
+      expect(snap.k[6].gd).toBe(1); expect(snap.lp).toBe(1);   // one long lap (DEC-061)
 
       expect(await race.god({ cmd: 'stun', target: 'all', dur: 2 }, 'rida')).toMatchObject({ ok: true });
       expect(await race.god({ cmd: 'laps', laps: 5 }, 'rida')).toMatchObject({ ok: true });

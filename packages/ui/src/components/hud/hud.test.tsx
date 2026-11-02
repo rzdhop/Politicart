@@ -3,6 +3,8 @@ import { createRef } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { CenterAnnounce } from './CenterAnnounce';
+import { CoinMeter, type CoinMeterHandle } from './CoinMeter';
+import { GoalTracker, type GoalTrackerHandle } from './GoalTracker';
 import { DriftGauge, type DriftGaugeHandle } from './DriftGauge';
 import { HitVignette, type HitVignetteHandle } from './HitVignette';
 import { HudCorner } from './HudCorner';
@@ -473,6 +475,83 @@ describe('LayoutReadout', () => {
     expect(el.querySelector('.lr-label')?.textContent).toBe('Tracé du jour');
     expect(el.querySelector('.lr-name')?.textContent).toBe('Jour de manif');
     ref.current?.setVisible(false);
+    expect(el.hidden).toBe(true);
+  });
+});
+
+describe('ItemSlot tiers and uses', () => {
+  it('tints the rim by tier and shows the uses left past one', () => {
+    const ref = createRef<ItemSlotHandle>();
+    const { container } = render(<ItemSlot ref={ref} icon="·" label="aucun objet" />);
+    const slot = container.firstElementChild as HTMLElement;
+    const uses = slot.querySelector('.uses') as HTMLElement;
+    expect(uses.hidden).toBe(true);
+    ref.current?.setItem({ icon: '⚡', label: '49.3 en rafale', filled: true, tier: 'rare', count: 3 });
+    expect(slot.classList.contains('tier-rare')).toBe(true);
+    expect(uses.hidden).toBe(false); expect(uses.textContent).toBe('×3');
+    ref.current?.setItem({ icon: '💰', label: 'Réserve parlementaire', filled: true, tier: 'mythic', count: 1 });
+    expect(slot.classList.contains('tier-rare')).toBe(false); expect(slot.classList.contains('tier-mythic')).toBe(true);
+    expect(uses.hidden).toBe(true);
+    ref.current?.flashJackpot();
+    expect(slot.classList.contains('jackpot')).toBe(true);
+  });
+
+  it('renders the tier and the count from props', () => {
+    const { container } = render(<ItemSlot icon="📁" label="Triple fuite" filled tier="rare" count={2} />);
+    const slot = container.firstElementChild as HTMLElement;
+    expect(slot.className).toBe('item has tier-rare');
+    expect(slot.querySelector('.uses')?.textContent).toBe('×2');
+  });
+});
+
+describe('CoinMeter', () => {
+  it('shows the count over the most and fills the bar; a rise pops it, the top glows', () => {
+    const ref = createRef<CoinMeterHandle>();
+    const { container } = render(<CoinMeter ref={ref} coins={2} max={10} />);
+    const el = container.firstElementChild as HTMLElement;
+    expect(el.querySelector('.cm-count')?.textContent).toBe('2/10');
+    expect((el.querySelector('.cm-bar i') as HTMLElement).style.width).toBe('20%');
+    ref.current?.setCoins(3);
+    expect(el.classList.contains('gain')).toBe(true);
+    expect(el.querySelector('.cm-count')?.textContent).toBe('3/10');
+    ref.current?.setCoins(14);
+    expect(el.querySelector('.cm-count')?.textContent).toBe('10/10');
+    expect(el.classList.contains('full')).toBe(true);
+    ref.current?.setCoins(7);
+    expect(el.classList.contains('full')).toBe(false);
+  });
+});
+
+describe('GoalTracker', () => {
+  const goals = [
+    { text: 'Réussir 2 super mini-turbos', have: 1, target: 2, done: false },
+    { text: 'Finir sur le podium', have: 0, target: 1, done: false },
+  ];
+
+  it('lists the goals with their progress, and hides with none', () => {
+    const { container } = render(<GoalTracker goals={goals} label="Objectifs" />);
+    const el = container.firstElementChild as HTMLElement;
+    expect(el.dataset.label).toBe('Objectifs');
+    const rows = el.querySelectorAll('li.goal');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.querySelector('.gl-prog')?.textContent).toBe('1/2');
+    expect(rows[1]?.querySelector('.gl-prog')?.textContent).toBe('');
+    const empty = render(<GoalTracker />).container.firstElementChild as HTMLElement;
+    expect(empty.hidden).toBe(true);
+  });
+
+  it('patches rows through the handle and flashes a goal just reached', () => {
+    const ref = createRef<GoalTrackerHandle>();
+    const { container } = render(<GoalTracker ref={ref} goals={goals} />);
+    const el = container.firstElementChild as HTMLElement;
+    ref.current?.setGoals([{ ...goals[0]!, have: 2, done: true }, goals[1]!, { text: 'Utiliser 5 objets', have: 0, target: 5, done: false }]);
+    const rows = el.querySelectorAll('li.goal');
+    expect(rows).toHaveLength(3);
+    expect(rows[0]?.classList.contains('done')).toBe(true);
+    expect(rows[0]?.classList.contains('just')).toBe(true);
+    expect(rows[0]?.querySelector('.gl-prog')?.textContent).toBe('✓');
+    expect(rows[2]?.querySelector('.gl-text')?.textContent).toBe('Utiliser 5 objets');
+    ref.current?.setGoals([]);
     expect(el.hidden).toBe(true);
   });
 });

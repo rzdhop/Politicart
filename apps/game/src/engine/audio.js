@@ -71,8 +71,16 @@ function playSfx(name) {
     case 'mow': voice(t, 'sawtooth', 95, 120, 0.9, 0.08); voice(t, 'square', 47, 60, 0.9, 0.05); noise(t, 0.9, 0.06, 3000, 1500); break;   // the mower's engine
     case 'euro': voice(t, 'sine', 1568, 1568, 0.12, 0.1); voice(t + 0.09, 'sine', 2093, 2093, 0.3, 0.1); for (let i = 0; i < 4; i++) voice(t + 0.12 + i * 0.05, 'triangle', 2600 + i * 180, 2300, 0.06, 0.04); break;   // the till
     case 'rally': chord(t, 'square', [392, 523, 659, 784], 0.08, 0.22, 0.09); voice(t + 0.32, 'triangle', 1046, 1046, 0.5, 0.08); break;   // a rally's fanfare
+    // ---- The run's rewards and events (DEC-064, DEC-066), routed per kart like the rest.
+    case 'coin': voice(t, 'square', 1975, 1975, 0.05, 0.05); voice(t + 0.05, 'square', 2637, 2637, 0.16, 0.05); break;               // a coin picked: the classic two-note ding
+    case 'event': chord(t, 'square', [659, 880, 1175], 0.09, 0.2, 0.08); voice(t + 0.3, 'triangle', 1760, 1760, 0.35, 0.07); break;    // a live event: the newsflash jingle
+    case 'goal': chord(t, 'triangle', [784, 988, 1175, 1568], 0.07, 0.25, 0.1); break;                                                 // a goal reached
+    case 'jackpot': chord(t, 'square', [1046, 1318, 1568, 2093], 0.05, 0.22, 0.08); for (let i = 0; i < 5; i++) voice(t + 0.22 + i * 0.04, 'sine', 2400 + i * 200, 2600, 0.08, 0.04); break;   // a rare item drawn
+    case 'parry': voice(t, 'triangle', 1200, 600, 0.12, 0.12); noise(t, 0.06, 0.12, 3000); break;                                     // a held item stops a hit from behind
   }
 }
+/** The run's own sounds (rewards, events, the jackpot, the parry), for the test: each a case above. */
+export const RUN_SOUNDS = Object.freeze(['coin', 'event', 'goal', 'jackpot', 'parry']);
 /** Every sound the items and powers play besides the race's own, for the test: each a case above. */
 export const ITEM_SOUNDS = Object.freeze(['impact', 'swoosh', 'teleport', 'siren', 'gas', 'pans', 'gavel', 'stamp', 'mow', 'euro', 'rally']);
 let noiseBuf = null;

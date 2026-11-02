@@ -42,3 +42,14 @@ export const Several: Story = {
     </div>
   ),
 };
+
+/** The upgrades and the jackpot: a rare item's blue rim with its uses left, a mythic one's violet rim. */
+export const RareAndMythic: Story = {
+  render: () => (
+    <div style={{ display: 'flex', gap: 12 }}>
+      <ItemSlot icon="⚡" label="49.3 en rafale" filled tier="rare" count={3} />
+      <ItemSlot icon="📁" label="Triple fuite" filled tier="rare" count={2} />
+      <ItemSlot icon="💰" label="Réserve parlementaire" filled tier="mythic" count={5} />
+    </div>
+  ),
+};

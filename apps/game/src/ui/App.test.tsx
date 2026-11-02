@@ -42,6 +42,7 @@ vi.mock('../engine/audio.js', () => {
 
 import { setRoster } from '../engine/custom.js';
 import { BASE, CHARACTERS, TRACKS } from '../engine/data.js';
+import { pickGoals } from '../engine/goals.js';
 import { builtinStyle } from '../engine/kartstyle.js';
 import { resetMachine, transition, getState } from '../engine/machine.js';
 import { setTransport } from '../engine/net.js';
@@ -50,6 +51,8 @@ import { App } from './App';
 import { hud } from './Hud';
 import { loadGarage, myStyle, resetGarage } from '../engine/garage.js';
 import { actions, getSnapshot, ownedOf } from './store';
+import { setTouchMode } from '../touch';
+import { TAGLINES } from './screens/TitleScreen';
 
 /**
  * Every id the E2E suite addresses on the screens and the note. The
@@ -57,7 +60,7 @@ import { actions, getSnapshot, ownedOf } from './store';
  * apart (ADMIN_IDS) and asserted under an admin profile.
  */
 const CONTRACT_IDS = [
-  's-title', 'b-play', 'b-poly', 'b-mute',
+  's-title', 'b-play', 'b-poly', 'b-mute', 'b-help', 'title-stage',
   's-select', 'roster', 'showcase', 'showcase-stage', 'b-back1', 'b-garage', 'b-next1',
   's-garage', 'g-showcase-stage', 'g-body', 'g-accent', 'g-number', 'g-wheels-gold', 'g-spoiler-wing', 'g-pods-off', 'g-sticker-rosette', 'b-garage-reset', 'b-garage-back',
   'g-exhaust-turbine', 'g-underglow-rainbow', 'g-mast-pirate', 'g-nose-ram', 'g-skin-flames', 'g-trail-laser', 'g-trail-note',
@@ -511,6 +514,139 @@ describe('the React screens', () => {
     expect(localStorage.getItem('politikart-kart')).toBeNull();
     fireEvent.click(container.querySelector('#b-garage-back')!);
     expect(getState()).toBe('select');
+  });
+});
+
+describe('the title screen (DEC-070)', () => {
+  afterEach(() => { act(() => setTouchMode(false)); });
+
+  it('is built around one hero « Jouer », the logo, a quip and the stage band with the candidate at the wheel', () => {
+    const { container } = render(<App />);
+    const title = $(container, 's-title')!;
+    expect(title.querySelector('h1')?.textContent).toBe('POLITIKART');
+    expect(title.querySelector('.title-logo .sub')?.textContent).toBe('Grand Prix de l’Hémicycle');
+    expect(TAGLINES).toContain(title.querySelector('.tagline')?.textContent as (typeof TAGLINES)[number]);
+    expect([...title.querySelectorAll('.hero-btn')].map(b => b.id)).toEqual(['b-play']);
+    expect(title.querySelector('#b-play .hero-btn-label')?.textContent).toBe('Jouer');
+    expect(title.querySelector('#b-play .hero-btn-hint')?.textContent).toBe('ou appuyez sur Entrée');
+    // the band the stage frames the kart into (preview.js reads the visible screen's .showcase-stage)
+    const band = $(container, 'title-stage')!;
+    expect(band.classList.contains('showcase-stage')).toBe(true);
+    expect(band.closest('.tl-stage')).not.toBeNull();
+    expect(band.getAttribute('role')).toBe('img');
+    expect(title.querySelector('.tl-caption')?.textContent).toBe('Au volant : ' + CHARACTERS[G.charIdx]!.name);
+    // the old flat panel and its inline legend are gone; the parody notice stays
+    expect(title.querySelector('.panel')).toBeNull();
+    expect(title.querySelector('.controls')).toBeNull();
+    expect(title.querySelector('.tl-footer .disclaimer')?.textContent).toContain('Parodie');
+    fireEvent.click($(container, 'b-play')!);
+    expect(getState()).toBe('select');
+  });
+
+  it('follows the chosen candidate in the caption', () => {
+    const { container } = render(<App />);
+    fireEvent.click($(container, 'b-play')!);
+    act(() => { actions.selectChar(1); });
+    act(() => { actions.toTitle(); });
+    expect($(container, 's-title')!.querySelector('.tl-caption b')?.textContent).toBe(CHARACTERS[1]!.name);
+  });
+
+  it('keeps the settings as directly clickable chips in the corner strip', () => {
+    const { container } = render(<App />);
+    const strip = $(container, 's-title')!.querySelector('.tl-corner .settings-strip')!;
+    expect(strip.getAttribute('role')).toBe('group');
+    expect([...strip.querySelectorAll('.settings-chip')].map(b => b.id)).toEqual(['b-poly', 'b-mute', 'b-help']);
+    // the detail level carries over from the tests before: read it, flip it, flip it back
+    const poly = $(container, 'b-poly')!;
+    const labels = { high: 'Graphismes : détaillés (ombres)', low: 'Graphismes : légers (low-poly)' };
+    for (let n = 0; n < 2; n++) {
+      const level = getSnapshot().poly;
+      expect(poly.textContent).toBe(labels[level]);
+      expect(poly.classList.contains('on')).toBe(level === 'high');
+      fireEvent.click(poly);
+      expect(getSnapshot().poly).not.toBe(level);
+    }
+    // the sound likewise: the label in words, the glyph and the gold well follow it
+    const mute = $(container, 'b-mute')!;
+    for (let n = 0; n < 2; n++) {
+      const muted = getSnapshot().muted;
+      expect(mute.textContent).toBe(muted ? 'Son : coupé' : 'Son : activé');
+      expect(mute.querySelector('[data-glyph]')?.getAttribute('data-glyph')).toBe(muted ? 'mute' : 'sound');
+      expect(mute.classList.contains('on')).toBe(!muted);
+      fireEvent.click(mute);
+      expect(getSnapshot().muted).toBe(!muted);
+    }
+  });
+
+  it('opens the keyboard legend in the « Commandes » sheet, which Escape closes without starting a race', () => {
+    const { container } = render(<App />);
+    expect(container.querySelector('[role=dialog]')).toBeNull();
+    const help = $(container, 'b-help')!;
+    expect(help.getAttribute('aria-haspopup')).toBe('dialog');
+    fireEvent.click(help);
+    const sheet = $(container, 'help-sheet')!;
+    expect(sheet.getAttribute('role')).toBe('dialog');
+    expect(sheet.querySelector('.sheet-title')?.textContent).toBe('Commandes');
+    expect(sheet.querySelector('.controls')?.textContent).toContain('accélérer');
+    expect($(container, 'touch-legend')).toBeNull();
+    // Enter on the sheet stays there: game.js reads Enter on the title as « Jouer »
+    const seen: string[] = [];
+    const spy = (e: KeyboardEvent) => seen.push(e.key);
+    window.addEventListener('keydown', spy);
+    fireEvent.keyDown(sheet, { key: 'Enter' });
+    fireEvent.keyDown(sheet, { key: 'Escape' });
+    window.removeEventListener('keydown', spy);
+    expect(seen).toEqual([]);
+    expect($(container, 'help-sheet')).toBeNull();
+    expect(getState()).toBe('title');
+  });
+
+  it('shows the touch legend in the sheet in touch mode, and no keyboard hint on « Jouer »', () => {
+    const { container } = render(<App />);
+    act(() => setTouchMode(true));
+    expect(container.querySelector('#b-play .hero-btn-hint')).toBeNull();
+    expect($(container, 'touch-legend')).toBeNull();
+    fireEvent.click($(container, 'b-help')!);
+    expect($(container, 'touch-legend')?.textContent).toContain('accélère tout seul');
+    fireEvent.click(container.querySelector('#help-sheet .sheet-close')!);
+    expect($(container, 'touch-legend')).toBeNull();
+  });
+
+  it('offers no destination cards on the static build', async () => {
+    const { container } = await renderServed({ server: false });
+    expect(container.querySelector('#s-title .menu-cards')).toBeNull();
+    for (const id of ['b-multi', 'b-shop', 'b-account']) expect($(container, id), '#' + id).toBeNull();
+  });
+
+  it('lays the game server\'s destinations out as cards: Multijoueur, Boutique with the balance, Compte with the pseudo, the level and the requests', async () => {
+    setTransport(OpenSocket);
+    const { container } = await renderServed({ server: true, who: 'player', coins: 1250 });
+    const cards = [...container.querySelectorAll('#s-title .menu-cards .menu-card')];
+    expect(cards.map(c => c.id)).toEqual(['b-multi', 'b-shop', 'b-account']);
+    expect(cards.map(c => c.querySelector('.mc-label')?.textContent)).toEqual(['Multijoueur', 'Boutique', 'Compte']);
+    expect($(container, 'b-shop')!.querySelector('.mc-sub .coin-value')?.textContent).toBe((1250).toLocaleString('fr-FR'));
+    expect($(container, 'b-account')!.querySelector('.mc-sub')?.textContent).toBe('Marianne · niv. 1');
+    expect($(container, 'b-account')!.querySelector('.mc-badge')).toBeNull();
+    act(() => { OpenSocket.last!.open(); });
+    act(() => { OpenSocket.last!.serve({ t: 'friends', list: [{ id: 'u-y', name: 'Yann', level: 2, status: 'incoming', online: false, room: null }] }); });
+    const badge = $(container, 'b-account')!.querySelector('.mc-badge')!;
+    expect(badge.textContent).toBe('✉ 1');
+    expect(badge.getAttribute('aria-label')).toBe('1 demande d’ami');
+    fireEvent.click($(container, 'b-account')!);
+    expect(getState()).toBe('account');
+  });
+
+  it('asks a visitor to sign in on the Compte card', async () => {
+    const { container } = await renderServed({ server: true });
+    expect($(container, 'b-account')!.querySelector('.mc-sub')?.textContent).toBe('se connecter');
+    expect($(container, 'b-shop')!.querySelector('.coin-value')?.textContent).toBe('0');
+  });
+
+  it('puts the admin\'s entries in the corner strip as chips', async () => {
+    const { container } = await renderServed({ server: true, who: 'admin' });
+    expect([...container.querySelectorAll('#s-title .settings-strip .settings-chip')].map(b => b.id)).toEqual(['b-poly', 'b-mute', 'b-help', 'b-admin', 'b-dashboard']);
+    expect($(container, 'b-admin')!.textContent).toBe('Atelier (admin)');
+    expect($(container, 'b-dashboard')!.textContent).toBe('Tableau de bord (admin)');
   });
 });
 
@@ -1276,6 +1412,22 @@ describe('the kart card and the coin line (stage 7)', () => {
     expect(($(container, 'r-xp')?.querySelector('.gain-value') as HTMLElement).style.getPropertyValue('--to')).toBe('40');
     expect($(container, 'r-kart')!.querySelector('.kart-trail')?.textContent).toBe('Laser');
     expect(getSnapshot().account!.profile.coins).toBe(60);
+  });
+
+  it('shows the run: the goals as stamps, and what the coins picked, the goals and the streak paid', async () => {
+    const bonus = { daily: false, levelUp: false, levelUpCoins: 0, pickups: 7, goals: 2, goalXp: 30, goalCoins: 50, streak: 3, streakCoins: 18 };
+    const { container, server } = await renderServed({ server: true, who: 'player', progress: { gained: 100, coins: 135, bonus } });
+    const player = raceWith({}) as Record<string, unknown>;
+    player.pickups = 7; player.tally = { turbos: 2 };
+    (G as unknown as { goals: unknown }).goals = pickGoals(1);
+    act(() => { transition('race'); transition('results'); });
+    await settle();
+    expect(server.calls.find(c => c.url === './api/progress')?.body).toMatchObject({ pickups: 7 });
+    expect($(container, 'r-run')?.querySelectorAll('.rs-goal')).toHaveLength(3);
+    expect($(container, 'r-run')?.querySelector('.streak')?.textContent).toContain('3 podiums');
+    expect([...$(container, 'r-xp')!.querySelectorAll('.gain-line')].map(l => l.textContent)).toEqual([
+      '+100 XP (dont 30 d’objectifs)', '+135 politicoins', '+7 politicoins ramassés', '+50 politicoins (2 objectifs)', '+18 série de 3 podiums',
+    ]);
   });
 
   it('names the level reached and its politicoins', async () => {

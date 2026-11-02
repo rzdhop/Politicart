@@ -39,6 +39,14 @@ function later(f) { queued.push(f); loadStage(); }
 
 /** The screens that show the turntable (the select stage): the roster and the Garage. */
 export const showsTurntable = state => state === 'select' || state === 'garage';
+/**
+ * The screens that show the stage as their backdrop (DEC-070): the title,
+ * the player's candidate turning on the podium behind the menu, framed into
+ * the title's own ShowcaseStage band like the roster's.
+ */
+export const showsBackdrop = state => state === 'title';
+/** Every screen the stage draws behind: the turntable's and the backdrop's. */
+export const drawsStage = state => showsTurntable(state) || showsBackdrop(state);
 
 /** A frame's share of the title's warm-up (preview.js warmStage); while the chunk loads, loading is the warm-up. */
 export function warmStage() { if (mod) return mod.warmStage(); loadStage(); return true; }

@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { GainBreakdown } from './GainBreakdown';
+import { RunSummary } from './RunSummary';
 import { Podium } from './Podium';
 import { ResultsTable, type ResultsRow } from './ResultsTable';
 import { TeamStandings } from './TeamStandings';
@@ -172,5 +173,35 @@ describe('TeamStandings', () => {
     const { container } = render(<TeamStandings teams={[{ name: 'Bleu', points: 0 }]} pointsLabel={(p) => p + ' points'} />);
     expect((container.querySelector('.ts-bar i') as HTMLElement).style.width).toBe('0%');
     expect(container.querySelector('td.t')?.textContent).toBe('0 points');
+  });
+});
+
+describe('RunSummary', () => {
+  const goals = [
+    { text: 'Réussir 2 super mini-turbos', done: true },
+    { text: 'Ramasser 15 politicoins', done: false },
+    { text: 'Finir sur le podium', done: true },
+  ];
+
+  it('stamps the goals reached, counts them, and shows the coins and the streak', () => {
+    const { container } = render(<RunSummary goals={goals} coins={12} streak={3} />);
+    const el = container.firstElementChild as HTMLElement;
+    expect(el.querySelector('.rs-count')?.textContent).toBe('2/3');
+    const rows = el.querySelectorAll('.rs-goal');
+    expect(rows[0]?.classList.contains('done')).toBe(true);
+    expect(rows[1]?.classList.contains('done')).toBe(false);
+    expect(rows[0]?.querySelector('.rs-stamp')?.textContent).toBe('✓');
+    expect(el.querySelector('.coins')?.textContent).toBe('12 politicoins ramassés');
+    expect(el.querySelector('.streak')?.textContent).toContain('3 podiums');
+    expect(el.classList.contains('all')).toBe(false);
+  });
+
+  it('turns gold when every goal is reached, and leaves the streak out under two', () => {
+    const { container } = render(<RunSummary goals={goals.map(g => ({ ...g, done: true }))} coins={1} streak={1} footer="Créez un compte" />);
+    const el = container.firstElementChild as HTMLElement;
+    expect(el.classList.contains('all')).toBe(true);
+    expect(el.querySelector('.streak')).toBeNull();
+    expect(el.querySelector('.coins')?.textContent).toBe('1 politicoin ramassé');
+    expect(el.querySelector('.rs-foot')?.textContent).toBe('Créez un compte');
   });
 });

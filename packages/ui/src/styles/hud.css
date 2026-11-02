@@ -105,6 +105,132 @@
   box-shadow:0 0 18px rgba(242,193,78,.35);
 }
 
+.item { position:relative; }
+
+/* A rare or mythic item: its grade's rim (the Politibox colours) and a stronger glow. */
+.item.has.tier-rare {
+  border-color:var(--grade-rare);
+  box-shadow:0 0 22px rgba(79,163,255,.5);
+}
+
+.item.has.tier-mythic {
+  border-color:var(--grade-mythic);
+  box-shadow:0 0 26px rgba(177,76,255,.6), inset 0 0 14px rgba(242,193,78,.25);
+}
+
+/* The uses left of an upgrade, a gold chip on the slot's corner. */
+.item .uses {
+  position:absolute;
+  top:-8px;
+  right:-8px;
+  min-width:26px;
+  padding:2px 6px;
+  border-radius:999px;
+  background:var(--gold);
+  color:#1a1408;
+  font-family:var(--font-display);
+  font-size:14px;
+  line-height:1.2;
+  text-align:center;
+  box-shadow:0 2px 6px rgba(0,0,0,.4);
+}
+
+/* The politicoins carried: a coin, the count, a thin gold bar. */
+.coin-meter {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 12px 6px 8px;
+  border-radius:999px;
+  background:var(--panel);
+  border:2px solid var(--line);
+  font-family:var(--font-display);
+  font-size:18px;
+  line-height:1;
+}
+
+.coin-meter .cm-coin {
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, #fff1b0 0 18%, var(--gold) 45%, #b8862a 100%);
+  box-shadow:inset 0 0 0 2px rgba(120,80,10,.55);
+}
+
+.coin-meter .cm-bar {
+  width:54px;
+  height:6px;
+  border-radius:3px;
+  background:rgba(255,255,255,.12);
+  overflow:hidden;
+}
+
+.coin-meter .cm-bar i {
+  display:block;
+  height:100%;
+  background:var(--gold);
+  transition:width .15s ease-out;
+}
+
+.coin-meter.full {
+  border-color:var(--gold);
+  box-shadow:0 0 16px rgba(242,193,78,.45);
+}
+
+/* The run's goals: a caption, then three short rows that tick. */
+.goal-tracker {
+  list-style:none;
+  margin:0;
+  padding:8px 10px;
+  border-radius:12px;
+  background:var(--panel);
+  border:2px solid var(--line);
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  max-width:260px;
+}
+
+.goal-tracker::before {
+  content:attr(data-label);
+  font-family:var(--font-display);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--gold);
+}
+
+.goal-tracker .goal {
+  display:grid;
+  grid-template-columns:14px 1fr auto;
+  align-items:center;
+  gap:6px;
+  font-size:12px;
+  line-height:1.2;
+  color:var(--fg);
+}
+
+.goal-tracker .gl-box {
+  width:12px;
+  height:12px;
+  border-radius:3px;
+  border:2px solid var(--muted);
+}
+
+.goal-tracker .gl-prog {
+  font-family:var(--font-display);
+  font-size:12px;
+  color:var(--muted);
+}
+
+.goal-tracker .goal.done .gl-box {
+  background:var(--gold);
+  border-color:var(--gold);
+}
+
+.goal-tracker .goal.done .gl-text,
+.goal-tracker .goal.done .gl-prog { color:var(--gold); }
+
 .power {
   width:150px;
   border-radius:14px;

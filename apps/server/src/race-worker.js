@@ -40,6 +40,7 @@ import { setSfxSink } from '../../game/src/engine/audio.js';
 import { CHARACTERS } from '../../game/src/engine/data.js';
 import { drain, resolveFor } from '../../game/src/engine/events.js';
 import { applyGodCommand } from '../../game/src/engine/godcmd.js';
+import { goalsCount } from '../../game/src/engine/goals.js';
 import { useItem } from '../../game/src/engine/items.js';
 import { getState, resetMachine } from '../../game/src/engine/machine.js';
 import { encodeKartPrivate, encodeSnapshot, markTeleports } from '../../game/src/engine/netstate.js';
@@ -176,6 +177,7 @@ function finish() {
     slot, name: roster[slot].name, charId: roster[slot].charId, team: k.team, isAI: roster[slot].isAI, god: roster[slot].god === true,
     rank: k.rank, finished: k.finished, time: k.finished ? k.finishTime : null, bestLap: Number.isFinite(k.bestLap) ? k.bestLap : null,
     points: roster[slot].isAI || k.team == null ? 0 : placementPoints(k.rank),
+    pickups: k.pickups || 0, goals: goalsCount(k),   // the run's own (DEC-064), paid by settleRace
   })).sort((a, b) => a.rank - b.rank);
   // Teams are scored from the grid, not the karts' live isAI flag: a driver who
   // left handed the kart to the AI, and its place still counts for the team.

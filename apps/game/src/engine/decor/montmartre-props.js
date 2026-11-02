@@ -11,12 +11,15 @@ import { box, cone, cyl, mat, sph, tag, textPlane } from '../primitives.js';
 import { G, disposable } from '../state.js';
 import { surface } from '../textures.js';
 import { hex, pick, rand } from '../util.js';
-import { terrainY, yAt } from './context.js';
+import { follow, terrainY, yAt } from './context.js';
 import { JACKETS, SKINS, figure } from './street.js';
 import { merged, rs } from './versailles-props.js';
 
-/** The butte: its centre (world), the plateau's height and radius, the radius where it meets the plain. */
-export const BUTTE = Object.freeze({ x: 0, z: 770, top: 40, plateau: 120, rim: 215 });
+/**
+ * The butte: its centre (world), the plateau's height and radius, the radius where it meets the plain. Its centre stays
+ * 254 m past the top of the loop (z 516 at scale 3) whatever the circuit's scale (context.js follow, DEC-061).
+ */
+export const BUTTE = Object.freeze({ x: 0, get z() { return follow(770, 254); }, top: 40, plateau: 120, rim: 215 });
 /** The butte's height at world (x, z): the plateau, a straight slope down to the terrain at the rim (so a funicular rail laid along a radius sits on it), the terrain beyond; a little below the terrain at the rim, so the plain's coarser grid never shows a seam. */
 export function butteY(x, z) {
   const r = Math.hypot(x - BUTTE.x, z - BUTTE.z), k = Math.max(0, Math.min(1, (BUTTE.rim - r) / (BUTTE.rim - BUTTE.plateau)));

@@ -51,7 +51,12 @@ const FORMER = {
   'item.referendum.hit': 'RÉFÉRENDUM : LE OUI L’EMPORTE, BOOST !',
   'item.referendum.non': 'RÉFÉRENDUM : LE NON L’EMPORTE, ${n} SONNÉ${s}',
   'item.referendum.nonHit': 'RÉFÉRENDUM : LE NON L’EMPORTE !',
-  'item.referendum.nul': 'RÉFÉRENDUM : 12 % DE PARTICIPATION, RÉSULTAT ANNULÉ',
+  'item.referendum.nul': 'RÉFÉRENDUM : VOTE BLANC, VOUS REPARTEZ QUAND MÊME',   // DEC-063: the vote blanc relaunches instead of slowing
+  // the upgrades and the rear shield (DEC-065): no former sentence, their first variant is the reference
+  'item.turbo3.use': '49.3 EN RAFALE : ET UN DE PLUS !',
+  'item.dossier3.use': 'TRIPLE FUITE : MEDIAPART DÉBORDÉ',
+  'item.reserve.use': 'RÉSERVE PARLEMENTAIRE : ARROSAGE DORÉ',
+  'rear.parry': 'PARÉ ! VOTRE OBJET ENCAISSE LE COUP',
   'power.debat.use': 'GRAND DÉBAT : TOUT LE MONDE ÉCOUTE',
   'power.debat.hit': 'GRAND DÉBAT : VOUS ÉCOUTEZ ${name}',
   'power.blocage.use': 'GRÈVE GÉNÉRALE !',

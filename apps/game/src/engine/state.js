@@ -18,7 +18,7 @@ import { getState } from './machine.js';
 // feature pinches it), and that is what the engine reads. A bike lane runs along the road's
 // right-hand edge (lateral offsets, right is +): bikeLane is its offsets at the default
 // width, bikeLaneOf(hw) the same lane on a road of half-width hw.
-export const CFG = { roadHalfWidth: 15, samples: 1800, laps: 3, numAI: 5, powerCooldown: 24, bikeLane: { inner: 10.3, outer: 13.9 } };
+export const CFG = { roadHalfWidth: 15, samples: 1800, laps: 1, numAI: 5, powerCooldown: 24, bikeLane: { inner: 10.3, outer: 13.9 } };
 /** The bike lane's lateral offsets on a road of half-width `hw`: 4.7 m to 1.1 m in from the right-hand kerb. */
 export const bikeLaneOf = hw => ({ inner: hw - 4.7, outer: hw - 1.1 });
 /** The simulation's fixed step: the server's race worker ticks at 60 Hz, and a networked client predicts its own kart at the same step (DEC-052). */
@@ -43,7 +43,8 @@ export function togglePoly() {
 
 export const G = {
   scene: null, track: null, karts: [], player: null, samples: [], N: 0, trackLength: 0,
-  hazards: [], projectiles: [], itemBoxes: [], animated: [], crowd: [], ramps: [], pits: [], pads: [], crossings: [], time: 0, countdown: 0, charIdx: 0, trackIdx: 0,
+  hazards: [], projectiles: [], itemBoxes: [], boxBatch: null, coins: [], coinMesh: null, animated: [], crowd: [], ramps: [], pits: [], pads: [], crossings: [], time: 0, countdown: 0, charIdx: 0, trackIdx: 0,
+  goals: [], eventPlan: null, eventBanner: null, urnRush: 0, coinRain: 0,   // the run's goals and live events (goals.js, raceevents.js)
   resultsAt: Infinity, wrongTimer: 0, laps: CFG.laps, previewKart: null, previewScene: null, sun: null, thumbs: {}, thumbPoly: null,
   // the race's seed and what it drew (DEC-049): the layout (engine/layout.js), the race's own
   // random stream, and the circuit's half-width (DEC-050); entitySeq numbers hazards and

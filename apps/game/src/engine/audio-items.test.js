@@ -3,7 +3,7 @@
 // voice. In its own file: initAudio keeps its context for the module's life.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { initAudio, ITEM_SOUNDS, setSfxSink, sfx } from './audio.js';
+import { initAudio, ITEM_SOUNDS, RUN_SOUNDS, setSfxSink, sfx } from './audio.js';
 
 let started = 0;
 const param = () => ({ value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {}, linearRampToValueAtTime() {} });
@@ -27,6 +27,11 @@ describe('the items’ and powers’ sounds', () => {
   });
 
   it.each(ITEM_SOUNDS)('%s starts voices of its own', name => {
+    const before = started; sfx(name);
+    expect(started - before).toBeGreaterThan(0);
+  });
+
+  it.each(RUN_SOUNDS)('the run sound %s starts voices of its own', name => {
     const before = started; sfx(name);
     expect(started - before).toBeGreaterThan(0);
   });

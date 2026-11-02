@@ -15,6 +15,12 @@ import { birdCount } from './flock.js';
 import { MOTION } from './life.js';
 import { TREE_KINDS } from './trees.js';
 
+/**
+ * One long lap (DEC-061): the circuits are drawn 1.5 times larger, so the road and all that follows it (its ribbons, lamps,
+ * trees, blocks, benches, the bike lane) is half as long again at the same density per metre, while the landmarks are not:
+ * the scene totals measured on the old three-lap circuits allow 15 % more triangles (about a third of the extra road).
+ */
+const LONG_LAP = 1.15;
 const MARSEILLE = TRACKS.findIndex(t => t.id === 'marseille');
 const STEP = 1 / 60;
 // Every circuit built twice from one random sequence is the same build (the pattern of headless.test.js).
@@ -30,7 +36,8 @@ function build(i, level, { random = 3, seed = 7 } = {}) {
   mockRandom(random); buildTrack(scene, TRACKS[i], { seed }); vi.restoreAllMocks();
   return { scene, animated: G.animated, crowd: crowdCount(), birds: birdCount() };
 }
-const instancedIn = scene => { const out = []; scene.traverse(o => { if (o.isInstancedMesh) out.push(o); }); return out; };
+/** The decor's instanced batches: the urnes and coins on the road (ballotbox.js, coins.js, named road:) are not decor. */
+const instancedIn = scene => { const out = []; scene.traverse(o => { if (o.isInstancedMesh && !o.name.startsWith('road:')) out.push(o); }); return out; };
 const run = (animated, steps) => { for (let n = 0; n < steps; n++) { G.time += STEP; for (const f of animated) f(STEP); } };
 
 afterEach(() => { MOTION.on = false; if (getPoly() !== 'high') togglePoly(); G.karts = []; });
@@ -43,7 +50,7 @@ describe('Marseille — Vieux-Port, dense', () => {
   it.each([['détaillés', 'high', 1.4], ['légers', 'low', 1.1]])('holds the budget on %s: no more draws than before, triangles within the margin', (_n, level, margin) => {
     const { scene, crowd, birds } = build(MARSEILLE, level);
     expect(countMeshes(scene, true)).toBeLessThanOrEqual(BEFORE[level].meshes);
-    expect(countTriangles(scene, true)).toBeLessThanOrEqual(BEFORE[level].tris * margin);
+    expect(countTriangles(scene, true)).toBeLessThanOrEqual(BEFORE[level].tris * margin * LONG_LAP);
     // the density: about twice the legacy crowd (212 figures) on "détaillés", and the flocks
     if (level === 'high') { expect(crowd).toBeGreaterThan(350); expect(birds).toBeGreaterThan(100); }
     else { expect(crowd).toBeGreaterThan(150); expect(birds).toBeGreaterThan(30); }

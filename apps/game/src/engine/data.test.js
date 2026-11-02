@@ -64,12 +64,12 @@ describe('the circuits', () => {
     expect(new Set(TRACKS.map(t => t.id)).size).toBe(TRACKS.length);
   });
 
-  it('draws every loop from 13 or 14 points at scale 3', () => {
+  it('draws every loop from 13 or 14 points at scale 4.5 (one long lap, DEC-061)', () => {
     for (const t of TRACKS) {
       expect(t.points.length).toBeGreaterThanOrEqual(13);
       expect(t.points.length).toBeLessThanOrEqual(14);
       for (const p of t.points) { expect(p).toHaveLength(2); expect(Number.isFinite(p[0]) && Number.isFinite(p[1])).toBe(true); }
-      expect(t.scale).toBe(3);
+      expect(t.scale).toBe(4.5);
       expect(t.kerb).toHaveLength(2); expect(t.sky).toHaveLength(2);
       expect(typeof t.name).toBe('string'); expect(t.desc.length).toBeGreaterThan(20);
     }
