@@ -37,7 +37,7 @@ import { TEX, bakeSurface, surface, textures } from './textures.js';
 import { pick, rand } from './util.js';
 import { buildBallotBoxes } from './ballotbox.js';
 import { buildCoins } from './coins.js';
-import { EMBANK, GROUND_CELLS, GROUND_SIZE, LAYOUT_SCALE, PAVEMENT, STILL, TERRAIN_REACH, nOf, setDecorScale, setTerrain, still, terrainFlat, terrainY, yAt } from './decor/context.js';
+import { EMBANK, GROUND_CELLS, GROUND_SIZE, LAYOUT_SCALE, PAVEMENT, STILL, TERRAIN_REACH, nOf, setDecorScale, setTerrain, spread, still, terrainFlat, terrainY, yAt } from './decor/context.js';
 import { BUILDERS, DECOR_SURFACES } from './decor/index.js';
 import { flushInstanced, resetInstanced } from './decor/instanced.js';
 import { resetLife } from './decor/life.js';
@@ -299,7 +299,7 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   // (CFG.samples at SAMPLES_SCALE) so the samples stay about 2 m apart and
   // every distance counted in samples (feature lengths, ramps, pits, AI
   // look-ahead, power offsets) keeps its meaning on the long lap (DEC-061).
-  const S = track.scale || 1; setDecorScale(S);
+  const S = track.scale || 1; setDecorScale(S, { road: track.spread === 'road' });   // DEC-071: road-spread circuits keep their roadside decor by the road
   const pts = track.points.map(p => new THREE.Vector3(p[0] * S, 0, p[1] * S));
   const curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
   curve.arcLengthDivisions = Math.round(2000 * S / SAMPLES_SCALE);
@@ -488,8 +488,13 @@ function* spreadDecor(decor, world, S) {
   let n = 0;
   for (const child of [...decor.children]) {
     bb.setFromObject(child).getSize(size); bb.getCenter(centre);
-    if (Math.max(size.x, size.z) < 14) { child.position.x *= S; child.position.z *= S; child.position.y += yAt(child.position.x, child.position.z); world.add(child); }
-    else child.position.y += yAt(centre.x * S, centre.z * S);
+    // where the piece goes (decor/context.js spread: x S, or kept by the road on a road-spread circuit, DEC-071)
+    if (Math.max(size.x, size.z) < 14) { const [x, z] = spread(child.position.x, child.position.z); child.position.x = x; child.position.z = z; child.position.y += yAt(x, z); world.add(child); }
+    else {
+      // a big piece stays in the group stretched by S; its centre moves to where spread() puts it
+      const [x, z] = spread(centre.x, centre.z);
+      child.position.x += (x - centre.x * S) / S; child.position.z += (z - centre.z * S) / S; child.position.y += yAt(x, z);
+    }
     if (++n % SLICE_CHILDREN === 0) yield;
   }
   decor.scale.set(S, 1, S); world.add(decor);

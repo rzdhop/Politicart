@@ -19,7 +19,7 @@ import * as THREE from 'three';
 
 import { G, getPoly, isClear } from '../state.js';
 import { pick, rand } from '../util.js';
-import { DS, K, clearAt, follow, nOf, yAt } from './context.js';
+import { DS, K, clearAt, follow, nOf, spread, yAt } from './context.js';
 import { fromBuilder, instanced } from './instanced.js';
 import { box, cyl } from '../primitives.js';
 import { building, carousel, funicular, house, lamp, metroEntrance, sacreCoeur, windmill } from './street.js';
@@ -172,7 +172,7 @@ export function* buildMontmartre(scene, world) {
 
   // the streets' life: 2CVs parked along the road and in the lanes, street artists, trees along the road
   for (let i = 30; i < N; i += dense ? 70 : 120) { const s = G.samples[i], sg = (i / 10) % 2 ? 1 : -1, l = s.hw + 9, x = s.x + s.sx * sg * l, z = s.z + s.sz * sg * l; if (isClear(x, z, 7.5)) pick(cars).add(x, z, { y: yAt(x, z), rotY: Math.atan2(s.tx, s.tz) - Math.PI / 2 + (sg > 0 ? 0 : Math.PI) }); }
-  [[-80, -100, 1.2], [90, -60, -0.3], [-20, 30, 1.6], [40, -90, 0.2], [-60, -40, 2.4]].forEach(([x, z, r]) => { if (clearAt(x, z, 6)) pick(cars).add(x * S, z * S, { y: yAt(x * S, z * S), rotY: r }); });
-  for (let i = 0; i < nOf(6); i++) { const x = rand(-40, 40) * S, z = rand(-100, -60) * S; walker(world, x, z, { hat: 'sign', base: yAt(x, z), world: true, amp: 0.1 }); }
+  [[-80, -100, 1.2], [90, -60, -0.3], [-20, 30, 1.6], [40, -90, 0.2], [-60, -40, 2.4]].forEach(([x, z, r]) => { if (!clearAt(x, z, 6)) return; const [wx, wz] = spread(x, z); pick(cars).add(wx, wz, { y: yAt(wx, wz), rotY: r }); });
+  for (let i = 0; i < nOf(6); i++) { const [x, z] = spread(rand(-40, 40), rand(-100, -60)); walker(world, x, z, { hat: 'sign', base: yAt(x, z), world: true, amp: 0.1 }); }
   for (let i = 0; i < G.N; i += 54) { const s = G.samples[i]; const sg = (i / 54) % 2 ? 1 : -1, x = s.x + s.sx * sg * (s.hw + 9), z = s.z + s.sz * sg * (s.hw + 9); if (isClear(x, z, 7)) wtrees.add(x, z, { y: yAt(x, z), scale: rand(0.9, 1.2), rotY: rand(0, 6.28) }); }
 }

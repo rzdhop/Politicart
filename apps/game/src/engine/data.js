@@ -221,7 +221,7 @@ export const TRACKS = [
   { id: 'montmartre', name: 'Montmartre — La Butte', desc: 'Montée pavée vers le Sacré-Cœur, place du Tertre et ses peintres, funiculaire et terrasses de café. Le Congrès est loin, les pigeons non.',
     ground: 0x6f9a55, sky: [0x86b0e0, 0xf2dcd8], fog: 0xf2dcd8, kerb: [0x24357a, 0xf6f1e4], pavement: 0xcdbf9e, cobble: true,
     points: [[0, -165], [95, -170], [165, -130], [175, -60], [180, 40], [150, 110], [100, 165], [30, 150], [-40, 172], [-120, 160], [-175, 100], [-160, 20], [-175, -80], [-110, -160]],
-    scale: 4.5, boxRows: [0.05, 0.13, 0.20, 0.26, 0.33, 0.40, 0.50, 0.57, 0.66, 0.74, 0.82, 0.865, 0.95],
+    scale: 4.5, spread: 'road', boxRows: [0.05, 0.13, 0.20, 0.26, 0.33, 0.40, 0.50, 0.57, 0.66, 0.74, 0.82, 0.865, 0.95],
     // the butte: a real climb of 22 m up the long right-hand straight, the place du Tertre on top, the descent down the other side (DEC-050 replaces A-035's ramps in series)
     roadHalfWidth: 11, profile: [[0, 0], [0.10, 2], [0.22, 14], [0.32, 22], [0.42, 22], [0.50, 20], [0.62, 14], [0.72, 8], [0.85, 2], [0.94, 0]], climates: ['dusk', 'night', 'dawn'], cyclists: { min: 16, max: 24 },
     features: [{ t: 'pad', f: 0.08 }, { t: 'pad', f: 0.215 }, { t: 'bump', f: 0.26, len: 6, h: 0.5 }, { t: 'bump', f: 0.275, len: 6, h: 0.5 }, { t: 'bump', f: 0.29, len: 6, h: 0.5 }, { t: 'pad', f: 0.30 }, { t: 'ramp', f: 0.36, h: 2.6, len: 8 }, { t: 'pad', f: 0.46 }, { t: 'crossing', f: 0.60, color: 0xf6f1e4, taxi: true }, { t: 'pad', f: 0.63 }, { t: 'ramp', f: 0.715, h: 2.6, len: 8 }, { t: 'pit', f: 0.84, len: 8, kind: 'works' }, { t: 'pad', f: 0.92 }, { t: 'bump', f: 0.975, len: 6, h: 0.5 }],
@@ -233,7 +233,7 @@ export const TRACKS = [
   { id: 'marseille', name: 'Marseille — Vieux-Port', desc: 'Les quais du Vieux-Port : bateaux, grande roue, Bonne Mère sur sa colline et terrasses de pastis. Rapide le long de l’eau, serré derrière. Le pastis n’est pas un carburant.',
     ground: 0x8aa860, sky: [0x2b7fd6, 0xcfe9fb], fog: 0xcfe9fb, kerb: [0x2a7fd4, 0xf6f1e4], pavement: 0xd8c9a3,
     points: [[0, -170], [110, -168], [172, -125], [178, -40], [165, 50], [175, 120], [110, 168], [30, 140], [-50, 170], [-120, 150], [-170, 95], [-140, 30], [-175, -50], [-120, -150]],
-    scale: 4.5, boxRows: [0.05, 0.17, 0.215, 0.31, 0.37, 0.44, 0.52, 0.61, 0.67, 0.74, 0.83, 0.88, 0.96],
+    scale: 4.5, spread: 'road', boxRows: [0.05, 0.17, 0.215, 0.31, 0.37, 0.44, 0.52, 0.61, 0.67, 0.74, 0.83, 0.88, 0.96],
     // flat along the quays, then the back half climbs 14 m to the Corniche, banked along the sea, in the mistral, and drops back to the port
     roadHalfWidth: 14, profile: [[0, 0], [0.45, 0], [0.55, 6], [0.65, 14], [0.78, 14], [0.88, 6], [0.96, 0]], climates: ['noon', 'golden', 'overcast'], cyclists: { min: 18, max: 28 },
     features: [{ t: 'pad', f: 0.08 }, { t: 'pad', f: 0.10 }, { t: 'ramp', f: 0.25, h: 3.4, len: 10 }, { t: 'pit', f: 0.25556, len: 9, kind: 'manif' }, { t: 'pad', f: 0.34 }, { t: 'pit', f: 0.40, len: 8, kind: 'works' }, { t: 'pad', f: 0.47 }, { t: 'ramp', f: 0.495, h: 2.8, len: 8 }, { t: 'crossing', f: 0.56, color: 0xf6f1e4, taxi: true }, { t: 'pad', f: 0.64 }, { t: 'bank', f: 0.68, len: 70, a: 0.12 }, { t: 'wind', f: 0.73, len: 60, push: 3.5 }, { t: 'ramp', f: 0.80, h: 2.8, len: 8 }, { t: 'pad', f: 0.86 }, { t: 'pit', f: 0.93, len: 8, kind: 'water' }, { t: 'pad', f: 0.985 }],

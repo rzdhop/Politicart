@@ -22,7 +22,7 @@ import * as THREE from 'three';
 
 import { bakeVertexColours, finishOf, mergeByMaterial } from '../geo.js';
 import { G } from '../state.js';
-import { DS, STILL, yAt } from './context.js';
+import { STILL, spread, yAt } from './context.js';
 
 /** The side of the square cells copies are grouped by, in world metres. */
 export const CELL = 200;
@@ -98,7 +98,7 @@ export function instanced(build, { world = false, tint = false, pad = 2, cell = 
       // resolve every copy's world pose, then group the copies by cell
       const cells = new Map();
       for (const c of copies) {
-        const x = world ? c.x : c.x * DS, z = world ? c.z : c.z * DS, y = world ? c.y : yAt(x, z) + c.y;
+        const [x, z] = world ? [c.x, c.z] : spread(c.x, c.z), y = world ? c.y : yAt(x, z) + c.y;
         c.pose = { x, y, z, rotY: c.rotY, tiltX: c.tiltX, tiltZ: c.tiltZ, scale: c.scale };
         const key = Math.floor(x / cell) + ',' + Math.floor(z / cell);
         if (!cells.has(key)) cells.set(key, []);

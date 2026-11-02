@@ -21,7 +21,7 @@ import { box, plane } from '../primitives.js';
 import { G, disposable, getPoly, isClear } from '../state.js';
 import { TEX, surface } from '../textures.js';
 import { pick, rand } from '../util.js';
-import { DS, K, clearAt, nOf, still } from './context.js';
+import { DS, K, clearAt, nOf, spread, still } from './context.js';
 import { chateauIf, corniche, cornicheSea, frioul, sea, seaMaterial, waterSheet } from './marseille-corniche.js';
 import { boules, landmark, major, mooredBoat, mooringPost, mucem, ombriere, sardineStall } from './marseille-port.js';
 import { bonneMere, building, cafe, circling, crane, crowd, ferrisWheel, ferry, flock, fort, house, tram, treeAt } from './street.js';
@@ -38,7 +38,7 @@ export function* buildMarseille(scene, world) {
   // the harbour south of the quai du Port, the rive neuve across it; the sea round the mouth and up the Corniche.
   // The water is a sheet over the ground (the road's descent spreads a low rise into the harbour's west end, decor/context.js)
   const waterMat = disposable(new THREE.MeshStandardMaterial({ map: disposable(TEX.water.clone()), normalMap: surface('water').normalMap, roughness: 0.12, metalness: 0.3 })); waterMat.map.needsUpdate = true; waterMat.map.repeat.set(40, 3);
-  const rows = []; for (let j = 0; j <= 5; j++) { const row = []; for (let i = 0; i <= 40; i++) row.push([(-310 + i * 13) * S, (-229 + j * 6.8) * S]); rows.push(row); }
+  const rows = []; for (let j = 0; j <= 5; j++) { const row = []; for (let i = 0; i <= 40; i++) row.push(spread(-310 + i * 13, -229 + j * 6.8)); rows.push(row); }
   waterSheet(world, waterMat, rows, 'marseille:harbour');
   G.animated.push(dt => { waterMat.map.offset.x += dt * 0.015; waterMat.map.offset.y += dt * 0.004; });
   // the quays' walls, one merged piece stretched with the harbour; the pontoons each on the water where it is
@@ -47,8 +47,8 @@ export function* buildMarseille(scene, world) {
   for (let px = -200; px <= 160; px += 60) scene.add(still(box(2, 0.5, 30, 0xbfb398, px, 0.2, -210)));
   // the mouth's landmarks, in world units drawn for a scale-3 circuit and moved out by K with the road (context.js), stay within the
   // sky dome (climate.js SKY_RADIUS): Fort Saint-Jean on the north side of the mouth, its walls west and north
-  fort(world, -860 * K, -545 * K, Math.PI); crane(world, 225 * S, -175 * S, -0.6); crane(world, 232 * S, -140 * S, 0.4); crane(world, 60 * S, -238 * S, 2.6);
-  bonneMere(world, 40 * S, -268 * S);
+  fort(world, -860 * K, -545 * K, Math.PI); crane(world, ...spread(225, -175), -0.6); crane(world, ...spread(232, -140), 0.4); crane(world, ...spread(60, -238), 2.6);
+  bonneMere(world, ...spread(40, -268));
   for (let x = -290; x <= 190; x += 34) building(scene, x, -252, 28, 16, rand(12, 18), 0, pick(OCHRES), pick([0xa0523d, 0xb0623f]));
   for (let x = -280; x <= 190; x += hi ? 15 : 30) treeAt(scene, x + rand(-2, 2), -236, 'palm');
   yield;
@@ -60,11 +60,11 @@ export function* buildMarseille(scene, world) {
   const gap = (hi ? 7.5 : 15) / S;
   for (let px = -200; px <= 160; px += 60) for (const side of [-1, 1]) for (let bz = -223; bz <= -197; bz += gap) if (Math.random() > 0.12) mooredBoat(px + side * 2.3, bz + rand(-0.2, 0.2), side > 0 ? 0 : Math.PI);
   ferry(scene, -190, 170, -222);
-  ferrisWheel(world, 218 * S, -208 * S, 18);
+  ferrisWheel(world, ...spread(218, -208), 18);
   yield;
   // the quai: pastis terraces, the Ombrière, sardine stalls, the tram, boules, gulls on the mooring posts, palms, the promenade's crowd
   cafe(scene, -120, -186, Math.PI, 'BAR DE LA MARINE', 0xf2c14e, 4); cafe(scene, 40, -186, Math.PI, 'LA SAMARITAINE', 0xf2c14e, 4); cafe(scene, -70, 40, 0, 'CHEZ ÉTIENNE', 0xf2c14e, 3);
-  ombriere(world, 108 * S, -189 * S);
+  ombriere(world, ...spread(108, -189));
   [-95, -60, -25, 10, 62, 80].forEach(x => sardineStall(scene, x, -187.5, 0));
   tram(scene, -150, 150, -181);
   boules(scene, -165, -186); boules(scene, 140, -186);
@@ -73,7 +73,7 @@ export function* buildMarseille(scene, world) {
   for (let x = -190; x <= 180; x += hi ? 24 : 36) if (Math.abs(x + 120) > 10 && Math.abs(x - 40) > 10 && Math.abs(x - 108) > 12) treeAt(scene, x, -190, 'palm');
   for (let i = 0; i < nOf(70); i++) { const x = rand(-205, 185); if (Math.abs(x + 120) < 4 || Math.abs(x - 40) < 4) continue; crowd(scene, x, rand(-192, -184), { jacket: pick(SUMMER), kind: Math.random() < 0.1 ? 'camera' : undefined, amp: Math.random() < 0.15 ? 0.12 : 0.04 }); }
   [-40, 30, 160].forEach(x => flock(scene, x, -184, { n: nOf(10), radius: 1.4 }));
-  for (const x of [-150, 0, 150]) circling(world, x * S, -212 * S, { world: true, y: 0, n: nOf(6), radius: 42, height: 22 });
+  for (const x of [-150, 0, 150]) circling(world, ...spread(x, -212), { world: true, y: 0, n: nOf(6), radius: 42, height: 22 });
   yield;
   // Le Panier inside the loop: ochre and pink houses round a little square with its boules, olive trees and oleanders; the ochre ring round the outside
   scene.add(still(plane(50, 40, 0xcdbc8e, -70, 10)));

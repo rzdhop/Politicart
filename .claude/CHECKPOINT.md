@@ -21,8 +21,10 @@ Current state only. History lives in git.
 - **Not run:** the E2E suite (Chromium 1248 wanted, 1243 installed);
   `mobile.spec.ts` was edited for the help sheet; R-04/R-05/R-07b touch the
   title. Nothing measured on a real GPU or phone.
-- **Follow-ups:** decor spread by scale reads sparser beside the road on
-  Marseille and Montmartre (a road-relative spread would fix it); relief
+- **2026-11-02, after the merge (PR #18):** Marseille and Montmartre now
+  spread their scale-1 decor along the road (DEC-071), so their roadside is
+  as close as at scale 3.
+- **Follow-ups:** relief
   profiles stretched 1.5x so crests launch less; the Grand Canal reaches
   ~1.9 km; draw calls per frame not re-measured; solo pickups/goals are
   client-reported (capped 60 / 3, no anti-cheat); item rolls and the

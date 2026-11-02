@@ -18,7 +18,7 @@
 //   tests switch it on with MOTION.on.
 import { mat } from '../primitives.js';
 import { G, getPoly } from '../state.js';
-import { DS, yAt } from './context.js';
+import { spread, yAt } from './context.js';
 import { CELL, instanced } from './instanced.js';
 
 let OWNER = null;
@@ -55,7 +55,7 @@ function tinted(prop) {
 /** World position of a copy at (x, z): scale-1 decor coordinates set on the ground, or world units with an absolute y (`world`). */
 export function place(x, z, { y = 0, world = false } = {}) {
   if (world) return { x, y, z };
-  const wx = x * DS, wz = z * DS;
+  const [wx, wz] = spread(x, z);
   return { x: wx, y: yAt(wx, wz) + y, z: wz };
 }
 

@@ -1427,3 +1427,24 @@ before, so Marseille's quai and Montmartre's ring of houses read sparser
 from the road; a road-relative spread would bring them back. The Grand
 Canal, already past the sky dome, now reaches further past it.
 
+
+## DEC-071 -- Marseille and Montmartre spread their decor along the road
+
+**Context.** Drawn 1.5x larger for the long lap (DEC-061), every circuit's
+scale-1 decor was spread by multiplying its positions by the scale, so what
+lined the road ended 1.5x further from it than its layout meant: the owner
+found Marseille's quai and Montmartre's houses sparse beside the road.
+
+**Decision.** `decor/context.js spread(x, z)` maps scale-1 coordinates to
+the world. On a circuit with `spread: 'road'` (Marseille, Montmartre) a
+point keeps its scale-3 distance to the road (each road sample within
+`SPREAD_REACH` = 140 scale-1 units proposes its own world point plus the
+offset x `LAYOUT_SCALE`, weighted by distance) and blends to the plain x DS
+spread further out (`FAR_WEIGHT`), so a point between two stretches of road
+lands between both answers rather than jumping. Every scale-1 placement goes
+through it: `track.js spreadDecor` (small pieces moved, big pieces' centres
+moved, their size still x S), `life.js place`, `instanced.js`, `clearAt`, and
+Marseille's port pieces placed in world units from scale-1 numbers (harbour
+water, Ombrière, cranes, big wheel, gulls). The Paris circuits keep the
+plain spread, unchanged. The decor tests (nothing on the road, budgets, the
+"légers" fold) pass unchanged; `spread.test.js` pins the mapping.
