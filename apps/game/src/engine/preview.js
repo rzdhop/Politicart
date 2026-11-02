@@ -11,6 +11,13 @@
 // for the "go" launch, the tail the stage draws behind the circuit screen
 // (Q3, below).
 //
+// The title draws the stage too, as its backdrop (DEC-070, stagegate.js
+// showsBackdrop): the player's candidate on the podium, framed into the
+// title's own ShowcaseStage band by the same frame function as the roster
+// (the visible screen's band), turning slowly from the first frame where
+// the stage moves by itself, and draggable. Until its programs are compiled
+// the title sits on the plain background, as before.
+//
 // One stage scene per detail tier ('high', 'phone' -- "détaillés" on a
 // coarse pointer: half-size fabrics, a 1024 shadow -- and 'low'), built on
 // first use and kept resident; changing the tier disposes it and builds the
@@ -80,7 +87,7 @@ import { LOOK3D } from './looks.js';
 import { getState, onTransition } from './machine.js';
 import { bodyOf, buildPilot, disposePilot, MOUNT } from './pilot.js';
 import { clearCanvas, getRenderer } from './render.js';
-import { initials, placeholder, showsTurntable } from './stagegate.js';
+import { drawsStage, initials, placeholder, showsBackdrop, showsTurntable } from './stagegate.js';
 import { stageDrag, stageInput, takeDrag, watchMouse } from './stageinput.js';
 import { RIM, STAGE_LOOK, tintOf, withLook } from './stagelook.js';
 import { G, getPoly } from './state.js';
@@ -483,7 +490,8 @@ function step(dt) {
   } else if (!live) ST.vel = 0;
   else {
     ST.yaw += ST.vel * dt; ST.vel *= Math.pow(0.04, dt);
-    if (ST.idle > 2.5) ST.yaw += 0.22 * dt;
+    if (showsBackdrop(getState())) ST.yaw += TITLE_SPIN * dt;   // the title's backdrop turns from the start (DEC-070)
+    else if (ST.idle > 2.5) ST.yaw += 0.22 * dt;
   }
   st.turntable.rotation.y = ST.yaw;
   // the rigs: the one leaving spins out, the one arriving pops in
@@ -517,6 +525,9 @@ function step(dt) {
   st.update(dt, t);
 }
 
+/** The title backdrop's turn, rad/s: a slow showroom spin under the menu. */
+const TITLE_SPIN = 0.32;
+
 /** What the kart's animations are told of the kart while it launches (kart.js reads boost). */
 const FLOORED = Object.freeze({ boost: 1, speed: 0 });
 
@@ -549,8 +560,8 @@ export function renderPreview(dt) {
   dt = dt > 0 ? Math.min(dt, MAX_DT) : 0;   // the stage's own clamp (A.1)
   const t0 = now(), r = getRenderer();
   govern(t0, r);
-  // behind another screen the stage draws only the launch's tail (Q3), and only while it moves
-  if (!showsTurntable(getState())) {
+  // behind another screen the stage draws only the launch's tail (Q3), and only while it moves; the title draws it as its backdrop
+  if (!drawsStage(getState())) {
     if (!launching()) return;
     if (!moving() || !ST.stage) { endLaunch(); clearCanvas(); return; }
     if (LAUNCH.armed && !LAUNCH.painted) { LAUNCH.painted = true; return; }   // the press's frame: the circuit screen paints over the last stage frame
@@ -565,7 +576,8 @@ export function renderPreview(dt) {
   if (LAUNCH.rig) LAUNCH.t = CAPTURE_MOTION ? captureStep(LAUNCH.t, dt) : (now() - LAUNCH.t0) / 1000;
   const t1 = now(); step(dt);
   // the stage draws once every program it needs is compiled: until then a few a frame, the page free between
-  if (!compileStage(r)) { ST.ms = { build: t1 - t0, step: now() - t1, draw: 0 }; return; }
+  // (the plain background meanwhile, on a screen that has not drawn the stage yet: a race left for the title must not linger)
+  if (!compileStage(r)) { if (!ST.drawn) clearCanvas(); ST.ms = { build: t1 - t0, step: now() - t1, draw: 0 }; return; }
   // a still stage that the title did not prime primes the canvas first, one object a frame over the plain background
   if (ST.warm !== ST.tier && stillStage(r)) {
     if (!ST.prime) ST.prime = primeJob(st.scene);
@@ -671,7 +683,7 @@ onTransition(to => {
   ST.drawn = false; ST.uiFirst = true;
   if (showsTurntable(to)) ST.drewIn = null;   // the screen that launches must have drawn its own podium first (launch)
   if (to !== 'tracks') endLaunch();   // leaving the circuits during the tail (Retour, a race, an invitation): the kart is back on the podium
-  if (showsTurntable(to) && ST.rig && ST.rig.userData.age < 1 && !moving()) { ST.rig.userData.age = 1; ST.rig.scale.setScalar(1); }   // no pop-in on a stage that stopped moving meanwhile
+  if (drawsStage(to) && ST.rig && ST.rig.userData.age < 1 && !moving()) { ST.rig.userData.age = 1; ST.rig.scale.setScalar(1); }   // no pop-in on a stage that stopped moving meanwhile
   if (to === 'garage' && ST.stage && !moving()) { ST.yaw = GARAGE_YAW; ST.vel = 0; }
 });
 
@@ -849,7 +861,11 @@ function draw(r, st, f, W, H, view) {
 export function warmStage() {
   const tier = stageTier();
   PT.titleUntil = now() + 1500;   // the title is idle: background work may run behind it until the next call or the next press
-  if (ST.warm === tier && ST.stage) return false;
+  if (ST.warm === tier && ST.stage) {
+    // the title's backdrop (DEC-070) warmed the stage by drawing it: the portraits still start behind the idle title, once
+    if (!Object.keys(PT.keys).length) makeThumbs();
+    return false;
+  }
   const r = getRenderer(), st = ensureStage();
   applyWant();
   if (!ST.rig) showRig(G.charIdx, { animate: true });
@@ -1192,7 +1208,7 @@ function backgroundFrame() {
   const state = getState(), t = now();
   const quiet = t - stageInput.lastInput > PORTRAIT_QUIET_MS;
   const menu = PORTRAIT_STATES.has(state) || (state === 'title' && ST.stage && t < PT.titleUntil);
-  const free = !showsTurntable(state) || !stillStage() || (ST.drawn && ST.want === null && !ST.job && !GOV.drew);
+  const free = !drawsStage(state) || !stillStage() || (ST.drawn && ST.want === null && !ST.job && !GOV.drew);
   if (quiet && menu && free && ST.stage) {
     const r = getRenderer();
     if (!BG.job) BG.job = nextJob(state);

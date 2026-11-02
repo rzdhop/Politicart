@@ -1348,3 +1348,37 @@ upgraded draws for 12 s), Pluie de pièces (every coin back, double for
 thread), Sondage éclair (the three last get an item and a boost). The
 server runs them; clients see their effects through what snapshots already
 carry, plus the banner's id (`ev`) shown in the centre of the HUD.
+
+## DEC-070 -- The title screen is a hero over the live stage
+
+**Context.** The title was one glass panel of eight equal-weight buttons, the
+key legend and the disclaimer, on a cleared canvas: nothing said "play me",
+and the 3D stage, the game's best first impression, waited behind "Jouer".
+The owner asked for a full redesign of the main page, fun and inviting.
+
+**Decision.** The title draws the select stage as its backdrop
+(`stagegate.js showsBackdrop` / `drawsStage`; game.js renders it on the
+title instead of clearing): the player's candidate turns on the podium
+(0.32 rad/s from the first frame where the stage moves by itself, still
+under reduced motion or the governor), framed into the title's own
+`ShowcaseStage` band (`#title-stage`) by the roster's frame function, which
+already follows the visible screen's band, and draggable. The chunk loads on
+the title's first frame; until the stage has compiled, the canvas is cleared
+to the plain background (`renderPreview` clears while it compiles on a
+screen that has not drawn it yet). `warmStage` still starts the portraits
+behind an idle title. The layout is a new `menu` group in `packages/ui`:
+`TitleLayout` (left column over a scrim, stage on the right; one column on
+a phone), `TitleLogo` (animated entrance and sheen), `Tagline` (rotating
+quips), `HeroButton` (the one « Jouer »), `MenuCard` (Multijoueur, Boutique
+with the balance, Compte with pseudo, level and a friend-request badge),
+`SettingsChip` (graphics, sound, « Commandes », the admin's two entries),
+`Sheet` (the modal that now holds the controls legend, `#touch-legend`
+inside it in touch mode) and `MenuGlyph`. Motion is fx.css only, off under
+`prefers-reduced-motion`. `#b-poly` and `#b-mute` stay on the title as
+chips with their exact labels. Enter on the title now opens the roster
+only: game.js read the state again after "Jouer" and pressed "Choisir le
+circuit" in the same keydown.
+
+**Consequence.** The title costs a stage frame per frame, as the roster
+does (on "légers" the low tier). The first visit to the roster is already
+warm. `e2e/mobile.spec.ts` opens `#b-help` to see the touch legend.
