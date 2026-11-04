@@ -2,7 +2,7 @@
 // their budgets on both detail levels against the decor they replaced, their
 // landmarks, nothing of theirs on the road, everything inside the sky.
 import * as THREE from 'three';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SKY_RADIUS } from '../climate.js';
 import { TRACKS } from '../data.js';
@@ -37,9 +37,19 @@ const ON_ROAD = /:pavers|:carpet|:haze|escorte|^road:/;   // road: the urnes and
 
 const setPoly = p => { if (getPoly() !== p) togglePoly(); };
 afterEach(() => setPoly('high'));
+/**
+ * Build circuit `i` from `seed` under a fixed random sequence, as the other decor suites do (three's uuids keep their
+ * own). The decor's cosmetic draws are on Math.random: unseeded, the Palais Bourbon's « légers » total moved by a
+ * few thousand triangles from build to build, and it sits about 1 % under its budget (the median of eight sequences
+ * at 0.7 to 1.3 % under, a single build up to 0.15 % over), so the bound failed now and then. Fixed, the budget
+ * measures the same build every time and still fails for good once the decor grows past it.
+ */
+const real = Math.random;
 function build(i, seed) {
+  let s = 20261029;
+  vi.spyOn(Math, 'random').mockImplementation(() => { if (new Error().stack.includes('generateUUID')) return real(); s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; });
   const scene = new THREE.Scene(); G.animated = []; G.hazards = []; G.entitySeq = 0; G.trackIdx = i; G.track = TRACKS[i]; G.crowd = []; G.lamps = [];
-  buildTrack(scene, TRACKS[i], { seed });
+  try { buildTrack(scene, TRACKS[i], { seed }); } finally { vi.restoreAllMocks(); }
   return scene;
 }
 const named = (scene, prefix) => { const out = []; scene.traverse(o => { if (o.name.startsWith(prefix + ':')) out.push(o); }); return out; };

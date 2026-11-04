@@ -5,7 +5,7 @@ Current state only. History lives in git.
 ## Latest task -- 2026-11-02: items, Garage and Boutique redesign
 
 - **Branch:** `feature/awesome-hamilton-ogmw8l`, cut from `main` at
-  `6adcef2` (PR #18). Owner's answers: every race item redrawn, the Garage
+  `6adcef2` (PR #18), restarted from `main` after each merge. Owner's answers: every race item redrawn, the Garage
   pushed from the title card, the results, the Politibox and the roster,
   the Boutique front end only (no economy change), a try-on on the stage.
 - **Done:** DEC-071 (`engine/itemmeshes.js`: BRAV-M bikes with officers,
@@ -33,10 +33,19 @@ Current state only. History lives in git.
   its two-by-two shop grid; the results nudge reads right whatever the
   part's gender. Screenshots at 390x844 and 844x390: title, Boutique,
   try-on, reveal, Garage, roster, results; no console error.
+- **Shipped:** PR #19 (items, Garage, Boutique) and PR #20 (phone pass)
+  merged to `main` and live on Render.
+- **Test stability:** the snapshot-size test (`netstate.test.js`) and the
+  Élysée/Bourbon decor budgets (`decor-elysee-bourbon.test.js`) now run
+  under a fixed random sequence, like the other decor suites: both crossed
+  their bounds now and then on `main` too (item rolls and the decor's
+  cosmetic draws are on Math.random). The Bourbon « légers » total sits
+  about 1 % under its budget (median of eight sequences 0.7-1.3 % under):
+  the next decor added there will need room made for it.
 - **Follow-ups:** the new effect kinds and the props not yet seen in a real
-  race on a GPU; the Garage glyph could read more like a wrench; the Bourbon
-  « légers » triangle budget sits at the top of its build-to-build spread
-  (re-measure BEFORE at scale 4.5, or seed the decor's cosmetic draws).
+  race on a GPU; the Garage glyph could read more like a wrench; E2E races
+  on a desktop viewport time out on the countdown under software GL here
+  (also on `main`).
 
 ## Previous task -- 2026-11-02: fun pass (one long lap, rewards, events, boxes, items, title screen, camera)
 
