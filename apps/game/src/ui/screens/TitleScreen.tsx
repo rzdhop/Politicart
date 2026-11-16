@@ -11,6 +11,7 @@ import {
   SettingsChip,
   Sheet,
   ShowcaseStage,
+  Skeleton,
   Tagline,
   TitleLayout,
   TitleLogo,
@@ -100,9 +101,11 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
   const cards = (
     <div className="menu-cards">
       {garage}
-      {ui.netAvailable && <MenuCard id="b-multi" icon={<MenuGlyph name="multi" />} label="Multijoueur" sub="Entre amis" onClick={actions.multiplayer} />}
+      {/* While the server is asked (and a saved session restored), the three cards it brings hold their places. */}
+      {ui.netProbing && ['multi', 'shop', 'account'].map(k => <Skeleton key={k} className="menu-card" label="Connexion au serveur…" style={{ minHeight: 84 }} />)}
+      {ui.netAvailable && !ui.netProbing && <MenuCard id="b-multi" icon={<MenuGlyph name="multi" />} label="Multijoueur" sub="Entre amis" onClick={actions.multiplayer} />}
       {/* The Boutique exists only where a game server runs the economy (DEC-035). */}
-      {ui.netAvailable && <MenuCard
+      {ui.netAvailable && !ui.netProbing && <MenuCard
         id="b-shop"
         tone="gold"
         icon={<MenuGlyph name="shop" />}
@@ -110,7 +113,7 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
         sub={<CoinCount size="sm" value={ui.account?.profile.coins ?? 0} format={fr} />}
         onClick={() => actions.openShop('title')}
       />}
-      {ui.netAvailable && <MenuCard
+      {ui.netAvailable && !ui.netProbing && <MenuCard
         id="b-account"
         tone="red"
         icon={<MenuGlyph name="account" />}
@@ -140,7 +143,7 @@ export function TitleScreen({ ui }: { ui: UiSnapshot }) {
       <TitleLayout
         corner={corner}
         brand={brand}
-        stage={<ShowcaseStage id="title-stage" aria-label={STAGE_LABEL} {...stageDrag()} />}
+        stage={<ShowcaseStage id="title-stage" aria-label={STAGE_LABEL} {...stageDrag()}>{!ui.stageReady && <Skeleton className="stage-wait" />}</ShowcaseStage>}
         stageCaption={<>Au volant : <b>{chosen?.name}</b></>}
         actions={actionsSlot}
         footer={

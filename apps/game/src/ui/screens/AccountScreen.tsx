@@ -8,13 +8,14 @@ import {
   Field,
   Heading,
   Panel,
+  type ResultsRow,
   ResultsTable,
   Row,
   Screen,
+  Skeleton,
   StatBar,
   Subtitle,
   TextInput,
-  type ResultsRow,
 } from '@politikart/ui';
 
 import { collection } from '../../engine/catalog.js';
@@ -135,7 +136,7 @@ function FriendPanel({ ui }: { ui: UiSnapshot }) {
       <Heading level={3} style={{ fontSize: 20 }}>{f ? f.name + ' · niveau ' + f.level : 'Stats'}</Heading>
       {ui.friendStatsError
         ? <Disclaimer role="status" style={{ color: 'var(--red)' }}>{ui.friendStatsError}</Disclaimer>
-        : !f ? <Disclaimer role="status">Chargement…</Disclaimer>
+        : !f ? <Skeleton label="Chargement…" style={{ width: '100%', height: 150 }} />
           : (
             <>
               <AdminGrid style={{ width: '100%' }}>

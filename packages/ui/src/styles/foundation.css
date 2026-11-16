@@ -53,3 +53,37 @@
   background:var(--gold);
   border-radius:4px;
 }
+
+/* A placeholder in the shape of what is loading (Skeleton): the caller sizes
+   it. The sweep is the pending tiles' and thumbnails' (fx.css kr-shimmer). */
+.skeleton {
+  position:relative;
+  overflow:hidden;
+  min-height:1em;
+  background:rgba(255,255,255,.08);
+  border-radius:10px;
+}
+
+.skeleton::after {
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.16) 50%,transparent 70%);
+  animation:kr-shimmer 1.6s ease-in-out infinite;
+  will-change:transform;
+  pointer-events:none;
+}
+
+.skeleton.line {
+  height:.9em;
+  min-height:0;
+  border-radius:6px;
+}
+
+.skeleton.circle {
+  border-radius:50%;
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .skeleton::after { animation:none; display:none; }
+}

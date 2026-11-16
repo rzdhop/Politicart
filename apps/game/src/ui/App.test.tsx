@@ -30,6 +30,7 @@ vi.mock('../engine/minimap.js', () => ({
 const box = vi.hoisted(() => ({ onPhase: null as ((name: string, index?: number) => void) | null, played: [] as unknown[], skips: 0 }));
 vi.mock('../engine/boxgate.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../engine/boxgate.js')>()),
+  loadBox: () => Promise.resolve({}),   // the Boutique fetches the Politibox's chunk ahead: not here
   playOpening: (drop: unknown, o: { onPhase?: (name: string, index?: number) => void } = {}) => { box.played.push(drop); box.onPhase = o.onPhase ?? null; box.onPhase?.('drop', 0); },
   skipOpening: () => { box.skips++; },
   stopOpening: () => {},
@@ -50,6 +51,8 @@ import { G } from '../engine/state.js';
 import { App } from './App';
 import { hud } from './Hud';
 import { loadGarage, myStyle, resetGarage } from '../engine/garage.js';
+import { STREAM } from '../engine/prebuild.js';
+import { startRace } from '../engine/race.js';
 import { actions, getSnapshot, ownedOf } from './store';
 import { setTouchMode } from '../touch';
 import { TAGLINES } from './screens/TitleScreen';
@@ -1439,6 +1442,24 @@ function raceWith(style: Record<string, unknown>) {
   act(() => { transition('countdown'); });
   return player;
 }
+describe('"C\'est parti" in the browser', () => {
+  it('shows the race\'s placeholder first, then starts the race, when the circuit is not built ahead', async () => {
+    const { container } = render(<App />);
+    const raf = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(cb => { setTimeout(() => cb(0), 0); return 0; });
+    const started = vi.mocked(startRace); started.mockClear();
+    STREAM.on = true;
+    try {
+      act(() => { actions.play(); actions.toTracks(); actions.start(); });
+      expect(started).not.toHaveBeenCalled();                              // the placeholder is painted before the build holds the page
+      expect(container.querySelector('#race-loading[aria-busy="true"]')).not.toBeNull();
+      expect(container.querySelectorAll('#race-loading .skeleton')).toHaveLength(4);
+      await act(async () => { await new Promise(r => setTimeout(r, 20)); });
+      expect(started).toHaveBeenCalledTimes(1);
+      expect(container.querySelector('#race-loading')).toBeNull();
+    } finally { STREAM.on = false; raf.mockRestore(); }
+  });
+});
+
 /** The engine's state, typed loosely: state.js starts it with no kart at all, which TypeScript reads as `null` for good. */
 const engine = G as unknown as { player: unknown; karts: unknown[] };
 const leaveRace = () => { engine.player = null; engine.karts = []; };

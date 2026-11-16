@@ -246,7 +246,7 @@ function frame(now) {
     // the circuits' thumbnails get what the pre-build left of the frame's share, at most their own budget (engine/thumbs.js)
     if (state === 'tracks' && !launch) { const left = Math.min(THUMB_BUDGET_MS, FRAME_SHARE_MS - (performance.now() - t0)); thumbsFrame({ renderer: getRenderer(), budget: left >= 1.5 ? left : 0 }); }
   }
-  if (drawsStage(state) || (state === 'tracks' && launching())) { renderPreview(dt); return; }
+  if (drawsStage(state) || (state === 'tracks' && launching())) { renderPreview(dt); if (stageInfo()?.ready) actions.stageDrawn(); return; }
   if (state === 'tracks' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'dashboard' || state === 'shop') { clearCanvas(); return; }
   // Paused or on the results the scene no longer moves: it is drawn again a few times a second (and on a resize, which
   // clears the canvas) instead of sixty, which is what keeps a phone left on the results screen from heating.

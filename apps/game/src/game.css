@@ -342,3 +342,17 @@ body{--note-h:34px;--note-room:calc(8px + var(--note-h) + 6px + env(safe-area-in
 @media (max-width:560px){#s-shop .shop-hero{align-items:start;}}
 @media (min-width:481px){#s-shop .shop-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));}}   /* an upright phone keeps its two by two (above) */
 #s-shop .fitting-actions .btn[disabled]{cursor:not-allowed;background:rgba(246,241,228,.1);color:var(--muted);box-shadow:none;transform:none;}
+
+/* ---------- Waiting ----------
+   The stage's band before the 3D stage has drawn: a placeholder over the
+   band (the canvas behind is still the plain background). */
+.stage-wait{position:absolute;inset:8px;min-height:0;}
+/* The race's placeholder while "C'est parti" builds the circuit: the HUD's
+   blocks where they will stand, over the night background. */
+.race-loading{position:fixed;inset:0;z-index:40;background:var(--bg);}
+.race-loading .skeleton{position:absolute;}
+.race-loading .rl-rank{top:max(14px,env(safe-area-inset-top));left:max(16px,env(safe-area-inset-left));width:150px;height:96px;}
+.race-loading .rl-map{top:max(14px,env(safe-area-inset-top));right:max(16px,env(safe-area-inset-right));width:150px;height:150px;}
+.race-loading .rl-item{bottom:max(18px,env(safe-area-inset-bottom));left:max(16px,env(safe-area-inset-left));width:96px;height:96px;}
+.race-loading .rl-speed{bottom:max(18px,env(safe-area-inset-bottom));right:max(16px,env(safe-area-inset-right));width:120px;height:44px;}
+.race-loading .rl-label{position:absolute;inset:0;margin:auto;height:1.4em;text-align:center;font-family:var(--font-display);font-size:clamp(20px,3.4vw,34px);color:var(--fg);}

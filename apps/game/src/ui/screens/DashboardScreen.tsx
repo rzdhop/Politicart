@@ -8,11 +8,12 @@ import {
   Field,
   Heading,
   Panel,
+  type ResultsRow,
   ResultsTable,
   Row,
   Screen,
+  Skeleton,
   TextInput,
-  type ResultsRow,
 } from '@politikart/ui';
 
 import { CHARACTERS, TRACKS } from '../../engine/data.js';
@@ -47,7 +48,7 @@ function since(ms: number | null): string {
 
 /** The headline figures: accounts, who is on, races played. */
 function Stats({ stats }: { stats: DashStats | null }) {
-  if (!stats) return <Disclaimer id="dash-stats">Chargement des statistiques…</Disclaimer>;
+  if (!stats) return <Skeleton id="dash-stats" label="Chargement des statistiques…" style={{ ...WIDE, height: 140 }} />;
   const byTrack = Object.entries(stats.races.byTrack).map(([i, n]) => trackName(Number(i)) + ' ' + n).join(' · ');
   return (
     <>

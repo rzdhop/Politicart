@@ -14,6 +14,7 @@ import {
   SelectLayout,
   Showcase,
   ShowcaseStage,
+  Skeleton,
   StatBar,
   StatGrid,
   Tricolore,
@@ -173,7 +174,7 @@ export function SelectScreen({ ui }: { ui: UiSnapshot }) {
           name={chosen.name}
           title={chosen.title}
           quote={chosen.quote}
-          stage={<ShowcaseStage id="showcase-stage" aria-label={STAGE_LABEL} {...stageDrag()} />}
+          stage={<ShowcaseStage id="showcase-stage" aria-label={STAGE_LABEL} {...stageDrag()}>{!ui.stageReady && <Skeleton className="stage-wait" />}</ShowcaseStage>}
         >
           <StatGrid>
             {STATS.map(([key, label]) => (

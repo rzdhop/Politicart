@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { NoteBanner } from '@politikart/ui';
+import { NoteBanner, Skeleton } from '@politikart/ui';
 
 import { AccountScreen } from './screens/AccountScreen';
 import { GarageScreen } from './screens/GarageScreen';
@@ -27,7 +27,24 @@ const DashboardScreen = lazy(() => import('./screens/DashboardScreen').then(m =>
  * ids the E2E suite drives (DEC-009) exist from the first render.
  */
 function LazyScreen({ id, shown }: { id: string; shown: boolean }) {
-  return <section id={id} className="screen" hidden={!shown}><p>Chargement…</p></section>;
+  return <section id={id} className="screen" hidden={!shown}><Skeleton label="Chargement…" style={{ width: 'min(980px,100%)', height: 260 }} /></section>;
+}
+
+/**
+ * The race's placeholder, over the circuits while "C'est parti" builds the
+ * circuit: the HUD's own blocks where they will stand (the rank, the
+ * minimap, the item slot, the speed), so the wait reads as the race arriving.
+ */
+function RaceLoading() {
+  return (
+    <div id="race-loading" className="race-loading" role="status" aria-busy="true" aria-label="Préparation du circuit…">
+      <Skeleton className="rl-rank" />
+      <Skeleton className="rl-map" />
+      <Skeleton className="rl-item" />
+      <Skeleton className="rl-speed" />
+      <p className="rl-label">Préparation du circuit…</p>
+    </div>
+  );
 }
 
 /**
@@ -57,6 +74,7 @@ export function App() {
       <GarageScreen ui={ui} />
       <TracksScreen ui={ui} />
       <Hud />
+      {ui.raceLoading && <RaceLoading />}
       <PauseScreen ui={ui} />
       <ResultsScreen ui={ui} />
       <LobbyScreen ui={ui} />
