@@ -929,6 +929,15 @@ export const actions = {
     const r: AuthReply = await account.register(name.trim(), password, { base: remoteServer });
     if (r.ok && r.token && r.profile) signedIn(r.token, r.profile); else set({ accountBusy: false, accountError: r.error ?? 'Inscription impossible.' });
   },
+  /** A new password for the account: the server closes its other sessions and hands this one a new token. Resolves to whether it took. */
+  async changePassword(current: string, next: string): Promise<boolean> {
+    const acc = snapshot.account; if (!acc) return false;
+    set({ accountBusy: true, accountError: null });
+    const r: AuthReply = await account.changePassword(acc.token, current, next, { base: remoteServer });
+    if (r.ok && r.token && r.profile) { signedIn(r.token, r.profile); return true; }
+    set({ accountBusy: false, accountError: r.error ?? 'Changement impossible.' });
+    return false;
+  },
   logOut() {
     const acc = snapshot.account; if (!acc) return;
     account.logout(acc.token, { base: remoteServer });

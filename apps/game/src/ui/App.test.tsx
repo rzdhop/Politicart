@@ -191,6 +191,12 @@ function fakeServer(o: FakeOptions = {}) {
       return answer(200, { profile: me(who), bought: {} });
     }
     if (url === './api/logout') { if (auth) state.sessions.delete(auth.slice(7)); return answer(200, {}); }
+    if (url === './api/password') {
+      if (!who) return answer(401, { error: 'Session expirée.' });
+      if (body.current !== 'secret1') return answer(401, { error: 'Mot de passe actuel incorrect.' });
+      state.sessions.delete(auth!.slice(7)); state.sessions.set('tok-new', who);
+      return answer(200, { token: 'tok-new', profile: me(who) });
+    }
     if (url === './api/progress') {
       if (!who) return answer(401, { error: 'Session expirée.' });
       const p = o.progress ?? { gained: 40, coins: 60, bonus: { daily: false, levelUp: false, levelUpCoins: 0 } };
@@ -1336,6 +1342,23 @@ describe('the Garage locks (DEC-035)', () => {
 
 describe('Compte stats (stage 6c)', () => {
   const STATS = { races: 3, wins: 1, podiums: 2, dnf: 1, finished: 2, solo: 3, boxes: 4, coinsEarned: 260, coinsSpent: 480, bestLap: { elysee: 61.2 }, bestTime: { elysee: 190.5 } };
+
+  it('change the password from the account screen: refused on a wrong current one, then done on a new session', async () => {
+    const { container } = await renderServed({ server: true, who: 'player' });
+    fireEvent.click($(container, 'b-account')!);
+    const type = (id: string, value: string) => fireEvent.change($(container, id)!, { target: { value } });
+    expect(disabled(container, 'b-acc-password')).toBe(true);
+    type('acc-pass-current', 'not-it'); type('acc-pass-next', 'nouveau-secret');
+    await act(async () => { fireEvent.click($(container, 'b-acc-password')!); });
+    await settle();
+    expect($(container, 'acc-pass-status')?.textContent).toMatch(/actuel incorrect/);
+    type('acc-pass-current', 'secret1');
+    await act(async () => { fireEvent.click($(container, 'b-acc-password')!); });
+    await settle();
+    expect($(container, 'acc-pass-status')?.textContent).toMatch(/Mot de passe changé/);
+    expect(getSnapshot().account?.token).toBe('tok-new');
+    expect(($(container, 'acc-pass-current') as HTMLInputElement).value).toBe('');
+  });
 
   it('show the account its politicoins, its figures, its collection and its best laps per circuit', async () => {
     const { container } = await renderServed({ server: true, who: 'player', coins: 250, stats: STATS, owned: { chars: ['lucie'], parts: ['wheels:gold'], trails: ['laser'] } });

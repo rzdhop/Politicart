@@ -19,15 +19,24 @@ Current state only. History lives in git.
   account, holds solo reports to what a race can be and a day of them to
   1,500 politicoins (DEC-075), reads
   X-Forwarded-For only as `TRUST_PROXY` says.
-- **Tier 1 on the tip:** typecheck clean; ui 542 + 8 skipped, game 1246,
-  server 193; game build OK.
+- **Tier 1 on the tip:** typecheck clean; ui 542 + 8 skipped, game 1247,
+  server 196; game build OK.
+- **Also done, on the owner's "finish all":** sessions are stored under a
+  hash of their token (both stores rekey the old ones when they open; tested
+  on Postgres 16), `POST /api/password` and its form on the account screen,
+  one alphabet per account name, a gradient id per `PartArt` drawing; the
+  decor budgets are held to a median of seven builds and the spin-out test
+  reads the heading on the step the spin ends (both failed now and then on
+  `main` too). `@neon/config` and `@neon/env` are Neon's own
+  (neondatabase/neon-pkgs, neon.tech maintainers).
 - **Follow-ups:** `TRUST_PROXY` on Render is still `first` (forgeable) until
-  the proxy chain is counted from `/api/admin/live`'s `forwarded`. The
-  Bourbon "légers" budget test fails about two runs in three, as it did
-  before this task (unseeded decor draws, 231.4-233.2k triangles against a
-  231.35k bound). Sessions are stored unhashed and last 60 days; no password
-  change; the admin's name can be imitated with look-alike letters.
-  `preview.js` keeps its own copy of `primeJob`/`primeSome`.
+  the proxy chain is counted from `/api/admin/live`'s `forwarded`: it needs
+  the live host. The race specs of the end-to-end suite were not run to the
+  end here (no GPU: 3 frames a second, the countdown alone outlasts their 20 s
+  wait, on `main` as well). The minimum password length is still 6 (the
+  suites' accounts use 7). Every store `set()` still re-renders every
+  screen. `preview.js` has its own `primeJob`/`primeSome`, which differ from
+  prebuild.js's (visible objects only, the stage's look, its governor).
 
 ## Previous task -- 2026-11-02: items, Garage and Boutique redesign
 

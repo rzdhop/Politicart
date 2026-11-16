@@ -337,6 +337,30 @@ describe('accounts', () => {
     expect(quick.profile.stats).toMatchObject({ finished: 0, wins: 0, dnf: 1, bestTime: {} });   // a lap in thirty seconds was not driven
   });
 
+  it('changes a password against the current one, closes the other sessions and hands back a new one', async () => {
+    const u = await account('Passe'), other = (await (await post('/api/login', { name: u.name, password: 'secret1' })).json()).token;
+    expect((await post('/api/password', { current: 'secret1', next: 'nouveau-secret' })).status).toBe(401);              // no session
+    const wrong = await post('/api/password', { current: 'not-it', next: 'nouveau-secret' }, u.token);
+    expect(wrong.status).toBe(401);
+    expect((await wrong.json()).error).toMatch(/actuel incorrect/);
+    expect((await post('/api/password', { current: 'secret1', next: 'court' }, u.token)).status).toBe(400);
+    const ok = await post('/api/password', { current: 'secret1', next: 'nouveau-secret' }, u.token);
+    expect(ok.status).toBe(200);
+    const fresh = (await ok.json()).token;
+    const me = t => fetch(url('/api/me'), { headers: { authorization: 'Bearer ' + t } });
+    expect([(await me(u.token)).status, (await me(other)).status, (await me(fresh)).status]).toEqual([401, 401, 200]);   // every older session is closed
+    expect((await post('/api/login', { name: u.name, password: 'secret1' })).status).toBe(401);
+    expect((await post('/api/login', { name: u.name, password: 'nouveau-secret' })).status).toBe(200);
+  });
+
+  it('refuses a name that mixes alphabets, the way a name is made to read as another\'s', async () => {
+    const mixed = await post('/api/register', { name: 'r\u0456da2', password: 'secret1' });   // a Cyrillic і among Latin letters
+    expect(mixed.status).toBe(400);
+    expect((await mixed.json()).error).toMatch(/Un seul alphabet/);
+    expect((await post('/api/register', { name: '\u041c\u0430\u0440\u0438\u044f', password: 'secret1' })).status).toBe(200);   // one alphabet, not Latin: fine
+    expect((await post('/api/register', { name: 'Hélène_2', password: 'secret1' })).status).toBe(200);                    // accents and digits are not another alphabet
+  });
+
   it('stops paying politicoins for solo races once the day\'s allowance is spent, and says so', async () => {
     const store = openFileStore(null), user = await store.createUser({ name: 'Marathon', hash: 'x' }), token = await store.createSession(user.id);
     let t = Date.UTC(2026, 0, 5, 0, 0, 0), coins = 0, capped = 0;

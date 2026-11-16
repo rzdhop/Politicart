@@ -197,6 +197,38 @@ function Friends({ ui }: { ui: UiSnapshot }) {
   );
 }
 
+/** The logged-in account's password: the current one, the new one, and what the server said. */
+function Password({ ui }: { ui: UiSnapshot }) {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [done, setDone] = useState(false);
+  const ready = current.length >= 6 && next.length >= 6 && next !== current && !ui.accountBusy;
+  const submit = async (e: FormEvent) => {
+    e.preventDefault(); if (!ready) return;
+    setDone(false);
+    if (await actions.changePassword(current, next)) { setCurrent(''); setNext(''); setDone(true); }
+  };
+  return (
+    <Panel id="acc-password" style={{ ...COLUMN, gap: 8, ...WIDE }}>
+      <Heading level={3} style={{ fontSize: 20 }}>Mot de passe</Heading>
+      <form onSubmit={submit} style={COLUMN}>
+        <AdminGrid style={{ width: 'min(520px, 100%)' }}>
+          <Field label="Actuel">
+            <input id="acc-pass-current" type="password" maxLength={128} autoComplete="current-password" value={current} onChange={e => setCurrent(e.target.value)} />
+          </Field>
+          <Field label="Nouveau (6 caractères au moins)">
+            <input id="acc-pass-next" type="password" maxLength={128} autoComplete="new-password" value={next} onChange={e => setNext(e.target.value)} />
+          </Field>
+        </AdminGrid>
+        <Button id="b-acc-password" type="submit" variant="ghost" disabled={!ready}>Changer le mot de passe</Button>
+      </form>
+      <Disclaimer id="acc-pass-status" role="status" style={{ color: done ? undefined : 'var(--red)', minHeight: '1.2em' }}>
+        {done ? 'Mot de passe changé. Vos autres appareils sont déconnectés.' : ui.accountError ?? ''}
+      </Disclaimer>
+    </Panel>
+  );
+}
+
 /** The account screen: sign in, or the logged-in account's level, politicoins, stats and friends. */
 export function AccountScreen({ ui }: { ui: UiSnapshot }) {
   const acc = ui.account;
@@ -207,7 +239,7 @@ export function AccountScreen({ ui }: { ui: UiSnapshot }) {
         {!ui.netAvailable
           ? <Disclaimer id="acc-offline">Aucun serveur de jeu joignable : les comptes sont indisponibles. Vous jouez en invité·e avec les quatre candidat·es de départ.</Disclaimer>
           : acc
-            ? <><Level profile={acc.profile} /><OwnStats profile={acc.profile} /><Friends ui={ui} /></>
+            ? <><Level profile={acc.profile} /><OwnStats profile={acc.profile} /><Friends ui={ui} />{!acc.profile.admin && <Password ui={ui} />}</>
             : <SignIn ui={ui} />}
         <Row>
           {acc && <Button id="b-acc-logout" variant="ghost" onClick={actions.logOut}>Se déconnecter</Button>}

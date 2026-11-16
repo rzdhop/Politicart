@@ -66,7 +66,7 @@
 // floored, and a negative one counts as 0; one that is not a number throws.
 // A purchase is one conditional update, never a read then a write (DEC-033).
 // Passwords arrive here already hashed (accounts.js); this module never sees one.
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync, existsSync } from 'node:fs';
 import { open, rename, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -76,6 +76,14 @@ const SESSION_MS = 60 * 24 * 3600 * 1000;
 /** The case- and accent-form-blind key two names are compared by. */
 export const nameKey = name => String(name).normalize('NFKC').toLowerCase();
 const newToken = () => randomBytes(32).toString('hex');
+/**
+ * What a session is stored under: a hash of its token, never the token, so a
+ * copy of the accounts file or of the database opens no session. The token is
+ * 256 random bits, so a plain SHA-256 is enough (nothing to guess, nothing to
+ * salt). The `h:` prefix tells a hashed key from a token stored before this:
+ * both stores rekey those once, when they open, and nobody is logged out.
+ */
+const sessionKey = token => 'h:' + createHash('sha256').update(token).digest('hex');
 
 /** The only document keys a store accepts; they become file names, so never user input. */
 export const DOC_KEYS = Object.freeze(['roster', 'stats']);
@@ -115,6 +123,8 @@ export function openFileStore(file, { log = console } = {}) {
     try { data = { ...data, ...JSON.parse(readFileSync(file, 'utf8')) }; }
     catch (e) { if (e.code !== 'ENOENT') throw new Error('Cannot read the accounts file ' + file + ': ' + e.message); }
   }
+  // sessions stored under their token, from before they were hashed: rekeyed once
+  for (const t of Object.keys(data.sessions)) if (!t.startsWith('h:')) { data.sessions[sessionKey(t)] = data.sessions[t]; delete data.sessions[t]; }
   const docs = openDocFiles(file ? join(dirname(file), 'politikart-docs') : null, log);
   let timer = null;
   const flush = () => {
@@ -184,15 +194,15 @@ export function openFileStore(file, { log = console } = {}) {
       const u = data.users[id]; if (!u) return null; u.owned = owned; save(); return full(u);
     },
     async setStats(id, stats) { stats = copy(objectOf(stats, 'stats')); const u = data.users[id]; if (!u) return null; u.stats = stats; save(); return full(u); },
-    async createSession(userId) { const t = newToken(); data.sessions[t] = { userId, at: Date.now() }; save(); return t; },
+    async createSession(userId) { const t = newToken(); data.sessions[sessionKey(t)] = { userId, at: Date.now() }; save(); return t; },
     async sessionUser(token) {
-      const s = typeof token === 'string' ? data.sessions[token] : null;
+      const key = typeof token === 'string' ? sessionKey(token) : null, s = key ? data.sessions[key] : null;
       if (!s) return null;
-      if (Date.now() - s.at > SESSION_MS) { delete data.sessions[token]; save(); return null; }
+      if (Date.now() - s.at > SESSION_MS) { delete data.sessions[key]; save(); return null; }
       const u = await this.user(s.userId);
       return u && !u.banned ? u : null;
     },
-    async dropSession(token) { if (typeof token === 'string' && data.sessions[token]) { delete data.sessions[token]; save(); } },
+    async dropSession(token) { const key = typeof token === 'string' ? sessionKey(token) : null; if (key && data.sessions[key]) { delete data.sessions[key]; save(); } },
     async dropSessionsOf(userId) { closeSessions(userId); save(); },
     async links(id) {
       const out = [];
@@ -298,7 +308,8 @@ alter table politikart_users add column if not exists seen bigint;
 alter table politikart_users add column if not exists banned jsonb;
 alter table politikart_users add column if not exists coins integer not null default 0;
 alter table politikart_users add column if not exists owned jsonb;
-alter table politikart_users add column if not exists stats jsonb not null default '{}'::jsonb;`;
+alter table politikart_users add column if not exists stats jsonb not null default '{}'::jsonb;
+update politikart_sessions set token = 'h:' || encode(sha256(convert_to(token, 'UTF8')), 'hex') where token not like 'h:%';`;
 
 const row = r => (r ? {
   id: r.id, name: r.name, hash: r.hash, xp: Number(r.xp), created: Number(r.created), seen: r.seen == null ? null : Number(r.seen), banned: r.banned ?? null,
@@ -365,12 +376,12 @@ export async function openPgStore(databaseUrl, { Pool } = {}) {
       return one('update politikart_users set owned = $2::jsonb where id = $1 returning *', [id, owned == null ? null : JSON.stringify(objectOf(owned, 'owned'))]);
     },
     async setStats(id, stats) { return one('update politikart_users set stats = $2::jsonb where id = $1 returning *', [id, JSON.stringify(objectOf(stats, 'stats'))]); },
-    async createSession(userId) { const t = newToken(); await q('insert into politikart_sessions (token, user_id, created) values ($1, $2, $3)', [t, userId, Date.now()]); return t; },
+    async createSession(userId) { const t = newToken(); await q('insert into politikart_sessions (token, user_id, created) values ($1, $2, $3)', [sessionKey(t), userId, Date.now()]); return t; },
     async sessionUser(token) {
       if (typeof token !== 'string') return null;
-      return one('select u.* from politikart_sessions s join politikart_users u on u.id = s.user_id where s.token = $1 and s.created > $2 and u.banned is null', [token, Date.now() - SESSION_MS]);
+      return one('select u.* from politikart_sessions s join politikart_users u on u.id = s.user_id where s.token = $1 and s.created > $2 and u.banned is null', [sessionKey(token), Date.now() - SESSION_MS]);
     },
-    async dropSession(token) { if (typeof token === 'string') await q('delete from politikart_sessions where token = $1', [token]); },
+    async dropSession(token) { if (typeof token === 'string') await q('delete from politikart_sessions where token = $1', [sessionKey(token)]); },
     async dropSessionsOf(userId) { await q('delete from politikart_sessions where user_id = $1', [userId]); },
     async links(id) {
       const r = await q(`select u.id, u.name, u.xp, f.status, f.a from politikart_friends f join politikart_users u on u.id = case when f.a = $1 then f.b else f.a end

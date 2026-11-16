@@ -5,6 +5,7 @@
 //   POST /api/login     {name, password}         -> {token, profile}
 //   POST /api/logout    (Authorization: Bearer)  -> {}
 //   GET  /api/me        (Authorization: Bearer)  -> {profile}
+//   POST /api/password  {current, next} -> {token, profile}   (Bearer; closes every other session)
 //   POST /api/progress  {rank, field, finished, trackId?, charId?, time?, bestLap?}
 //                       -> {profile, gained, coins, bonus: {daily, levelUp, levelUpCoins}}   (Bearer)
 //
@@ -57,6 +58,9 @@ export function badName(name) {
   if (typeof name !== 'string') return 'Pseudo manquant.';
   if (name.length < 3 || name.length > 16) return 'Le pseudo fait de 3 à 16 caractères.';
   if (!/^[\p{L}\p{N}_.-]+$/u.test(name)) return 'Lettres, chiffres, tiret, point et souligné seulement (pas d’espace).';
+  // One alphabet per name: a Cyrillic or Greek letter among Latin ones is how a name is made to read as another's
+  // (the admin's, a friend's) while being a different string to every comparison.
+  if (/\p{Script=Latin}/u.test(name) && /(?!\p{Script=Latin})\p{L}/u.test(name)) return 'Un seul alphabet par pseudo.';
   return null;
 }
 
@@ -238,6 +242,19 @@ export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {},
       if (user.banned) return reply(res, 403, { error: 'Compte banni' + (user.banned.reason ? ' : ' + user.banned.reason : '') + '.' });
       await store.touchSeen(user.id);
       reply(res, 200, { token: await store.createSession(user.id), profile: await profile(user) });
+    },
+    // A new password for the session's account: the current one is asked again (a stolen session alone changes nothing),
+    // every session is closed (store.setHash) and a fresh one answered. The admin's is the server's configuration.
+    'POST /api/password': async (req, res) => {
+      if (blocked(req)) return reply(res, 429, TOO_MANY);
+      const user = await session(req); if (!user) return reply(res, 401, { error: 'Session expirée.' });
+      const b = await readJson(req); if (!b) return reply(res, 400, { error: 'Requête illisible.' });
+      if (isAdmin(user)) return reply(res, 403, { error: 'Le mot de passe de l’administrateur se règle dans la configuration du serveur.' });
+      const why = badPassword(b.next); if (why) return reply(res, 400, { error: why });
+      if (!(await checkPassword(b.current, user.hash))) { count(req); return reply(res, 401, { error: 'Mot de passe actuel incorrect.' }); }
+      const after = await store.setHash(user.id, await hashPassword(b.next));
+      if (!after) return reply(res, 401, { error: 'Session expirée.' });
+      reply(res, 200, { token: await store.createSession(after.id), profile: await profile(after) });
     },
     'POST /api/logout': async (req, res) => { await store.dropSession(bearer(req)); reply(res, 200, {}); },
     'GET /api/me': async (req, res) => {

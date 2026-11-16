@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
 import type { Grade } from './store';
 
@@ -9,7 +9,9 @@ import type { Grade } from './store';
  * every card on a shelf reads apart at a glance. Pure SVG, no request.
  */
 export function PartArt({ category, value, grade }: { category: string; value: string; grade: Grade }) {
-  const id = 'pa-' + category + '-' + value;
+  // One id per drawing: the same part is on a shelf and in the fitting room at once, and a gradient looked up by a
+  // shared id is the first one in the page, which may sit in a hidden screen and then paints nothing.
+  const id = 'pa-' + useId().replace(/[^a-zA-Z0-9]/g, '');
   return (
     <svg className="part-art" viewBox="0 0 96 72" width="100%" height="100%" aria-hidden="true" data-part={category + ':' + value}>
       <defs>

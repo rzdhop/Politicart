@@ -72,7 +72,9 @@ describe('spin-outs', () => {
   it('come out facing down the road', () => {
     const k = G.karts[0]; place(k, 200, 0, 30);
     expect(stunKart(k, 1.5)).toBe(true);
-    for (let n = 0; n < 1.6 * 60; n++) updateKart(k, STEP);
+    // read on the step the spin ends: a few steps later the kart's own driver (an AI, its lane drawn at random) has
+    // begun to steer, and one run in twelve it had turned 18 degrees by the old fixed count of steps
+    for (let n = 0; n < 1.6 * 60 && k.stun > 0; n++) updateKart(k, STEP);
     expect(k.stun).toBe(0);
     expect(roadDot(k)).toBeGreaterThan(0.95);
   });
