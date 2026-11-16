@@ -40,8 +40,7 @@ import { nameKey } from './store.js';
 const scrypt = promisify(scryptCb);
 const MIN_SOLO_GAP_MS = 60_000;          // a race takes minutes; one reward a minute at most
 // A solo race is the client's word, so it is only held to what a race can be. A lap is about 5.4 km and a kart
-// boosting all the way does 63 m/s: no finish under 75 s, and none sooner after the last reward than it says it took.
-// And a day's play has an end: past SOLO_PER_DAY rewarded races an account earns nothing more until the next day.
+// boosting all the way does 63 m/s: no finish under 75 s. And a day's play has an end: past SOLO_PER_DAY rewarded races an account earns nothing more until the next day.
 const SOLO_MIN_S = 75, SOLO_PER_DAY = 40;
 const LOGIN_WINDOW_MS = 60_000, LOGIN_TRIES = 10;
 // Failed logins per account. An address that keeps failing on an account is locked out of it (ACCOUNT_TRIES), so
@@ -255,10 +254,9 @@ export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {},
       const user = await session(req); if (!user) return reply(res, 401, { error: 'Session expirée.' });
       const b = await readJson(req); if (!b) return reply(res, 400, { error: 'Requête illisible.' });
       const now = raceClock();
-      // a finish is one the race's own time makes possible: long enough for a lap, and no longer than the wait since the last reward
+      // a finish is one the race's own time makes possible: long enough for a lap
       const time = seconds(b.time), finished = b.finished === true && time !== null && time >= SOLO_MIN_S;
-      const gap = Math.max(MIN_SOLO_GAP_MS, finished ? time * 1000 : 0), last = lastSolo.get(user.id);
-      if ((last !== undefined && now - last < gap) || !soloToday(user.id, now)) return reply(res, 200, { profile: await profile(user), gained: 0, coins: 0, bonus: NO_BONUS });
+      if (now - (lastSolo.get(user.id) ?? 0) < MIN_SOLO_GAP_MS || !soloToday(user.id, now)) return reply(res, 200, { profile: await profile(user), gained: 0, coins: 0, bonus: NO_BONUS });
       lastSolo.set(user.id, now);
       const field = Number.isInteger(b.field) && b.field > 1 && b.field <= 12 ? b.field : 6;
       const race = {
