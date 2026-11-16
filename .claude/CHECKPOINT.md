@@ -16,10 +16,11 @@ Current state only. History lives in git.
   lazy screens; the server bounds an input's `seq` (one message froze a
   race), caps sockets, races and message rates, keeps one room per account,
   sends a CSP and its companions, locks failed logins per address before per
-  account, holds solo reports to what a race can be, reads
+  account, holds solo reports to what a race can be and a day of them to
+  1,500 politicoins (DEC-075), reads
   X-Forwarded-For only as `TRUST_PROXY` says.
-- **Tier 1 on the tip:** typecheck clean; ui 542 + 8 skipped, game 1245,
-  server 192; game build OK.
+- **Tier 1 on the tip:** typecheck clean; ui 542 + 8 skipped, game 1246,
+  server 193; game build OK.
 - **Follow-ups:** `TRUST_PROXY` on Render is still `first` (forgeable) until
   the proxy chain is counted from `/api/admin/live`'s `forwarded`. The
   Bourbon "légers" budget test fails about two runs in three, as it did

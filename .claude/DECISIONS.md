@@ -1538,3 +1538,26 @@ group the builder is handed, never into the scene. Not done, as measured not
 worth it: freezing static matrices, and drawing the lobby's seed ahead (a
 team race's cold start is now the 290 ms above).
 
+## DEC-075 -- A day of solo races pays 1,500 politicoins at most
+
+**Context.** A solo race's result is the client's word (accounts.js): a
+forged report claims a win, sixty coins picked up and three goals, 255
+politicoins a time. A first cap of 40 paid solo races a day, counted in
+memory, still left about 10,000 politicoins a day per account, 83 Politibox,
+and started again whenever the host woke. The owner found that far too much
+and asked that the game stay pleasant for an honest player.
+
+**Decision.** The coins are capped, not the races: `SOLO_DAILY_COINS` = 1,500
+(catalog.js), twelve Politibox, about an hour of good racing. `settleRace`
+holds what a solo race itself pays (place, pickups, goals, streak) to what is
+left of the day's allowance, kept in the account's stats (`soloDay`,
+`soloCoins`), so it survives a restart. The race that crosses the line is
+paid up to it. The experience is never capped; the day's bonus and a new
+level's coins come on top; a team race, which the server simulates, pays in
+full. A capped race says so on the results screen (`bonus.capped`).
+
+**Consequence.** An account mints 1,500 politicoins a day from solo play at
+most, forged or not. A player who races solo for hours keeps levelling and is
+pointed to team races for coins. Forged experience remains possible (one race
+a minute); it buys levels, whose coins are paid once each.
+

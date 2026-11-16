@@ -7,7 +7,7 @@ import { brotliCompressSync, gzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 
-import { DNF_COINS } from '../../game/src/engine/catalog.js';
+import { DAILY_COINS, DNF_COINS, SOLO_DAILY_COINS } from '../../game/src/engine/catalog.js';
 import { xpForRace } from '../../game/src/engine/progress.js';
 import { accountApi } from './accounts.js';
 import { startServer } from './server.js';
@@ -337,18 +337,17 @@ describe('accounts', () => {
     expect(quick.profile.stats).toMatchObject({ finished: 0, wins: 0, dnf: 1, bestTime: {} });   // a lap in thirty seconds was not driven
   });
 
-  it('pays no more solo races in a day than a day holds', async () => {
+  it('stops paying politicoins for solo races once the day\'s allowance is spent, and says so', async () => {
     const store = openFileStore(null), user = await store.createUser({ name: 'Marathon', hash: 'x' }), token = await store.createSession(user.id);
-    let t = Date.UTC(2026, 0, 5, 0, 0, 0), paid = 0;
+    let t = Date.UTC(2026, 0, 5, 0, 0, 0), coins = 0, capped = 0;
     const api = accountApi(store, { now: () => t });
     const call = () => new Promise(ok => {
-      const req = Object.assign(Readable.from([Buffer.from(JSON.stringify({ rank: 0, field: 6, finished: true, time: 140 }))]), { method: 'POST', headers: { authorization: 'Bearer ' + token }, socket: {} });
+      const req = Object.assign(Readable.from([Buffer.from(JSON.stringify({ rank: 0, field: 6, finished: true, time: 140, pickups: 60, goals: 3 }))]), { method: 'POST', headers: { authorization: 'Bearer ' + token }, socket: {} });
       api(req, { writeHead() {}, end: body => ok(JSON.parse(body)) }, '/api/progress');
     });
-    for (let i = 0; i < 45; i++) { t += 150_000; if ((await call()).gained > 0) paid++; }
-    expect(paid).toBe(40);
-    t += 86_400_000;                                                     // the next day pays again
-    expect((await call()).gained).toBeGreaterThan(0);
+    for (let i = 0; i < 20; i++) { t += 150_000; const r = await call(); coins += r.coins - r.bonus.levelUpCoins - (r.bonus.daily ? DAILY_COINS : 0); if (r.bonus.capped) capped++; expect(r.gained).toBeGreaterThan(0); }
+    expect(coins).toBe(SOLO_DAILY_COINS);                                // a forged perfect race every time still mints no more
+    expect(capped).toBeGreaterThan(5);
   });
 
   it('keeps guests out of room creation and away from locked candidates', async () => {
@@ -382,7 +381,7 @@ describe('accounts', () => {
     expect(p.gained).toBe(70 + 20);          // winner, and the winning team
     expect(p.profile.xp).toBe(90);
     expect(p.coins).toBe(60 + 20 + 50);      // first place, the winning team, the first race of the day
-    expect(p.bonus).toEqual({ daily: true, levelUp: false, levelUpCoins: 0, pickups: 0, goals: 0, goalXp: 0, goalCoins: 0, streak: 1, streakCoins: 0 });
+    expect(p.bonus).toEqual({ daily: true, levelUp: false, levelUpCoins: 0, pickups: 0, goals: 0, goalXp: 0, goalCoins: 0, streak: 1, streakCoins: 0, capped: false });
     expect(p.profile.coins).toBe(130);
     expect(p.profile.stats).toMatchObject({ races: 1, wins: 1, podiums: 1, finished: 1, team: 1, teamWins: 1, solo: 0, bestLap: { elysee: 41.5 }, bestTime: { elysee: 130 } });
     expect(b.seen.some(m => m.t === 'profile')).toBe(false);

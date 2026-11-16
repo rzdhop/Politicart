@@ -141,7 +141,7 @@ interface FakeOptions {
   /** What the next bundle holds (five), instead of `drop` five times. */
   drops?: unknown[];
   /** What a solo race report pays (POST /api/progress): experience, politicoins, bonuses, and the level the profile comes back at. */
-  progress?: { gained: number; coins: number; bonus: { daily: boolean; levelUp: boolean; levelUpCoins: number }; level?: number };
+  progress?: { gained: number; coins: number; bonus: { daily: boolean; levelUp: boolean; levelUpCoins: number; capped?: boolean }; level?: number };
 }
 
 /**
@@ -1560,6 +1560,15 @@ describe('the kart card and the coin line (stage 7)', () => {
     await settle();
     expect([...$(container, 'r-xp')!.querySelectorAll('.gain-line')].map(l => l.textContent)).toEqual(['+90 XP', '+45 politicoins', '+200 politicoins (niveau 2)']);
     expect($(container, 'r-xp')?.querySelector('.gain-notes')?.textContent).toBe('Niveau 2 atteint !');
+  });
+
+  it('says so when the day\'s solo allowance cut the politicoins, with what still pays', async () => {
+    const { container } = await renderServed({ server: true, who: 'player', progress: { gained: 70, coins: 0, bonus: { daily: false, levelUp: false, levelUpCoins: 0, capped: true } } });
+    raceWith({});
+    act(() => { transition('race'); transition('results'); });
+    await settle();
+    expect([...$(container, 'r-xp')!.querySelectorAll('.gain-line')].map(l => l.textContent)).toEqual(['+70 XP']);
+    expect($(container, 'r-xp')?.querySelector('.gain-notes')?.textContent).toMatch(/Plafond solo du jour atteint.*l’expérience continue.*équipe/);
   });
 
   it('says nothing about politicoins to a guest, who is invited to sign up', async () => {

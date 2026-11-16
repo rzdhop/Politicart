@@ -40,8 +40,9 @@ import { nameKey } from './store.js';
 const scrypt = promisify(scryptCb);
 const MIN_SOLO_GAP_MS = 60_000;          // a race takes minutes; one reward a minute at most
 // A solo race is the client's word, so it is only held to what a race can be. A lap is about 5.4 km and a kart
-// boosting all the way does 63 m/s: no finish under 75 s. And a day's play has an end: past SOLO_PER_DAY rewarded races an account earns nothing more until the next day.
-const SOLO_MIN_S = 75, SOLO_PER_DAY = 40;
+// boosting all the way does 63 m/s: no finish under 75 s. What a day of solo races pays in all is capped where the
+// race is paid (economy.js settleRace, catalog.js SOLO_DAILY_COINS).
+const SOLO_MIN_S = 75;
 const LOGIN_WINDOW_MS = 60_000, LOGIN_TRIES = 10;
 // Failed logins per account. An address that keeps failing on an account is locked out of it (ACCOUNT_TRIES), so
 // whoever guesses at an account locks only themselves; the account as a whole locks at ACCOUNT_GLOBAL times that,
@@ -203,13 +204,6 @@ export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {},
     for (const [k, v] of failures) if (t - v.since >= accWindow) failures.delete(k);
     for (const [k, v] of failures) { if (failures.size <= ACCOUNT_CAP) break; if (v.n < accTries && k !== key) failures.delete(k); }
   };
-  const soloDays = new Map();       // user id -> { day, n }: the solo races rewarded today
-  /** Whether `id` may still be paid for a solo race today; counts it if so. */
-  const soloToday = (id, now) => {
-    const day = Math.floor(now / 86_400_000), d = soloDays.get(id);
-    if (!d || d.day !== day) { soloDays.set(id, { day, n: 1 }); return true; }
-    return ++d.n <= SOLO_PER_DAY;
-  };
   const session = async req => store.sessionUser(bearer(req));
 
   const routes = {
@@ -256,7 +250,7 @@ export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {},
       const now = raceClock();
       // a finish is one the race's own time makes possible: long enough for a lap
       const time = seconds(b.time), finished = b.finished === true && time !== null && time >= SOLO_MIN_S;
-      if (now - (lastSolo.get(user.id) ?? 0) < MIN_SOLO_GAP_MS || !soloToday(user.id, now)) return reply(res, 200, { profile: await profile(user), gained: 0, coins: 0, bonus: NO_BONUS });
+      if (now - (lastSolo.get(user.id) ?? 0) < MIN_SOLO_GAP_MS) return reply(res, 200, { profile: await profile(user), gained: 0, coins: 0, bonus: NO_BONUS });
       lastSolo.set(user.id, now);
       const field = Number.isInteger(b.field) && b.field > 1 && b.field <= 12 ? b.field : 6;
       const race = {

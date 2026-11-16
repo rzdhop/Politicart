@@ -40,6 +40,12 @@ export const DNF_COINS = 5;
 export const TEAM_WIN_COINS = 20;
 /** The bonus of the first race of a (UTC) day. */
 export const DAILY_COINS = 50;
+/**
+ * The politicoins a day of solo races pays at most (the day's bonus and a new level's come on top). A solo result is
+ * the client's word, so this is what an account can mint in a day: 12 Politibox, about an hour of good racing. The
+ * experience is never capped, and a team race, which the server simulates, pays in full.
+ */
+export const SOLO_DAILY_COINS = 1500;
 // The run's own rewards (DEC-064), paid by the server's settleRace beside the place:
 /** Experience and politicoins for each of the run's goals reached (goals.js). */
 export const GOAL_XP = 15, GOAL_COINS = 25;

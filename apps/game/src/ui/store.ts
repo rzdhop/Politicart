@@ -109,6 +109,8 @@ export interface Bonus {
   daily: boolean; levelUp: boolean; levelUpCoins: number;
   /** The run's own lines (DEC-064); absent from a server older than them. */
   pickups?: number; goals?: number; goalXp?: number; goalCoins?: number; streak?: number; streakCoins?: number;
+  /** Whether the day's solo allowance (catalog.js SOLO_DAILY_COINS) cut this race's politicoins. */
+  capped?: boolean;
 }
 /** What the account API answers (engine/account.js). */
 type AuthReply = { ok: boolean; status: number; error?: string; token?: string; profile?: Profile; gained?: number; coins?: number; bonus?: Bonus };
@@ -118,6 +120,8 @@ export interface Gain {
   gained: number; coins: number; daily: boolean; levelUpCoins: number; level: number; levelUp: boolean; unlockedNow: string[];
   /** The run's own lines (DEC-064): coins picked on the road, goals reached and what they paid, the podium streak and its bonus. */
   pickups: number; goals: number; goalXp: number; goalCoins: number; streak: number; streakCoins: number;
+  /** Whether the day's solo allowance cut this race's politicoins: the results say so. */
+  capped: boolean;
 }
 
 /** The kart this screen drives in the race on screen (or the last one): its candidate and the full style it was built with. */
@@ -432,7 +436,7 @@ function takeProfile(profile: Profile, gained = 0, coins = 0, bonus: Bonus | nul
     const had = new Set(before?.unlocked ?? []);
     patch.lastGain = {
       gained, coins, daily: !!bonus?.daily, levelUpCoins: bonus?.levelUpCoins ?? 0,
-      pickups: bonus?.pickups ?? 0, goals: bonus?.goals ?? 0, goalXp: bonus?.goalXp ?? 0, goalCoins: bonus?.goalCoins ?? 0, streak: bonus?.streak ?? 0, streakCoins: bonus?.streakCoins ?? 0,
+      pickups: bonus?.pickups ?? 0, goals: bonus?.goals ?? 0, goalXp: bonus?.goalXp ?? 0, goalCoins: bonus?.goalCoins ?? 0, streak: bonus?.streak ?? 0, streakCoins: bonus?.streakCoins ?? 0, capped: !!bonus?.capped,
       level: profile.level, levelUp: !!before && profile.level > before.level, unlockedNow: profile.unlocked.filter(id => !had.has(id)),
     };
   }
