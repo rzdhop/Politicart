@@ -47,10 +47,15 @@ const named = (scene, prefix) => { const out = []; scene.traverse(o => { if (o.n
 describe.each([['elysee', 0], ['bourbon', 1]])('%s decor', (id, i) => {
   it.each(['high', 'low'])('holds its budget on « %s », every layout: no more meshes than before, triangles +40 % / +10 % at most', poly => {
     setPoly(poly);
+    // Measured as BEFORE was: the median of several builds, since the cosmetic draws move a build's triangles by a
+    // percent either way. One build against that median failed two runs in three on Bourbon « low », whose median
+    // sits 2,000 triangles under the bound and whose builds range 2,500 round it.
+    const median = xs => [...xs].sort((a, b) => a - b)[xs.length >> 1];
     for (let v = 0; v < 3; v++) {
-      const scene = build(i, seedForVariant(TRACKS[i], v)), [meshes, tris] = BEFORE[id][poly][v];
-      expect(countMeshes(scene, true), `${id} ${poly} variant ${v} meshes`).toBeLessThanOrEqual(meshes);
-      expect(countTriangles(scene, true), `${id} ${poly} variant ${v} triangles`).toBeLessThanOrEqual(tris * (poly === 'high' ? 1.4 : 1.1) * LONG_LAP);
+      const [meshes, tris] = BEFORE[id][poly][v], counts = [];
+      for (let n = 0; n < 7; n++) { const scene = build(i, seedForVariant(TRACKS[i], v)); counts.push([countMeshes(scene, true), countTriangles(scene, true)]); }
+      expect(median(counts.map(c => c[0])), `${id} ${poly} variant ${v} meshes`).toBeLessThanOrEqual(meshes);
+      expect(median(counts.map(c => c[1])), `${id} ${poly} variant ${v} triangles`).toBeLessThanOrEqual(tris * (poly === 'high' ? 1.4 : 1.1) * LONG_LAP);
     }
   }, 60000);
 
