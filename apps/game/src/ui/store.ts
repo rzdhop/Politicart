@@ -17,7 +17,7 @@ import { initAudio, isMuted, toggleMute as toggleAudioMute } from '../engine/aud
 import { beginDraft, clearDraft, getDraft, setRoster } from '../engine/custom.js';
 import { emptyOwned } from '../engine/catalog.js';
 import { clearTryOn, garageSeen, getGarage, getTryOn, markGarageSeen, resetGarage, setGarage, setOwned, setTryOn } from '../engine/garage.js';
-import { playOpening, skipOpening as skipBoxOpening, stopOpening } from '../engine/boxgate.js';
+import { loadBox, playOpening, skipOpening as skipBoxOpening, stopOpening } from '../engine/boxgate.js';
 import { canTransition, getState, onTransition, transition } from '../engine/machine.js';
 import * as net from '../engine/net.js';
 import { isNetRace, netLatency, onNetResults, pressItem, pressPower } from '../engine/netrace.js';
@@ -26,7 +26,7 @@ import { useItem as engineUseItem } from '../engine/items.js';
 import { usePower as engineUsePower } from '../engine/powers.js';
 import { CHARACTERS, TRACKS } from '../engine/data.js';
 import { hasPreview, launch, makeThumbs, setPreview } from '../engine/stagegate.js';
-import { requestPrebuild } from '../engine/prebuild.js';
+import { prebuildStatus, requestPrebuild, STREAM } from '../engine/prebuild.js';
 import { onThumbs as onTrackThumbs, warmFigures } from '../engine/thumbs.js';
 import { goalsCount } from '../engine/goals.js';
 import { STARTERS } from '../engine/progress.js';
@@ -109,6 +109,8 @@ export interface Bonus {
   daily: boolean; levelUp: boolean; levelUpCoins: number;
   /** The run's own lines (DEC-064); absent from a server older than them. */
   pickups?: number; goals?: number; goalXp?: number; goalCoins?: number; streak?: number; streakCoins?: number;
+  /** Whether the day's solo allowance (catalog.js SOLO_DAILY_COINS) cut this race's politicoins. */
+  capped?: boolean;
 }
 /** What the account API answers (engine/account.js). */
 type AuthReply = { ok: boolean; status: number; error?: string; token?: string; profile?: Profile; gained?: number; coins?: number; bonus?: Bonus };
@@ -118,6 +120,8 @@ export interface Gain {
   gained: number; coins: number; daily: boolean; levelUpCoins: number; level: number; levelUp: boolean; unlockedNow: string[];
   /** The run's own lines (DEC-064): coins picked on the road, goals reached and what they paid, the podium streak and its bonus. */
   pickups: number; goals: number; goalXp: number; goalCoins: number; streak: number; streakCoins: number;
+  /** Whether the day's solo allowance cut this race's politicoins: the results say so. */
+  capped: boolean;
 }
 
 /** The kart this screen drives in the race on screen (or the last one): its candidate and the full style it was built with. */
@@ -205,6 +209,12 @@ export interface UiSnapshot {
   noteHidden: boolean;
   /** Whether the page was served by the game server, so team races are possible. */
   netAvailable: boolean;
+  /** Whether the server is still being asked (the probe, then a saved session): the title holds its cards' places meanwhile. */
+  netProbing: boolean;
+  /** Whether "C'est parti" is building the circuit: a placeholder of the race covers the menu until the countdown. */
+  raceLoading: boolean;
+  /** Whether the 3D stage has drawn once: its bands show a placeholder until then. */
+  stageReady: boolean;
   net: NetView;
   /** The name shown to the other players, remembered in this browser. */
   netName: string;
@@ -321,6 +331,9 @@ let snapshot: UiSnapshot = {
   tryOn: null,
   noteHidden: false,
   netAvailable: false,
+  netProbing: false,
+  raceLoading: false,
+  stageReady: false,
   net: net.getNet() as NetView,
   netName: loadName(),
   netResults: null,
@@ -423,7 +436,7 @@ function takeProfile(profile: Profile, gained = 0, coins = 0, bonus: Bonus | nul
     const had = new Set(before?.unlocked ?? []);
     patch.lastGain = {
       gained, coins, daily: !!bonus?.daily, levelUpCoins: bonus?.levelUpCoins ?? 0,
-      pickups: bonus?.pickups ?? 0, goals: bonus?.goals ?? 0, goalXp: bonus?.goalXp ?? 0, goalCoins: bonus?.goalCoins ?? 0, streak: bonus?.streak ?? 0, streakCoins: bonus?.streakCoins ?? 0,
+      pickups: bonus?.pickups ?? 0, goals: bonus?.goals ?? 0, goalXp: bonus?.goalXp ?? 0, goalCoins: bonus?.goalCoins ?? 0, streak: bonus?.streak ?? 0, streakCoins: bonus?.streakCoins ?? 0, capped: !!bonus?.capped,
       level: profile.level, levelUp: !!before && profile.level > before.level, unlockedNow: profile.unlocked.filter(id => !had.has(id)),
     };
   }
@@ -838,8 +851,16 @@ export const actions = {
     initAudio();
     soloRace = true;
     set({ netResults: null });
-    startRace();
+    // A circuit not built ahead far enough is built now, which holds the page for a moment: the race's placeholder is
+    // painted first (a frame, then a task), so the click is answered at once. Headless, and when the circuit is ready,
+    // the race starts in the same breath, as before.
+    if (!STREAM.on || prebuildStatus()?.built) { startRace(); return; }
+    if (snapshot.raceLoading) return;
+    set({ raceLoading: true });
+    requestAnimationFrame(() => setTimeout(() => { try { if (getState() === 'tracks') startRace(); } finally { set({ raceLoading: false }); } }, 0));
   },
+  /** The 3D stage has drawn its first frame (game.js): its placeholders go. */
+  stageDrawn() { if (!snapshot.stageReady) set({ stageReady: true }); },
   pause() { transition('paused'); },
   resume() { transition(G.countdown > 0 ? 'countdown' : 'race'); },
   /** Use the held item: the keyboard's Ctrl/E and the touch OBJET button. In a team race the server resolves it. */
@@ -856,17 +877,20 @@ export const actions = {
    * in force, and restores a saved session. Unreachable: the default cast.
    */
   async detectServer() {
+    // The probe has no time limit on purpose: a sleeping host takes a minute to wake, and the cards must still come.
+    // The title shows their places meanwhile, and until a saved session has answered, so they never flash a guest's.
+    set({ netProbing: true });
     const ok: boolean = await net.probeServer(globalThis.fetch, remoteServer);
-    set({ netAvailable: ok });
+    const token = ok ? loadToken() : null;
+    set({ netAvailable: ok, netProbing: !!token });
     if (!ok) { applyOwned(null); return; }                       // the static build: the default cast, no accounts, no economy
     if (!snapshot.account) applyOwned(emptyOwned());             // a guest until a saved session says otherwise
-    const token = loadToken();
     await Promise.all([
       refreshRoster(),
       token && account.me(token, { base: remoteServer }).then((r: AuthReply) => {
         if (r.ok && r.profile) signedIn(token, r.profile);
         else if (r.status === 401) saveToken(null);               // expired; a network failure keeps it for next time
-      }),
+      }).finally(() => set({ netProbing: false })),
     ]);
   },
   /** "Multijoueur": open the lobby and connect. */
@@ -904,6 +928,15 @@ export const actions = {
     set({ accountBusy: true, accountError: null });
     const r: AuthReply = await account.register(name.trim(), password, { base: remoteServer });
     if (r.ok && r.token && r.profile) signedIn(r.token, r.profile); else set({ accountBusy: false, accountError: r.error ?? 'Inscription impossible.' });
+  },
+  /** A new password for the account: the server closes its other sessions and hands this one a new token. Resolves to whether it took. */
+  async changePassword(current: string, next: string): Promise<boolean> {
+    const acc = snapshot.account; if (!acc) return false;
+    set({ accountBusy: true, accountError: null });
+    const r: AuthReply = await account.changePassword(acc.token, current, next, { base: remoteServer });
+    if (r.ok && r.token && r.profile) { signedIn(r.token, r.profile); return true; }
+    set({ accountBusy: false, accountError: r.error ?? 'Changement impossible.' });
+    return false;
   },
   logOut() {
     const acc = snapshot.account; if (!acc) return;
@@ -961,6 +994,7 @@ export const actions = {
     initAudio();
     // The candidates' cards show the roster portraits (placeholders until each is rendered).
     shop({ from, error: null, notice: null, ...(tab ? { tab } : {}) });
+    loadBox().catch(() => {});   // the Politibox's chunk, fetched while the player browses: opening a box then starts at once
     refreshThumbs();
     transition('shop');
     setPreview(G.charIdx);

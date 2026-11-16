@@ -28,9 +28,9 @@ import { getState, onTransition } from './engine/machine.js';
 import { renderLootbox } from './engine/boxgate.js';
 import { isNetRace, netStep } from './engine/netrace.js';
 import { drawsStage, launching, renderPreview, stageInfo, stageStill, warmStage } from './engine/stagegate.js';
-import { prebuildFrame, prebuildStatus, primeCountdown } from './engine/prebuild.js';
+import { BUDGET_MS, prebuildFrame, prebuildStatus, primeCountdown, STREAM, streamFrame, streamStatus } from './engine/prebuild.js';
 import { BUDGET_MS as THUMB_BUDGET_MS, setStillProbe, thumbsFrame, thumbStatus } from './engine/thumbs.js';
-import { endRace, renderRace, stepRace } from './engine/race.js';
+import { cullDecor, endRace, renderRace, stepRace } from './engine/race.js';
 import { clearCanvas, getRenderer } from './engine/render.js';
 import { G } from './engine/state.js';
 import { $, clamp, fmtTime } from './engine/util.js';
@@ -40,7 +40,6 @@ import { actions } from './ui/store.ts';
 import { touchHud } from './ui/TouchControls.tsx';
 import { initTouch, installNoContextMenu, isCoarsePointer, isTouchMode, setTouchMode, touchHeld } from './touch.ts';
 
-'use strict';
 /* =====================================================================================
    POLITIKART v2 — satirical kart racer with a pun-name parody French political cast.
    Single-file Three.js game: spline tracks, kart physics with drift/mini-turbo,
@@ -173,6 +172,8 @@ function inputState() {
 }
 // The engine reads the player's controls through this seam rather than the keys map.
 setInputSource(inputState);
+// A race here starts as soon as its circuit can be raced on, and builds the rest of the decor in its frames (prebuild.js).
+STREAM.on = true;
 initTouch();
 // A long press on a menu button is a tap, not a context menu or a selection (the fields keep theirs).
 installNoContextMenu();
@@ -213,6 +214,9 @@ let lastFrame = performance.now();
  * most of the warm-up, and the idle title's share goes to the portraits.
  */
 let titleIdle = 0;
+/** Frames since the race scene last moved (paused, results): it is redrawn every fifteenth, and at once after a resize. */
+let stillFrames = 0;
+addEventListener('resize', () => { stillFrames = 0; });
 const WARM_AFTER = 0.8;
 /** The work a menu frame may do ahead (the pre-build, then the thumbnails), ms. */
 const FRAME_SHARE_MS = 12;
@@ -241,9 +245,12 @@ function frame(now) {
     // the circuits' thumbnails get what the pre-build left of the frame's share, at most their own budget (engine/thumbs.js)
     if (state === 'tracks' && !launch) { const left = Math.min(THUMB_BUDGET_MS, FRAME_SHARE_MS - (performance.now() - t0)); thumbsFrame({ renderer: getRenderer(), budget: left >= 1.5 ? left : 0 }); }
   }
-  if (drawsStage(state) || (state === 'tracks' && launching())) { renderPreview(dt); return; }
+  if (drawsStage(state) || (state === 'tracks' && launching())) { renderPreview(dt); if (stageInfo()?.ready) actions.stageDrawn(); return; }
   if (state === 'tracks' || state === 'admin' || state === 'lobby' || state === 'account' || state === 'dashboard' || state === 'shop') { clearCanvas(); return; }
-  if (state === 'paused' || state === 'results') { renderRace(); updateEngine(); return; }
+  // Paused or on the results the scene no longer moves: it is drawn again a few times a second (and on a resize, which
+  // clears the canvas) instead of sixty, which is what keeps a phone left on the results screen from heating.
+  if (state === 'paused' || state === 'results') { if (stillFrames++ % 15 === 0) renderRace(); updateEngine(); return; }
+  stillFrames = 0;
 
   const payload = isNetRace() ? netStep(dt) : stepRace(dt);
   // Routed events (say/tell/hintFor) resolve for the local driver, G.player.
@@ -252,6 +259,9 @@ function frame(now) {
   updateHUD(payload); updateEngine();
   // The countdown primes the items' materials, a few per frame, so the first throw never stutters (prebuild.js).
   if (state === 'countdown') primeCountdown({ renderer: getRenderer() });
+  // A race that started before its decor was built builds the rest here, a share per frame: most of the frame while the
+  // karts wait on the grid, half of that once they race. Once it is all there, what the fog hides is no longer drawn.
+  if (!streamFrame({ renderer: getRenderer(), budget: state === 'countdown' ? BUDGET_MS : BUDGET_MS / 2 })) cullDecor();
   renderRace();
 }
 requestAnimationFrame(frame);
@@ -267,5 +277,7 @@ requestAnimationFrame(frame);
 // stage() is read-only too: the select stage as its last frame drew it (preview.js stageInfo): the candidate,
 // the podium's yaw, the frame's draw calls, triangles and programs, the model's box on screen, the portraits.
 // prebuild() is read-only: the circuit being built ahead (prebuild.js prebuildStatus), its phase and timings.
+// stream() is read-only: what a race that started before its decor was built still has to build and prime, null once done.
+// drawn() is read-only: the last frame's draw calls and triangles.
 // thumbs() is read-only: the circuits' thumbnails (thumbs.js thumbStatus): how many are rendered, the slices' cost.
-window.__kr = { endRace, karts: () => (G.karts || []).map(k => ({ charId: k.def.id, style: { ...k.style } })), stage: () => stageInfo(), prebuild: () => prebuildStatus(), thumbs: () => thumbStatus() };
+window.__kr = { endRace, karts: () => (G.karts || []).map(k => ({ charId: k.def.id, style: { ...k.style } })), stage: () => stageInfo(), prebuild: () => prebuildStatus(), stream: () => streamStatus(), drawn: () => { const { calls, triangles } = getRenderer().info.render; return { calls, triangles }; }, thumbs: () => thumbStatus() };

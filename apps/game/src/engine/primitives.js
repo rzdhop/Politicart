@@ -9,26 +9,8 @@ import * as THREE from 'three';
 import { SHADOWS, seg } from './state.js';
 
 const matCache = {};
-/**
- * Whether meshes created from here on cast shadows.
- *
- * Module-private behind setCast because it is assigned from elsewhere and an
- * imported binding is read-only for the importer.
- *
- * Carried over as-is, including a quirk worth knowing: nothing ever sets this
- * to false. The three call sites outside this module all set it true, so
- * `CAST && SHADOWS()` in tag() is currently just SHADOWS(). Left alone rather
- * than simplified, because stage 9 is a repackaging and a dead flag is not
- * worth a behaviour change; noted in .design-sync/NOTES.md as a cleanup.
- */
-let CAST = true;
-
-/** Set whether subsequently built meshes cast shadows. */
-export function setCast(value) {
-  CAST = value;
-}
 export function mat(color, rough) { const k = color + ':' + (rough || 0.85); return matCache[k] || (matCache[k] = new THREE.MeshStandardMaterial({ color, roughness: rough || 0.85, metalness: 0.05 })); }
-export function tag(m) { m.castShadow = CAST && SHADOWS(); m.receiveShadow = true; return m; }
+export function tag(m) { m.castShadow = SHADOWS(); m.receiveShadow = true; return m; }
 export function box(w, h, d, color, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color)); m.position.set(x, y, z); return tag(m); }
 export function sph(r, color, x, y, z, s) { const m = new THREE.Mesh(new THREE.SphereGeometry(r, s || seg(), s || seg()), mat(color)); m.position.set(x, y, z); return tag(m); }
 export function cyl(rt, rb, h, color, x, y, z, s) { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, s || seg()), mat(color)); m.position.set(x, y, z); return tag(m); }

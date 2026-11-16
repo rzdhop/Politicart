@@ -10,11 +10,13 @@ import { countMeshes, countTriangles } from './geo.js';
 import { chooseLayout } from './layout.js';
 import { getState, resetMachine, transition } from './machine.js';
 import { framePayload } from './payload.js';
-import { applyPrebuilt, buildExtras, dropPrebuild, HAZARD_TYPES, prebuildFrame, prebuildKey, prebuildStatus, prebuiltSeed, PROJECTILE_TYPES, requestPrebuild, takePrebuilt } from './prebuild.js';
-import { startField, startRace } from './race.js';
+import { openBatches } from './decor/instanced.js';
+import { applyPrebuilt, buildExtras, dropPrebuild, HAZARD_TYPES, prebuildFrame, prebuildKey, prebuildStatus, prebuiltSeed, PROJECTILE_TYPES, requestPrebuild, startStream, STREAM, streamFrame, streamStatus, takePrebuilt } from './prebuild.js';
+import { cullDecor, startField, startRace } from './race.js';
+import { camera } from './render.js';
 import { CFG, G, getPoly, togglePoly } from './state.js';
 import { takeSurfaceRequests } from './textures.js';
-import { buildTrack, samplesOf, surfacesOf, TRACK_PHASES } from './track.js';
+import { buildTrack, buildTrackPhases, PLAYABLE, samplesOf, surfacesOf, TRACK_PHASES } from './track.js';
 
 const slots = () => CHARACTERS.slice(0, 6).map((def, i) => ({ def, isAI: i < 5, local: i === 5 }));
 /** Run the pre-build's frames headless until it reports nothing left; the number of frames it took. */
@@ -98,6 +100,102 @@ describe('the pre-build', () => {
     expect(sliced.state.crowd.length).toBe(G.crowd.length);
     expect(sliced.state.animated.length).toBe(G.animated.length);
   }, 60000);
+
+  // ---- the stream (the browser's way: STREAM.on)
+  const fresh = () => { G.animated = []; G.hazards = []; G.crowd = []; G.lamps = []; G.disposables = []; G.entitySeq = 0; G.track = TRACKS[0]; G.climate = null; };
+  const drain = () => { let n = 0; while (streamFrame({ budget: 4 }) && n < 5000) n++; return n; };
+  it.each([['détaillés', 'high'], ['légers (folded)', 'low']])('streams the decor after the circuit is playable into the same circuit as at once, on %s', (_n, level) => {
+    if (getPoly() !== level) togglePoly();
+    mockRandom(2); fresh(); const scene = new THREE.Scene(); G.scene = scene;
+    const gen = buildTrackPhases(scene, TRACKS[0], { seed: 11 });
+    for (let r = gen.next(); r.value !== PLAYABLE; r = gen.next()) { /* the road, the urnes, the features, the riders */ }
+    const playable = { tris: countTriangles(scene), hazards: G.hazards.length, cyclists: G.cyclists.length };
+    startStream(scene, gen);
+    expect(countTriangles(scene)).toBeGreaterThan(playable.tris);              // the start line's furniture is there at once
+    expect(streamStatus()).toMatchObject({ building: true });
+    expect(scene.userData.decor).toBeUndefined();                             // nothing is culled while the build goes on
+    expect(drain()).toBeGreaterThan(3);                                        // over frames
+    expect(streamStatus()).toBeNull();
+    expect(openBatches()).toBe(0);
+    const streamed = { tris: countTriangles(scene), crowd: G.crowd.length, animated: G.animated.length, lamps: G.lamps.length, hazards: G.hazards.length, cyclists: G.cyclists.length };
+    vi.restoreAllMocks();
+    mockRandom(2); fresh(); const whole = new THREE.Scene(); buildTrack(whole, TRACKS[0], { seed: 11 }); vi.restoreAllMocks();
+    expect(streamed).toEqual({ tris: countTriangles(whole), crowd: G.crowd.length, animated: G.animated.length, lamps: G.lamps.length, hazards: G.hazards.length, cyclists: G.cyclists.length });
+    expect(streamed.hazards).toBe(playable.hazards);                           // the race's own pieces were all there at the start
+    expect(streamed.cyclists).toBe(playable.cyclists);
+    expect(scene.userData.decor.length).toBeGreaterThan(50);
+  }, 60000);
+
+  it('starts a race as soon as the circuit is playable, built ahead or not, and builds the rest in its frames', () => {
+    STREAM.on = true;
+    try {
+      startField(slots(), { seed: 3 });                                       // nothing built ahead
+      expect(getState()).toBe('countdown');
+      expect(G.samples).toHaveLength(samplesOf(TRACKS[0]));
+      expect(G.itemBoxes.length).toBeGreaterThanOrEqual(16);
+      expect(streamStatus()).toMatchObject({ building: true });
+      const early = countMeshes(G.scene);
+      drain();
+      expect(streamStatus()).toBeNull();
+      expect(countMeshes(G.scene)).toBeGreaterThan(early);
+      expect(countMeshes(G.scene)).toBeGreaterThan(1500);
+
+      resetMachine('tracks');
+      requestPrebuild(0); prebuildFrame({ budget: 1 });                       // built ahead, but only just begun
+      const st = prebuildStatus();
+      startField(slots(), { seed: st.seed });
+      expect(G.scene).toBe(st.scene);
+      expect(streamStatus()).toMatchObject({ building: true });
+      drain();
+      expect(countMeshes(G.scene)).toBeGreaterThan(1500);
+
+      resetMachine('tracks');
+      requestPrebuild(0); runFrames();                                        // built ahead to the end: nothing to stream
+      startField(slots(), { seed: prebuildStatus().seed });
+      expect(streamStatus()).toBeNull();
+    } finally { STREAM.on = false; }
+  }, 60000);
+
+  it('gives way to the next pre-build: one build at a time', () => {
+    STREAM.on = true;
+    try {
+      startField(slots(), { seed: 3 });
+      expect(streamStatus()).not.toBeNull();
+      requestPrebuild(1, { seed: 5 }); prebuildFrame({ budget: 1 });          // the results screen builds "Rejouer" ahead
+      expect(streamStatus()).toBeNull();
+      expect(streamFrame()).toBe(false);
+    } finally { STREAM.on = false; }
+  });
+
+  it('builds a circuit without its decor for the game server: the same race, nothing to look at', () => {
+    fresh(); const bare = new THREE.Scene(); buildTrack(bare, TRACKS[0], { seed: 11, decor: false });
+    const race = () => ({ layout: G.layout, hazards: G.hazards.map(h => [h.id, h.x, h.z]), cyclists: G.cyclists.map(c => [c.x, c.z]), n: G.N, boxes: G.itemBoxes.length, coins: G.coins.length, pads: G.pads.length, ramps: G.ramps.length, ids: G.entitySeq });
+    const without = race();
+    expect(bare.userData.world.children).toHaveLength(0);
+    takeSurfaceRequests(); fresh(); buildTrack(new THREE.Scene(), TRACKS[0], { seed: 11, decor: false });
+    expect(takeSurfaceRequests().sort()).toEqual(['asphalt', 'grass']);       // a playable circuit bakes its road and its ground, no more
+    fresh(); const full = new THREE.Scene(); buildTrack(full, TRACKS[0], { seed: 11 });
+    expect(without).toEqual(race());
+    expect(countMeshes(bare)).toBeLessThan(countMeshes(full) / 2);
+  }, 60000);
+
+  it('stops drawing the decor the fog has swallowed, and only that', () => {
+    const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0, 100, 500);
+    const piece = (x, y, z, h) => { const m = new THREE.Mesh(new THREE.BoxGeometry(4, h, 4), new THREE.MeshBasicMaterial()); m.position.set(x, y + h / 2, z); scene.add(m); return m; };
+    const near = piece(0, 0, 100, 2), far = piece(0, 0, 900, 2), tower = piece(0, 0, 900, 60), behind = piece(0, 0, -900, 2), off = piece(0, 0, 900, 2), mover = piece(0, 0, 100, 2);
+    off.visible = false;                                                      // a builder's own choice
+    scene.userData.decor = [near, far, tower, behind, off, mover];
+    scene.updateMatrixWorld(true);
+    camera.position.set(0, 6, 0); camera.lookAt(0, 6, 100); camera.updateMatrixWorld(true);
+    expect(cullDecor(scene)).toBe(1);
+    expect([near, far, tower, behind, off, mover].map(o => o.visible)).toEqual([true, false, true, true, false, true]);
+    mover.position.z = 900; scene.updateMatrixWorld(true);                    // a piece that travels is followed
+    expect(cullDecor(scene)).toBe(2);
+    expect(mover.visible).toBe(false);
+    camera.position.set(0, 6, 700); camera.updateMatrixWorld(true);           // the kart comes back in range
+    expect(cullDecor(scene)).toBe(0);
+    expect([far, mover, off].map(o => o.visible)).toEqual([true, true, false]);
+  });
 
   it('is taken by startField when the circuit matches: the scene and its registrations, not rebuilt, the climate applied', () => {
     requestPrebuild(0, { seed: 3 }); runFrames();

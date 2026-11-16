@@ -1,11 +1,15 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { brotliCompressSync, gzipSync } from 'node:zlib';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 
+import { DAILY_COINS, DNF_COINS, SOLO_DAILY_COINS } from '../../game/src/engine/catalog.js';
+import { xpForRace } from '../../game/src/engine/progress.js';
+import { accountApi } from './accounts.js';
 import { startServer } from './server.js';
 import { openFileStore } from './store.js';
 
@@ -92,6 +96,51 @@ describe('http', () => {
     expect(await page.text()).toContain('<title>kr</title>');
     expect((await fetch(url('/app.js'))).headers.get('content-type')).toMatch(/javascript/);
     expect((await fetch(url('/nope.js'))).status).toBe(404);
+  });
+
+  it('sends the page and its files with a policy that runs no script but its own and lets nobody frame it', async () => {
+    for (const path of ['/', '/app.js']) {
+      const r = await fetch(url(path));
+      expect(r.headers.get('content-security-policy')).toMatch(/script-src 'self';/);
+      expect(r.headers.get('content-security-policy')).toMatch(/frame-ancestors 'none'/);
+      expect(r.headers.get('content-security-policy')).not.toMatch(/unsafe-eval|script-src[^;]*unsafe-inline/);
+      expect(r.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(r.headers.get('x-frame-options')).toBe('DENY');
+      expect(r.headers.get('strict-transport-security')).toBeNull();        // plain HTTP: no promise of HTTPS
+    }
+    expect((await fetch(url('/'), { headers: { 'x-forwarded-proto': 'https' } })).headers.get('strict-transport-security')).toMatch(/max-age=\d+/);
+  });
+
+  it('closes a socket that talks faster than any player, and takes no more sockets or races than it was given', async () => {
+    const closed = ws => new Promise(ok => ws.on('close', code => ok(code)));
+    const flood = new WebSocket(`ws://127.0.0.1:${srv.port}/ws`); await new Promise(ok => flood.on('open', ok));
+    const gone = closed(flood);
+    for (let i = 0; i < 150; i++) flood.send(JSON.stringify({ t: 'friends' }));
+    expect(await gone).toBe(1008);
+
+    const small = await startServer({ port: 0, host: '127.0.0.1', staticDir: dir, runRace: fakeRace, loginTries: 1000, maxConns: 1, maxRaces: 0 });
+    try {
+      const open = port => { const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`); return new Promise(ok => ws.on('open', () => ok(ws))); };
+      const first = await open(small.port), second = await open(small.port);
+      expect(await closed(second)).toBe(1013);                              // full: the second socket is turned away
+      const said = t => new Promise(ok => first.on('message', raw => { const m = JSON.parse(String(raw)); if (m.t === t) ok(m); }));
+      const reg = await (await fetch(`http://127.0.0.1:${small.port}/api/register`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Plein', password: 'secret1' }) })).json();
+      const room = said('room'); first.send(JSON.stringify({ t: 'hello', token: reg.token })); first.send(JSON.stringify({ t: 'create' })); await room;
+      const error = said('error'); first.send(JSON.stringify({ t: 'set', ready: true })); first.send(JSON.stringify({ t: 'start' }));
+      expect((await error).msg).toMatch(/serveur est plein/);
+      first.close();
+    } finally { small.close(); }
+  });
+
+  it('keeps an account in one room at a time: a second tab takes the first one out', async () => {
+    const u = await account();
+    const a = await hello(u), b = await hello(u);
+    a.send({ t: 'create' }); const ra = await a.next(m => m.t === 'room' && m.room);
+    b.send({ t: 'create' }); const rb = await b.next(m => m.t === 'room' && m.room);
+    expect(rb.room.code).not.toBe(ra.room.code);
+    expect((await a.next(m => m.t === 'room' && !m.room)).room).toBeNull();
+    expect((await a.next(m => m.t === 'error')).msg).toMatch(/autre onglet/);
+    a.close?.(); b.close?.();
   });
 
   it('serves the icons the game links, the bare /favicon.ico a browser asks for included', async () => {
@@ -263,10 +312,10 @@ describe('accounts', () => {
 
   it('awards experience for a solo race, at most once a minute', async () => {
     const u = await account();
-    const first = await (await post('/api/progress', { rank: 0, field: 6, finished: true }, u.token)).json();
+    const first = await (await post('/api/progress', { rank: 0, field: 6, finished: true, time: 140 }, u.token)).json();
     expect(first.gained).toBe(70);
     expect(first.profile.xp).toBe(70);
-    const again = await (await post('/api/progress', { rank: 0, field: 6, finished: true }, u.token)).json();
+    const again = await (await post('/api/progress', { rank: 0, field: 6, finished: true, time: 140 }, u.token)).json();
     expect(again).toMatchObject({ gained: 0, coins: 0, bonus: { daily: false, levelUp: false, levelUpCoins: 0 } });
     expect((await post('/api/progress', { rank: 0 })).status).toBe(401);
   });
@@ -280,8 +329,49 @@ describe('accounts', () => {
     // anything else in those fields is ignored, never refused
     const v = await account();
     const odd = await (await post('/api/progress', { rank: 5, field: 6, finished: true, trackId: 'nowhere', charId: '__proto__', time: 'fast', bestLap: 2 }, v.token)).json();
-    expect(odd).toMatchObject({ gained: 20, coins: 12 + 50 });
-    expect(odd.profile.stats).toMatchObject({ races: 1, bestLap: {}, bestTime: {}, byChar: {} });
+    // a finish with no time a lap could take is paid as a retirement: the client's word is held to what a race can be
+    expect(odd).toMatchObject({ gained: xpForRace({ rank: 5, field: 6, finished: false }), coins: DNF_COINS + 50 });
+    expect(odd.profile.stats).toMatchObject({ races: 1, finished: 0, dnf: 1, bestLap: {}, bestTime: {}, byChar: {} });
+    const w = await account();
+    const quick = await (await post('/api/progress', { rank: 0, field: 6, finished: true, time: 30, pickups: 60, goals: 3 }, w.token)).json();
+    expect(quick.profile.stats).toMatchObject({ finished: 0, wins: 0, dnf: 1, bestTime: {} });   // a lap in thirty seconds was not driven
+  });
+
+  it('changes a password against the current one, closes the other sessions and hands back a new one', async () => {
+    const u = await account('Passe'), other = (await (await post('/api/login', { name: u.name, password: 'secret1' })).json()).token;
+    expect((await post('/api/password', { current: 'secret1', next: 'nouveau-secret' })).status).toBe(401);              // no session
+    const wrong = await post('/api/password', { current: 'not-it', next: 'nouveau-secret' }, u.token);
+    expect(wrong.status).toBe(401);
+    expect((await wrong.json()).error).toMatch(/actuel incorrect/);
+    expect((await post('/api/password', { current: 'secret1', next: 'court' }, u.token)).status).toBe(400);
+    const ok = await post('/api/password', { current: 'secret1', next: 'nouveau-secret' }, u.token);
+    expect(ok.status).toBe(200);
+    const fresh = (await ok.json()).token;
+    const me = t => fetch(url('/api/me'), { headers: { authorization: 'Bearer ' + t } });
+    expect([(await me(u.token)).status, (await me(other)).status, (await me(fresh)).status]).toEqual([401, 401, 200]);   // every older session is closed
+    expect((await post('/api/login', { name: u.name, password: 'secret1' })).status).toBe(401);
+    expect((await post('/api/login', { name: u.name, password: 'nouveau-secret' })).status).toBe(200);
+  });
+
+  it('refuses a name that mixes alphabets, the way a name is made to read as another\'s', async () => {
+    const mixed = await post('/api/register', { name: 'r\u0456da2', password: 'secret1' });   // a Cyrillic і among Latin letters
+    expect(mixed.status).toBe(400);
+    expect((await mixed.json()).error).toMatch(/Un seul alphabet/);
+    expect((await post('/api/register', { name: '\u041c\u0430\u0440\u0438\u044f', password: 'secret1' })).status).toBe(200);   // one alphabet, not Latin: fine
+    expect((await post('/api/register', { name: 'Hélène_2', password: 'secret1' })).status).toBe(200);                    // accents and digits are not another alphabet
+  });
+
+  it('stops paying politicoins for solo races once the day\'s allowance is spent, and says so', async () => {
+    const store = openFileStore(null), user = await store.createUser({ name: 'Marathon', hash: 'x' }), token = await store.createSession(user.id);
+    let t = Date.UTC(2026, 0, 5, 0, 0, 0), coins = 0, capped = 0;
+    const api = accountApi(store, { now: () => t });
+    const call = () => new Promise(ok => {
+      const req = Object.assign(Readable.from([Buffer.from(JSON.stringify({ rank: 0, field: 6, finished: true, time: 140, pickups: 60, goals: 3 }))]), { method: 'POST', headers: { authorization: 'Bearer ' + token }, socket: {} });
+      api(req, { writeHead() {}, end: body => ok(JSON.parse(body)) }, '/api/progress');
+    });
+    for (let i = 0; i < 20; i++) { t += 150_000; const r = await call(); coins += r.coins - r.bonus.levelUpCoins - (r.bonus.daily ? DAILY_COINS : 0); if (r.bonus.capped) capped++; expect(r.gained).toBeGreaterThan(0); }
+    expect(coins).toBe(SOLO_DAILY_COINS);                                // a forged perfect race every time still mints no more
+    expect(capped).toBeGreaterThan(5);
   });
 
   it('keeps guests out of room creation and away from locked candidates', async () => {
@@ -315,7 +405,7 @@ describe('accounts', () => {
     expect(p.gained).toBe(70 + 20);          // winner, and the winning team
     expect(p.profile.xp).toBe(90);
     expect(p.coins).toBe(60 + 20 + 50);      // first place, the winning team, the first race of the day
-    expect(p.bonus).toEqual({ daily: true, levelUp: false, levelUpCoins: 0, pickups: 0, goals: 0, goalXp: 0, goalCoins: 0, streak: 1, streakCoins: 0 });
+    expect(p.bonus).toEqual({ daily: true, levelUp: false, levelUpCoins: 0, pickups: 0, goals: 0, goalXp: 0, goalCoins: 0, streak: 1, streakCoins: 0, capped: false });
     expect(p.profile.coins).toBe(130);
     expect(p.profile.stats).toMatchObject({ races: 1, wins: 1, podiums: 1, finished: 1, team: 1, teamWins: 1, solo: 0, bestLap: { elysee: 41.5 }, bestTime: { elysee: 130 } });
     expect(b.seen.some(m => m.t === 'profile')).toBe(false);

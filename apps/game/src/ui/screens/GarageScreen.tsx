@@ -4,8 +4,8 @@ import {
   Button,
   ChoiceGroup,
   type ChoiceOption,
-  ColorSwatch,
   ColorsRow,
+  ColorSwatch,
   Disclaimer,
   Field,
   GradeBadge,
@@ -16,6 +16,7 @@ import {
   SelectLayout,
   Showcase,
   ShowcaseStage,
+  Skeleton,
   TextInput,
 } from '@politikart/ui';
 
@@ -144,7 +145,7 @@ export function GarageScreen({ ui }: { ui: UiSnapshot }) {
       {sideways ? null : heading}
       <SelectLayout style={LAYOUT}>
         {sideways ? <div className="select-side">{heading}{form}{buttons}</div> : form}
-        <Showcase id="g-showcase" name={chosen.name} title="Votre kart" quote="" stage={<ShowcaseStage id="g-showcase-stage" aria-label={STAGE_LABEL} {...stageDrag()} />} />
+        <Showcase id="g-showcase" name={chosen.name} title="Votre kart" quote="" stage={<ShowcaseStage id="g-showcase-stage" aria-label={STAGE_LABEL} {...stageDrag()}>{!ui.stageReady && <Skeleton className="stage-wait" />}</ShowcaseStage>} />
       </SelectLayout>
       {sideways ? null : buttons}
     </Screen>

@@ -10,7 +10,9 @@
 // (sharing the part's attributes) whose sphere covers that cell's copies.
 //
 // Builders add copies while the decor is built; track.js flushes every
-// batch into the scene after spreading the decor (flushInstanced), so a
+// batch into the scene after spreading the decor (flushInstanced), and a
+// streamed build flushes the start line's furniture first (prebuild.js): a
+// flush makes the copies added since the last one, so a
 // copy placed in the decor's scale-1 coordinates lands where a small piece
 // of decor would: moved to the circuit's scale and set on the ground there
 // (yAt). A batch opened with `world: true` takes world units and absolute
@@ -41,10 +43,11 @@ const BATCHES = [];
 
 const ORIGIN = new THREE.Vector3();
 
+// Scratch values: move() runs for hundreds of swaying trees a frame, and a fresh matrix, quaternion and vectors each time is garbage to collect.
+const Q = new THREE.Quaternion(), E = new THREE.Euler(), P = new THREE.Vector3(), SC = new THREE.Vector3(), M1 = new THREE.Matrix4(), M2 = new THREE.Matrix4();
 /** The world matrix of a copy: at (x, y, z), turned `rotY` about the vertical, tilted `tiltX`/`tiltZ`, scaled `scale`. */
 function copyMatrix(m, { x, y, z, rotY = 0, tiltX = 0, tiltZ = 0, scale = 1 }) {
-  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(tiltX, rotY, tiltZ, 'YXZ'));
-  return m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(scale, scale, scale));
+  return m.compose(P.set(x, y, z), Q.setFromEuler(E.set(tiltX, rotY, tiltZ, 'YXZ')), SC.set(scale, scale, scale));
 }
 
 /** The prop's merged parts: { geometry, material, matrix, cast, receive, radius } relative to the prop's origin. */
@@ -78,26 +81,30 @@ function partsOf(prop) {
  */
 export function instanced(build, { world = false, tint = false, pad = 2, cell = CELL } = {}) {
   const copies = [];
+  let done = 0, parts = null, open = true;   // copies already made into meshes, the prop's parts, whether BATCHES holds the batch
   const batch = {
     meshes: [], count: 0,
     add(x, z, { y = 0, rotY = 0, tiltX = 0, tiltZ = 0, scale = 1, color = null } = {}) {
+      if (!open) { open = true; BATCHES.push(batch); }   // copies added after a flush wait for the next one
       copies.push({ x, z, y, rotY, tiltX, tiltZ, scale, color: color === null ? null : new THREE.Color(color) });
       return batch.count++;
     },
     move(i, pose) {
       const c = copies[i]; if (!c || !c.slot) return;
       Object.assign(c.pose, pose);
-      const m = copyMatrix(new THREE.Matrix4(), c.pose), out = new THREE.Matrix4();
-      c.slot.meshes.forEach((mesh, p) => { mesh.setMatrixAt(c.slot.index, out.multiplyMatrices(m, c.slot.parts[p].matrix)); mesh.instanceMatrix.needsUpdate = true; });
+      const m = copyMatrix(M1, c.pose);
+      c.slot.meshes.forEach((mesh, p) => { mesh.setMatrixAt(c.slot.index, M2.multiplyMatrices(m, c.slot.parts[p].matrix)); mesh.instanceMatrix.needsUpdate = true; });
     },
-    /** Make the instanced meshes into `scene` (track.js, through flushInstanced). */
+    /** Make the instanced meshes of the copies added since the last flush into `scene` (track.js, through flushInstanced). */
     flush(scene) {
-      if (!copies.length) return;
-      const parts = partsOf(build());
+      open = false;
+      const fresh = copies.slice(done); done = copies.length;
+      if (!fresh.length) return;
+      parts ??= partsOf(build());
       if (!parts.length) return;
       // resolve every copy's world pose, then group the copies by cell
       const cells = new Map();
-      for (const c of copies) {
+      for (const c of fresh) {
         const x = world ? c.x : c.x * DS, z = world ? c.z : c.z * DS, y = world ? c.y : yAt(x, z) + c.y;
         c.pose = { x, y, z, rotY: c.rotY, tiltX: c.tiltX, tiltZ: c.tiltZ, scale: c.scale };
         const key = Math.floor(x / cell) + ',' + Math.floor(z / cell);
@@ -114,12 +121,14 @@ export function instanced(build, { world = false, tint = false, pad = 2, cell = 
           const box = new THREE.Box3();
           for (const c of group) box.expandByPoint(new THREE.Vector3(c.pose.x, c.pose.y, c.pose.z));
           const sphere = box.getBoundingSphere(new THREE.Sphere());
-          sphere.radius += part.radius * Math.max(...group.map(c => c.scale)) + pad;
+          const reach = part.radius * Math.max(...group.map(c => c.scale)) + pad;
+          sphere.radius += reach;
           g.boundingSphere = sphere;
           const mesh = new THREE.InstancedMesh(g, tint ? tintedOf(part.material) : part.material, group.length);
           mesh.castShadow = part.cast; mesh.receiveShadow = part.receive;
           mesh.frustumCulled = true;   // r128 turns it off for instanced meshes; the cell's own bounds make it right
           mesh.name = 'instanced:' + (part.material.name || part.material.type);
+          mesh.userData.top = box.max.y + reach;   // the cell's highest point, for the far decor's culling (race.js cullDecor)
           return mesh;
         });
         group.forEach((c, index) => {

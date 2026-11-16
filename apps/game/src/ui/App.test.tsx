@@ -30,6 +30,7 @@ vi.mock('../engine/minimap.js', () => ({
 const box = vi.hoisted(() => ({ onPhase: null as ((name: string, index?: number) => void) | null, played: [] as unknown[], skips: 0 }));
 vi.mock('../engine/boxgate.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../engine/boxgate.js')>()),
+  loadBox: () => Promise.resolve({}),   // the Boutique fetches the Politibox's chunk ahead: not here
   playOpening: (drop: unknown, o: { onPhase?: (name: string, index?: number) => void } = {}) => { box.played.push(drop); box.onPhase = o.onPhase ?? null; box.onPhase?.('drop', 0); },
   skipOpening: () => { box.skips++; },
   stopOpening: () => {},
@@ -50,6 +51,8 @@ import { G } from '../engine/state.js';
 import { App } from './App';
 import { hud } from './Hud';
 import { loadGarage, myStyle, resetGarage } from '../engine/garage.js';
+import { STREAM } from '../engine/prebuild.js';
+import { startRace } from '../engine/race.js';
 import { actions, getSnapshot, ownedOf } from './store';
 import { setTouchMode } from '../touch';
 import { TAGLINES } from './screens/TitleScreen';
@@ -138,7 +141,7 @@ interface FakeOptions {
   /** What the next bundle holds (five), instead of `drop` five times. */
   drops?: unknown[];
   /** What a solo race report pays (POST /api/progress): experience, politicoins, bonuses, and the level the profile comes back at. */
-  progress?: { gained: number; coins: number; bonus: { daily: boolean; levelUp: boolean; levelUpCoins: number }; level?: number };
+  progress?: { gained: number; coins: number; bonus: { daily: boolean; levelUp: boolean; levelUpCoins: number; capped?: boolean }; level?: number };
 }
 
 /**
@@ -188,6 +191,12 @@ function fakeServer(o: FakeOptions = {}) {
       return answer(200, { profile: me(who), bought: {} });
     }
     if (url === './api/logout') { if (auth) state.sessions.delete(auth.slice(7)); return answer(200, {}); }
+    if (url === './api/password') {
+      if (!who) return answer(401, { error: 'Session expirée.' });
+      if (body.current !== 'secret1') return answer(401, { error: 'Mot de passe actuel incorrect.' });
+      state.sessions.delete(auth!.slice(7)); state.sessions.set('tok-new', who);
+      return answer(200, { token: 'tok-new', profile: me(who) });
+    }
     if (url === './api/progress') {
       if (!who) return answer(401, { error: 'Session expirée.' });
       const p = o.progress ?? { gained: 40, coins: 60, bonus: { daily: false, levelUp: false, levelUpCoins: 0 } };
@@ -1334,6 +1343,23 @@ describe('the Garage locks (DEC-035)', () => {
 describe('Compte stats (stage 6c)', () => {
   const STATS = { races: 3, wins: 1, podiums: 2, dnf: 1, finished: 2, solo: 3, boxes: 4, coinsEarned: 260, coinsSpent: 480, bestLap: { elysee: 61.2 }, bestTime: { elysee: 190.5 } };
 
+  it('change the password from the account screen: refused on a wrong current one, then done on a new session', async () => {
+    const { container } = await renderServed({ server: true, who: 'player' });
+    fireEvent.click($(container, 'b-account')!);
+    const type = (id: string, value: string) => fireEvent.change($(container, id)!, { target: { value } });
+    expect(disabled(container, 'b-acc-password')).toBe(true);
+    type('acc-pass-current', 'not-it'); type('acc-pass-next', 'nouveau-secret');
+    await act(async () => { fireEvent.click($(container, 'b-acc-password')!); });
+    await settle();
+    expect($(container, 'acc-pass-status')?.textContent).toMatch(/actuel incorrect/);
+    type('acc-pass-current', 'secret1');
+    await act(async () => { fireEvent.click($(container, 'b-acc-password')!); });
+    await settle();
+    expect($(container, 'acc-pass-status')?.textContent).toMatch(/Mot de passe changé/);
+    expect(getSnapshot().account?.token).toBe('tok-new');
+    expect(($(container, 'acc-pass-current') as HTMLInputElement).value).toBe('');
+  });
+
   it('show the account its politicoins, its figures, its collection and its best laps per circuit', async () => {
     const { container } = await renderServed({ server: true, who: 'player', coins: 250, stats: STATS, owned: { chars: ['lucie'], parts: ['wheels:gold'], trails: ['laser'] } });
     fireEvent.click($(container, 'b-account')!);
@@ -1439,6 +1465,24 @@ function raceWith(style: Record<string, unknown>) {
   act(() => { transition('countdown'); });
   return player;
 }
+describe('"C\'est parti" in the browser', () => {
+  it('shows the race\'s placeholder first, then starts the race, when the circuit is not built ahead', async () => {
+    const { container } = render(<App />);
+    const raf = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(cb => { setTimeout(() => cb(0), 0); return 0; });
+    const started = vi.mocked(startRace); started.mockClear();
+    STREAM.on = true;
+    try {
+      act(() => { actions.play(); actions.toTracks(); actions.start(); });
+      expect(started).not.toHaveBeenCalled();                              // the placeholder is painted before the build holds the page
+      expect(container.querySelector('#race-loading[aria-busy="true"]')).not.toBeNull();
+      expect(container.querySelectorAll('#race-loading .skeleton')).toHaveLength(4);
+      await act(async () => { await new Promise(r => setTimeout(r, 20)); });
+      expect(started).toHaveBeenCalledTimes(1);
+      expect(container.querySelector('#race-loading')).toBeNull();
+    } finally { STREAM.on = false; raf.mockRestore(); }
+  });
+});
+
 /** The engine's state, typed loosely: state.js starts it with no kart at all, which TypeScript reads as `null` for good. */
 const engine = G as unknown as { player: unknown; karts: unknown[] };
 const leaveRace = () => { engine.player = null; engine.karts = []; };
@@ -1539,6 +1583,15 @@ describe('the kart card and the coin line (stage 7)', () => {
     await settle();
     expect([...$(container, 'r-xp')!.querySelectorAll('.gain-line')].map(l => l.textContent)).toEqual(['+90 XP', '+45 politicoins', '+200 politicoins (niveau 2)']);
     expect($(container, 'r-xp')?.querySelector('.gain-notes')?.textContent).toBe('Niveau 2 atteint !');
+  });
+
+  it('says so when the day\'s solo allowance cut the politicoins, with what still pays', async () => {
+    const { container } = await renderServed({ server: true, who: 'player', progress: { gained: 70, coins: 0, bonus: { daily: false, levelUp: false, levelUpCoins: 0, capped: true } } });
+    raceWith({});
+    act(() => { transition('race'); transition('results'); });
+    await settle();
+    expect([...$(container, 'r-xp')!.querySelectorAll('.gain-line')].map(l => l.textContent)).toEqual(['+70 XP']);
+    expect($(container, 'r-xp')?.querySelector('.gain-notes')?.textContent).toMatch(/Plafond solo du jour atteint.*l’expérience continue.*équipe/);
   });
 
   it('says nothing about politicoins to a guest, who is invited to sign up', async () => {

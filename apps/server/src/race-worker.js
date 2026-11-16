@@ -70,7 +70,7 @@ const IDLE = Object.freeze({ throttle: false, brake: false, left: false, right: 
 applyCast(cast, CHARACTERS);
 resetMachine('tracks');
 G.trackIdx = trackIdx;
-startField(roster.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team, god: s.god === true })), { seed });
+startField(roster.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team, god: s.god === true })), { seed, decor: false });   // the server races, it never looks: no decor to build
 
 const humans = new Map();        // slot -> { c, item, power, usedItem, usedPower, ev, fx, seq, q, ack, n }
 /** Seat a human at grid slot `slot`: their controls drive that kart. */
@@ -100,9 +100,11 @@ parentPort.on('message', m => {
     loading.delete(m.slot);
     const c = m.c ?? {};
     const ctrl = { throttle: bool(c.throttle), brake: bool(c.brake), left: bool(c.left), right: bool(c.right), drift: bool(c.drift) };
-    if (Number.isInteger(m.item) && m.item > h.item) h.item = m.item;
-    if (Number.isInteger(m.power) && m.power > h.power) h.power = m.power;
-    if (!Number.isInteger(m.seq)) { h.c = ctrl; return; }          // unnumbered (the tests' drivers): the latest controls drive
+    // Safe integers only: Number.isInteger(1e300) is true, and at that size `s++` below no longer changes `s`, so one
+    // message would loop for ever, filling the queue until the worker died. Anything else is read as unnumbered.
+    if (Number.isSafeInteger(m.item) && m.item > h.item) h.item = m.item;
+    if (Number.isSafeInteger(m.power) && m.power > h.power) h.power = m.power;
+    if (!Number.isSafeInteger(m.seq)) { h.c = ctrl; return; }       // unnumbered (the tests' drivers): the latest controls drive
     if (m.seq <= h.seq) return;                                     // reordered or repeated
     // the message stands for every tick since the last one received (a frame's ticks share its controls)
     for (let s = Math.max(h.seq + 1, m.seq - MAX_AHEAD); s <= m.seq; s++) h.q.push({ seq: s, c: ctrl });

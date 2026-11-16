@@ -16,9 +16,10 @@ import {
   ShopHero,
   Showcase,
   ShowcaseStage,
+  Skeleton,
   Tabs,
-  TrailStrip,
   type TrailKind,
+  TrailStrip,
 } from '@politikart/ui';
 
 import {
@@ -420,7 +421,7 @@ export function ShopScreen({ ui }: { ui: UiSnapshot }) {
           name={chosen.name}
           title={ui.tryOn ? 'Cabine d’essayage' : 'Votre kart'}
           quote=""
-          stage={<ShowcaseStage id="shop-stage" aria-label={STAGE_LABEL} {...stageDrag()} />}
+          stage={<ShowcaseStage id="shop-stage" aria-label={STAGE_LABEL} {...stageDrag()}>{!ui.stageReady && <Skeleton className="stage-wait" />}</ShowcaseStage>}
         >
           <FittingRoom ui={ui} coins={coins} guest={guest} />
         </Showcase>

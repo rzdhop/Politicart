@@ -5,6 +5,7 @@ import { Bar } from './Bar';
 import { Panel } from './Panel';
 import { Row } from './Row';
 import { Screen } from './Screen';
+import { Skeleton } from './Skeleton';
 
 describe('Screen', () => {
   it('renders a section carrying the screen class', () => {
@@ -89,5 +90,30 @@ describe('Bar', () => {
     const bar = screen.getByRole('progressbar');
     expect(bar.getAttribute('aria-valuenow')).toBe('67');
     expect(bar.querySelector('i')?.style.width).toBe('67%');
+  });
+});
+
+describe('Skeleton', () => {
+  it('is a decorative block by default, hidden from assistive technology', () => {
+    const { container } = render(<Skeleton />);
+    const el = container.firstElementChild;
+    expect(el?.className).toBe('skeleton');
+    expect(el?.getAttribute('aria-hidden')).toBe('true');
+    expect(el?.hasAttribute('role')).toBe(false);
+  });
+
+  it('announces itself as a busy status when it is given a label', () => {
+    render(<Skeleton label="Chargement des statistiques" />);
+    const el = screen.getByRole('status', { name: 'Chargement des statistiques' });
+    expect(el.getAttribute('aria-busy')).toBe('true');
+    expect(el.hasAttribute('aria-hidden')).toBe(false);
+  });
+
+  it('takes a shape, the caller\'s class last and the native props', () => {
+    const { container } = render(<Skeleton shape="line" className="wide" style={{ width: '60%' }} data-x="1" />);
+    const el = container.firstElementChild as HTMLElement;
+    expect(el.className).toBe('skeleton line wide');
+    expect(el.style.width).toBe('60%');
+    expect(el.dataset.x).toBe('1');
   });
 });

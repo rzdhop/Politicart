@@ -48,7 +48,11 @@ export function XpLine({ ui }: { ui: UiSnapshot }) {
   if (g.streakCoins > 0) lines.push({ key: 'streak', label: 'série de ' + g.streak + ' podiums', value: g.streakCoins, tone: 'bonus' });
   if (g.daily) lines.push({ key: 'daily', label: 'bonus du jour', value: DAILY_COINS, tone: 'bonus' });
   if (g.levelUpCoins > 0) lines.push({ key: 'level', label: 'politicoins (niveau ' + g.level + ')', value: g.levelUpCoins, tone: 'bonus' });
-  const notes = [...(g.levelUp ? ['Niveau ' + g.level + ' atteint !'] : []), ...(names.length ? ['Débloqué : ' + names.join(', ')] : [])];
+  const notes = [
+    ...(g.levelUp ? ['Niveau ' + g.level + ' atteint !'] : []), ...(names.length ? ['Débloqué : ' + names.join(', ')] : []),
+    // the day's solo allowance is spent: said plainly, with what still pays, rather than a total that does not add up
+    ...(g.capped ? ['Plafond solo du jour atteint : l’expérience continue, et les courses en équipe paient toujours.'] : []),
+  ];
   return <GainBreakdown id="r-xp" lines={lines} notes={notes} format={fr} />;
 }
 

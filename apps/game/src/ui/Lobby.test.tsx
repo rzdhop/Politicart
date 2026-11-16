@@ -70,6 +70,18 @@ describe('the Multijoueur button', () => {
     expect(container.querySelector('#b-multi')).toBeNull();
   });
 
+  it('holds the server cards\' places while the server is asked, then gives way to them', async () => {
+    const { container } = render(<App />);
+    let answer: (v: unknown) => void = () => {};
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(ok => { answer = ok; })));   // a sleeping host: no answer yet
+    await act(async () => { actions.detectServer(); await Promise.resolve(); });
+    expect(container.querySelectorAll('.menu-cards .skeleton[aria-busy="true"]')).toHaveLength(3);
+    expect(container.querySelector('#b-multi')).toBeNull();
+    await act(async () => { answer({ ok: true, status: 200, json: async () => ({ kr: 'server' }) }); await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+    expect(container.querySelectorAll('.menu-cards .skeleton')).toHaveLength(0);
+    expect(container.querySelector('#b-multi')).not.toBeNull();
+  });
+
   it('appears when the game server answers its probe', async () => {
     const { container } = render(<App />);
     await served(true);

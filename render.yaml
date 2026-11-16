@@ -34,3 +34,13 @@ services:
         value: rida
       - key: POLITIKART_ADMIN_PASSWORD_HASH
         sync: false
+      # How far to believe X-Forwarded-For, for the limits kept per address
+      # (sign-ups, failed logins). `first` is what the server did before: the
+      # leftmost entry, which a client can forge if Render's edge appends to
+      # the header instead of replacing it. To close that, count the proxies:
+      # log in as the admin, open the dashboard, and read `forwarded` on your
+      # own connection in the reply of /api/admin/live (the raw header). If
+      # your address is N entries from its right end, counting from 0, set N+1
+      # here: the entry the nearest N+1 proxies wrote cannot be forged.
+      - key: TRUST_PROXY
+        value: first

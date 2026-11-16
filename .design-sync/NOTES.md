@@ -108,12 +108,7 @@ All carried over unchanged rather than fixed, because stage 9 is a
 repackaging: a behaviour change hidden inside a 1200-line move is exactly what
 the staging exists to avoid. Worth doing as their own task.
 
-- **`CAST` is a dead flag.** `apps/game/src/engine/primitives.js` keeps a
-  `CAST` boolean that `tag()` reads as `CAST && SHADOWS()`, but nothing ever
-  sets it to `false` -- the three call sites outside the module
-  (`startRace`, `useItem`'s rebuild, `setPreview`) all set it `true`. So the
-  expression is just `SHADOWS()`, and both the flag and its three assignments
-  could go.
+- **`CAST` was a dead flag** in `apps/game/src/engine/primitives.js`: removed, `tag()` reads `SHADOWS()`.
 - **No `<meta name="viewport">`.** The game declares a custom
   `claude:viewport-fit-sides` meta but not the standard viewport one, so a
   phone renders it at a 980px layout width and the `600px`/`760px` media

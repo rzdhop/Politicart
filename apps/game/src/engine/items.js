@@ -28,7 +28,7 @@ import { hintFor, say, tell } from './events.js';
 import { line, plural } from './lines.js';
 import { updateProgress } from './physics.js';
 import { barricade, buildProjectileMesh, lacrymo, poseProjectile } from './itemmeshes.js';
-import { box, cone, cyl, mat, setCast, sph, textPlane } from './primitives.js';
+import { box, cone, cyl, mat, sph, textPlane } from './primitives.js';
 import { G, nextEntityId, roadYAt } from './state.js';
 import { foeAhead, isFoe, leadingFoe } from './teams.js';
 import { clamp, lerp, rand, wrapAngle } from './util.js';
@@ -126,7 +126,6 @@ const PROJECTILE_HIT = { dossier: ['papers'], motion: ['shockwave', 0xc8102e, 6]
 /** The mesh and parameters of a hazard of `type`, unplaced. Shared by the simulation and networked clients. */
 export function buildHazard(type) {
   const g = new THREE.Group(); let r = 2.2, life = 45, stun = 1.3;
-  setCast(true);
   if (type === 'barricade') {
     barricade(g); g.rotation.y = rand(0, 6.28);   // the strike's barricade, its tyres and burning barrel (itemmeshes.js)
   } else if (type === 'fakebox') {

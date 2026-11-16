@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 
-import { BOX_BUNDLE, BOX_PRICE, DAILY_COINS, EVERYTHING, GOAL_COINS, GOAL_XP, PICKUP_CAP, RACE_COINS, REFUND, levelUpCoins, streakCoins } from '../../game/src/engine/catalog.js';
+import { BOX_BUNDLE, BOX_PRICE, DAILY_COINS, EVERYTHING, GOAL_COINS, GOAL_XP, PICKUP_CAP, RACE_COINS, REFUND, SOLO_DAILY_COINS, levelUpCoins, streakCoins } from '../../game/src/engine/catalog.js';
 import { STARTERS } from '../../game/src/engine/progress.js';
 import { hashPassword } from './accounts.js';
 import { ensureAdmin } from './admin.js';
@@ -372,6 +372,24 @@ describe('settleRace', () => {
     return { s, u };
   }
 
+  it('pays solo races up to the day\'s allowance in politicoins, never less experience, and a team race in full', async () => {
+    const { s, u } = await fresh();
+    const win = { rank: 0, field: 6, finished: true, pickups: 60, goals: 3, solo: true };
+    await s.setStats(u.id, { lastDaily: utcDay(DAY), soloDay: utcDay(DAY), soloCoins: SOLO_DAILY_COINS - 100 });   // a day's racing already paid
+    const last = await settleRace(s, u, win, { now: DAY });
+    expect(last.gain).toMatchObject({ coins: 100 + last.gain.levelUpCoins, capped: true });   // paid up to the allowance, not refused
+    expect(last.gain.xp).toBe(70 + 3 * 15);                                                    // the experience is whole
+    expect(last.after.stats).toMatchObject({ soloDay: utcDay(DAY), soloCoins: SOLO_DAILY_COINS });
+    const over = await settleRace(s, u, win, { now: DAY });
+    expect(over.gain).toMatchObject({ coins: over.gain.levelUpCoins, capped: true, xp: 70 + 3 * 15 });
+    const team = await settleRace(s, u, { rank: 0, field: 6, finished: true, teamWon: true }, { now: DAY });
+    expect(team.gain).toMatchObject({ capped: false });
+    expect(team.gain.coins - team.gain.levelUpCoins).toBeGreaterThanOrEqual(60 + 20);          // the server ran that race: paid in full
+    const next = await settleRace(s, u, { ...win, pickups: 0, goals: 0 }, { now: DAY + 86_400_000 });
+    expect(next.gain).toMatchObject({ capped: false, daily: true });                           // a new day, a new allowance, and its bonus on top
+    expect(next.after.stats.soloCoins).toBeLessThan(200);
+  });
+
   it('pays politicoins by place, a DNF and a team win', async () => {
     for (let rank = 0; rank < 8; rank++) {
       const { s, u } = await fresh();
@@ -425,6 +443,7 @@ describe('settleRace', () => {
       drops: { char: 0, part: 0, trail: 0, coins: 0 }, recent: [],
       bestLap: { elysee: 39 }, bestTime: { elysee: 120 }, byChar: { victor: 5 },
       lastDaily: utcDay(DAY), lastRaceAt: DAY,
+      soloDay: utcDay(DAY), soloCoins: 60 + 35 + streakCoins(35, 2) + 45 + 5 + 25,   // what the five solo races paid, bonuses apart
     });
     expect(normaliseStats(after.stats)).toEqual(after.stats);
   });
@@ -499,7 +518,7 @@ describe('normaliseStats', () => {
     expect(normaliseStats(null)).toEqual({
       races: 0, wins: 0, podiums: 0, finished: 0, dnf: 0, solo: 0, team: 0, teamWins: 0, boxes: 0, coinsEarned: 0, coinsSpent: 0,
       podiumStreak: 0, bestStreak: 0, goals: 0, pickups: 0,
-      drops: { char: 0, part: 0, trail: 0, coins: 0 }, recent: [], bestLap: {}, bestTime: {}, byChar: {}, lastDaily: null, lastRaceAt: null,
+      drops: { char: 0, part: 0, trail: 0, coins: 0 }, recent: [], bestLap: {}, bestTime: {}, byChar: {}, lastDaily: null, lastRaceAt: null, soloDay: null, soloCoins: 0,
     });
     const ring = normaliseStats({ recent: [
       { kind: 'coins', amount: 50, at: 5 }, { kind: 'hat', id: 'x', at: 5 }, 'junk', { kind: 'char', id: 'lucie', grade: 'bogus', amount: -1, at: 'now' },

@@ -16,6 +16,7 @@ export { Bar, type BarProps } from './components/foundation/Bar';
 export { Panel, type PanelProps } from './components/foundation/Panel';
 export { Row, type RowProps } from './components/foundation/Row';
 export { Screen, type ScreenProps } from './components/foundation/Screen';
+export { Skeleton, type SkeletonProps } from './components/foundation/Skeleton';
 
 // Typography.
 export { Disclaimer, type DisclaimerProps } from './components/typography/Disclaimer';

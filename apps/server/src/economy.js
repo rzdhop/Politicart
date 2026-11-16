@@ -27,7 +27,7 @@
 import { CHARACTERS, TRACKS } from '../../game/src/engine/data.js';
 import {
   BOX_BUNDLE, BOX_PRICE, canBuyChar, canBuyPart, cleanOwned, coinsForRace, collection, DAILY_COINS, EVERYTHING, GOAL_COINS, GOAL_XP, GOALS_PER_RUN, GRADES, levelUpCoins, partKey,
-  PICKUP_CAP, priceOf, rollBox, streakCoins,
+  PICKUP_CAP, priceOf, rollBox, SOLO_DAILY_COINS, streakCoins,
 } from '../../game/src/engine/catalog.js';
 import { levelFromXp, STARTERS, unlockedIds, unlockLevel, xpForRace } from '../../game/src/engine/progress.js';
 import { bearer } from './accounts.js';
@@ -82,6 +82,7 @@ function recentOf(list) {
  * (newest first), `lastDaily` a 'YYYY-MM-DD' (UTC) or null, `lastRaceAt` a
  * time or null. Unknown keys are dropped. Never throws.
  */
+const DAY = { test: v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) };
 export function normaliseStats(s) {
   const src = isPlain(s) ? s : {};
   const out = {};
@@ -91,8 +92,11 @@ export function normaliseStats(s) {
   out.bestLap = table(src.bestLap, TRACK_IDS, v => seconds(v) !== null);
   out.bestTime = table(src.bestTime, TRACK_IDS, v => seconds(v) !== null);
   out.byChar = table(src.byChar, CHAR_IDS, v => count(v) === v && v > 0);
-  out.lastDaily = typeof src.lastDaily === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(src.lastDaily) ? src.lastDaily : null;
+  out.lastDaily = DAY.test(src.lastDaily) ? src.lastDaily : null;
   out.lastRaceAt = Number.isFinite(src.lastRaceAt) && src.lastRaceAt > 0 ? src.lastRaceAt : null;
+  // the politicoins solo races paid on `soloDay` (catalog.js SOLO_DAILY_COINS)
+  out.soloDay = DAY.test(src.soloDay) ? src.soloDay : null;
+  out.soloCoins = count(src.soloCoins);
   return out;
 }
 
@@ -107,6 +111,7 @@ export function bonusOf(gain) {
   return {
     daily: !!gain?.daily, levelUp: !!gain?.levelUp, levelUpCoins: gain?.levelUpCoins ?? 0,
     pickups: gain?.pickups ?? 0, goals: gain?.goals ?? 0, goalXp: gain?.goalXp ?? 0, goalCoins: gain?.goalCoins ?? 0, streak: gain?.streak ?? 0, streakCoins: gain?.streakCoins ?? 0,
+    capped: !!gain?.capped,
   };
 }
 
@@ -169,7 +174,12 @@ export async function settleRace(store, user, outcome, { now = Date.now() } = {}
   const podium = outcome.finished === true && Math.floor(Number(outcome.rank) || 0) <= 2;
   const streak = podium ? before.podiumStreak + 1 : 0;
   const place = coinsForRace(outcome), streakBonus = streakCoins(place, streak);
-  const coins = place + bonus + (daily ? DAILY_COINS : 0) + pickups + goals * GOAL_COINS + streakBonus;
+  // What the race itself paid. Solo, it is the client's word: held to what is left of the day's allowance (the last race
+  // is paid up to it, never refused), while the day's bonus and a new level's come on top and the experience stays whole.
+  const earned = place + pickups + goals * GOAL_COINS + streakBonus;
+  const soloBefore = before.soloDay === today ? before.soloCoins : 0;
+  const raceCoins = outcome.solo ? Math.min(earned, Math.max(0, SOLO_DAILY_COINS - soloBefore)) : earned;
+  const coins = raceCoins + bonus + (daily ? DAILY_COINS : 0);
   const withCoins = (await store.addCoins(user.id, coins)) ?? withXp;
 
   const s = normaliseStats(withCoins.stats);
@@ -187,9 +197,10 @@ export async function settleRace(store, user, outcome, { now = Date.now() } = {}
   s.coinsEarned += coins;
   s.podiumStreak = streak; s.bestStreak = Math.max(s.bestStreak, streak); s.goals += goals; s.pickups += pickups;
   s.lastDaily = today;
+  if (outcome.solo) { s.soloDay = today; s.soloCoins = soloBefore + raceCoins; }
   s.lastRaceAt = now;
   const after = (await store.setStats(user.id, s)) ?? withCoins;
-  return { after, gain: { xp, coins, daily, levelUp: levelAfter > levelBefore, levelUpCoins: bonus, pickups, goals, goalXp: goals * GOAL_XP, goalCoins: goals * GOAL_COINS, streak, streakCoins: streakBonus } };
+  return { after, gain: { xp, coins, daily, levelUp: levelAfter > levelBefore, levelUpCoins: bonus, pickups, goals, goalXp: goals * GOAL_XP, goalCoins: goals * GOAL_COINS, streak, streakCoins: streakBonus, capped: raceCoins < earned } };
 }
 
 /** What the shop says to each refusal of catalog.js canBuyChar / canBuyPart. */

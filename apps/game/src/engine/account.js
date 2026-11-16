@@ -29,6 +29,10 @@ export const register = (name, password, { fetchImpl = globalThis.fetch, base = 
 export const login = (name, password, { fetchImpl = globalThis.fetch, base = '' } = {}) =>
   call(fetchImpl, base, 'POST', '/api/login', { body: { name, password } });
 
+/** Change the account's password: { ok, token, profile } (a new session; the others are closed) or { ok: false, error }. */
+export const changePassword = (token, current, next, { fetchImpl = globalThis.fetch, base = '' } = {}) =>
+  call(fetchImpl, base, 'POST', '/api/password', { token, body: { current, next } });
+
 /** End this session on the server. */
 export const logout = (token, { fetchImpl = globalThis.fetch, base = '' } = {}) =>
   call(fetchImpl, base, 'POST', '/api/logout', { token, body: {} });

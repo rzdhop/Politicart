@@ -64,20 +64,25 @@ const crowdSet = () => perBuild('crowd', () => {
   // on "légers" the kinds share four batches (their hats and bags are a few pixels on a phone): fewer draws per cell
   for (const k of CROWD_KINDS) { const own = hi ? k : LOW_KIND[k]; rest[k] = rest[own] || (rest[own] = batch(() => { const g = new THREE.Group(); KIND_PARTS[own](g, hi, S); return g; })); }
   const set = { body, head, rest, bob: new Map(), count: 0 };
-  // the bobbing: found on the first frame after the flush, then only the translations' y are written
-  let jumping = null;
+  // the bobbing: found on the first frame after a flush (a streamed build flushes more than once), then only the
+  // translations' y are written, and only in the cells being drawn (race.js cullDecor hides the far ones)
+  const batches = [...new Set([body, head, ...Object.values(rest)])], jumping = [], found = new Set();
+  let made = 0;
   G.animated.push(() => {
     if (!moving() || !set.bob.size) return;
-    if (!jumping) {
-      jumping = [];
-      for (const b of new Set([body, head, ...Object.values(rest)])) for (const mesh of b.meshes) {
+    const n = batches.reduce((sum, b) => sum + b.meshes.length, 0);
+    if (n !== made) {
+      made = n;
+      for (const b of batches) for (const mesh of b.meshes) {
+        if (found.has(mesh)) continue;
+        found.add(mesh);
         const a = mesh.instanceMatrix.array, list = [];
         for (let i = 0; i < mesh.count; i++) { const o = i * 16, e = set.bob.get(spotKey(a[o + 12], a[o + 14])); if (e) list.push(o + 13, a[o + 13], e[0], e[1]); }
         if (list.length) jumping.push([mesh, Float64Array.from(list)]);
       }
     }
     const ct = G.time * 5;
-    for (const [mesh, l] of jumping) { const a = mesh.instanceMatrix.array; for (let j = 0; j < l.length; j += 4) a[l[j]] = l[j + 1] + Math.abs(Math.sin(ct + l[j + 2])) * l[j + 3]; mesh.instanceMatrix.needsUpdate = true; }
+    for (const [mesh, l] of jumping) { if (!mesh.visible) continue; const a = mesh.instanceMatrix.array; for (let j = 0; j < l.length; j += 4) a[l[j]] = l[j + 1] + Math.abs(Math.sin(ct + l[j + 2])) * l[j + 3]; mesh.instanceMatrix.needsUpdate = true; }
   });
   return set;
 });

@@ -1,7 +1,7 @@
 // The account store, both backends, against the same contract. The Postgres
 // run needs a scratch database: set POLITIKART_TEST_DATABASE_URL (its politikart_* tables are
 // dropped first). Without it only the file store runs.
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -222,6 +222,36 @@ describe.each(backends)('%s store', (kind, open) => {
       expect((await s.listUsers()).find(u => u.id === old.id).coins).toBe(0);
       expect((await s.buy(old.id, { kind: 'chars', item: 'victor', price: 1 }))).toBe('poor');
       expect((await s.grant(old.id, { kind: 'chars', item: 'victor' })).owned).toEqual({ chars: ['victor'], parts: [], trails: [] });
+      if (s !== store) await s.close();
+    });
+
+    it('keeps a session under a hash of its token, and rekeys one stored before that without closing it', async () => {
+      const legacy = 'ab'.repeat(32), owner = await store.createUser({ name: 'Ancienne' + kind, hash: 'h' });
+      let s = store, stored;
+      if (kind === 'postgres') {
+        const { default: pg } = await import('pg');
+        const pool = new pg.Pool({ connectionString: PG });
+        await pool.query('insert into politikart_sessions (token, user_id, created) values ($1, $2, $3)', [legacy, owner.id, Date.now()]);
+        s = await openPgStore(PG);                                          // opening rekeys what an older server stored
+        const fresh = await s.createSession(owner.id);
+        stored = (await pool.query('select token from politikart_sessions where user_id = $1', [owner.id])).rows.map(r => r.token);
+        await pool.end();
+        expect(stored).not.toContain(fresh);
+      } else {
+        const file = join(mkdtempSync(join(tmpdir(), 'kr-store-')), 'accounts.json');
+        writeFileSync(file, JSON.stringify({ users: { [owner.id]: owner }, sessions: { [legacy]: { userId: owner.id, at: Date.now() } }, links: [] }));
+        s = openFileStore(file);
+        const fresh = await s.createSession(owner.id);
+        await new Promise(r => setTimeout(r, 300));                         // the file is written a moment later
+        stored = Object.keys(JSON.parse(readFileSync(file, 'utf8')).sessions);
+        expect(stored).not.toContain(fresh);
+        expect((statSync(file).mode & 0o777).toString(8)).toBe('600');     // hashes inside: the owner's eyes only
+      }
+      expect(stored).toHaveLength(2);
+      expect(stored.every(t => /^h:[0-9a-f]{64}$/.test(t))).toBe(true);     // no token at rest, the old one included
+      expect((await s.sessionUser(legacy))?.id).toBe(owner.id);             // and the old session still opens
+      await s.dropSession(legacy);
+      expect(await s.sessionUser(legacy)).toBeNull();
       if (s !== store) await s.close();
     });
   });

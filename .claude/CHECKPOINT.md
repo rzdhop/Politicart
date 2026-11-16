@@ -2,7 +2,43 @@
 
 Current state only. History lives in git.
 
-## Latest task -- 2026-11-02: items, Garage and Boutique redesign
+## Latest task -- 2026-11-16: decor streaming, placeholders, server hardening
+
+- **Branch:** `feature/funny-gates-xg5eys`, cut from `main` at `40d6db3`
+  (PR #20). Owner's answers: stream the decor in chunks (no unloading), fix
+  the critical and high security findings, apply the ponytail and ECC review
+  procedures by hand.
+- **Done:** DEC-074 (playable cut, `streamFrame`, incremental instanced
+  flush, sliced fold, `cullDecor`, serverside `decor: false`); leaks freed
+  between races (the sun's shadow map, trails, pilots' materials, four
+  textures); `Skeleton` in the library and placeholders on the title's server
+  cards, the stage bands, the race start, friend stats, the dashboard and the
+  lazy screens; the server bounds an input's `seq` (one message froze a
+  race), caps sockets, races and message rates, keeps one room per account,
+  sends a CSP and its companions, locks failed logins per address before per
+  account, holds solo reports to what a race can be and a day of them to
+  1,500 politicoins (DEC-075), reads
+  X-Forwarded-For only as `TRUST_PROXY` says.
+- **Tier 1 on the tip:** typecheck clean; ui 542 + 8 skipped, game 1247,
+  server 196; game build OK.
+- **Also done, on the owner's "finish all":** sessions are stored under a
+  hash of their token (both stores rekey the old ones when they open; tested
+  on Postgres 16), `POST /api/password` and its form on the account screen,
+  one alphabet per account name, a gradient id per `PartArt` drawing; the
+  decor budgets are held to a median of seven builds and the spin-out test
+  reads the heading on the step the spin ends (both failed now and then on
+  `main` too). `@neon/config` and `@neon/env` are Neon's own
+  (neondatabase/neon-pkgs, neon.tech maintainers).
+- **Follow-ups:** `TRUST_PROXY` on Render is still `first` (forgeable) until
+  the proxy chain is counted from `/api/admin/live`'s `forwarded`: it needs
+  the live host. The race specs of the end-to-end suite were not run to the
+  end here (no GPU: 3 frames a second, the countdown alone outlasts their 20 s
+  wait, on `main` as well). The minimum password length is still 6 (the
+  suites' accounts use 7). Every store `set()` still re-renders every
+  screen. `preview.js` has its own `primeJob`/`primeSome`, which differ from
+  prebuild.js's (visible objects only, the stage's look, its governor).
+
+## Previous task -- 2026-11-02: items, Garage and Boutique redesign
 
 - **Branch:** `feature/awesome-hamilton-ogmw8l`, cut from `main` at
   `6adcef2` (PR #18). Owner's answers: every race item redrawn, the Garage
