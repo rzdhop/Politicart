@@ -96,7 +96,7 @@ describe.each(['versailles', 'montmartre'])('the %s decor', id => {
     scene.updateMatrixWorld(true);
     const p = new THREE.Vector3(); let n = 0;
     for (const c of G.crowd) {
-      if (c.g.parent !== scene) continue;   // figures inside a stand or a café move with it
+      if (c.g.parent !== scene.userData.world) continue;   // figures inside a stand or a café move with it
       c.g.getWorldPosition(p); n++;
       expect(Math.abs(p.y - yAt(p.x, p.z)), `a figure at ${Math.round(p.x)}, ${Math.round(p.z)}`).toBeLessThan(3);
     }

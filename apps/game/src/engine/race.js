@@ -29,17 +29,18 @@ import { freshTally, pickGoals } from './goals.js';
 import { startEvents, updateEvents } from './raceevents.js';
 import { buildKart } from './kart.js';
 import { myStyle } from './garage.js';
+import { disposePilot } from './pilot.js';
 import { defaultStyle } from './kartstyle.js';
 import { transition } from './machine.js';
 import { buildMinimapBase, drawMinimap } from './minimap.js';
 import { framePayload } from './payload.js';
 import { kartCollisions, updateKart, updateRanks } from './physics.js';
-import { applyPrebuilt, prebuiltSeed, takePrebuilt } from './prebuild.js';
+import { applyPrebuilt, prebuiltSeed, startStream, STREAM, takePrebuilt } from './prebuild.js';
 import { setCast } from './primitives.js';
 import { camera, getRenderer } from './render.js';
 import { newSeed } from './seed.js';
 import { CFG, G } from './state.js';
-import { buildTrack } from './track.js';
+import { buildTrackPhases, PLAYABLE } from './track.js';
 import { buildTrail } from './trail.js';
 import { initVfx, updateVfx } from './vfx.js';
 import { clamp, lerp, rand, wrapAngle } from './util.js';
@@ -93,16 +94,30 @@ export function startRace({ seed = prebuiltSeed(G.trackIdx) ?? newSeed() } = {})
  * shapes the race, so every side passes the same one; 0 by default. It is
  * also part of the key a circuit built ahead must match (prebuild.js,
  * DEC-055): solo play takes the pre-build's own seed (startRace).
+ * `decor: false` builds the circuit without what is only ever seen (the game
+ * server). In the browser (STREAM.on) the race starts once the circuit is
+ * playable and the rest of the decor is built in its frames.
  */
-export function startField(slots, { seed = 0 } = {}) {
-  if (G.scene) disposeScene(G.scene);
+export function startField(slots, { seed = 0, decor = true } = {}) {
+  if (G.scene) {
+    // the karts of the race before: their trails' materials and their pilots' own (the geometries go with the scene)
+    for (const k of G.karts) { k.mesh.userData.trail?.dispose(); const d = k.mesh.userData.driver; if (d && d.userData.lod) disposePilot(d); }
+    disposeScene(G.scene);
+  }
   const track = TRACKS[G.trackIdx]; G.track = track;
   // DEC-055: the circuit built ahead while the player chose (prebuild.js), when it is this one at this detail and seed; else built below as before.
   const pre = takePrebuilt({ trackIdx: G.trackIdx, seed });
   const scene = pre ? pre.scene : new THREE.Scene();
   G.scene = scene; G.animated = []; G.hazards = []; G.projectiles = []; G.crowd = []; G.lamps = []; G.disposables = [];
   G.entitySeq = 0;   // before the track: its static obstacles take the first ids, the same on every side
-  if (pre) applyPrebuilt(pre); else { setCast(true); buildTrack(scene, track, { seed }); }
+  let rest = pre ? pre.gen : null;   // what a streamed race still has to build
+  if (pre) applyPrebuilt(pre);
+  else {
+    setCast(true);
+    const gen = buildTrackPhases(scene, track, { seed, decor });
+    for (let r = gen.next(); !r.done; r = gen.next()) if (STREAM.on && decor && r.value === PLAYABLE) { rest = gen; break; }
+  }
+  if (rest) startStream(scene, rest);
   // the lights, the sky and the air, after the track so the climate finds the lamps the decor registered (DEC-051)
   applyClimate(scene, track, G.layout?.climate ?? track.climates?.[0] ?? 'noon');
   buildMinimapBase();
@@ -147,7 +162,8 @@ export function joinField(sl) {
 
 /** Free the geometry of a scene (or any object tree) that is being replaced, and what the race registered as disposable (textures, materials). */
 export function disposeScene(scene) {
-  scene.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+  // a light's shadow map is a render target of its own (the sun's is 2048 px square): the renderer never frees it
+  scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.isLight && o.shadow && o.shadow.map) o.shadow.map.dispose(); });
   for (const d of G.disposables) if (d && typeof d.dispose === 'function') d.dispose();
   G.disposables = [];
 }
@@ -263,6 +279,54 @@ export function simStep(dt) {
     for (const k of G.karts) { if (k.hazardGrace > 0 || k.fly > 0 || k.y - c.s.y > 1.2) continue; const d = (k.pos.x - c.mesh.position.x) ** 2 + (k.pos.z - c.mesh.position.z) ** 2; if (d < 10) { k.hazardGrace = 1.5; k.speed *= 0.3; if (stunKart(k, 1.3)) say(k, line('hazard.cortege.hit')); } } }
   updateCyclists(dt);
   animateCrowd();
+}
+
+// ---------- Far decor ----------
+const BOX = new THREE.Box3(), CENTRE = new THREE.Vector3(), SIZE = new THREE.Vector3(), AHEAD = new THREE.Vector3();
+/** How far past the fog's end a piece must be before it is dropped, metres: room for a frame's travel. */
+const FOG_MARGIN = 40;
+/**
+ * How far over the camera's eye line a dropped piece may rise, as a slope: 0.03 is 1.7 degrees, twenty pixels of a
+ * 720-pixel screen. Measured at four points of each circuit (détaillés): at 0 the culling drops 1 to 18 % of the decor's
+ * triangles in view, at 0.03 from 11 to 55 %, and past it nothing more. The cost is a low fog-coloured strip of the
+ * skyline that appears as the kart nears; the landmarks, which stand well over it, are never dropped.
+ */
+const SKYLINE = 0.03;
+/** A decor piece's reach, measured once: its centre as an offset from its own origin (so a piece that moves is followed), its radius, its top. */
+function reachOf(o) {
+  const e = o.matrixWorld.elements;
+  if (o.isInstancedMesh) { const s = o.geometry.boundingSphere; return { x: s.center.x - e[12], y: s.center.y - e[13], z: s.center.z - e[14], r: s.radius, top: o.userData.top - e[13], hidden: false }; }
+  BOX.setFromObject(o); BOX.getCenter(CENTRE); BOX.getSize(SIZE);
+  return { x: CENTRE.x - e[12], y: CENTRE.y - e[13], z: CENTRE.z - e[14], r: SIZE.length() / 2, top: BOX.max.y - e[13], hidden: false };
+}
+/**
+ * Stop drawing the decor the fog has swallowed. Past the fog's end a piece
+ * is the fog's colour, and so is the ground behind it, so one that lies
+ * wholly beyond it and does not rise over the eye line (SKYLINE) reads as
+ * ground: it is hidden until the kart comes back in range. A piece that
+ * stands over it stays, as a silhouette against the sky. Depth is taken
+ * along the camera's axis, as the fog takes it. The pieces are the build's
+ * own chunks (scene.userData.decor, track.js): instanced cells, the fold's
+ * cells, merged landmarks. Only what this function hid is shown again, so a
+ * piece a builder left hidden stays so. Called by game.js once a frame, in
+ * the browser only (the headless tests count what a build shows). Returns
+ * how many pieces are hidden.
+ */
+export function cullDecor(scene = G.scene) {
+  const list = scene?.userData.decor, fog = scene?.fog;
+  if (!list || !fog) return 0;
+  camera.getWorldDirection(AHEAD);
+  const c = camera.position, limit = fog.far + FOG_MARGIN;
+  let hidden = 0;
+  for (const o of list) {
+    if (!o.parent) continue;   // folded away
+    const e = o.matrixWorld.elements, b = o.userData.reach || (o.userData.reach = reachOf(o));
+    const depth = (e[12] + b.x - c.x) * AHEAD.x + (e[13] + b.y - c.y) * AHEAD.y + (e[14] + b.z - c.z) * AHEAD.z;
+    const gone = depth - b.r > limit && e[13] + b.top - c.y <= SKYLINE * depth;
+    if (gone ? o.visible : b.hidden) { o.visible = !gone; b.hidden = gone; }
+    if (b.hidden) hidden++;
+  }
+  return hidden;
 }
 
 /** Draw the race scene with the race camera. Safe to call while paused. */

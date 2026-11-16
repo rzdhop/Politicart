@@ -18,7 +18,7 @@
 import * as THREE from 'three';
 
 import { box, cyl, plane } from '../primitives.js';
-import { G, getPoly, isClear } from '../state.js';
+import { G, disposable, getPoly, isClear } from '../state.js';
 import { TEX } from '../textures.js';
 import { pick, rand } from '../util.js';
 import { DS, K, clearAt, nOf, yAt } from './context.js';
@@ -103,7 +103,7 @@ export function* buildVersailles(scene, world) {
   yield;
 
   // the Grand Canal south of the loop: its arms, the cypress allées, swans and gondolas on it, boats moored at its head
-  const canal = new THREE.Mesh(new THREE.PlaneGeometry(44, 240), new THREE.MeshStandardMaterial({ map: TEX.water.clone(), normalMap: water.normalMap, roughness: 0.15, metalness: 0.3 })); canal.material.map.needsUpdate = true; canal.material.map.repeat.set(2, 12); canal.rotation.x = -Math.PI / 2; canal.position.set(0, 0.03, -305); scene.add(canal);
+  const canal = new THREE.Mesh(new THREE.PlaneGeometry(44, 240), disposable(new THREE.MeshStandardMaterial({ map: disposable(TEX.water.clone()), normalMap: water.normalMap, roughness: 0.15, metalness: 0.3 }))); canal.material.map.needsUpdate = true; canal.material.map.repeat.set(2, 12); canal.rotation.x = -Math.PI / 2; canal.position.set(0, 0.03, -305); scene.add(canal);
   const cross = canal.clone(); cross.geometry = new THREE.PlaneGeometry(240, 36); cross.position.set(0, 0.03, -330); scene.add(cross);
   for (let z = -200; z >= -420; z -= 12) { T.cypress.add(-34, z, { scale: rand(0.9, 1.2) }); T.cypress.add(34, z, { scale: rand(0.9, 1.2) }); if (dense) { T.round.add(-41, z + 6); T.round.add(41, z + 6); } }
   for (let i = 0; i < nOf(220); i++) { const x = rand(-330, 330), z = rand(-330, 100); if (Math.abs(x) > 110 && clearAt(x, z, 9)) T[Math.random() < 0.5 ? 'cypress' : 'round'].add(x, z, { scale: rand(0.85, 1.25), rotY: rand(0, 6.28) }); }

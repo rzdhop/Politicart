@@ -51,7 +51,7 @@
 // skipped; nothing here touches the DOM.
 import * as THREE from 'three';
 
-import { applyClimate } from './climate.js';
+import { applyClimate, lightLamps } from './climate.js';
 import { CHARACTERS, TRACKS } from './data.js';
 import { myStyle } from './garage.js';
 import { buildHazard, buildProjectileMesh } from './items.js';
@@ -62,7 +62,8 @@ import { setCast } from './primitives.js';
 import { camera } from './render.js';
 import { newSeed } from './seed.js';
 import { CFG, G, getPoly } from './state.js';
-import { buildTrackPhases, TRACK_PHASES } from './track.js';
+import { flushInstanced } from './decor/instanced.js';
+import { buildTrackPhases, PLAYABLE, TRACK_PHASES } from './track.js';
 import { buildTrail } from './trail.js';
 import { vfxRoot } from './vfx.js';
 
@@ -126,18 +127,19 @@ export function dropPrebuild() {
 function enter(j) { j.saved = {}; for (const f of FIELDS) { j.saved[f] = G[f]; G[f] = j.state[f]; } setCast(true); }
 function leave(j) { for (const f of FIELDS) { j.state[f] = G[f]; G[f] = j.saved[f]; } j.saved = null; }
 
-/** Run the build's next phases until the budget is spent (at least one). True once the build is complete. */
-function buildSome(j, budget) {
+/** Run the build's next phases until the budget is spent (at least one), or with `toPlayable` only until the circuit can be raced on. True once the build is complete. */
+function buildSome(j, budget, toPlayable = false) {
   if (j.built) return true;
   const t0 = now();
   enter(j);
   try {
-    if (!j.gen) j.gen = buildTrackPhases(j.scene, TRACKS[j.trackIdx], { seed: j.seed });
+    if (!j.gen) { stream = null; j.gen = buildTrackPhases(j.scene, TRACKS[j.trackIdx], { seed: j.seed }); }   // one build at a time: the decor's build state is the module's (decor/context.js, instanced.js)
     do {
       const t1 = now(), r = j.gen.next(), dt = now() - t1;
       if (r.done) { j.built = true; j.phase = 'built'; break; }
       j.phase = r.value; j.ms[r.value] = (j.ms[r.value] || 0) + dt;
       if (dt > j.step.ms) j.step = { ms: dt, phase: r.value };   // the longest single step: what one slice can never go below
+      if (r.value === PLAYABLE) { j.playable = true; if (toPlayable) break; }
     } while (now() - t0 < budget);
   } finally { leave(j); }
   return j.built;
@@ -296,14 +298,17 @@ export function prebuildFrame({ renderer = null, budget = BUDGET_MS } = {}) {
  * The circuit built ahead for `{ trackIdx, seed }` at the current detail
  * level, or null: a key mismatch drops what was built. Whatever the frames
  * did not get to is built here and now (the priming is left to the first
- * frame). The result is `{ scene, state, ms, primed }`, for applyPrebuilt.
+ * frame), or, when the race streams its decor (STREAM.on), only as far as
+ * the circuit is playable: `gen` is then the rest of the build, for
+ * startStream. The result is `{ scene, state, ms, primed, gen }`, for
+ * applyPrebuilt.
  */
 export function takePrebuilt({ trackIdx, seed = 0 }) {
   if (!job) return null;
   if (job.key !== prebuildKey({ trackIdx, seed })) { dropPrebuild(); return null; }
-  while (!buildSome(job, Infinity)) { /* the remaining phases */ }
+  while (!(job.built || (STREAM.on && job.playable))) buildSome(job, Infinity, STREAM.on);
   unlight(job); unsample(job);
-  const out = { scene: job.scene, state: job.state, ms: job.ms, primed: job.primed, slices: job.sliced };
+  const out = { scene: job.scene, state: job.state, ms: job.ms, primed: job.primed, slices: job.sliced, gen: job.built ? null : job.gen };
   job = null;
   return out;
 }
@@ -311,6 +316,59 @@ export function takePrebuilt({ trackIdx, seed = 0 }) {
 /** Put a taken pre-build's registrations into G (startField's counterpart of buildTrack's side effects). */
 export function applyPrebuilt(pre) {
   for (const f of FIELDS) G[f] = pre.state[f];
+}
+
+// ---- the stream: the decor built in the race's own frames
+/**
+ * Whether a race starts as soon as its circuit is playable and builds the
+ * decor in its frames (the browser, game.js) rather than all at once before
+ * the countdown (headless: the tests and the game server, which skips the
+ * decor altogether).
+ */
+export const STREAM = { on: false };
+/** The one stream: `{ scene, gen, known, compile, ms }`, or null. */
+let stream = null;
+
+/**
+ * Hand the rest of a build (`gen`: buildTrackPhases stopped at PLAYABLE) to
+ * the race's frames. The start line's furniture is made first: its lamps,
+ * stands and crowds are instanced batches, flushed otherwise with the decor.
+ * From here the build fills the live G, as buildTrack does.
+ */
+export function startStream(scene, gen) {
+  for (const _ of flushInstanced(scene.userData.world)) { /* the furniture's batches */ }
+  stream = { scene, gen, known: null, compile: { list: [], i: 0 }, ms: 0 };
+}
+
+/** What is left of the stream: `{ building, compiling, ms }` (`ms`: what the build has cost so far), or null once it is done. */
+export const streamStatus = () => (stream ? { building: !!stream.gen, compiling: stream.compile.list.length - stream.compile.i, ms: stream.ms } : null);
+
+/**
+ * A race frame's share of the stream: the build's next steps within the
+ * budget, then, given a renderer, the programs of the pieces that landed
+ * since the last frame are compiled (compileSome) before the camera finds
+ * them. Compiled, not primed: a priming draw is a whole render, shadow pass
+ * included, and a race has no frames to give it. When the build ends, the
+ * lamps the decor registered are lit (climate.js, at night). Called by
+ * game.js before the frame is drawn. Returns whether there is work left.
+ */
+export function streamFrame({ renderer = null, budget = BUDGET_MS } = {}) {
+  if (!stream) return false;
+  if (stream.scene !== G.scene) { stream = null; return false; }   // another race took the scene's place
+  const t0 = now(), world = stream.scene.userData.world, todo = stream.compile;
+  if (stream.gen) {
+    let r; do r = stream.gen.next(); while (!r.done && now() - t0 < budget);
+    if (r.done) { stream.gen = null; lightLamps(stream.scene); }
+    stream.ms += now() - t0;
+  }
+  if (renderer) {
+    // the first frame draws what is there; from then on what the build adds is compiled, a share per frame
+    if (!stream.known) stream.known = new Set(world.children);
+    for (const o of world.children) if (!stream.known.has(o)) { stream.known.add(o); todo.list.push(...compileJob(o).list); }
+    if (todo.i < todo.list.length) compileSome(renderer, stream.scene, camera, todo, budget / 2);
+  } else todo.i = todo.list.length;
+  if (!stream.gen && todo.i >= todo.list.length) stream = null;
+  return !!stream;
 }
 
 // ---- the countdown's priming

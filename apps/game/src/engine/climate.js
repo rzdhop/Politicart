@@ -83,7 +83,7 @@ export function applyClimate(scene, track, climateId = pickClimate(track)) {
   skyDome(scene, c);
   if (c.disc) { const d = new THREE.Mesh(new THREE.SphereGeometry(c.disc.r, 16, 16), disposable(new THREE.MeshBasicMaterial({ color: c.disc.color, fog: false }))); d.position.set(off.x, off.y, off.z).multiplyScalar(700 / SUN_RANGE); d.name = 'disc'; scene.add(d); }
   clouds(scene, c.clouds);
-  if (c.lampsOn) lightLamps(scene);
+  lightLamps(scene);
   if (c.rain) rain(scene);
   return { sun, id, preset: c };
 }
@@ -136,12 +136,16 @@ const geometryOf = (pos, uv, idx) => { const g = new THREE.BufferGeometry(); g.s
  * all the heads in one draw and all the pools in another. The heads' world
  * positions come from their matrices, so a head folded away on "légers"
  * (foldStill removes it from the scene after merging it) still counts.
+ * Nothing by day.
  */
-function lightLamps(scene) {
-  if (!G.lamps.length) return;
+export function lightLamps(scene) {
+  // only the heads registered since the last call: a streamed race lights the decor's lamps once they are built (prebuild.js)
+  const c = G.climate, fresh = c && c.lampsOn ? G.lamps.slice(c.lit || 0) : [];
+  if (!fresh.length) return;
+  c.lit = G.lamps.length;
   scene.updateMatrixWorld(true);
   const hp = [], hu = [], hi = [], pp = [], pu = [], pi = [], p = new THREE.Vector3(), R = 1.7, S = 7;
-  for (const { head, rise } of G.lamps) {
+  for (const { head, rise } of fresh) {
     p.setFromMatrixPosition(head.matrixWorld);
     quad(hp, hu, hi, [p.x - R, p.y - R, p.z], [p.x + R, p.y - R, p.z], [p.x + R, p.y + R, p.z], [p.x - R, p.y + R, p.z]);
     quad(hp, hu, hi, [p.x, p.y - R, p.z - R], [p.x, p.y - R, p.z + R], [p.x, p.y + R, p.z + R], [p.x, p.y + R, p.z - R]);

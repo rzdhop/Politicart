@@ -121,7 +121,7 @@ export function* buildBourbon(scene, world) {
 
   // ---- the Seine: the water following the ground under it, the parapets of both quais ----
   const river = new THREE.Group(); river.name = 'bourbon:seine';
-  const wt = TEX.water.clone(); wt.needsUpdate = true;
+  const wt = disposable(TEX.water.clone()); wt.needsUpdate = true;
   const wm = disposable(new THREE.MeshStandardMaterial({ map: wt, normalMap: surface('water').normalMap, roughness: 0.15, metalness: 0.3 }));
   { const X0 = -RX, X1 = RX, DX = 50, rows = [QZ - 1, (QZ + FZ) / 2, FZ + 1], p = [], uv = [], ix = [], cols = (X1 - X0) / DX + 1;
     for (const z of rows) for (let c = 0; c < cols; c++) { const x = X0 + c * DX; p.push(x, groundY(x, z) + 0.3, z); uv.push(x / 24, z / 24); }

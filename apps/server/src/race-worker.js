@@ -70,7 +70,7 @@ const IDLE = Object.freeze({ throttle: false, brake: false, left: false, right: 
 applyCast(cast, CHARACTERS);
 resetMachine('tracks');
 G.trackIdx = trackIdx;
-startField(roster.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team, god: s.god === true })), { seed });
+startField(roster.map(s => ({ def: CHARACTERS.find(c => c.id === s.charId), isAI: s.isAI, team: s.team, god: s.god === true })), { seed, decor: false });   // the server races, it never looks: no decor to build
 
 const humans = new Map();        // slot -> { c, item, power, usedItem, usedPower, ev, fx, seq, q, ack, n }
 /** Seat a human at grid slot `slot`: their controls drive that kart. */

@@ -97,4 +97,23 @@ describe('instanced decor batches', () => {
     expect(b.meshes).toHaveLength(2);
     expect([STILL.length, G.crowd.length, G.animated.length]).toEqual([marks, 0, 0]);
   });
+  it('makes only the copies added since the last flush, and moves either round\'s', () => {
+    const one = countTriangles(prop());
+    const b = instanced(prop, { world: true }), scene = new THREE.Scene();
+    b.add(0, 0); b.add(5, 5);
+    flush(scene);
+    expect(openBatches()).toBe(0);
+    b.add(10, 10, { y: 30 });                                             // a streamed build's later copy re-opens the batch
+    expect(openBatches()).toBe(1);
+    flush(scene);
+    expect(openBatches()).toBe(0);
+    expect(b.meshes).toHaveLength(4);                                    // two parts, twice
+    expect(countTriangles(scene)).toBe(one * 3);                         // every copy drawn once
+    expect(b.meshes[2].userData.top).toBeGreaterThan(30);                // the cell's top, for the far culling
+    const m = new THREE.Matrix4(), p = new THREE.Vector3();
+    b.move(0, { x: 1 }); b.meshes[0].getMatrixAt(0, m); expect(p.setFromMatrixPosition(m).x).toBeCloseTo(1);
+    b.move(2, { x: 12 }); b.meshes[2].getMatrixAt(0, m); expect(p.setFromMatrixPosition(m).x).toBeCloseTo(12);
+    flush(scene);
+    expect(b.meshes).toHaveLength(4);                                    // nothing new: nothing made
+  });
 });

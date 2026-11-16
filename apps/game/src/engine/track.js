@@ -59,11 +59,14 @@ import { ADS, JACKETS, SKINS, adBoard, bench, crowdZone, figure, flagPole, flock
 // still(); "détaillés" draws everything as before.
 /** The side of the cells still loose meshes are merged by, in metres. */
 const CELL = 60;
-function foldStill(scene) {
+/** A generator, yielding every few pieces and merged cells so a slice of the pre-build or of the stream stays short (DEC-057). */
+function* foldStill(scene, into = scene) {
   const marked = new Set(STILL), crowd = new Set(G.crowd.map(c => c.g)), cells = new Map(), v = new THREE.Vector3();
   const under = o => { for (let p = o.parent; p; p = p.parent) if (marked.has(p)) return true; return false; };
   scene.updateMatrixWorld(true);
+  let n = 0;
   for (const o of STILL) {
+    if (++n % 32 === 0) yield;
     if (under(o) || !o.parent) continue;   // its marked ancestor folds it
     bakeVertexColours(o, finishOf);
     if (!o.isMesh) { mergeByMaterial(o, c => crowd.has(c)); continue; }
@@ -74,10 +77,12 @@ function foldStill(scene) {
     if (!cells.has(key)) cells.set(key, []);
     cells.get(key).push(o);
   }
+  n = 0;
   for (const meshes of cells.values()) {
     if (meshes.length < 2) continue;
-    scene.add(mergeInWorld(meshes));
+    into.add(mergeInWorld(meshes));
     for (const m of meshes) m.parent.remove(m);
+    if (++n % 8 === 0) yield;
   }
   STILL.length = 0;
 }
@@ -267,6 +272,8 @@ export function buildTrack(scene, track, opts = {}) {
  * after each. The pre-build (prebuild.js) runs them one or a few per frame.
  */
 export const TRACK_PHASES = Object.freeze(['textures', 'road', 'strips', 'furniture', 'features', 'cyclists', 'decor', 'fold']);
+/** The phase after which a circuit can be raced on: only cosmetic decor is built past its yield. */
+export const PLAYABLE = TRACK_PHASES[5];
 /**
  * Inside a heavy phase the generator also yields, under that phase's name,
  * every SLICE_SAMPLES samples and every SLICE_CHILDREN decor pieces spread
@@ -289,11 +296,14 @@ const SLICE_SAMPLES = 256, SLICE_CHILDREN = 48;
  * this build is filling: the caller owns G meanwhile (prebuild.js swaps the
  * fields in and out around every slice).
  */
-export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', seed = 0 } = {}) {
+export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', seed = 0, decor: withDecor = true } = {}) {
   textures(); STILL.length = 0; resetInstanced();
   const layout = chooseLayout(track, seed);
   G.seed = seed >>> 0; G.layout = layout; G.rng = makeRng(derive(seed, SALT_RACE)); G.hw = track.roadHalfWidth ?? CFG.roadHalfWidth;
-  for (const kind of surfacesOf(track)) for (const _ of bakeSurface(kind)) yield TRACK_PHASES[0];   // baked ahead, a few rows a step
+  // The surfaces are computed pixel by pixel, the largest share of a build: the road's and the ground's now, the decor's
+  // own with the decor, so a streamed race does not wait for walls it cannot see yet. Baked ahead, a few rows a step.
+  const playSurfaces = [roadKindOf(track), track.gravel ? 'gravel' : 'grass'];
+  for (const kind of playSurfaces) for (const _ of bakeSurface(kind)) yield TRACK_PHASES[0];
   yield TRACK_PHASES[0];
   // The circuit is drawn at track.scale; the sample count grows with it
   // (CFG.samples at SAMPLES_SCALE) so the samples stay about 2 m apart and
@@ -348,11 +358,11 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   // start line + gantry
   const s0 = samples[0]; const yaw = Math.atan2(s0.tx, s0.tz), hw0 = s0.hw;
   const checker = canvasTexture(128, 32, (c) => { for (let x = 0; x < 8; x++) for (let y = 0; y < 2; y++) { c.fillStyle = (x + y) % 2 ? '#111' : '#fff'; c.fillRect(x * 16, y * 16, 16, 16); } });
-  const lineHolder = new THREE.Group(); lineHolder.position.set(s0.x, s0.y + 0.08, s0.z); lineHolder.rotation.y = yaw; const lineMesh = new THREE.Mesh(new THREE.PlaneGeometry(hw0 * 2, 3), new THREE.MeshBasicMaterial({ map: checker })); lineMesh.rotation.x = -Math.PI / 2; lineHolder.add(lineMesh); scene.add(lineHolder);
+  const lineHolder = new THREE.Group(); lineHolder.position.set(s0.x, s0.y + 0.08, s0.z); lineHolder.rotation.y = yaw; const lineMesh = new THREE.Mesh(new THREE.PlaneGeometry(hw0 * 2, 3), disposable(new THREE.MeshBasicMaterial({ map: disposable(checker) }))); lineMesh.rotation.x = -Math.PI / 2; lineHolder.add(lineMesh); scene.add(lineHolder);
   const gantry = new THREE.Group(); gantry.position.set(s0.x, s0.y, s0.z); gantry.rotation.y = yaw;
   gantry.add(cyl(0.35, 0.35, 9, 0xdddddd, hw0 + 1.6, 4.5, 0, 8)); gantry.add(cyl(0.35, 0.35, 9, 0xdddddd, -hw0 - 1.6, 4.5, 0, 8));
   const banner = canvasTexture(1024, 160, (c, w, h) => { c.fillStyle = '#1f3a93'; c.fillRect(0, 0, w / 3, h); c.fillStyle = '#fffaf0'; c.fillRect(w / 3, 0, w / 3, h); c.fillStyle = '#c8102e'; c.fillRect(2 * w / 3, 0, w / 3, h); c.fillStyle = '#0c1230'; c.font = 'bold 96px sans-serif'; c.textAlign = 'center'; c.fillText('DÉPART · ARRIVÉE', w / 2, 112); });
-  const bm = new THREE.Mesh(new THREE.PlaneGeometry(hw0 * 2 + 3.2, 3), new THREE.MeshBasicMaterial({ map: banner, side: THREE.DoubleSide })); bm.position.set(0, 8, 0); gantry.add(bm); scene.add(still(gantry));
+  const bm = new THREE.Mesh(new THREE.PlaneGeometry(hw0 * 2 + 3.2, 3), disposable(new THREE.MeshBasicMaterial({ map: disposable(banner), side: THREE.DoubleSide }))); bm.position.set(0, 8, 0); gantry.add(bm); scene.add(still(gantry));
 
   // ground: a plain that follows the road's relief around it (decor/context.js terrainY), flat on a flat circuit;
   // the map cloned for its own repeat (the normal map follows it: one uvTransform in r128), none of it on "légers"
@@ -369,23 +379,34 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   buildBallotBoxes(scene, spots);
   buildCoins(scene, samples, boxRows, seed);
 
+  // Everything from here on that is only ever seen goes into one group, `world`, so the race can tell the decor from
+  // what it plays on or with: the stream primes what lands in it (prebuild.js) and the far culling hides its pieces
+  // (race.js cullDecor). The group stays at the origin, unscaled, so a piece in it stands where it would in the scene.
+  const world = new THREE.Group(); world.name = 'decor-world'; scene.add(world); scene.userData.world = world;
   // shared street furniture: lamps, ad boards, crowd zones, grandstand, benches, pigeons
-  for (const _ of furnish(scene, track, layout)) yield TRACK_PHASES[3];
+  if (withDecor) for (const _ of furnish(world, track, layout)) yield TRACK_PHASES[3];
   yield TRACK_PHASES[3];
 
   buildFeatures(scene, layout, makeRng(derive(seed, SALT_FEATURES)));
   yield TRACK_PHASES[4];
   buildCyclists(scene, makeRng(derive(seed, SALT_CYCLISTS)), layout.cyclists);
   for (const c of G.cyclists) still(c.mesh);   // a rider moves and falls as a whole
-  yield TRACK_PHASES[5];
+  // The circuit is PLAYABLE from here: the road, the urnes, the coins, the features and the riders are in, and what
+  // follows is only ever seen. A streamed race starts now and builds the rest in its frames (prebuild.js streamFrame);
+  // the game server stops here (`decor: false`), as nothing below shapes the race.
+  yield PLAYABLE;
+  if (!withDecor) { STILL.length = 0; return; }
+  for (const kind of surfacesOf(track)) if (!playSurfaces.includes(kind)) for (const _ of bakeSurface(kind)) yield TRACK_PHASES[6];
   // themed decor, laid out at scale 1 and then spread out to the circuit's scale
   const decor = new THREE.Group();
-  const themed = (BUILDERS[track.id] ?? BUILDERS.versailles)(decor, scene);
+  const themed = (BUILDERS[track.id] ?? BUILDERS.versailles)(decor, world);
   if (themed && typeof themed.next === 'function') for (const _ of themed) yield TRACK_PHASES[6];   // a generator builder yields between its sections
-  for (const _ of spreadDecor(decor, scene, S)) yield TRACK_PHASES[6];
-  for (const _ of flushInstanced(scene)) yield TRACK_PHASES[6];   // the repeated props' batches, placed like small decor (decor/instanced.js)
+  for (const _ of spreadDecor(decor, world, S)) yield TRACK_PHASES[6];
+  for (const _ of flushInstanced(world)) yield TRACK_PHASES[6];   // the repeated props' batches, placed like small decor (decor/instanced.js)
   yield TRACK_PHASES[6];
-  if (fold) foldStill(scene); else STILL.length = 0;
+  if (fold) for (const _ of foldStill(scene, world)) yield TRACK_PHASES[7]; else STILL.length = 0;
+  // the decor's pieces, for the far culling: the big stretched pieces one by one rather than the group that holds them all
+  scene.userData.decor = world.children.flatMap(o => (o === decor ? o.children : [o]));
   yield TRACK_PHASES[7];
 }
 
