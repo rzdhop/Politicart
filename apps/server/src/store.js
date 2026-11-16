@@ -120,7 +120,7 @@ export function openFileStore(file, { log = console } = {}) {
   const flush = () => {
     timer = null; if (!file) return;
     mkdirSync(dirname(file), { recursive: true });
-    const tmp = file + '.tmp'; writeFileSync(tmp, JSON.stringify(data)); renameSync(tmp, file);
+    const tmp = file + '.tmp'; writeFileSync(tmp, JSON.stringify(data), { mode: 0o600 }); renameSync(tmp, file);   // password hashes and session tokens: the owner's eyes only
   };
   const save = () => { if (file && !timer) timer = setTimeout(flush, 200); };
   const byKey = key => Object.values(data.users).find(u => nameKey(u.name) === key) ?? null;

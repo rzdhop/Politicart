@@ -1,11 +1,15 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { brotliCompressSync, gzipSync } from 'node:zlib';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 
+import { DNF_COINS } from '../../game/src/engine/catalog.js';
+import { xpForRace } from '../../game/src/engine/progress.js';
+import { accountApi } from './accounts.js';
 import { startServer } from './server.js';
 import { openFileStore } from './store.js';
 
@@ -92,6 +96,51 @@ describe('http', () => {
     expect(await page.text()).toContain('<title>kr</title>');
     expect((await fetch(url('/app.js'))).headers.get('content-type')).toMatch(/javascript/);
     expect((await fetch(url('/nope.js'))).status).toBe(404);
+  });
+
+  it('sends the page and its files with a policy that runs no script but its own and lets nobody frame it', async () => {
+    for (const path of ['/', '/app.js']) {
+      const r = await fetch(url(path));
+      expect(r.headers.get('content-security-policy')).toMatch(/script-src 'self';/);
+      expect(r.headers.get('content-security-policy')).toMatch(/frame-ancestors 'none'/);
+      expect(r.headers.get('content-security-policy')).not.toMatch(/unsafe-eval|script-src[^;]*unsafe-inline/);
+      expect(r.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(r.headers.get('x-frame-options')).toBe('DENY');
+      expect(r.headers.get('strict-transport-security')).toBeNull();        // plain HTTP: no promise of HTTPS
+    }
+    expect((await fetch(url('/'), { headers: { 'x-forwarded-proto': 'https' } })).headers.get('strict-transport-security')).toMatch(/max-age=\d+/);
+  });
+
+  it('closes a socket that talks faster than any player, and takes no more sockets or races than it was given', async () => {
+    const closed = ws => new Promise(ok => ws.on('close', code => ok(code)));
+    const flood = new WebSocket(`ws://127.0.0.1:${srv.port}/ws`); await new Promise(ok => flood.on('open', ok));
+    const gone = closed(flood);
+    for (let i = 0; i < 150; i++) flood.send(JSON.stringify({ t: 'friends' }));
+    expect(await gone).toBe(1008);
+
+    const small = await startServer({ port: 0, host: '127.0.0.1', staticDir: dir, runRace: fakeRace, loginTries: 1000, maxConns: 1, maxRaces: 0 });
+    try {
+      const open = port => { const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`); return new Promise(ok => ws.on('open', () => ok(ws))); };
+      const first = await open(small.port), second = await open(small.port);
+      expect(await closed(second)).toBe(1013);                              // full: the second socket is turned away
+      const said = t => new Promise(ok => first.on('message', raw => { const m = JSON.parse(String(raw)); if (m.t === t) ok(m); }));
+      const reg = await (await fetch(`http://127.0.0.1:${small.port}/api/register`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Plein', password: 'secret1' }) })).json();
+      const room = said('room'); first.send(JSON.stringify({ t: 'hello', token: reg.token })); first.send(JSON.stringify({ t: 'create' })); await room;
+      const error = said('error'); first.send(JSON.stringify({ t: 'set', ready: true })); first.send(JSON.stringify({ t: 'start' }));
+      expect((await error).msg).toMatch(/serveur est plein/);
+      first.close();
+    } finally { small.close(); }
+  });
+
+  it('keeps an account in one room at a time: a second tab takes the first one out', async () => {
+    const u = await account();
+    const a = await hello(u), b = await hello(u);
+    a.send({ t: 'create' }); const ra = await a.next(m => m.t === 'room' && m.room);
+    b.send({ t: 'create' }); const rb = await b.next(m => m.t === 'room' && m.room);
+    expect(rb.room.code).not.toBe(ra.room.code);
+    expect((await a.next(m => m.t === 'room' && !m.room)).room).toBeNull();
+    expect((await a.next(m => m.t === 'error')).msg).toMatch(/autre onglet/);
+    a.close?.(); b.close?.();
   });
 
   it('serves the icons the game links, the bare /favicon.ico a browser asks for included', async () => {
@@ -263,10 +312,10 @@ describe('accounts', () => {
 
   it('awards experience for a solo race, at most once a minute', async () => {
     const u = await account();
-    const first = await (await post('/api/progress', { rank: 0, field: 6, finished: true }, u.token)).json();
+    const first = await (await post('/api/progress', { rank: 0, field: 6, finished: true, time: 140 }, u.token)).json();
     expect(first.gained).toBe(70);
     expect(first.profile.xp).toBe(70);
-    const again = await (await post('/api/progress', { rank: 0, field: 6, finished: true }, u.token)).json();
+    const again = await (await post('/api/progress', { rank: 0, field: 6, finished: true, time: 140 }, u.token)).json();
     expect(again).toMatchObject({ gained: 0, coins: 0, bonus: { daily: false, levelUp: false, levelUpCoins: 0 } });
     expect((await post('/api/progress', { rank: 0 })).status).toBe(401);
   });
@@ -280,8 +329,26 @@ describe('accounts', () => {
     // anything else in those fields is ignored, never refused
     const v = await account();
     const odd = await (await post('/api/progress', { rank: 5, field: 6, finished: true, trackId: 'nowhere', charId: '__proto__', time: 'fast', bestLap: 2 }, v.token)).json();
-    expect(odd).toMatchObject({ gained: 20, coins: 12 + 50 });
-    expect(odd.profile.stats).toMatchObject({ races: 1, bestLap: {}, bestTime: {}, byChar: {} });
+    // a finish with no time a lap could take is paid as a retirement: the client's word is held to what a race can be
+    expect(odd).toMatchObject({ gained: xpForRace({ rank: 5, field: 6, finished: false }), coins: DNF_COINS + 50 });
+    expect(odd.profile.stats).toMatchObject({ races: 1, finished: 0, dnf: 1, bestLap: {}, bestTime: {}, byChar: {} });
+    const w = await account();
+    const quick = await (await post('/api/progress', { rank: 0, field: 6, finished: true, time: 30, pickups: 60, goals: 3 }, w.token)).json();
+    expect(quick.profile.stats).toMatchObject({ finished: 0, wins: 0, dnf: 1, bestTime: {} });   // a lap in thirty seconds was not driven
+  });
+
+  it('pays no more solo races in a day than a day holds', async () => {
+    const store = openFileStore(null), user = await store.createUser({ name: 'Marathon', hash: 'x' }), token = await store.createSession(user.id);
+    let t = Date.UTC(2026, 0, 5, 0, 0, 0), paid = 0;
+    const api = accountApi(store, { now: () => t });
+    const call = () => new Promise(ok => {
+      const req = Object.assign(Readable.from([Buffer.from(JSON.stringify({ rank: 0, field: 6, finished: true, time: 140 }))]), { method: 'POST', headers: { authorization: 'Bearer ' + token }, socket: {} });
+      api(req, { writeHead() {}, end: body => ok(JSON.parse(body)) }, '/api/progress');
+    });
+    for (let i = 0; i < 45; i++) { t += 150_000; if ((await call()).gained > 0) paid++; }
+    expect(paid).toBe(40);
+    t += 86_400_000;                                                     // the next day pays again
+    expect((await call()).gained).toBeGreaterThan(0);
   });
 
   it('keeps guests out of room creation and away from locked candidates', async () => {

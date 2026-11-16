@@ -51,6 +51,21 @@ describe('a race in a worker', () => {
     } finally { race.stop(); }
   }, 15_000);
 
+  it('keeps racing when an input carries a number no counter reaches', async () => {
+    const { room, roster, sent, io } = harness();
+    const race = runRace(room, roster, io, { fast: false });
+    try {
+      race.input('bob', { c: {} });
+      // Number.isInteger(1e300) is true: read as a tick number, it used to spin the worker's loop for ever
+      race.input('alice', { seq: 1e300, item: 1e300, power: 1e300, c: { throttle: true } });
+      race.input('alice', { seq: 2 ** 53, c: { throttle: true } });
+      await new Promise(r => setTimeout(r, 400));
+      const before = sent.filter(([, m]) => m.t === 'snap').length;
+      await new Promise(r => setTimeout(r, 600));
+      expect(sent.filter(([, m]) => m.t === 'snap').length).toBeGreaterThan(before + 5);   // the worker still steps and reports
+    } finally { race.stop(); }
+  }, 15_000);
+
   it('echoes each player\'s numbered inputs as ack and n, with their own private block, one tick for each of theirs (DEC-052)', async () => {
     const { room, roster, sent, raw, io } = harness();
     const race = runRace(room, roster, io, { fast: false, hold: 0 });

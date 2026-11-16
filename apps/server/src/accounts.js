@@ -38,11 +38,16 @@ import { bonusOf, ownedOf, seconds, settleRace } from './economy.js';
 import { nameKey } from './store.js';
 
 const scrypt = promisify(scryptCb);
-const MIN_SOLO_GAP_MS = 60_000;          // a three-lap race takes minutes; one reward a minute at most
+const MIN_SOLO_GAP_MS = 60_000;          // a race takes minutes; one reward a minute at most
+// A solo race is the client's word, so it is only held to what a race can be. A lap is about 5.4 km and a kart
+// boosting all the way does 63 m/s: no finish under 75 s, and none sooner after the last reward than it says it took.
+// And a day's play has an end: past SOLO_PER_DAY rewarded races an account earns nothing more until the next day.
+const SOLO_MIN_S = 75, SOLO_PER_DAY = 40;
 const LOGIN_WINDOW_MS = 60_000, LOGIN_TRIES = 10;
-// Failed logins per account, whatever address they come from: the per-address
-// limit trusts X-Forwarded-For, which a client can rotate.
-const ACCOUNT_WINDOW_MS = 15 * 60_000, ACCOUNT_TRIES = 10, ACCOUNT_CAP = 10_000;
+// Failed logins per account. An address that keeps failing on an account is locked out of it (ACCOUNT_TRIES), so
+// whoever guesses at an account locks only themselves; the account as a whole locks at ACCOUNT_GLOBAL times that,
+// which still bounds a guesser who changes address and costs ten times more to turn against the account's owner.
+const ACCOUNT_WINDOW_MS = 15 * 60_000, ACCOUNT_TRIES = 10, ACCOUNT_GLOBAL = 10, ACCOUNT_CAP = 10_000;
 const TRACK_IDS = TRACKS.map(t => t.id);
 const CHAR_IDS = CHARACTERS.map(c => c.id);
 const NO_BONUS = Object.freeze({ daily: false, levelUp: false, levelUpCoins: 0 });
@@ -90,6 +95,28 @@ export async function checkPassword(pw, stored) {
   return timingSafeEqual(got, want);
 }
 
+/**
+ * How far to believe X-Forwarded-For (TRUST_PROXY): 0 or unset, not at all,
+ * the socket's address is the client's (a server reached directly, where the
+ * header is whatever the client typed); a number N, the server sits behind N
+ * proxies that each append the address they saw, so the client is N entries
+ * from the right of the chain, which no client can forge; 'first', the
+ * leftmost entry, which a client CAN forge unless the outermost proxy
+ * overwrites the header.
+ */
+export const parseTrustProxy = v => (v === 'first' ? 'first' : Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : 0);
+const TRUST_PROXY = parseTrustProxy(process.env.TRUST_PROXY);
+
+/** The address a request (or a socket's upgrade request) comes from, for the limits kept per address. */
+export function clientAddress(req, trustProxy = TRUST_PROXY) {
+  const socket = req.socket?.remoteAddress || '?';
+  if (!trustProxy) return socket;
+  const chain = String(req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (trustProxy === 'first') return chain[0] || socket;
+  chain.push(socket);
+  return chain[Math.max(0, chain.length - 1 - trustProxy)];
+}
+
 /** The bearer token of a request, or null. */
 export function bearer(req) {
   const h = req.headers.authorization || '';
@@ -123,7 +150,7 @@ function readJson(req, limit = 4096) {
  * solo race rewarded, for the dashboard's counters. `now` is the clock of
  * solo rewards (the daily bonus, the gap between two rewards).
  */
-export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {}, tries: maxTries = LOGIN_TRIES, admin, accountLock = {}, now: raceClock = Date.now } = {}) {
+export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {}, tries: maxTries = LOGIN_TRIES, admin, accountLock = {}, now: raceClock = Date.now, trustProxy = TRUST_PROXY } = {}) {
   const adminCfg = adminConfig(admin);
   const isAdmin = user => isAdminUser(adminCfg, user);
   /** What an account owns: the admin everything, a pre-economy account seeded once. */
@@ -143,8 +170,7 @@ export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {},
     res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*', ...headers });
     res.end(JSON.stringify(body));
   };
-  // Per client address; behind a host's proxy (Render) that is the first X-Forwarded-For hop.
-  const addr = req => String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '?';
+  const addr = req => clientAddress(req, trustProxy);
   /** Whether this address has used up its tries for now. */
   const blocked = req => { const t = tries.get(addr(req)); return !!t && Date.now() - t.since <= LOGIN_WINDOW_MS && t.n >= maxTries; };
   /** Count one try (a failed login, or any sign-up) against this address. */
@@ -159,11 +185,11 @@ export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {},
   const { tries: accTries = ACCOUNT_TRIES, windowMs: accWindow = ACCOUNT_WINDOW_MS, now: clock = Date.now } = accountLock;
   const failures = new Map();
   /** Seconds until `key` may try again, or 0 if it may now. */
-  const lockedFor = key => {
+  const lockedFor = (key, tries = accTries) => {
     const f = failures.get(key); if (!f) return 0;
     const left = f.since + accWindow - clock();
     if (left <= 0) { failures.delete(key); return 0; }
-    return f.n >= accTries ? Math.ceil(left / 1000) : 0;
+    return f.n >= tries ? Math.ceil(left / 1000) : 0;
   };
   /**
    * Count one failed login against an existing account. Bounded: expired
@@ -177,6 +203,13 @@ export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {},
     if (failures.size <= ACCOUNT_CAP) return;
     for (const [k, v] of failures) if (t - v.since >= accWindow) failures.delete(k);
     for (const [k, v] of failures) { if (failures.size <= ACCOUNT_CAP) break; if (v.n < accTries && k !== key) failures.delete(k); }
+  };
+  const soloDays = new Map();       // user id -> { day, n }: the solo races rewarded today
+  /** Whether `id` may still be paid for a solo race today; counts it if so. */
+  const soloToday = (id, now) => {
+    const day = Math.floor(now / 86_400_000), d = soloDays.get(id);
+    if (!d || d.day !== day) { soloDays.set(id, { day, n: 1 }); return true; }
+    return ++d.n <= SOLO_PER_DAY;
   };
   const session = async req => store.sessionUser(bearer(req));
 
@@ -197,17 +230,18 @@ export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {},
       if (blocked(req)) return reply(res, 429, TOO_MANY);
       const b = await readJson(req); if (!b) return reply(res, 400, { error: 'Requête illisible.' });
       const key = typeof b.name === 'string' ? nameKey(b.name.trim()) : null;
-      // a locked account answers before any lookup or scrypt, even to the right password
-      const wait = key ? lockedFor(key) : 0;
+      // a locked account answers before any lookup or scrypt, even to the right password: locked for this address, or for everyone
+      const mine = key + '|' + addr(req);
+      const wait = key ? Math.max(lockedFor(mine), lockedFor(key, accTries * ACCOUNT_GLOBAL)) : 0;
       if (wait) return reply(res, 429, { error: 'Trop d’essais pour ce compte, réessayez dans ' + Math.ceil(wait / 60) + ' min.' }, { 'retry-after': String(wait), 'access-control-expose-headers': 'retry-after' });
       const user = key ? await store.userByName(b.name.trim()) : null;
       // only failures count, so players sharing an address can still log in
       if (!user || !(await checkPassword(b.password, user.hash))) {
         count(req);
-        if (user) fail(key);           // only real accounts: the map stays as small as the user base
+        if (user) { fail(key); fail(mine); }   // only real accounts: the map stays as small as the user base
         return reply(res, 401, { error: 'Pseudo ou mot de passe incorrect.' });
       }
-      failures.delete(key);
+      failures.delete(key); failures.delete(mine);
       if (user.banned) return reply(res, 403, { error: 'Compte banni' + (user.banned.reason ? ' : ' + user.banned.reason : '') + '.' });
       await store.touchSeen(user.id);
       reply(res, 200, { token: await store.createSession(user.id), profile: await profile(user) });
@@ -221,13 +255,16 @@ export function accountApi(store, { onProfile = () => {}, onSoloRace = () => {},
       const user = await session(req); if (!user) return reply(res, 401, { error: 'Session expirée.' });
       const b = await readJson(req); if (!b) return reply(res, 400, { error: 'Requête illisible.' });
       const now = raceClock();
-      if (now - (lastSolo.get(user.id) ?? 0) < MIN_SOLO_GAP_MS) return reply(res, 200, { profile: await profile(user), gained: 0, coins: 0, bonus: NO_BONUS });
+      // a finish is one the race's own time makes possible: long enough for a lap, and no longer than the wait since the last reward
+      const time = seconds(b.time), finished = b.finished === true && time !== null && time >= SOLO_MIN_S;
+      const gap = Math.max(MIN_SOLO_GAP_MS, finished ? time * 1000 : 0), last = lastSolo.get(user.id);
+      if ((last !== undefined && now - last < gap) || !soloToday(user.id, now)) return reply(res, 200, { profile: await profile(user), gained: 0, coins: 0, bonus: NO_BONUS });
       lastSolo.set(user.id, now);
       const field = Number.isInteger(b.field) && b.field > 1 && b.field <= 12 ? b.field : 6;
       const race = {
-        rank: Math.max(0, Math.floor(Number(b.rank) || 0)), field, finished: b.finished === true,
+        rank: Math.max(0, Math.floor(Number(b.rank) || 0)), field, finished,
         trackId: TRACK_IDS.includes(b.trackId) ? b.trackId : null, charId: CHAR_IDS.includes(b.charId) ? b.charId : null,
-        time: seconds(b.time), bestLap: seconds(b.bestLap), solo: true,
+        time: finished ? time : null, bestLap: seconds(b.bestLap), solo: true,
         pickups: b.pickups, goals: b.goals,   // the run's own (DEC-064): settleRace caps both
       };
       await owned(user);             // a pre-economy account is seeded with the level it had before this race

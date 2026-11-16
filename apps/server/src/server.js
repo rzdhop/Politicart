@@ -53,10 +53,10 @@ import { WebSocketServer } from 'ws';
 import { emptyOwned } from '../../game/src/engine/catalog.js';
 import { TRACKS } from '../../game/src/engine/data.js';
 import { levelFromXp } from '../../game/src/engine/progress.js';
-import { accountApi } from './accounts.js';
+import { accountApi, clientAddress } from './accounts.js';
 import { dashboardApi, recordRace, recordSolo } from './dashboard.js';
 import { bonusOf, economyApi, settleRace } from './economy.js';
-import { newCode, Room } from './lobby.js';
+import { cleanName, newCode, Room } from './lobby.js';
 import { rosterApi } from './roster.js';
 import { openFileStore } from './store.js';
 
@@ -71,6 +71,22 @@ const MIME = {
 export const PROTOCOL = 3;
 /** A socket with more than this queued unsent is not sent snapshots until it drains (DEC-052): the next one supersedes the skipped. */
 export const MAX_BUFFERED = 64 * 1024;
+// What one server gives out, so that no client can take it all. A race is a thread stepping at 60 Hz: MAX_RACES of
+// them at once (POLITIKART_MAX_RACES). A socket costs memory and a ping: MAX_CONNS in all. A connection drives at a
+// screen's rate, up to 240 Hz, plus its pings (FAST_PER_S), and clicks through a lobby far slower (SLOW_PER_10S):
+// one that sends more is not a player and is closed.
+const MAX_RACES = Number(process.env.POLITIKART_MAX_RACES) || 16, MAX_CONNS = 400, FAST_PER_S = 600, SLOW_PER_10S = 100;
+/**
+ * The headers every page and file goes out with. The policy lets the page
+ * load only its own scripts (no inline one, no eval: the build has neither),
+ * so text a player typed can never run as code, and with it the session
+ * token kept in localStorage stays out of reach; inline styles stay allowed
+ * (the splash's sheet, React's style attributes), as do data: images and
+ * fonts (portraits, the fonts in the stylesheet) and the game's socket.
+ * No page may frame the game.
+ */
+const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+const SECURITY_HEADERS = Object.freeze({ 'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin', 'x-frame-options': 'DENY', 'content-security-policy': CSP });
 
 // ---- the built game's files (DEC-055)
 /** The text assets the build precompresses (apps/game/scripts/compress.mjs): served from their `.br` or `.gz` sibling when the client takes it. */
@@ -106,7 +122,9 @@ function serveFile(req, res, file, rel) {
     return;
   }
   const ext = extname(file).toLowerCase(), hashed = rel.startsWith('/assets/');
-  const headers = { 'content-type': MIME[ext] ?? 'application/octet-stream', 'cache-control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache' };
+  const headers = { ...SECURITY_HEADERS, 'content-type': MIME[ext] ?? 'application/octet-stream', 'cache-control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache' };
+  // behind a host's TLS proxy the browser is told to come back over HTTPS only
+  if (req.headers['x-forwarded-proto'] === 'https') headers['strict-transport-security'] = 'max-age=31536000';
   let body = file, size = st.size, enc = null;
   if (PRECOMPRESSED.has(ext)) {
     headers.vary = 'Accept-Encoding';
@@ -149,7 +167,7 @@ function serveFile(req, res, file, rel) {
  * snapshot (MAX_BUFFERED; tests lower it).
  * Resolves to `{ port, close() }` once listening.
  */
-export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, store = openFileStore(null), loginTries, admin, rng = Math.random, now = Date.now, inputDelayMs = 0, maxBuffered = MAX_BUFFERED }) {
+export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, store = openFileStore(null), loginTries, admin, rng = Math.random, now = Date.now, inputDelayMs = 0, maxBuffered = MAX_BUFFERED, maxRaces = MAX_RACES, maxConns = MAX_CONNS, trustProxy }) {
   const root = resolve(staticDir);
   const rooms = new Map();          // code -> Room
   const races = new Map();          // code -> race handle
@@ -159,12 +177,12 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
 
   // A change of balance or inventory outside a race (a solo report, a purchase, a box, an admin grant): no gain to show.
   const tellProfile = user => { updateProfile(user).catch(e => console.error('profile not pushed:', e)); };
-  const api = accountApi(store, { onProfile: tellProfile, onSoloRace: () => recordSolo(store).catch(e => console.error('solo race not counted:', e)), tries: loginTries, admin, now });
+  const api = accountApi(store, { onProfile: tellProfile, onSoloRace: () => recordSolo(store).catch(e => console.error('solo race not counted:', e)), tries: loginTries, admin, now, trustProxy });
   const economy = economyApi(store, { profile: api.profile, onProfile: tellProfile, isAdmin: api.isAdmin, rng, now });
   const cast = rosterApi(store, { requireAdmin: api.requireAdmin });
   // The dashboard's window on the live server: sockets and rooms, and the levers on them.
   const live = {
-    connections: () => [...conns.values()].map(c => ({ id: c.id, name: c.name, userId: c.user?.id ?? null, guest: !c.user, admin: !!c.user && api.isAdmin(c.user), room: c.code })),
+    connections: () => [...conns.values()].map(c => ({ id: c.id, name: c.name, userId: c.user?.id ?? null, guest: !c.user, admin: !!c.user && api.isAdmin(c.user), room: c.code, addr: c.addr, forwarded: c.forwarded })),   // addr and forwarded: what TRUST_PROXY makes of the chain, for the admin to set it right
     rooms: () => [...rooms.values()].map(r => ({ ...r.view(), since: raceSince.get(r.code) ?? null, race: raceGrid(r.code) })),
     kick: id => { const c = conns.get(id); if (!c) return false; send(id, { t: 'error', msg: 'Connexion fermée par l’administrateur.' }); c.ws.close(); return true; },
     closeRoom: code => { const room = rooms.get(code); if (!room) return false; for (const p of [...room.players]) { const c = conns.get(p.id); send(p.id, { t: 'error', msg: 'Salle fermée par l’administrateur.' }); if (c) leaveRoom(c); } races.get(code)?.stop(); races.delete(code); rooms.delete(code); return true; },
@@ -291,6 +309,7 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
   function start(c, room, force = false) {
     if (force) { if (room.phase !== 'lobby') return c && fail(c.id, 'La course a déjà commencé.'); }
     else { const why = room.cannotStart(c.id); if (why) return fail(c.id, why); }
+    if (races.size >= maxRaces) return c && fail(c.id, 'Le serveur est plein : réessayez dans quelques minutes.');
     room.phase = 'race';
     const roster = room.roster(), trackIdx = room.trackIdx;
     const io = {
@@ -345,10 +364,18 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
     return race.god(cmd, actor?.id);
   }
 
+  /** An account sits in one room at a time: entering one from another tab leaves the room the first tab was in, so one account cannot hold rooms (and their races) open by the dozen. */
+  const oneRoom = c => {
+    for (const o of (c.user && online.get(c.user.id)) || []) {
+      if (o === c || !o.code) continue;
+      leaveRoom(o); send(o.id, { t: 'room', room: null }); fail(o.id, 'Vous avez rejoint une salle depuis un autre onglet.');
+    }
+  };
+
   const handlers = {
     hello: async (c, m) => {
       const user = typeof m.token === 'string' && m.token ? await store.sessionUser(m.token) : null;
-      if (!user) c.name = typeof m.name === 'string' ? m.name : c.name;
+      if (!user) c.name = typeof m.name === 'string' ? cleanName(m.name) : c.name;
       else store.touchSeen(user.id).catch(console.error);
       await setUser(c, user);
       send(c.id, { t: 'welcome', id: c.id, protocol: PROTOCOL, profile: user ? await api.profile(user) : null });
@@ -356,11 +383,13 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
     create: async (c, m) => {
       if (!c.user) return fail(c.id, 'Connectez-vous pour créer une salle. Les invité·es peuvent en rejoindre une.');
       const who = await whoOf(c);
+      oneRoom(c);
       c.style = m.style; leaveRoom(c); const room = new Room(newCode(new Set(rooms.keys()))); rooms.set(room.code, room); enter(c, room, who);
     },
     join: async (c, m) => {
       const who = await whoOf(c);
       const room = rooms.get(String(m.code ?? '').toUpperCase().trim()); if (!room) return fail(c.id, 'Aucune salle avec ce code.');
+      oneRoom(c);
       c.style = m.style; if (c.code !== room.code) { leaveRoom(c); enter(c, room, who); }
     },
     // The admin enters a room as a god (DEC-030): outside the six, in any phase, on no team; mid-race, straight into the race (DEC-031).
@@ -430,13 +459,18 @@ export function startServer({ port = 0, host = '0.0.0.0', staticDir, runRace, st
     ping: (c, m) => send(c.id, { t: 'pong', n: m.n, at: m.at }),
   };
 
-  wss.on('connection', ws => {
-    const c = { ws, id: randomUUID(), name: '', code: null, alive: true, user: null, queue: Promise.resolve() };
+  wss.on('connection', (ws, req) => {
+    if (conns.size >= maxConns) { ws.close(1013, 'server full'); return; }
+    const c = { ws, id: randomUUID(), name: '', code: null, alive: true, user: null, queue: Promise.resolve(), addr: clientAddress(req, trustProxy), forwarded: String(req.headers['x-forwarded-for'] || '').slice(0, 200), fast: { n: 0, at: 0 }, slow: { n: 0, at: 0 } };
     conns.set(c.id, c);
+    /** Count one message against a window of `ms`; false once the connection has sent more than `max` in it. */
+    const within = (w, max, ms) => { const t = Date.now(); if (t - w.at > ms) { w.at = t; w.n = 0; } return ++w.n <= max; };
     ws.on('pong', () => { c.alive = true; });
     ws.on('message', raw => {
       let m; try { m = JSON.parse(String(raw)); } catch { return; }
-      if (m && (m.t === 'input' || m.t === 'ping')) { try { fast[m.t](c, m); } catch (e) { console.error('message ' + m.t + ' failed:', e); } return; }
+      const isFast = !!m && (m.t === 'input' || m.t === 'ping');
+      if (!(isFast ? within(c.fast, FAST_PER_S, 1000) : within(c.slow, SLOW_PER_10S, 10_000))) { ws.close(1008, 'too many messages'); return; }
+      if (isFast) { try { fast[m.t](c, m); } catch (e) { console.error('message ' + m.t + ' failed:', e); } return; }
       const h = m && typeof m.t === 'string' && Object.hasOwn(handlers, m.t) ? handlers[m.t] : null;
       // One message at a time per connection: hello may wait on the store, and what follows it must see its outcome.
       if (h) c.queue = c.queue.then(() => h(c, m)).catch(e => console.error('message ' + m.t + ' failed:', e));

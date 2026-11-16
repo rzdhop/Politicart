@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 
-import { accountApi, checkPassword, hashPassword, hashPasswordSync } from './accounts.js';
+import { accountApi, checkPassword, clientAddress, hashPassword, hashPasswordSync, parseTrustProxy } from './accounts.js';
 import { adminConfig, ensureAdmin, isAdminUser, isReservedName, validAdminHash } from './admin.js';
 import { startServer } from './server.js';
 import { openFileStore } from './store.js';
@@ -213,9 +213,9 @@ describe('the per-account login limit', () => {
   let http, port, clock, s, store, rida, other;
   const t0 = Date.now();
   let ip = 0;
-  /** A login from a fresh X-Forwarded-For each time: the per-address limit never fires. */
-  const login = (name, pw) => fetch(`http://127.0.0.1:${port}/api/login`, {
-    method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': `203.0.113.${++ip % 250}, 10.0.0.1` },
+  /** A login from a fresh address each time (the client's, two proxies out), or from `from`: the per-address limit never fires. */
+  const login = (name, pw, from = `203.0.113.${++ip % 250}`) => fetch(`http://127.0.0.1:${port}/api/login`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': `${from}, 10.0.0.1` },
     body: JSON.stringify({ name, password: pw }),
   });
 
@@ -225,7 +225,7 @@ describe('the per-account login limit', () => {
     other = password();
     await store.createUser({ name: 'Voisin', hash: await hashPassword(other) });
     clock = t0;
-    const api = accountApi(store, { admin: s.admin, accountLock: { now: () => clock } });
+    const api = accountApi(store, { admin: s.admin, accountLock: { now: () => clock }, tries: 1000, trustProxy: 2 });
     http = createServer(async (req, res) => { if (!(await api(req, res, new URL(req.url, 'http://x').pathname))) res.writeHead(404).end(); });
     await new Promise(ok => http.listen(0, '127.0.0.1', ok));
     port = http.address().port;
@@ -233,8 +233,29 @@ describe('the per-account login limit', () => {
   afterAll(() => new Promise(ok => http.close(ok)));
   afterEach(() => vi.restoreAllMocks());
 
-  it('locks an account after 10 failures from any addresses, even against the right password, and not its neighbours', async () => {
-    for (let i = 0; i < 10; i++) expect((await login(i % 2 ? 'RIDA' : 'rida', 'wrong-' + i)).status).toBe(401);
+  it('locks an address out of an account after 10 failures there, and leaves the account to its owner', async () => {
+    const guesser = '198.51.100.7';
+    for (let i = 0; i < 10; i++) expect((await login('Voisin', 'wrong-' + i, guesser)).status).toBe(401);
+    expect((await login('Voisin', other, guesser)).status).toBe(429);   // the guesser is out, even with the right password
+    expect((await login('Voisin', other, '198.51.100.8')).status).toBe(200);   // the owner, from home, is not
+    expect((await login('Voisin', other, guesser)).status).toBe(429);   // and the owner's login did not let the guesser back in
+    clock = t0 + 15 * 60_000 + 1;
+    expect((await login('Voisin', other, guesser)).status).toBe(200);
+    clock = t0;
+  });
+
+  it('believes only the hop its proxies wrote: a forged chain names the same client', async () => {
+    const req = xff => ({ headers: { 'x-forwarded-for': xff }, socket: { remoteAddress: '10.0.0.9' } });
+    expect(clientAddress(req('6.6.6.6, 203.0.113.5, 10.0.0.1'), 2)).toBe('203.0.113.5');   // whatever the client typed first
+    expect(clientAddress(req('203.0.113.5'), 1)).toBe('203.0.113.5');
+    expect(clientAddress(req('6.6.6.6'), 0)).toBe('10.0.0.9');                              // no proxy: the header is hearsay
+    expect(clientAddress(req(''), 2)).toBe('10.0.0.9');
+    expect(clientAddress(req('6.6.6.6, 203.0.113.5'), 'first')).toBe('6.6.6.6');
+    expect([parseTrustProxy(undefined), parseTrustProxy('2'), parseTrustProxy('first'), parseTrustProxy('-1'), parseTrustProxy('x')]).toEqual([0, 2, 'first', 0, 0]);
+  });
+
+  it('locks an account after 100 failures from any addresses, even against the right password, and not its neighbours', async () => {
+    for (let i = 0; i < 100; i++) expect((await login(i % 2 ? 'RIDA' : 'rida', 'wrong-' + i)).status).toBe(401);
     const lookup = vi.spyOn(store, 'userByName');
     const locked = await login('rida', rida);
     expect(locked.status).toBe(429);

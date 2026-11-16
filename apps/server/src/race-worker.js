@@ -100,9 +100,11 @@ parentPort.on('message', m => {
     loading.delete(m.slot);
     const c = m.c ?? {};
     const ctrl = { throttle: bool(c.throttle), brake: bool(c.brake), left: bool(c.left), right: bool(c.right), drift: bool(c.drift) };
-    if (Number.isInteger(m.item) && m.item > h.item) h.item = m.item;
-    if (Number.isInteger(m.power) && m.power > h.power) h.power = m.power;
-    if (!Number.isInteger(m.seq)) { h.c = ctrl; return; }          // unnumbered (the tests' drivers): the latest controls drive
+    // Safe integers only: Number.isInteger(1e300) is true, and at that size `s++` below no longer changes `s`, so one
+    // message would loop for ever, filling the queue until the worker died. Anything else is read as unnumbered.
+    if (Number.isSafeInteger(m.item) && m.item > h.item) h.item = m.item;
+    if (Number.isSafeInteger(m.power) && m.power > h.power) h.power = m.power;
+    if (!Number.isSafeInteger(m.seq)) { h.c = ctrl; return; }       // unnumbered (the tests' drivers): the latest controls drive
     if (m.seq <= h.seq) return;                                     // reordered or repeated
     // the message stands for every tick since the last one received (a frame's ticks share its controls)
     for (let s = Math.max(h.seq + 1, m.seq - MAX_AHEAD); s <= m.seq; s++) h.q.push({ seq: s, c: ctrl });
