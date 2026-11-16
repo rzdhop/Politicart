@@ -36,7 +36,6 @@ import { buildMinimapBase, drawMinimap } from './minimap.js';
 import { framePayload } from './payload.js';
 import { kartCollisions, updateKart, updateRanks } from './physics.js';
 import { applyPrebuilt, prebuiltSeed, startStream, STREAM, takePrebuilt } from './prebuild.js';
-import { setCast } from './primitives.js';
 import { camera, getRenderer } from './render.js';
 import { newSeed } from './seed.js';
 import { CFG, G } from './state.js';
@@ -113,7 +112,6 @@ export function startField(slots, { seed = 0, decor = true } = {}) {
   let rest = pre ? pre.gen : null;   // what a streamed race still has to build
   if (pre) applyPrebuilt(pre);
   else {
-    setCast(true);
     const gen = buildTrackPhases(scene, track, { seed, decor });
     for (let r = gen.next(); !r.done; r = gen.next()) if (STREAM.on && decor && r.value === PLAYABLE) { rest = gen; break; }
   }

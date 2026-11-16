@@ -1499,3 +1499,42 @@ charges from the catalogue alone.
 **Consequence.** The stage now draws behind the shop (the governor and the
 still stage apply as on the roster). A guest may try on what they cannot
 buy. The odds table moved into a « Toutes les chances » disclosure.
+
+## DEC-074 -- A race starts when its circuit is playable; the decor streams in
+
+**Context.** A race built its whole circuit before the countdown. Built ahead
+on the circuits screen this was hidden, but a race launched early, and every
+team race (its seed is only known at the start), built it in one blocking
+step. Measured in Chromium on software GL: 750 ms for a circuit, of which the
+procedural surfaces 466 ms, the themed decor 185 ms and everything the race
+is played on about 95 ms. The owner asked for a chunk loader so the maps can
+grow in detail without the wait growing with them.
+
+**Decision.** `buildTrackPhases` yields `PLAYABLE` once the road, the urnes,
+the coins, the features and the riders are in; nothing after it shapes the
+race. In the browser (`STREAM.on`, game.js) `startField` stops there, shows
+the start line's furniture (instanced batches now flush only the copies added
+since their last flush) and hands the rest of the generator to
+`prebuild.js streamFrame`: 8 ms a frame during the countdown, 4 ms in the
+race, on the live `G`. The decor's own surfaces are baked with the decor. The
+chunks are the pieces the builders already merge (instanced cells, fold
+cells, merged landmarks), kept in one group (`scene.userData.world`); the
+builders were not rewritten. Once the stream ends, `race.js cullDecor` hides
+the pieces that lie wholly past the fog and rise less than 1.7 degrees over
+the eye line (11 to 55 % of the decor's triangles in view, measured at four
+points of each circuit). The game server builds no decor (`decor: false`).
+Headless, `buildTrack` and `startField` build everything at once, as the
+tests compare. One build runs at a time: starting a pre-build drops a stream.
+
+**Consequence.** The blocking part of a cold start fell from about 750 ms to
+about 290 ms on the same machine. DEC-020's "loaded" now means "the road is
+drawn": the buildings rise during the countdown (about a second on a real
+GPU, longer on software GL). On "légers" the still decor is folded only when
+the stream ends, so the first seconds draw it unfolded. New pieces have
+their programs compiled ahead (`compileSome`), not primed: a priming draw is
+a whole render and slowed the countdown to a crawl. A new `G` field a build
+writes still belongs in `FIELDS`; a new decor piece goes into the `world`
+group the builder is handed, never into the scene. Not done, as measured not
+worth it: freezing static matrices, and drawing the lobby's seed ahead (a
+team race's cold start is now the 290 ms above).
+

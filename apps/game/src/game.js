@@ -40,7 +40,6 @@ import { actions } from './ui/store.ts';
 import { touchHud } from './ui/TouchControls.tsx';
 import { initTouch, installNoContextMenu, isCoarsePointer, isTouchMode, setTouchMode, touchHeld } from './touch.ts';
 
-'use strict';
 /* =====================================================================================
    POLITIKART v2 — satirical kart racer with a pun-name parody French political cast.
    Single-file Three.js game: spline tracks, kart physics with drift/mini-turbo,

@@ -176,7 +176,6 @@ export function gate(scene, x, z, rotY, width) {
   g.add(box(width - 4, 0.12, 0.12, 0x1a1a1a, 0, 1.2, 0)); g.add(box(width - 4, 0.12, 0.12, 0x1a1a1a, 0, 4.6, 0)); g.add(box(width - 4, 0.3, 0.3, 0xd4af37, 0, 3.0, 0));
   g.position.set(x, 0, z); g.rotation.y = rotY; scene.add(still(g));
 }
-export function obelisk(scene, x, z) { scene.add(still(box(6, 6, 6, 0x9a8f7a, x, 3, z))); scene.add(still(box(4, 1.5, 4, 0xb0a48c, x, 6.75, z))); const o = cyl(0.9, 1.8, 20, 0xc9a56a, x, 17.5, z, 4); o.rotation.y = Math.PI / 4; scene.add(still(o)); const t = cone(1.2, 2.5, 0xf2c14e, x, 28.7, z, 4); t.rotation.y = Math.PI / 4; scene.add(still(t)); }
 export function bridge(scene, x, z0, z1) {
   const len = z1 - z0; const cz = (z0 + z1) / 2;
   scene.add(box(30, 1.6, len, 0xd3c7ad, x, 5.2, cz)); [-15.5, 15.5].forEach(o => scene.add(box(1, 1.2, len, 0xbfb398, x + o, 6.6, cz)));
@@ -201,13 +200,7 @@ export function hedgeWall(scene, x, z, w, d, h) { scene.add(still(box(w, h, d, 0
 export function statue(scene, x, z, rot) { scene.add(still(box(1.6, 2.2, 1.6, 0xcfc6b5, x, 1.1, z))); const f = figure(0xe8e2d6, 0xe8e2d6, null); f.position.set(x, 2.2, z); f.rotation.y = rot || 0; f.scale.setScalar(1.15); scene.add(f); }
 export function parterre(scene, x, z, w, d) { const p = plane(w, d, 0x4f8f3f, x, z); scene.add(p); const inner = plane(w - 3, d - 3, pick([0xe36f8a, 0xf2c14e, 0xd95f5f, 0xf0f0f0, 0x8a5fc8]), x, z); inner.position.y = 0.04; scene.add(inner); const edge = box(w, 0.6, 0.5, 0x2f6b3a, x, 0.3, z - d / 2); scene.add(edge); const e2 = edge.clone(); e2.position.z = z + d / 2; scene.add(e2); const e3 = box(0.5, 0.6, d, 0x2f6b3a, x - w / 2, 0.3, z); scene.add(e3); const e4 = e3.clone(); e4.position.x = x + w / 2; scene.add(e4); }
 export function kiosk(scene, x, z, color, signText, rotY) { const g = new THREE.Group(); g.add(box(5, 3.2, 4, 0xf3ead6, 0, 1.6, 0)); g.add(box(6, 0.4, 5, color, 0, 3.4, 0)); g.add(cone(3.4, 2.5, color, 0, 4.8, 0, 4)); const sign = textPlane(4.6, 1.15, signText, '#fffaf0', '#222', 60); sign.position.set(0, 2.6, 2.05); g.add(sign); g.add(box(5.2, 0.1, 1.6, color, 0, 2.2, 2.6)); g.position.set(x, 0, z); g.rotation.y = rotY || 0; scene.add(still(g)); }
-export function shopRow(scene, x0, x1, z, facing) {
-  const names = [['BOULANGERIE', '#c8102e'], ['PHARMACIE', '#2e8b57'], ['CAFÉ DE LA PAIX', '#1f3a93'], ['TABAC · PRESSE', '#b8102e'], ['GALERIE', '#5c1a33'], ['CHOCOLATIER', '#6b4a2b'], ['FLEURISTE', '#e36f8a'], ['BRASSERIE', '#e0a030']];
-  let i = 0;
-  for (let x = x0; x < x1; x += 20) { building(scene, x + 10, z, 20, 14, 18, 0); const n = names[i++ % names.length]; const aw = box(18, 0.2, 2.6, parseInt(n[1].slice(1), 16), x + 10, 3.6, z + facing * 8.2); aw.rotation.x = facing * 0.25; scene.add(still(aw)); const sg = textPlane(10, 1.2, n[0], n[1], '#fffaf0', 70); sg.position.set(x + 10, 4.6, z + facing * 7.1); sg.rotation.y = facing > 0 ? 0 : Math.PI; scene.add(sg); const win = new THREE.Mesh(new THREE.PlaneGeometry(14, 2.6), new THREE.MeshStandardMaterial({ color: 0x1e2a3a, roughness: 0.2, metalness: 0.5 })); win.position.set(x + 10, 1.6, z + facing * 7.05); win.rotation.y = facing > 0 ? 0 : Math.PI; scene.add(win); }
-}
 export function pigeon(scene, x, z) { const g = new THREE.Group(); g.add(sph(0.22, 0x8a8a92, 0, 0.22, 0, 8)); g.add(sph(0.12, 0x6a6a74, 0.2, 0.42, 0, 6)); g.add(cone(0.04, 0.12, 0xe0a030, 0.33, 0.4, 0, 4)); g.position.set(x, 0, z); g.rotation.y = rand(0, 6.28); scene.add(still(g)); }
-export function bouquiniste(scene, x, z, rotY) { const g = new THREE.Group(); g.add(box(2.2, 1.1, 0.9, 0x2f5f32, 0, 1.4, 0)); g.add(box(2.3, 0.1, 1.0, 0x244a28, 0, 1.95, 0)); const lid = box(2.2, 0.08, 0.9, 0x2f5f32, 0, 2.3, -0.6); lid.rotation.x = -1.1; g.add(lid); for (let i = 0; i < 5; i++) g.add(box(0.3, 0.5, 0.7, pick([0xc8102e, 0xf2c14e, 0x1f3a93, 0xf6f1e4, 0x6b4a2b]), -0.8 + i * 0.4, 1.95 + 0.25, 0)); g.position.set(x, 0, z); g.rotation.y = rotY; scene.add(still(g)); }
 // ---------- Street life shared by several circuits ----------
 // Figure counts drop by half on 'low' detail (phones), big pieces stay.
 export function person(scene, x, z, rotY, hat, amp) { const f = figure(pick(JACKETS), pick(SKINS), hat || null); f.position.set(x, 0, z); f.rotation.y = rotY ?? rand(0, 6.28); scene.add(f); G.crowd.push({ g: f, ph: rand(0, 6.28), amp: amp ?? 0.1, base: 0 }); return f; }
@@ -265,8 +258,6 @@ export function busStop(scene, x, z, rotY) {
   const f = figure(pick(JACKETS), pick(SKINS), null); f.position.set(-0.8, 0, -0.2); g.add(f); G.crowd.push({ g: f, ph: rand(0, 6), amp: 0.05, base: 0 });
   g.position.set(x, 0, z); g.rotation.y = rotY || 0; scene.add(still(g));
 }
-// A Wallace fountain: dark green, four caryatids under a little dome.
-export function wallace(scene, x, z) { const g = new THREE.Group(); g.add(cyl(0.9, 1.0, 0.5, 0x1f5a3a, 0, 0.25, 0, 10)); g.add(cyl(0.45, 0.6, 1.0, 0x1f5a3a, 0, 1.0, 0, 8)); for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2; g.add(cyl(0.1, 0.12, 1.2, 0x1f5a3a, Math.cos(a) * 0.4, 2.1, Math.sin(a) * 0.4, 5)); } g.add(sph(0.55, 0x1f5a3a, 0, 2.9, 0, 10)); g.add(cone(0.15, 0.4, 0x1f5a3a, 0, 3.5, 0, 5)); g.position.set(x, 0, z); scene.add(still(g)); }
 // A moored péniche: a long low barge with a cabin aft and a tarp over the hold.
 export function peniche(scene, x, z, rotY, color) { const g = new THREE.Group(); g.add(box(26, 1.6, 6, color, 0, 0.5, 0)); g.add(box(6, 2.4, 5, 0xf6f1e4, -8.5, 2.5, 0)); g.add(box(6.2, 0.3, 5.2, 0x8a2b2b, -8.5, 3.8, 0)); g.add(box(14, 0.7, 5.4, 0x444444, 3, 1.6, 0)); g.add(cyl(0.2, 0.2, 1.6, 0x222222, -10.5, 4.4, 1.5, 6)); g.add(box(0.5, 0.35, 0.05, 0xc8102e, 12.5, 2.4, 0)); g.position.set(x, 0.2, z); g.rotation.y = rotY; scene.add(g); }
 // A swan: body, curved neck, head and an orange beak.
@@ -300,14 +291,6 @@ export function ferrisWheel(world, x, z, r) {
   bakeVertexColours(g, finishOf); mergeByMaterial(g, [wheel, ...gondolas]);   // the frame, the wheel and each gondola one draw apiece, still turning
   g.name = 'ferrisWheel'; world.add(g);
 }
-// A fish stall: a bed of ice with the catch on it under a parasol, the vendor behind.
-export function fishStall(scene, x, z, rotY) {
-  const g = new THREE.Group(); g.add(box(3, 0.1, 1.4, 0x8b5a2b, 0, 0.9, 0)); [-1.3, 1.3].forEach(px => g.add(box(0.1, 0.9, 1.2, 0x8b5a2b, px, 0.45, 0))); g.add(box(2.8, 0.25, 1.2, 0xeaf6ff, 0, 1.07, 0));
-  for (let i = 0; i < 6; i++) { const f = sph(0.18, 0xc0c8d0, -1.1 + i * 0.44, 1.22, rand(-0.3, 0.3), 6); f.scale.set(1, 0.5, 2.2); f.rotation.y = rand(-0.3, 0.3); g.add(f); }
-  g.add(cyl(0.04, 0.04, 2.6, 0x555555, 0, 1.3, -0.6, 5)); g.add(cone(2.4, 0.8, 0x2a7fd4, 0, 2.95, -0.6, 4)); const sg = textPlane(2.6, 0.6, 'POISSONNERIE', '#1f3a93', '#fff', 56); sg.position.set(0, 2.2, 0.75); g.add(sg);
-  const v = figure(0x3b4a6b, pick(SKINS), null); v.position.set(0, 0, -1.3); g.add(v); G.crowd.push({ g: v, ph: rand(0, 6), amp: 0.08, base: 0 });
-  g.position.set(x, 0, z); g.rotation.y = rotY || 0; scene.add(g);
-}
 // Fort Saint-Jean: two stone walls meeting at a round tower. World coordinates.
 export function fort(world, x, z, rotY) { const g = new THREE.Group(); g.add(box(70, 11, 9, 0xc9b48c, 20, 5.5, 0)); g.add(box(9, 11, 60, 0xc9b48c, 0, 5.5, -25)); g.add(box(72, 1.5, 10, 0xb9a47c, 20, 11.6, 0)); g.add(cyl(8, 8.6, 26, 0xd3c09a, 0, 13, 0, 16)); g.add(cyl(9, 9, 2, 0xb9a47c, 0, 26.8, 0, 16)); g.add(cyl(0.12, 0.12, 8, 0xdddddd, 0, 31, 0, 5)); g.add(box(3, 1.8, 0.1, 0x2f55c7, 1.5, 33.5, 0)); g.position.set(x, 0, z); g.rotation.y = rotY || 0; world.add(merged(g, 'fort')); }
 // A dockside crane. World coordinates, so the jib keeps its proportions.
@@ -319,8 +302,6 @@ export function tram(scene, x0, x1, z) {
   merged(g, 'tram'); g.position.set(x0 + 5, 0, z); scene.add(g); let dir = 1;
   G.animated.push(dt => { g.position.x += dt * 6 * dir; if (g.position.x > (x1 - 5) * DS) dir = -1; if (g.position.x < (x0 + 5) * DS) dir = 1; });
 }
-// A game of pétanque: the boules, the cochonnet, and the players arguing around them.
-export function petanque(scene, x, z) { const g = new THREE.Group(); g.add(plane(9, 7, 0xcdbc8e, 0, 0)); for (let i = 0; i < 6; i++) g.add(sph(0.13, 0x9a9a9a, rand(-1.5, 1.5), 0.13, rand(-1, 1), 6)); g.add(sph(0.06, 0xe0a030, rand(-0.5, 0.5), 0.06, rand(-0.5, 0.5), 5)); for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2 + 0.4; const f = figure(pick(JACKETS), pick(SKINS), null); f.position.set(Math.cos(a) * 2.6, 0, Math.sin(a) * 2.2); f.rotation.y = Math.atan2(-Math.cos(a), -Math.sin(a)); g.add(f); G.crowd.push({ g: f, ph: rand(0, 6), amp: i === 0 ? 0.3 : 0.05, base: 0 }); } g.position.set(x, 0, z); scene.add(g); }
 // A seagull on a mooring post.
 export function seagull(scene, x, z, h) { const g = new THREE.Group(); g.add(cyl(0.1, 0.14, h, 0x6b4a2b, 0, h / 2, 0, 6)); const b = sph(0.22, 0xffffff, 0, h + 0.2, 0, 7); b.scale.set(1, 0.8, 1.5); g.add(b); [-1, 1].forEach(s => { const w = box(0.7, 0.04, 0.3, 0xe8e8e8, s * 0.4, h + 0.3, 0); w.rotation.z = -s * 0.25; g.add(w); }); g.add(cone(0.05, 0.18, 0xe0a030, 0, h + 0.28, 0.42, 5).rotateX(Math.PI / 2)); g.position.set(x, 0, z); g.rotation.y = rand(0, 6.28); scene.add(g); }
 // A lower village house with a tiled roof: Montmartre's and Le Panier's.

@@ -2,7 +2,33 @@
 
 Current state only. History lives in git.
 
-## Latest task -- 2026-11-02: items, Garage and Boutique redesign
+## Latest task -- 2026-11-16: decor streaming, placeholders, server hardening
+
+- **Branch:** `feature/funny-gates-xg5eys`, cut from `main` at `40d6db3`
+  (PR #20). Owner's answers: stream the decor in chunks (no unloading), fix
+  the critical and high security findings, apply the ponytail and ECC review
+  procedures by hand.
+- **Done:** DEC-074 (playable cut, `streamFrame`, incremental instanced
+  flush, sliced fold, `cullDecor`, serverside `decor: false`); leaks freed
+  between races (the sun's shadow map, trails, pilots' materials, four
+  textures); `Skeleton` in the library and placeholders on the title's server
+  cards, the stage bands, the race start, friend stats, the dashboard and the
+  lazy screens; the server bounds an input's `seq` (one message froze a
+  race), caps sockets, races and message rates, keeps one room per account,
+  sends a CSP and its companions, locks failed logins per address before per
+  account, holds solo reports to what a race can be, reads
+  X-Forwarded-For only as `TRUST_PROXY` says.
+- **Tier 1 on the tip:** typecheck clean; ui 542 + 8 skipped, game 1245,
+  server 192; game build OK.
+- **Follow-ups:** `TRUST_PROXY` on Render is still `first` (forgeable) until
+  the proxy chain is counted from `/api/admin/live`'s `forwarded`. The
+  Bourbon "légers" budget test fails about two runs in three, as it did
+  before this task (unseeded decor draws, 231.4-233.2k triangles against a
+  231.35k bound). Sessions are stored unhashed and last 60 days; no password
+  change; the admin's name can be imitated with look-alike letters.
+  `preview.js` keeps its own copy of `primeJob`/`primeSome`.
+
+## Previous task -- 2026-11-02: items, Garage and Boutique redesign
 
 - **Branch:** `feature/awesome-hamilton-ogmw8l`, cut from `main` at
   `6adcef2` (PR #18). Owner's answers: every race item redrawn, the Garage

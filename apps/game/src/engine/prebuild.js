@@ -58,7 +58,6 @@ import { buildHazard, buildProjectileMesh } from './items.js';
 import { buildKart } from './kart.js';
 import { onTransition } from './machine.js';
 import { disposePilot } from './pilot.js';
-import { setCast } from './primitives.js';
 import { camera } from './render.js';
 import { newSeed } from './seed.js';
 import { CFG, G, getPoly } from './state.js';
@@ -124,7 +123,7 @@ export function dropPrebuild() {
 }
 
 // ---- G in and out of a slice
-function enter(j) { j.saved = {}; for (const f of FIELDS) { j.saved[f] = G[f]; G[f] = j.state[f]; } setCast(true); }
+function enter(j) { j.saved = {}; for (const f of FIELDS) { j.saved[f] = G[f]; G[f] = j.state[f]; } }
 function leave(j) { for (const f of FIELDS) { j.state[f] = G[f]; G[f] = j.saved[f]; } j.saved = null; }
 
 /** Run the build's next phases until the budget is spent (at least one), or with `toPlayable` only until the circuit can be raced on. True once the build is complete. */
@@ -402,8 +401,6 @@ export function primeCountdown({ renderer, budget = BUDGET_MS } = {}) {
   cd.done = true; cd.group = null;
   return false;
 }
-/** Forget the countdown's priming (tests, and a scene that is gone). */
-export function resetCountdownPrime() { cd = null; }
 
 // The screens that wait on a circuit: the circuits screen builds G.trackIdx ahead, the results screen builds it again for
 // "Rejouer" (a team race's lobby asks through the store, which knows the room's circuit); the title has nothing to wait for.

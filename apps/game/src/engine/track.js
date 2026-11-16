@@ -450,12 +450,10 @@ function* furnish(scene, track, layout) {
   for (let i = 75, k = 0; i < N; i += hi ? 150 : 225, k++) { if (busy[i]) continue; const s = samples[i], sg = k % 2 ? 1 : -1, p = side(s, sg, 3.6); flock(scene, p.x, p.z, { world: true, y: p.y, n: nOf(8), radius: 2.2 }); }
 }
 
-/** Every surface kind a build of `track` uses: the road's, the ground's, the shared furniture's and features', and its decor's (decor/<id>.js SURFACES). */
+/** Every surface kind a build of `track` uses: the road's, the ground's, and its decor's (decor/<id>.js SURFACES); the shared furniture and the features use none. */
 export function surfacesOf(track) {
-  return [...new Set([roadKindOf(track), track.gravel ? 'gravel' : 'grass', ...SHARED_SURFACES, ...(DECOR_SURFACES[track.id] ?? DECOR_SURFACES.versailles)])];
+  return [...new Set([roadKindOf(track), track.gravel ? 'gravel' : 'grass', ...(DECOR_SURFACES[track.id] ?? DECOR_SURFACES.versailles)])];
 }
-/** The surface kinds the road, its strips, the shared furniture and the features use on every circuit. */
-const SHARED_SURFACES = Object.freeze([]);
 
 /** The road's surface kind: gravel for the park, cobbles for the butte, asphalt elsewhere. */
 export const roadKindOf = track => (track.gravel ? 'gravel' : track.cobble ? 'cobble' : 'asphalt');

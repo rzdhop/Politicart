@@ -87,13 +87,13 @@ function materials(fake = false) {
   };
 }
 
-/** Shared geometries (built once). */
+/** Shared geometries, built once per detail level: the glow's roundness follows it, so a toggle between two races builds them anew. */
 let GEO = null;
 function geometries() {
-  if (GEO) return GEO;
   const low = getPoly() === 'low';
+  if (GEO && GEO.low === low) return GEO;
   const glow = new THREE.CircleGeometry(1.9, low ? 12 : 24); glow.rotateX(-Math.PI / 2);
-  GEO = { frame: frameGeometry(), glass: new THREE.BoxGeometry(BOX_W - 0.08, BOX_H - 0.08, BOX_W - 0.08), envelope: new THREE.BoxGeometry(1.5, 1.08, 0.05), glow };
+  GEO = { frame: frameGeometry(), glass: new THREE.BoxGeometry(BOX_W - 0.08, BOX_H - 0.08, BOX_W - 0.08), envelope: new THREE.BoxGeometry(1.5, 1.08, 0.05), glow, low };
   return GEO;
 }
 
