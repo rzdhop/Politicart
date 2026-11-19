@@ -129,11 +129,13 @@ describe('the circuits', () => {
       for (const [f, y] of t.profile) { expect(f).toBeGreaterThanOrEqual(0); expect(f).toBeLessThan(1); expect(Number.isFinite(y)).toBe(true); expect(Math.abs(y)).toBeLessThanOrEqual(25); }
     }
     const ys = id => TRACKS.find(t => t.id === id).profile.map(p => p[1]);
-    expect(Math.max(...ys('elysee'))).toBe(0);
-    expect(Math.max(...ys('montmartre'))).toBe(22);
-    expect(Math.max(...ys('bourbon'))).toBe(6);
-    expect(Math.max(...ys('marseille'))).toBe(14);
-    expect(Math.min(...ys('versailles'))).toBe(-8);
+    // every circuit has relief of its own: [lowest, highest] of its profile
+    const range = id => [Math.min(...ys(id)), Math.max(...ys(id))];
+    expect(range('elysee')).toEqual([-4, 8]);
+    expect(range('bourbon')).toEqual([-5, 8]);
+    expect(range('versailles')).toEqual([-10, 5]);
+    expect(range('montmartre')).toEqual([0, 24]);
+    expect(range('marseille')).toEqual([0, 18]);
   });
 
   it('cobbles only the butte, gravels only the park', () => {

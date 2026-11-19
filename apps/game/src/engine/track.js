@@ -37,7 +37,7 @@ import { TEX, bakeSurface, surface, textures } from './textures.js';
 import { pick, rand } from './util.js';
 import { buildBallotBoxes } from './ballotbox.js';
 import { buildCoins } from './coins.js';
-import { EMBANK, GROUND_CELLS, GROUND_SIZE, LAYOUT_SCALE, PAVEMENT, STILL, TERRAIN_REACH, nOf, setDecorScale, setTerrain, still, terrainFlat, terrainY, yAt } from './decor/context.js';
+import { EMBANK, GROUND_CELLS, GROUND_SIZE, LAYOUT_SCALE, PAVEMENT, STILL, TERRAIN_REACH, nOf, setDecorScale, setTerrain, shapeGround, still, terrainFlat, terrainY, yAt } from './decor/context.js';
 import { BUILDERS, DECOR_SURFACES } from './decor/index.js';
 import { flushInstanced, resetInstanced } from './decor/instanced.js';
 import { resetLife } from './decor/life.js';
@@ -321,7 +321,7 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   const total = curve.getLength(), step = total / N;
   shapeSamples(samples, layout.features, step);
   G.samples = samples; G.N = N; G.trackLength = total;
-  setTerrain(samples);
+  setTerrain(samples, (track.hills || []).map(([x, z, r, h]) => [x * S, z * S, r, h]));
 
   // road surface (asphalt, gravel or cobbles; the texture tiles every `period` metres), as wide as each sample says, with its relief and wear maps
   const roadSurf = surface(roadKindOf(track)), roadTex = roadSurf.map, period = track.gravel ? 10 : track.cobble ? 8 : 20;
@@ -352,7 +352,6 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
     yield TRACK_PHASES[2];
   }
   bikeLane(scene, track, strip);
-  embankment(scene, samples, track.ground, RS);
   yield TRACK_PHASES[2];
 
   // start line + gantry
@@ -370,6 +369,7 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   const ground = { mesh: null };
   for (const _ of groundMesh(gt, gs.normalMap, ground)) yield TRACK_PHASES[2];
   scene.add(ground.mesh);
+  embankment(scene, samples, track.ground, RS);   // after the ground: its foot stands on the lattice just shaped
   yield TRACK_PHASES[2];
 
   // item boxes: rows of 4 glass urnes across the road (ballotbox.js, four instanced draws), four rows unless the track lists more;
@@ -479,12 +479,10 @@ function embankment(scene, samples, color, stride = 1) {
 function* groundMesh(texture, normalMap, out) {
   // a flat circuit needs one quad; "détaillés" takes 31 m cells, "légers" 62 m, the terrain's blend being smooth over 220 m (DEC-050)
   const SIZE = GROUND_SIZE, CELLS = terrainFlat() ? 1 : getPoly() === 'high' ? GROUND_CELLS : GROUND_CELLS / 2, p = [], uv = [], ix = [];
-  for (let j = 0; j <= CELLS; j++) {
-    for (let i = 0; i <= CELLS; i++) {
-      const x = -SIZE / 2 + i * SIZE / CELLS, z = -SIZE / 2 + j * SIZE / CELLS;
-      p.push(x, Math.abs(x) <= TERRAIN_REACH && Math.abs(z) <= TERRAIN_REACH ? terrainY(x, z) : 0, z); uv.push(i / CELLS, j / CELLS);
-    }
-    if (j % 16 === 15) yield;
+  for (const _ of shapeGround(CELLS)) yield;
+  for (let j = 0; j <= CELLS; j++) for (let i = 0; i <= CELLS; i++) {
+    const x = -SIZE / 2 + i * SIZE / CELLS, z = -SIZE / 2 + j * SIZE / CELLS;
+    p.push(x, terrainY(Math.min(x, SIZE / 2 - 0.01), Math.min(z, SIZE / 2 - 0.01)), z); uv.push(i / CELLS, j / CELLS);
   }
   for (let j = 0; j < CELLS; j++) for (let i = 0; i < CELLS; i++) { const a = j * (CELLS + 1) + i; ix.push(a, a + CELLS + 1, a + 1, a + 1, a + CELLS + 1, a + CELLS + 2); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(ix); g.computeVertexNormals();

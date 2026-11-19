@@ -13,6 +13,7 @@ import { animateCrowd, simStep, startField, startRace } from './race.js';
 import { drain, resolveFor } from './events.js';
 import { countMeshes, countTriangles } from './geo.js';
 import { CFG, G, getPoly, togglePoly } from './state.js';
+import { PAVEMENT, terrainY } from './decor/context.js';
 import { buildTrack, roadTexOf } from './track.js';
 import { POOL } from './trail.js';
 
@@ -122,6 +123,18 @@ describe('seeded layouts, headless', () => {
 // descends with it, and the samples carry the width a `narrow` pinches.
 describe('elevation and width, headless', () => {
   beforeEach(() => { resetMachine('tracks'); G.charIdx = 0; });
+
+  it.each(['high', 'low'])('never draws the ground through the road, however coarse its lattice (« %s »)', poly => {
+    if (getPoly() !== poly) togglePoly();
+    try {
+      for (const [i, track] of TRACKS.entries()) {
+        const scene = new THREE.Scene(); G.animated = []; G.hazards = []; G.entitySeq = 0; G.trackIdx = i; G.track = track; G.crowd = []; G.lamps = [];
+        buildTrack(scene, track, { seed: 3, decor: false });
+        // across the road and its pavement, every fifth sample: the drawn ground stays under the road's surface there
+        for (let k = 0; k < G.N; k += 5) { const s = G.samples[k]; for (const lat of [-s.hw - PAVEMENT, -s.hw, 0, s.hw, s.hw + PAVEMENT]) expect(terrainY(s.x + s.sx * lat, s.z + s.sz * lat), `${track.id} sample ${k} lat ${lat}`).toBeLessThanOrEqual(s.y + lat * s.bank); }
+      }
+    } finally { if (getPoly() !== 'high') togglePoly(); }
+  });
 
   it('keeps a kart on the road height of its sample, camber included', () => {
     G.trackIdx = 3; startRace({ seed: 5 });   // the butte
