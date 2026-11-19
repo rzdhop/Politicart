@@ -217,7 +217,10 @@ export function haussmann(M, k, x, y, z, w, d, h, rotY, { tint = Math.floor(Math
   if (shops) for (let sx = -w / 2 + 4; sx < w / 2 - 3; sx += high() ? rand(7, 10) : rand(16, 22)) { M.plane(4.4, 2.8, k.window, sx + 2, 1.9, d / 2 + 0.02); M.box(5, 0.12, 1.8, pick(awnings), sx + 2, 3.9, d / 2 + 0.9, 0, 0.3); }
   if (detail) {
     for (let dx = -w / 2 + 3; dx < w / 2 - 2; dx += 6.4) M.box(1.3, 1.5, 1.2, 0x5b626d, dx, h + 2.6, d / 2 - 1.6);     // the dormers
-    for (let dx = -w / 2 + 6; dx < w / 2 - 4; dx += rand(11, 16)) M.box(1.4, 2.6, 0.7, 0xb5795c, dx, h + 5.7, 0);         // the chimney stacks
+    for (let dx = -w / 2 + 6; dx < w / 2 - 4; dx += rand(11, 16)) { M.box(1.4, 2.6, 0.7, 0xb5795c, dx, h + 5.7, 0); M.box(0.4, 0.5, 0.4, 0x8a4a34, dx - 0.4, h + 7.2, 0); M.box(0.4, 0.5, 0.4, 0x8a4a34, dx + 0.4, h + 7.2, 0); }   // the chimney stacks and their pots
+    for (const cx of [-w / 2, w / 2]) for (const cz of [-d / 2, d / 2]) M.box(0.7, h - gf, 0.7, 0xd9cfb8, cx, gf + (h - gf) / 2, cz);   // the corners' quoins
+    M.box(w + 0.2, 0.25, d + 0.2, 0xd9cfb8, 0, gf + (h - gf) * 0.55, 0);                                  // a string course half-way up
+    if (shops && w > 14) { M.box(2.6, 4, 0.2, 0x1f3a2a, -w / 2 + 2.4, 2, d / 2 + 0.05); M.box(3, 0.4, 0.4, 0xd9cfb8, -w / 2 + 2.4, 4.2, d / 2 + 0.1); }   // the porte cochère
   }
   return M;
 }

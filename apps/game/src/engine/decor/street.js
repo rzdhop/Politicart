@@ -156,9 +156,29 @@ export function building(scene, x, z, w, d, h, rotY, tint, roofColor) {
   const fs = surface('facade'), m = tag(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), disposable(new THREE.MeshStandardMaterial({ map: disposable(fs.map.clone()), normalMap: fs.normalMap, roughness: 0.9, color: tint || 0xffffff }))));
   m.material.map.needsUpdate = true; m.material.map.repeat.set(Math.max(1, Math.round(w / 8)), Math.max(1, Math.round(h / 9)));
   m.position.set(x, h / 2, z); m.rotation.y = rotY || 0; scene.add(m);
-  const roof = box(w * 0.96, 2.6, d * 0.96, roofColor || 0x59606b, 0, h + 1.3, 0); roof.position.set(x, h + 1.3, z); roof.rotation.y = rotY || 0; scene.add(still(roof));
-  for (let i = -w / 2 + 4; i < w / 2 - 2; i += 6) { const ch = box(0.9, 1.6, 0.9, 0x8a8a8a, 0, 0, 0); const a = (rotY || 0); ch.position.set(x + Math.cos(a) * i, h + 3.2, z - Math.sin(a) * i); scene.add(still(ch)); }
+  // the roof, the chimneys and, on "détaillés", the facade's relief, in one merged piece: a draw or two a building whatever it carries
+  const top = new THREE.Group(); top.position.set(x, 0, z); top.rotation.y = rotY || 0;
+  top.add(box(w * 0.96, 2.6, d * 0.96, roofColor || 0x59606b, 0, h + 1.3, 0));
+  for (let i = -w / 2 + 4; i < w / 2 - 2; i += 6) top.add(box(0.9, 1.6, 0.9, 0x8a8a8a, i, h + 3.2, 0));
+  if (getPoly() === 'high') {
+    // a block this wide is stretched with the circuit (track.js spreadDecor): what repeats along it is spaced and sized for the stretched wall
+    const k = w >= 14 ? DS : 1, trim = 0xe8dcc0, iron = 0x2a2a2a;
+    top.add(box(w + 0.7 / k, 0.5, d + 0.7 / k, trim, 0, h + 0.05, 0));                                   // the cornice
+    top.add(box(w + 0.3 / k, 0.3, d + 0.3 / k, trim, 0, 4.1, 0));                                       // the string course over the ground floor
+    for (const sg of [1, -1]) {
+      for (const fy of h > 11 ? [h * 0.5, h * 0.78] : [h * 0.62]) top.add(box(w * 0.94, 0.1, 0.7 / k, iron, 0, fy, sg * (d / 2 + 0.35 / k)));   // the balconies' rails
+      for (let i = -w / 2 + 4 / k; i < w / 2 - 4 / k; i += 9 / k) {
+        top.add(box(4.6 / k, 2.6, 0.1 / k, 0x1c2430, i, 1.6, sg * (d / 2 + 0.03 / k)));                 // a shop's window
+        const awn = box(5 / k, 0.12, 1.7 / k, pick(AWNINGS), i, 3.5, sg * (d / 2 + 0.8 / k)); awn.rotation.x = sg * 0.3; top.add(awn);
+      }
+      for (let i = -w / 2 + 3 / k; i < w / 2 - 2 / k; i += 7 / k) top.add(box(1.3 / k, 1.3, 1.2 / k, roofColor || 0x59606b, i, h + 1.2, sg * (d * 0.48 - 0.2 / k)));   // the dormers
+    }
+    for (let i = -w / 2 + 4; i < w / 2 - 2; i += 6) top.add(box(0.5, 0.5, 0.5, 0xb5795c, i, h + 4.2, 0));   // the chimneys' pots
+  }
+  scene.add(still(merged(top, 'building:top')));
 }
+/** The awnings of a block's shops. */
+const AWNINGS = [0x1f3a93, 0xc8102e, 0x2e5d3a, 0x5c1a33, 0xb08a3a, 0xf6f1e4];
 export function palace(scene, x, z, w, h, d, rotY, roofColor) {
   const g = new THREE.Group();
   const ps = surface('palace'), body = tag(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), disposable(new THREE.MeshStandardMaterial({ map: disposable(ps.map.clone()), normalMap: ps.normalMap, roughness: 0.9 })))); body.material.map.needsUpdate = true; body.material.map.repeat.set(Math.round(w / 10), Math.round(h / 10)); body.position.y = h / 2; g.add(body);
@@ -167,6 +187,14 @@ export function palace(scene, x, z, w, h, d, rotY, roofColor) {
   const central = box(w * 0.22, h + 6, d + 2, 0xeadfc8, 0, (h + 6) / 2, 0); g.add(central); g.add(box(w * 0.22 + 1, 1.2, d + 3, 0xd9cfb8, 0, h + 6.6, 0));
   const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.01, w * 0.11, d + 3, 3, 1), mat(0xe8dcc0)); ped.rotation.z = Math.PI / 2; ped.scale.set(1, 1, 0.45); ped.position.set(0, h + 8.5, 0); g.add(ped);
   for (let i = -3; i <= 3; i++) g.add(cyl(0.9, 1.0, h + 1, 0xf3ead6, i * (w * 0.22) / 7, (h + 1) / 2, d / 2 + 1.5, 10));
+  if (getPoly() === 'high') {
+    // the facade's relief ("détaillés"): pilasters between the bays, a balustrade and dormers along the roof, chimney stacks, a gilded ridge
+    for (let i = -w / 2 + 5; i <= w / 2 - 5; i += 10) if (Math.abs(i) > w * 0.13) { g.add(box(0.5, h, 0.5, 0xeadfc8, i, h / 2, d / 2 + 0.2)); g.add(box(0.7, 0.5, 0.7, 0xd9cfb8, i, h - 0.2, d / 2 + 0.2)); }
+    for (const sg of [1, -1]) g.add(box(w, 0.9, 0.3, 0xe8dcc0, 0, h + 1.85, sg * (d / 2 + 0.2)));
+    for (let i = -w / 2 + 8; i <= w / 2 - 8; i += 12) if (Math.abs(i) > w * 0.13) g.add(box(1.4, 1.6, 1.4, roofColor || 0x4a4f5a, i, h + 2.6, d / 2 - 2.2));
+    for (let i = -w / 2 + 14; i <= w / 2 - 14; i += 24) g.add(box(0.9, 3, 2, 0xcfc6b5, i, h + 6, 0));
+    g.add(box(w - 6, 0.35, 0.35, 0xd4af37, 0, h + 5.6, 0));
+  }
   g.position.set(x, 0, z); g.rotation.y = rotY || 0; scene.add(still(g)); return g;
 }
 export function gate(scene, x, z, rotY, width) {
