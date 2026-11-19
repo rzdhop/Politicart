@@ -447,7 +447,7 @@ describe('the React screens', () => {
       expect(card.querySelector('.track-thumb')?.getAttribute('data-thumb')).toBe('pending');
       expect(card.querySelector('.track-thumb canvas')?.getAttribute('width')).toBe('320');
     }
-    expect(container.querySelector('#track-card-elysee .track-chip:nth-child(2) .tc-value')?.textContent).toBe('plat');
+    expect(container.querySelector('#track-card-elysee .track-chip:nth-child(2) .tc-value')?.textContent).toBe('20 m');   // the Élysée's climb, since its Faubourg rolls
   });
 
   it('flip the graphics and sound button labels', () => {

@@ -2,7 +2,27 @@
 
 Current state only. History lives in git.
 
-## Latest task -- 2026-11-16: decor streaming, placeholders, server hardening
+## Latest task -- 2026-11-19: relief, roadside density, building detail
+
+- **Branch:** `feature/sleepy-mendel-nstrqs`, cut from `main` at `b8a63d8`
+  (PR #21). Owner's answers: relief both played (profiles, banks) and seen
+  (terrain), "légers" frozen so the gain goes to "détaillés", the five
+  circuits at once, the ponytail and ECC skills installed from their
+  repositories at the start of the session (their skill files only, not
+  their hooks).
+- **Done:** DEC-076 (new profiles and banks on the five circuits, `hills` on
+  Marseille, `shapeGround` and the carved lattice, `decor/roadside.js` with
+  its occupancy grid and recipes, relief on `building()`, `palace()` and
+  `haussmann()`).
+- **Tier 1 on the tip:** see the commit; screenshots of every circuit were
+  taken through a throwaway viewer page under software GL, not in a race.
+- **Follow-ups:** not driven on a GPU or a phone: the grades, the new banks
+  and the frame rate on "détaillés" want a real race. The AI's lines do not
+  read the camber. `thumbs.js` keeps its own terrain blend (no carve, no
+  buttes). The stretched quay blocks of Marseille skew their new relief when
+  turned. Versailles is the heaviest scene on "détaillés" (949k triangles).
+
+## Previous task -- 2026-11-16: decor streaming, placeholders, server hardening
 
 - **Branch:** `feature/funny-gates-xg5eys`, cut from `main` at `40d6db3`
   (PR #20). Owner's answers: stream the decor in chunks (no unloading), fix
