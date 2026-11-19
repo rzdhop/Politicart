@@ -162,7 +162,7 @@ export function rollItem(rank, rush = false) {
 
 // ---------- Tracks ----------
 // A circuit: its loop (`points` at `scale`), its surface and colours, its
-// `roadHalfWidth` (DEC-050), its elevation `profile` ([[f, y], ...] control
+// `roadHalfWidth` (DEC-050), the buttes beside the road (`hills`, optional), its elevation `profile` ([[f, y], ...] control
 // points over the lap, f = 0 first, closed at f = 1), the fixed skeleton of
 // `features`, three named `variants` of extra features one of which each race
 // draws (DEC-049, engine/layout.js), the riders' count range `cyclists` and the
@@ -237,6 +237,8 @@ export const TRACKS = [
     points: [[0, -170], [110, -168], [172, -125], [178, -40], [165, 50], [175, 120], [110, 168], [30, 140], [-50, 170], [-120, 150], [-170, 95], [-140, 30], [-175, -50], [-120, -150]],
     scale: 4.5, boxRows: [0.05, 0.17, 0.215, 0.31, 0.37, 0.44, 0.52, 0.61, 0.67, 0.74, 0.83, 0.88, 0.96],
     // flat along the quays but for one hump, then the back half climbs 18 m in two pitches to the Corniche, banked along the sea, in the mistral, and drops back to the port over a last rise
+    // the garrigue's hills inside the loop, east of the old town's houses: [x, z, radius, height], x and z at scale 1 like `points`
+    hills: [[75, 20, 250, 16], [20, 95, 170, 10]],
     roadHalfWidth: 14, profile: [[0, 0], [0.28, 0], [0.32, 4], [0.36, 0], [0.45, 0], [0.52, 8], [0.57, 8], [0.63, 18], [0.70, 18], [0.74, 13], [0.79, 16], [0.86, 5], [0.90, 5], [0.95, 0]], climates: ['noon', 'golden', 'overcast'], cyclists: { min: 18, max: 28 },
     features: [{ t: 'bank', f: 0.335, len: 55, a: 0.09 }, { t: 'bank', f: 0.41, len: 50, a: 0.08 }, { t: 'bank', f: 0.48, len: 50, a: -0.08 }, { t: 'bank', f: 0.72, len: 55, a: -0.09 }, { t: 'pad', f: 0.08 }, { t: 'pad', f: 0.10 }, { t: 'ramp', f: 0.25, h: 3.4, len: 10 }, { t: 'pit', f: 0.25556, len: 9, kind: 'manif' }, { t: 'pad', f: 0.34 }, { t: 'pit', f: 0.40, len: 8, kind: 'works' }, { t: 'pad', f: 0.47 }, { t: 'ramp', f: 0.495, h: 2.8, len: 8 }, { t: 'crossing', f: 0.56, color: 0xf6f1e4, taxi: true }, { t: 'pad', f: 0.64 }, { t: 'bank', f: 0.68, len: 70, a: 0.12 }, { t: 'wind', f: 0.73, len: 60, push: 3.5 }, { t: 'ramp', f: 0.80, h: 2.8, len: 8 }, { t: 'pad', f: 0.86 }, { t: 'pit', f: 0.93, len: 8, kind: 'water' }, { t: 'pad', f: 0.985 }],
     variants: [

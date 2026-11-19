@@ -30,6 +30,8 @@ const BEFORE = {
  * the scene totals measured on the old three-lap circuits allow 15 % more triangles (about a third of the extra road).
  */
 const LONG_LAP = 1.15;
+/** The roadside's dressing (decor/roadside.js, DEC-076) on "détaillés": the triangles its instanced trees, hedges and houses may add on top. */
+const ROADSIDE = { versailles: 220000, montmartre: 120000 };
 const LANDMARKS = {
   versailles: ['versailles:chateau', 'versailles:latone', 'versailles:apollon', 'versailles:colonnade', 'versailles:orangerie', 'versailles:terrasses', 'versailles:labyrinthe'],
   montmartre: ['montmartre:butte', 'montmartre:sacre-coeur', 'montmartre:funiculaire', 'montmartre:place-du-tertre', 'montmartre:moulin-galette', 'montmartre:lapin-agile', 'montmartre:mur-je-taime', 'montmartre:terrasses'],
@@ -107,7 +109,7 @@ describe.each(['versailles', 'montmartre'])('the %s decor', id => {
     const { scene } = build(id, poly);
     const before = BEFORE[id][poly], meshes = countMeshes(scene, true), tris = countTriangles(scene, true);
     expect(meshes).toBeLessThanOrEqual(before.meshes);
-    expect(tris).toBeLessThanOrEqual(before.tris * (poly === 'high' ? 1.4 : 1.1) * LONG_LAP);
+    expect(tris).toBeLessThanOrEqual(before.tris * (poly === 'high' ? 1.4 : 1.1) * LONG_LAP + (poly === 'high' ? ROADSIDE[id] : 0));
     expect(meshes).toBeLessThan(14000);
   }, 60000);
 });

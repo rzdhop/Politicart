@@ -41,6 +41,7 @@ import { EMBANK, GROUND_CELLS, GROUND_SIZE, LAYOUT_SCALE, PAVEMENT, STILL, TERRA
 import { BUILDERS, DECOR_SURFACES } from './decor/index.js';
 import { flushInstanced, resetInstanced } from './decor/instanced.js';
 import { resetLife } from './decor/life.js';
+import { dressRoadside } from './decor/roadside.js';
 import { ADS, JACKETS, SKINS, adBoard, bench, crowdZone, figure, flagPole, flock, grandstand, lampAt, litterBin, sedan } from './decor/street.js';
 
 // ---------- "Légers": still decor in fewer draws (PLAN 4.2) ----------
@@ -403,6 +404,9 @@ export function* buildTrackPhases(scene, track, { fold = getPoly() === 'low', se
   if (themed && typeof themed.next === 'function') for (const _ of themed) yield TRACK_PHASES[6];   // a generator builder yields between its sections
   for (const _ of spreadDecor(decor, world, S)) yield TRACK_PHASES[6];
   for (const _ of flushInstanced(world)) yield TRACK_PHASES[6];   // the repeated props' batches, placed like small decor (decor/instanced.js)
+  // the roadside's dressing reads what now stands (decor/roadside.js, "détaillés" only); its own batches are made by a second flush
+  for (const _ of dressRoadside(world, track, layout)) yield TRACK_PHASES[6];
+  for (const _ of flushInstanced(world)) yield TRACK_PHASES[6];
   yield TRACK_PHASES[6];
   if (fold) for (const _ of foldStill(scene, world)) yield TRACK_PHASES[7]; else STILL.length = 0;
   // the decor's pieces, for the far culling: the big stretched pieces one by one rather than the group that holds them all
