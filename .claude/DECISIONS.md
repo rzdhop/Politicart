@@ -1561,3 +1561,33 @@ most, forged or not. A player who races solo for hours keeps levelling and is
 pointed to team races for coins. Forged experience remains possible (one race
 a minute); it buys levels, whose coins are paid once each.
 
+## DEC-076 -- Every circuit has hills and a dressed roadside; phones keep their scene
+
+**Context.** The owner asked for denser maps, more relief on the courses and
+more detail on the maps and their buildings, without loading the phones that
+play. Measured first: the Élysée was flat, Bourbon had two 6 m humps, and
+three circuits ran through bare grass between their landmarks. Phones start
+on "légers" (game.js); the owner chose to keep that tier's budget frozen.
+
+**Decision.** Relief is gameplay and so on both tiers: every profile gains
+pitches of up to 6 % (data.js; A-040's 25 m still holds), every tight curve a
+`bank`, and a track may list buttes (`hills`). The ground is shaped on the
+lattice it is drawn with (`shapeGround`, decor/context.js): vertices within a
+cell and a half of the road are held under it, so the coarse grid cannot come
+up through the asphalt, and `terrainY` reads that lattice. Density and
+building detail are "détaillés" only: `decor/roadside.js` rasterises what a
+build put down on a 3 m grid and fills the pavements and verges from a recipe
+per circuit (posts, planters, hedges, trees, rocks, houses), all instanced in
+400 m cells, the small ones casting no shadow; `building()`, `palace()` and
+the Haussmann blocks take cornices, balconies, shopfronts, dormers and
+pilasters, merged into the piece they belong to.
+
+**Consequence.** Median of six builds, before -> after. "Détaillés"
+triangles: Élysée 618k -> 781k, Bourbon 663k -> 800k, Versailles 779k ->
+949k, Montmartre 651k -> 876k, Marseille 469k -> 830k; meshes +7 to +16 %.
+"Légers": triangles and meshes unchanged but for the Élysée's ground (+4 %,
+its plain is no longer one quad). A build on "détaillés" takes 110 to 230 ms
+longer headless, spread over the stream's slices. The decor tests give the
+dressing an allowance of its own on "détaillés" (`ROADSIDE`). A new decor
+piece needs no entry anywhere: the grid finds it. A player on "légers" sees
+the relief and not the dressing.

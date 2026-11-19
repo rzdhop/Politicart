@@ -68,7 +68,7 @@ describe('profileHeights', () => {
     for (const t of TRACKS) {
       const N = 1800, h = profileHeights(t.profile, N);
       let maxStep = 0; for (let i = 0; i < N; i++) maxStep = Math.max(maxStep, Math.abs(h[(i + 1) % N] - h[i]));
-      expect(maxStep).toBeLessThan(0.1);                                  // under 10 cm per sample (about 1.7 m of road): a 6 % grade at most
+      expect(maxStep).toBeLessThan(0.18);                                 // under 18 cm per sample (about 3 m of the long lap's road): a 6 % grade at most
     }
   });
 });

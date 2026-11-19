@@ -21,6 +21,8 @@ import { TREE_KINDS } from './trees.js';
  * the scene totals measured on the old three-lap circuits allow 15 % more triangles (about a third of the extra road).
  */
 const LONG_LAP = 1.15;
+/** The roadside's dressing (decor/roadside.js, DEC-076) on "détaillés": the triangles its instanced palms, pines, rocks and houses, and the quay blocks' relief, may add on top (Marseille was the barest circuit). */
+const ROADSIDE = 400000;
 const MARSEILLE = TRACKS.findIndex(t => t.id === 'marseille');
 const STEP = 1 / 60;
 // Every circuit built twice from one random sequence is the same build (the pattern of headless.test.js).
@@ -50,7 +52,7 @@ describe('Marseille — Vieux-Port, dense', () => {
   it.each([['détaillés', 'high', 1.4], ['légers', 'low', 1.1]])('holds the budget on %s: no more draws than before, triangles within the margin', (_n, level, margin) => {
     const { scene, crowd, birds } = build(MARSEILLE, level);
     expect(countMeshes(scene, true)).toBeLessThanOrEqual(BEFORE[level].meshes);
-    expect(countTriangles(scene, true)).toBeLessThanOrEqual(BEFORE[level].tris * margin * LONG_LAP);
+    expect(countTriangles(scene, true)).toBeLessThanOrEqual(BEFORE[level].tris * margin * LONG_LAP + (level === 'high' ? ROADSIDE : 0));
     // the density: about twice the legacy crowd (212 figures) on "détaillés", and the flocks
     if (level === 'high') { expect(crowd).toBeGreaterThan(350); expect(birds).toBeGreaterThan(100); }
     else { expect(crowd).toBeGreaterThan(150); expect(birds).toBeGreaterThan(30); }

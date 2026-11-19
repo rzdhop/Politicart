@@ -162,14 +162,15 @@ export function rollItem(rank, rush = false) {
 
 // ---------- Tracks ----------
 // A circuit: its loop (`points` at `scale`), its surface and colours, its
-// `roadHalfWidth` (DEC-050), its elevation `profile` ([[f, y], ...] control
+// `roadHalfWidth` (DEC-050), the buttes beside the road (`hills`, optional), its elevation `profile` ([[f, y], ...] control
 // points over the lap, f = 0 first, closed at f = 1), the fixed skeleton of
 // `features`, three named `variants` of extra features one of which each race
 // draws (DEC-049, engine/layout.js), the riders' count range `cyclists` and the
 // `climates` it allows. Feature types: pad, ramp, pit, crossing (one per track,
 // in the skeleton: snapshots list crossings by index), chicane, obstacle
 // (kind: sedan, van, barrier, stall, bins, scaffold; lat within hw - 3), narrow
-// (the road pinches to half-width w over len samples), bank (camber a over len),
+// (the road pinches to half-width w over len samples), bank (camber a over len,
+// positive when the road turns towards its +s side: every tight curve has one),
 // wind (lateral push over len, Marseille's mistral), bump (a short hump of h).
 //
 // One long lap (DEC-061): every loop is drawn at scale 4.5 (it was 3), about
@@ -186,8 +187,9 @@ export const TRACKS = [
     ground: 0x6f9a55, sky: [0x3f7fd0, 0xc9dff2], fog: 0xc9dff2, kerb: [0xd83b4b, 0xf6f1e4], pavement: 0x9a9a92,
     points: [[0, -150], [90, -155], [160, -110], [175, -30], [150, 40], [165, 110], [90, 160], [0, 130], [-90, 160], [-165, 110], [-150, 40], [-175, -30], [-160, -110], [-90, -155]],
     scale: 4.5, boxRows: [0.06, 0.10, 0.18, 0.27, 0.36, 0.42, 0.49, 0.54, 0.66, 0.74, 0.815, 0.88, 0.97],
-    roadHalfWidth: 13, profile: [[0, 0]], climates: ['golden', 'night', 'overcast'], cyclists: { min: 18, max: 28 },
-    features: [{ t: 'pad', f: 0.12 }, { t: 'ramp', f: 0.15, h: 3.0, len: 9 }, { t: 'pad', f: 0.25 }, { t: 'ramp', f: 0.30, h: 3.6, len: 10 }, { t: 'pit', f: 0.30556, len: 9, kind: 'manif' }, { t: 'bank', f: 0.36, len: 60, a: 0.08 }, { t: 'pad', f: 0.47 }, { t: 'pad', f: 0.505 }, { t: 'crossing', f: 0.60, color: 0x111111 }, { t: 'pad', f: 0.625 }, { t: 'ramp', f: 0.70, h: 3.2, len: 9 }, { t: 'pit', f: 0.845, len: 8, kind: 'works' }, { t: 'pad', f: 0.93 }],
+    // the Faubourg rolls: a hump past the line, the steep rue up to the palace's terrace, a dip under the crossing's avenue (flat where the car crosses)
+    roadHalfWidth: 13, profile: [[0, 0], [0.06, 0], [0.10, 5], [0.14, 5], [0.18, 0], [0.27, 0], [0.31, 8], [0.40, 8], [0.44, 2], [0.60, 2], [0.66, -4], [0.72, -4], [0.76, 3], [0.82, 3], [0.87, 0]], climates: ['golden', 'night', 'overcast'], cyclists: { min: 18, max: 28 },
+    features: [{ t: 'bank', f: 0.275, len: 50, a: -0.08 }, { t: 'bank', f: 0.49, len: 50, a: -0.08 }, { t: 'bank', f: 0.65, len: 55, a: 0.10 }, { t: 'bank', f: 0.71, len: 50, a: -0.08 }, { t: 'pad', f: 0.12 }, { t: 'ramp', f: 0.15, h: 3.0, len: 9 }, { t: 'pad', f: 0.25 }, { t: 'ramp', f: 0.30, h: 3.6, len: 10 }, { t: 'pit', f: 0.30556, len: 9, kind: 'manif' }, { t: 'bank', f: 0.36, len: 60, a: 0.08 }, { t: 'pad', f: 0.47 }, { t: 'pad', f: 0.505 }, { t: 'crossing', f: 0.60, color: 0x111111 }, { t: 'pad', f: 0.625 }, { t: 'ramp', f: 0.70, h: 3.2, len: 9 }, { t: 'pit', f: 0.845, len: 8, kind: 'works' }, { t: 'pad', f: 0.93 }],
     variants: [
       { name: 'Visite officielle', features: [{ t: 'chicane', f: 0.78, n: 3, kind: 'vauban' }, { t: 'obstacle', f: 0.52, lat: -6, kind: 'sedan' }, { t: 'obstacle', f: 0.545, lat: 6, kind: 'sedan' }, { t: 'obstacle', f: 0.64, lat: 0, kind: 'barrier' }, { t: 'narrow', f: 0.40, len: 40, w: 9 }] },
       { name: 'Jour de manif', features: [{ t: 'chicane', f: 0.78, n: 2, kind: 'vauban' }, { t: 'obstacle', f: 0.44, lat: -7, kind: 'barrier' }, { t: 'obstacle', f: 0.455, lat: 7, kind: 'barrier' }, { t: 'pit', f: 0.53, len: 7, kind: 'manif' }, { t: 'obstacle', f: 0.57, lat: -5, kind: 'bins' }, { t: 'obstacle', f: 0.66, lat: 4, kind: 'van' }, { t: 'obstacle', f: 0.88, lat: 6, kind: 'stall' }] },
@@ -197,9 +199,9 @@ export const TRACKS = [
     ground: 0x7a9a60, sky: [0x4a8ad6, 0xd4e6f5], fog: 0xd4e6f5, kerb: [0x1f4ea8, 0xf6f1e4], pavement: 0xa4a39b,
     points: [[0, -100], [100, -105], [170, -70], [165, 10], [120, 60], [150, 130], [70, 165], [-20, 130], [-100, 165], [-170, 120], [-165, 30], [-120, -30], [-170, -80], [-100, -105]],
     scale: 4.5, boxRows: [0.015, 0.05, 0.18, 0.24, 0.30, 0.38, 0.46, 0.52, 0.62, 0.66, 0.765, 0.84, 0.95],
-    // two bridges: humps of 6 m, one on each half of the lap
-    roadHalfWidth: 15, profile: [[0, 0], [0.14, 0], [0.20, 6], [0.26, 0], [0.84, 0], [0.90, 6], [0.96, 0]], climates: ['dawn', 'noon', 'dusk'], cyclists: { min: 20, max: 28 },
-    features: [{ t: 'pad', f: 0.08 }, { t: 'pad', f: 0.265 }, { t: 'pad', f: 0.33 }, { t: 'ramp', f: 0.42, h: 3.4, len: 10 }, { t: 'pit', f: 0.42556, len: 9, kind: 'works' }, { t: 'pad', f: 0.50 }, { t: 'crossing', f: 0.56, color: 0xf6f1e4, taxi: true }, { t: 'ramp', f: 0.675, h: 3.0, len: 9 }, { t: 'pad', f: 0.72 }, { t: 'pit', f: 0.79, len: 8, kind: 'manif' }, { t: 'pad', f: 0.875 }, { t: 'pad', f: 0.98 }],
+    // two bridges: humps of 6 m, one on each half of the lap; between them the road drops 5 m to the low quay and climbs 8 m over the hill behind
+    roadHalfWidth: 15, profile: [[0, 0], [0.14, 0], [0.20, 6], [0.26, 0], [0.34, 0], [0.38, -5], [0.46, -5], [0.50, 0], [0.58, 0], [0.63, 8], [0.68, 8], [0.72, 1], [0.84, 0], [0.90, 6], [0.96, 0]], climates: ['dawn', 'noon', 'dusk'], cyclists: { min: 20, max: 28 },
+    features: [{ t: 'bank', f: 0.265, len: 55, a: -0.10 }, { t: 'bank', f: 0.33, len: 55, a: 0.10 }, { t: 'bank', f: 0.78, len: 55, a: -0.10 }, { t: 'bank', f: 0.84, len: 60, a: 0.10 }, { t: 'pad', f: 0.08 }, { t: 'pad', f: 0.265 }, { t: 'pad', f: 0.33 }, { t: 'ramp', f: 0.42, h: 3.4, len: 10 }, { t: 'pit', f: 0.42556, len: 9, kind: 'works' }, { t: 'pad', f: 0.50 }, { t: 'crossing', f: 0.56, color: 0xf6f1e4, taxi: true }, { t: 'ramp', f: 0.675, h: 3.0, len: 9 }, { t: 'pad', f: 0.72 }, { t: 'pit', f: 0.79, len: 8, kind: 'manif' }, { t: 'pad', f: 0.875 }, { t: 'pad', f: 0.98 }],
     variants: [
       { name: 'Quais en fête', features: [{ t: 'chicane', f: 0.70, n: 3, kind: 'vauban' }, { t: 'obstacle', f: 0.62, lat: 7, kind: 'stall' }, { t: 'obstacle', f: 0.645, lat: -7, kind: 'stall' }, { t: 'obstacle', f: 0.30, lat: 5, kind: 'bins' }, { t: 'bump', f: 0.53, len: 6, h: 0.5 }] },
       { name: 'Bouquinistes', features: [{ t: 'obstacle', f: 0.10, lat: 9, kind: 'stall' }, { t: 'obstacle', f: 0.115, lat: 9, kind: 'stall' }, { t: 'obstacle', f: 0.13, lat: 9, kind: 'stall' }, { t: 'obstacle', f: 0.36, lat: -6, kind: 'van' }, { t: 'narrow', f: 0.62, len: 60, w: 10 }, { t: 'obstacle', f: 0.74, lat: -8, kind: 'stall' }, { t: 'obstacle', f: 0.90, lat: 7, kind: 'bins' }] },
@@ -209,9 +211,9 @@ export const TRACKS = [
     ground: 0x8aa860, sky: [0x5a97dc, 0xe3eef8], fog: 0xe3eef8, kerb: [0xd9b24a, 0xf6f1e4], pavement: 0xcbb98a, gravel: true,
     points: [[0, -160], [110, -160], [150, -100], [110, -40], [150, 20], [120, 90], [40, 110], [-40, 110], [-120, 90], [-150, 20], [-110, -40], [-150, -100], [-110, -160]],
     scale: 4.5, boxRows: [0.04, 0.12, 0.17, 0.24, 0.30, 0.40, 0.465, 0.58, 0.66, 0.755, 0.80, 0.92, 0.985],
-    // two terraces: the allées drop 4 m twice (Latone, then the tapis vert) and climb back before the line
-    roadHalfWidth: 17, profile: [[0, 0], [0.28, 0], [0.32, -4], [0.58, -4], [0.62, -8], [0.80, -8], [0.92, 0]], climates: ['noon', 'golden', 'overcast'], cyclists: { min: 16, max: 26 },
-    features: [{ t: 'pad', f: 0.08 }, { t: 'bump', f: 0.105, len: 6, h: 0.5 }, { t: 'ramp', f: 0.20, h: 3.8, len: 10 }, { t: 'pit', f: 0.20556, len: 10, kind: 'water' }, { t: 'ramp', f: 0.335, h: 2.8, len: 8 }, { t: 'pad', f: 0.36 }, { t: 'ramp', f: 0.44, h: 2.6, len: 8 }, { t: 'pad', f: 0.64 }, { t: 'pad', f: 0.69 }, { t: 'ramp', f: 0.72, h: 3.0, len: 8 }, { t: 'pit', f: 0.72445, len: 8, kind: 'water' }, { t: 'crossing', f: 0.85, color: 0x2f6b3a }, { t: 'pad', f: 0.88 }, { t: 'pit', f: 0.97, len: 7, kind: 'works' }],
+    // a knoll after the line, then two terraces: the allées drop 5 m twice (Latone, then the tapis vert), each with a roller, and climb back before the line
+    roadHalfWidth: 17, profile: [[0, 0], [0.09, 0], [0.13, 5], [0.19, 5], [0.24, 0], [0.28, 0], [0.31, -5], [0.42, -5], [0.46, -2], [0.50, -5], [0.58, -5], [0.61, -10], [0.70, -10], [0.74, -6], [0.79, -10], [0.87, -10], [0.95, 0]], climates: ['noon', 'golden', 'overcast'], cyclists: { min: 16, max: 26 },
+    features: [{ t: 'bank', f: 0.165, len: 50, a: 0.08 }, { t: 'bank', f: 0.23, len: 55, a: -0.10 }, { t: 'bank', f: 0.29, len: 50, a: 0.08 }, { t: 'bank', f: 0.68, len: 50, a: 0.08 }, { t: 'bank', f: 0.745, len: 55, a: -0.10 }, { t: 'bank', f: 0.81, len: 50, a: 0.08 }, { t: 'pad', f: 0.08 }, { t: 'bump', f: 0.105, len: 6, h: 0.5 }, { t: 'ramp', f: 0.20, h: 3.8, len: 10 }, { t: 'pit', f: 0.20556, len: 10, kind: 'water' }, { t: 'ramp', f: 0.335, h: 2.8, len: 8 }, { t: 'pad', f: 0.36 }, { t: 'ramp', f: 0.44, h: 2.6, len: 8 }, { t: 'pad', f: 0.64 }, { t: 'pad', f: 0.69 }, { t: 'ramp', f: 0.72, h: 3.0, len: 8 }, { t: 'pit', f: 0.72445, len: 8, kind: 'water' }, { t: 'crossing', f: 0.85, color: 0x2f6b3a }, { t: 'pad', f: 0.88 }, { t: 'pit', f: 0.97, len: 7, kind: 'works' }],
     variants: [
       { name: 'Jour du Congrès', features: [{ t: 'chicane', f: 0.50, n: 4, kind: 'hedge' }, { t: 'obstacle', f: 0.56, lat: -8, kind: 'sedan' }, { t: 'obstacle', f: 0.575, lat: 8, kind: 'sedan' }, { t: 'obstacle', f: 0.92, lat: 0, kind: 'barrier' }] },
       { name: 'Grandes Eaux', features: [{ t: 'pit', f: 0.30, len: 7, kind: 'water' }, { t: 'chicane', f: 0.50, n: 2, kind: 'hedge' }, { t: 'pit', f: 0.58, len: 7, kind: 'water' }, { t: 'obstacle', f: 0.14, lat: 9, kind: 'bins' }, { t: 'bump', f: 0.78, len: 6, h: 0.5 }] },
@@ -222,9 +224,9 @@ export const TRACKS = [
     ground: 0x6f9a55, sky: [0x86b0e0, 0xf2dcd8], fog: 0xf2dcd8, kerb: [0x24357a, 0xf6f1e4], pavement: 0xcdbf9e, cobble: true,
     points: [[0, -165], [95, -170], [165, -130], [175, -60], [180, 40], [150, 110], [100, 165], [30, 150], [-40, 172], [-120, 160], [-175, 100], [-160, 20], [-175, -80], [-110, -160]],
     scale: 4.5, boxRows: [0.05, 0.13, 0.20, 0.26, 0.33, 0.40, 0.50, 0.57, 0.66, 0.74, 0.82, 0.865, 0.95],
-    // the butte: a real climb of 22 m up the long right-hand straight, the place du Tertre on top, the descent down the other side (DEC-050 replaces A-035's ramps in series)
-    roadHalfWidth: 11, profile: [[0, 0], [0.10, 2], [0.22, 14], [0.32, 22], [0.42, 22], [0.50, 20], [0.62, 14], [0.72, 8], [0.85, 2], [0.94, 0]], climates: ['dusk', 'night', 'dawn'], cyclists: { min: 16, max: 24 },
-    features: [{ t: 'pad', f: 0.08 }, { t: 'pad', f: 0.215 }, { t: 'bump', f: 0.26, len: 6, h: 0.5 }, { t: 'bump', f: 0.275, len: 6, h: 0.5 }, { t: 'bump', f: 0.29, len: 6, h: 0.5 }, { t: 'pad', f: 0.30 }, { t: 'ramp', f: 0.36, h: 2.6, len: 8 }, { t: 'pad', f: 0.46 }, { t: 'crossing', f: 0.60, color: 0xf6f1e4, taxi: true }, { t: 'pad', f: 0.63 }, { t: 'ramp', f: 0.715, h: 2.6, len: 8 }, { t: 'pit', f: 0.84, len: 8, kind: 'works' }, { t: 'pad', f: 0.92 }, { t: 'bump', f: 0.975, len: 6, h: 0.5 }],
+    // the butte: a climb of 24 m in two steep pitches with a landing between, the place du Tertre on top, a descent in steps with two rises on the other side (DEC-050 replaces A-035's ramps in series)
+    roadHalfWidth: 11, profile: [[0, 0], [0.08, 0], [0.14, 8], [0.18, 8], [0.24, 18], [0.30, 24], [0.42, 24], [0.47, 19], [0.52, 21], [0.58, 12], [0.64, 12], [0.70, 5], [0.76, 7], [0.84, 0]], climates: ['dusk', 'night', 'dawn'], cyclists: { min: 16, max: 24 },
+    features: [{ t: 'bank', f: 0.4, len: 55, a: 0.09 }, { t: 'bank', f: 0.46, len: 50, a: -0.08 }, { t: 'bank', f: 0.66, len: 50, a: 0.08 }, { t: 'pad', f: 0.08 }, { t: 'pad', f: 0.215 }, { t: 'bump', f: 0.26, len: 6, h: 0.5 }, { t: 'bump', f: 0.275, len: 6, h: 0.5 }, { t: 'bump', f: 0.29, len: 6, h: 0.5 }, { t: 'pad', f: 0.30 }, { t: 'ramp', f: 0.36, h: 2.6, len: 8 }, { t: 'pad', f: 0.46 }, { t: 'crossing', f: 0.60, color: 0xf6f1e4, taxi: true }, { t: 'pad', f: 0.63 }, { t: 'ramp', f: 0.715, h: 2.6, len: 8 }, { t: 'pit', f: 0.84, len: 8, kind: 'works' }, { t: 'pad', f: 0.92 }, { t: 'bump', f: 0.975, len: 6, h: 0.5 }],
     variants: [
       { name: 'Place du Tertre', features: [{ t: 'chicane', f: 0.78, n: 3, kind: 'vauban' }, { t: 'obstacle', f: 0.40, lat: 5, kind: 'stall' }, { t: 'obstacle', f: 0.415, lat: -5, kind: 'stall' }, { t: 'obstacle', f: 0.55, lat: 4, kind: 'sedan' }, { t: 'obstacle', f: 0.70, lat: -6, kind: 'bins' }] },
       { name: 'Fête des vendanges', features: [{ t: 'obstacle', f: 0.12, lat: 6, kind: 'stall' }, { t: 'obstacle', f: 0.135, lat: -6, kind: 'stall' }, { t: 'pit', f: 0.44, len: 8, kind: 'manif' }, { t: 'obstacle', f: 0.52, lat: 0, kind: 'barrier' }, { t: 'chicane', f: 0.78, n: 2, kind: 'vauban' }, { t: 'obstacle', f: 0.88, lat: 5, kind: 'van' }] },
@@ -234,9 +236,11 @@ export const TRACKS = [
     ground: 0x8aa860, sky: [0x2b7fd6, 0xcfe9fb], fog: 0xcfe9fb, kerb: [0x2a7fd4, 0xf6f1e4], pavement: 0xd8c9a3,
     points: [[0, -170], [110, -168], [172, -125], [178, -40], [165, 50], [175, 120], [110, 168], [30, 140], [-50, 170], [-120, 150], [-170, 95], [-140, 30], [-175, -50], [-120, -150]],
     scale: 4.5, boxRows: [0.05, 0.17, 0.215, 0.31, 0.37, 0.44, 0.52, 0.61, 0.67, 0.74, 0.83, 0.88, 0.96],
-    // flat along the quays, then the back half climbs 14 m to the Corniche, banked along the sea, in the mistral, and drops back to the port
-    roadHalfWidth: 14, profile: [[0, 0], [0.45, 0], [0.55, 6], [0.65, 14], [0.78, 14], [0.88, 6], [0.96, 0]], climates: ['noon', 'golden', 'overcast'], cyclists: { min: 18, max: 28 },
-    features: [{ t: 'pad', f: 0.08 }, { t: 'pad', f: 0.10 }, { t: 'ramp', f: 0.25, h: 3.4, len: 10 }, { t: 'pit', f: 0.25556, len: 9, kind: 'manif' }, { t: 'pad', f: 0.34 }, { t: 'pit', f: 0.40, len: 8, kind: 'works' }, { t: 'pad', f: 0.47 }, { t: 'ramp', f: 0.495, h: 2.8, len: 8 }, { t: 'crossing', f: 0.56, color: 0xf6f1e4, taxi: true }, { t: 'pad', f: 0.64 }, { t: 'bank', f: 0.68, len: 70, a: 0.12 }, { t: 'wind', f: 0.73, len: 60, push: 3.5 }, { t: 'ramp', f: 0.80, h: 2.8, len: 8 }, { t: 'pad', f: 0.86 }, { t: 'pit', f: 0.93, len: 8, kind: 'water' }, { t: 'pad', f: 0.985 }],
+    // flat along the quays but for one hump, then the back half climbs 18 m in two pitches to the Corniche, banked along the sea, in the mistral, and drops back to the port over a last rise
+    // the garrigue's hills inside the loop, east of the old town's houses: [x, z, radius, height], x and z at scale 1 like `points`
+    hills: [[75, 20, 250, 16], [20, 95, 170, 10]],
+    roadHalfWidth: 14, profile: [[0, 0], [0.28, 0], [0.32, 4], [0.36, 0], [0.45, 0], [0.52, 8], [0.57, 8], [0.63, 18], [0.70, 18], [0.74, 13], [0.79, 16], [0.86, 5], [0.90, 5], [0.95, 0]], climates: ['noon', 'golden', 'overcast'], cyclists: { min: 18, max: 28 },
+    features: [{ t: 'bank', f: 0.335, len: 55, a: 0.09 }, { t: 'bank', f: 0.41, len: 50, a: 0.08 }, { t: 'bank', f: 0.48, len: 50, a: -0.08 }, { t: 'bank', f: 0.72, len: 55, a: -0.09 }, { t: 'pad', f: 0.08 }, { t: 'pad', f: 0.10 }, { t: 'ramp', f: 0.25, h: 3.4, len: 10 }, { t: 'pit', f: 0.25556, len: 9, kind: 'manif' }, { t: 'pad', f: 0.34 }, { t: 'pit', f: 0.40, len: 8, kind: 'works' }, { t: 'pad', f: 0.47 }, { t: 'ramp', f: 0.495, h: 2.8, len: 8 }, { t: 'crossing', f: 0.56, color: 0xf6f1e4, taxi: true }, { t: 'pad', f: 0.64 }, { t: 'bank', f: 0.68, len: 70, a: 0.12 }, { t: 'wind', f: 0.73, len: 60, push: 3.5 }, { t: 'ramp', f: 0.80, h: 2.8, len: 8 }, { t: 'pad', f: 0.86 }, { t: 'pit', f: 0.93, len: 8, kind: 'water' }, { t: 'pad', f: 0.985 }],
     variants: [
       { name: 'Jour de mistral', features: [{ t: 'chicane', f: 0.17, n: 3, kind: 'vauban' }, { t: 'obstacle', f: 0.44, lat: -6, kind: 'bins' }, { t: 'wind', f: 0.58, len: 50, push: 4 }, { t: 'obstacle', f: 0.90, lat: 7, kind: 'stall' }] },
       { name: 'Fête du pastis', features: [{ t: 'obstacle', f: 0.12, lat: 8, kind: 'stall' }, { t: 'obstacle', f: 0.135, lat: 8, kind: 'stall' }, { t: 'obstacle', f: 0.15, lat: -8, kind: 'stall' }, { t: 'chicane', f: 0.17, n: 2, kind: 'vauban' }, { t: 'pit', f: 0.52, len: 7, kind: 'manif' }, { t: 'obstacle', f: 0.76, lat: -5, kind: 'van' }] },

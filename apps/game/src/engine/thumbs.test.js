@@ -21,11 +21,11 @@ describe('trackMeta', () => {
     }
   });
 
-  it('measures the climb a lap goes up: none on a flat circuit, the butte’s 22 m on Montmartre', () => {
+  it('measures the climb a lap goes up: every rise of the profile added, the butte’s 28 m on Montmartre', () => {
     const by = id => trackMeta(TRACKS.find(t => t.id === id));
-    expect(by('elysee').climb).toBe(0);
-    expect(by('montmartre').climb).toBeCloseTo(22, 0);
-    expect(by('bourbon').climb).toBeCloseTo(12, 0);   // two 6 m bridges
+    expect(by('elysee').climb).toBeCloseTo(20, 0);       // the hump, the rue up to the terrace, the climb out of the dip
+    expect(by('montmartre').climb).toBeCloseTo(28, 0);   // 24 m to the top and two rises of 2 m on the way down
+    expect(by('bourbon').climb).toBeCloseTo(25, 0);      // two 6 m bridges, 5 m back from the low quay, the 8 m hill
   });
 });
 
